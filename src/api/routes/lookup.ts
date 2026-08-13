@@ -38,15 +38,17 @@ async function doLookup(app: FastifyInstance, ip: string): Promise<LookupResult>
   };
 }
 
+export function lookupErrorHandler(err: unknown, _req: unknown, reply: { code: (n: number) => { send: (b: unknown) => unknown }; send: (b: unknown) => unknown }): unknown {
+  const statusCode = (err as any).statusCode ?? 500;
+  const code = (err as any).code;
+  if (code === 'invalid_ip' || code === 'not_found') {
+    return reply.code(statusCode).send({ error: code });
+  }
+  return reply.code(statusCode).send({ error: 'internal_error' });
+}
+
 export default async function lookupRoute(app: FastifyInstance): Promise<void> {
-  app.setErrorHandler((err, _req, reply) => {
-    const statusCode = (err as any).statusCode ?? 500;
-    const code = (err as any).code;
-    if (code === 'invalid_ip' || code === 'not_found') {
-      return reply.code(statusCode).send({ error: code });
-    }
-    return reply.code(statusCode).send({ error: code ?? err.message });
-  });
+  app.setErrorHandler(lookupErrorHandler);
   app.get('/lookup', async (req, reply) => {
     const ip = (req.query as { ip?: string }).ip;
     if (!ip || !isValidIp(ip)) return reply.code(400).send({ error: 'invalid_ip', message: ip ?? 'missing' });
