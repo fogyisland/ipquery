@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 import type { FastifyInstance } from 'fastify';
 import { parseIp, isValidIp } from '../../ip';
-import { findRange } from '../../storage/mysql';
+import { findRange, lastSuccessfulEtl } from '../../storage/mysql';
 import type { LookupResult } from '../../types';
 
 async function doLookup(app: FastifyInstance, ip: string): Promise<LookupResult> {
@@ -20,7 +20,8 @@ async function doLookup(app: FastifyInstance, ip: string): Promise<LookupResult>
     (err as any).ip = ip;
     throw err;
   }
-  const etag = `unknown`; // Replaced in Task 15 (stats endpoint provides etag source)
+  const lastRun = await lastSuccessfulEtl(app.pool);
+  const etag = lastRun ? lastRun.toISOString() : 'never';
   return {
     ip,
     country: { code: row.countryCode, name: row.countryName, source: row.countrySource ?? 'maxmind' },

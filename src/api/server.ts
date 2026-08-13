@@ -7,6 +7,7 @@ import type { AppConfig } from '../config';
 import { createPool } from '../storage/mysql';
 import healthRoute from './routes/health';
 import lookupRoute from './routes/lookup';
+import statsRoute from './routes/stats';
 
 declare module 'fastify' {
   interface FastifyInstance {
@@ -29,6 +30,7 @@ export async function buildServer(cfg: AppConfig): Promise<FastifyInstance> {
 
   await app.register(healthRoute);
   await app.register(lookupRoute);
+  await app.register(statsRoute);
 
   await app.ready();
 

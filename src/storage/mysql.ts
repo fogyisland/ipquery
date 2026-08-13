@@ -147,3 +147,11 @@ export async function lastEtlRun(pool: mysql.Pool): Promise<EtlRun | null> {
     dbipBuiltAt: r.dbip_built_at,
   };
 }
+
+export async function lastSuccessfulEtl(pool: mysql.Pool): Promise<Date | null> {
+  const [rows] = await pool.query<mysql.RowDataPacket[]>(
+    `SELECT finished_at FROM etl_runs WHERE status = 'success' ORDER BY id DESC LIMIT 1`,
+  );
+  if (rows.length === 0 || !rows[0]?.finished_at) return null;
+  return rows[0].finished_at as Date;
+}
