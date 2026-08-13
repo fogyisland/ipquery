@@ -14,5 +14,23 @@ services:
       timeout: 5s
       retries: 20
 
+  app:
+    build: .
+    depends_on:
+      mysql: { condition: service_healthy }
+    environment:
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_USER: root
+      DB_PASSWORD: rootpass
+      DB_NAME: ipquery
+      MAXMIND_LICENSE_KEY: ${MAXMIND_LICENSE_KEY:-}
+      ETL_SCHEDULE: ${ETL_SCHEDULE:-0 2 * * *}
+    command: ["node", "dist/cli.js", "serve"]
+    ports: ["3000:3000"]
+    volumes:
+      - app_data:/app/data
+
 volumes:
   mysql_data:
+  app_data:
