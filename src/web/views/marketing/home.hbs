@@ -1,0 +1,21 @@
+{{!-- SPDX-License-Identifier: MIT --}}
+<section class="hero">
+  <h1>IPQuery</h1>
+  <p>开源 IP 地理位置查询服务,聚合 MaxMind / ip2region / DB-IP 三大数据源</p>
+  <a class="btn-primary" href="/try">{{req.t 'nav.try'}}</a>
+  <a href="/docs">{{req.t 'nav.docs'}}</a>
+</section>
+<section>
+  <h2>特性</h2>
+  <ul>
+    <li>三大数据源聚合,主源优先 + 备源补字段</li>
+    <li>HTTP API + Web 控制台</li>
+    <li>每日自动 ETL 增量更新</li>
+    <li>MySQL 原子切换,服务零停机</li>
+  </ul>
+</section>
+<section>
+  <h2>API 快速开始</h2>
+  <pre><code>curl "{{viewBaseUrl}}/lookup?ip=8.8.8.8"</code></pre>
+  <p><a href="/docs">{{req.t 'nav.docs'}}</a></p>
+</section>

@@ -38,6 +38,20 @@ export async function registerView(app: FastifyInstance, cfg: { baseUrl: string 
   });
   Handlebars.registerHelper('year', () => new Date().getFullYear());
 
+  // Register all Handlebars partials globally so layouts (e.g. public.hbs) can
+  // include them with `{{> nav }}` / `{{> footer }}` / `{{> flash }}`. The
+  // view plugin resolves partials by directory path; registering via the
+  // engine makes them available regardless of layout.
+  const partialsDir = path.join(viewsDir, 'partials');
+  if (fs.existsSync(partialsDir)) {
+    for (const name of fs.readdirSync(partialsDir)) {
+      if (!name.endsWith('.hbs')) continue;
+      const partialName = name.slice(0, -'.hbs'.length);
+      const partialPath = path.join(partialsDir, name);
+      Handlebars.registerPartial(partialName, fs.readFileSync(partialPath, 'utf-8'));
+    }
+  }
+
   // @fastify/view validates the layout file at *registration* time (accessSync on
   // `<root>/layouts/public.hbs`) and throws if it is missing. The layout ships with
   // Task 11, so only opt into it once the file is actually on disk; every template
