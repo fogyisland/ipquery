@@ -13,6 +13,8 @@ import { registerView } from '../web/plugins/view';
 import { registerI18n } from '../web/plugins/i18n';
 import { registerSecurityHeaders } from '../web/plugins/security';
 import { registerQueryLogWriter } from '../web/plugins/queryLog';
+import { registerSession } from '../web/plugins/session';
+import { registerAuthGuards } from '../web/plugins/auth';
 import { createMailer } from '../mailer';
 import healthRoute from './routes/health';
 import lookupRoute from './routes/lookup';
@@ -44,6 +46,8 @@ export async function buildServer(cfg: AppConfig): Promise<FastifyInstance> {
   await registerView(app, { baseUrl: cfg.web.baseUrl });
   await registerI18n(app);
   await registerSecurityHeaders(app, { cookieSecure: cfg.web.cookieSecure });
+  await registerSession(app);
+  await registerAuthGuards(app);
 
   app.decorate('mailer', createMailer(cfg));
   registerQueryLogWriter(app, app.pool);
