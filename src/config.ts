@@ -2,6 +2,36 @@
 import 'dotenv/config'; // side-effect import: auto-loads .env into process.env at module load
 import * as cronParser from 'node-cron';
 
+export interface WebConfig {
+  baseUrl: string;
+  cookieDomain: string;
+  cookieSecure: boolean;
+  sessionTtlHours: number;
+  sessionSecret: string;
+  csrfSecret: string;
+}
+
+export interface SmtpConfig {
+  host: string;
+  port: number;
+  secure: boolean;
+  user: string;
+  pass: string;
+  from: string;
+}
+
+export interface SecurityConfig {
+  loginMaxAttempts: number;
+  loginLockoutMinutes: number;
+  signupRatePerIpPerHour: number;
+  verifyResendCooldownSeconds: number;
+}
+
+export interface AdminBootstrap {
+  email: string;
+  password: string;
+}
+
 export interface AppConfig {
   db: {
     host: string; port: number; user: string; password: string;
@@ -10,6 +40,10 @@ export interface AppConfig {
   maxmind: { licenseKey?: string; editions: string[] };
   api: { port: number; rateLimit: number };
   etl: { schedule: string; timezone: string; dataDir: string };
+  web: WebConfig;
+  smtp: SmtpConfig;
+  security: SecurityConfig;
+  admin: AdminBootstrap;
 }
 
 function num(v: string | undefined, fallback: number): number {
@@ -23,11 +57,21 @@ function str(v: string | undefined, fallback: string): string {
   return v === undefined || v === '' ? fallback : v;
 }
 
+function bool(v: string | undefined, fallback: boolean): boolean {
+  if (v === undefined) return fallback;
+  return v === 'true' || v === '1';
+}
+
 export function loadConfig(): AppConfig {
   const schedule = str(process.env.ETL_SCHEDULE, '0 2 * * *');
   if (!cronParser.validate(schedule)) {
     throw new Error(`ETL_SCHEDULE is not a valid cron expression: ${schedule}`);
   }
+
+  const sessionTtl = num(process.env.SESSION_TTL_HOURS, 168);
+  if (sessionTtl < 1) throw new Error('SESSION_TTL_HOURS must be >= 1');
+  const loginMax = num(process.env.LOGIN_MAX_ATTEMPTS, 5);
+  if (loginMax < 1) throw new Error('LOGIN_MAX_ATTEMPTS must be >= 1');
 
   return {
     db: {
@@ -52,6 +96,32 @@ export function loadConfig(): AppConfig {
       timezone: str(process.env.ETL_TIMEZONE, 'UTC'),
       dataDir: str(process.env.DATA_DIR, './data'),
     },
+    web: {
+      baseUrl: str(process.env.WEB_BASE_URL, 'http://localhost:3100'),
+      cookieDomain: str(process.env.COOKIE_DOMAIN, ''),
+      cookieSecure: bool(process.env.COOKIE_SECURE, false),
+      sessionTtlHours: sessionTtl,
+      sessionSecret: str(process.env.SESSION_SECRET, ''),
+      csrfSecret: str(process.env.CSRF_SECRET, ''),
+    },
+    smtp: {
+      host: str(process.env.SMTP_HOST, ''),
+      port: num(process.env.SMTP_PORT, 587),
+      secure: bool(process.env.SMTP_SECURE, false),
+      user: str(process.env.SMTP_USER, ''),
+      pass: str(process.env.SMTP_PASS, ''),
+      from: str(process.env.SMTP_FROM, 'IPQuery <noreply@example.com>'),
+    },
+    security: {
+      loginMaxAttempts: loginMax,
+      loginLockoutMinutes: num(process.env.LOGIN_LOCKOUT_MINUTES, 15),
+      signupRatePerIpPerHour: num(process.env.SIGNUP_RATE_PER_IP_PER_HOUR, 5),
+      verifyResendCooldownSeconds: num(process.env.VERIFY_RESEND_COOLDOWN_SECONDS, 60),
+    },
+    admin: {
+      email: str(process.env.ADMIN_BOOTSTRAP_EMAIL, ''),
+      password: str(process.env.ADMIN_BOOTSTRAP_PASSWORD, ''),
+    },
   };
 }
 
@@ -67,6 +137,10 @@ export function configSummary(cfg: AppConfig): string {
     `[config] editions=${cfg.maxmind.editions.join(',')}`,
     `[config] api port=${cfg.api.port} rateLimit=${cfg.api.rateLimit}/min`,
     `[config] etl schedule="${cfg.etl.schedule}" tz=${cfg.etl.timezone} dataDir=${cfg.etl.dataDir}`,
+    `[config] web baseUrl=${cfg.web.baseUrl} cookieSecure=${cfg.web.cookieSecure}`,
+    `[config] smtp host=${cfg.smtp.host || '(console)'} from=${cfg.smtp.from}`,
+    `[config] session secret=${cfg.web.sessionSecret ? redactSecret(cfg.web.sessionSecret) : '(unset)'}`,
+    `[config] csrf secret=${cfg.web.csrfSecret ? redactSecret(cfg.web.csrfSecret) : '(unset)'}`,
   ];
   return lines.join('\n');
 }
