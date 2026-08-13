@@ -15,6 +15,8 @@ import { registerSecurityHeaders } from '../web/plugins/security';
 import { registerQueryLogWriter } from '../web/plugins/queryLog';
 import { registerSession } from '../web/plugins/session';
 import { registerAuthGuards } from '../web/plugins/auth';
+import { registerCsrf } from '../web/plugins/csrf';
+import { _resetForTests as resetLoginLimit } from '../web/plugins/loginRateLimit';
 import { createMailer } from '../mailer';
 import healthRoute from './routes/health';
 import lookupRoute from './routes/lookup';
@@ -25,10 +27,11 @@ declare module 'fastify' {
     cfg: AppConfig;
     pool: ReturnType<typeof createPool>;
     mailer: ReturnType<typeof createMailer>;
+    resetLoginLimit: () => void;
   }
 }
 
-export async function buildServer(cfg: AppConfig): Promise<FastifyInstance> {
+export async function buildServer(cfg: AppConfig, opts?: { extraRoutes?: (app: FastifyInstance) => Promise<void> | void }): Promise<FastifyInstance> {
   const app = Fastify({
     logger: { level: process.env.LOG_LEVEL ?? 'info' },
   });
@@ -48,6 +51,8 @@ export async function buildServer(cfg: AppConfig): Promise<FastifyInstance> {
   await registerSecurityHeaders(app, { cookieSecure: cfg.web.cookieSecure });
   await registerSession(app);
   await registerAuthGuards(app);
+  await registerCsrf(app);
+  app.decorate('resetLoginLimit', resetLoginLimit);
 
   app.decorate('mailer', createMailer(cfg));
   registerQueryLogWriter(app, app.pool);
@@ -55,6 +60,10 @@ export async function buildServer(cfg: AppConfig): Promise<FastifyInstance> {
   await app.register(healthRoute);
   await app.register(lookupRoute);
   await app.register(statsRoute);
+
+  if (opts?.extraRoutes) {
+    await opts.extraRoutes(app);
+  }
 
   app.addHook('onClose', async () => {
     try { await app.pool.end(); } catch { /* ignore */ }
