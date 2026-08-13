@@ -32,6 +32,10 @@ export async function buildServer(cfg: AppConfig): Promise<FastifyInstance> {
   await app.register(lookupRoute);
   await app.register(statsRoute);
 
+  app.addHook('onClose', async () => {
+    try { await app.pool.end(); } catch { /* ignore */ }
+  });
+
   await app.ready();
 
   return app;
