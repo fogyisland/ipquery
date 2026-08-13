@@ -21,6 +21,7 @@ import { createMailer } from '../mailer';
 import healthRoute from './routes/health';
 import lookupRoute from './routes/lookup';
 import statsRoute from './routes/stats';
+import marketingRoute from '../web/routes/marketing';
 
 declare module 'fastify' {
   interface FastifyInstance {
@@ -60,6 +61,7 @@ export async function buildServer(cfg: AppConfig, opts?: { extraRoutes?: (app: F
   await app.register(healthRoute);
   await app.register(lookupRoute);
   await app.register(statsRoute);
+  await app.register(marketingRoute);
 
   if (opts?.extraRoutes) {
     await opts.extraRoutes(app);

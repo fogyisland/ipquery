@@ -1,0 +1,13 @@
+{{!-- SPDX-License-Identifier: MIT --}}
+<h1>服务状态</h1>
+{{#if lastRun}}
+<section>
+  <h2>最近一次 ETL</h2>
+  <p>开始时间:{{formatDate lastRun.startedAt}}</p>
+  <p>结束时间:{{formatDate lastRun.finishedAt}}</p>
+  <p>状态:<strong>{{lastRun.status}}</strong></p>
+  <p>合并记录数:{{lastRun.mergedRecords}}</p>
+</section>
+{{else}}
+<p>暂无 ETL 运行记录。</p>
+{{/if}}
