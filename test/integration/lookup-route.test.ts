@@ -4,7 +4,7 @@ import request from 'supertest';
 import * as mysql from 'mysql2/promise';
 import { buildServer } from '../../src/api/server';
 import { loadConfig } from '../../src/config';
-import { createPool, initSchema, truncateNew, insertIntoNew, atomicSwapRanges } from '../../src/storage/mysql';
+import { createPool, runMigrations, truncateNew, insertIntoNew, atomicSwapRanges } from '../../src/storage/mysql';
 
 const TEST_DB = 'ipquery_lookup_test';
 let cfg = loadConfig();
@@ -17,7 +17,7 @@ beforeAll(async () => {
   await root.query(`CREATE DATABASE ${TEST_DB}`);
   await root.end();
   const pool = createPool(cfg);
-  await initSchema(pool);
+  await runMigrations(pool);
   await truncateNew(pool);
   await insertIntoNew(pool, [{
     startIp: Buffer.from([0,0,0,0,0,0,0,0,0,0,0,0,8,8,8,0]),

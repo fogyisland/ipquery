@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import * as mysql from 'mysql2/promise';
-import { createPool, initSchema, findRange, lastEtlRun } from '../../src/storage/mysql';
+import { createPool, runMigrations, findRange, lastEtlRun } from '../../src/storage/mysql';
 import { runPipeline } from '../../src/etl/pipeline';
 import { loadConfig } from '../../src/config';
 import * as fs from 'node:fs/promises';
@@ -38,7 +38,7 @@ beforeAll(async () => {
   await root.query(`CREATE DATABASE ${TEST_DB}`);
   await root.end();
   pool = createPool(cfg);
-  await initSchema(pool);
+  await runMigrations(pool);
 });
 
 afterAll(async () => {

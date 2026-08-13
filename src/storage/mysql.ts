@@ -1,17 +1,7 @@
 // SPDX-License-Identifier: MIT
 import * as mysql from 'mysql2/promise';
-import * as fs from 'node:fs/promises';
-import * as path from 'node:path';
 import type { AppConfig } from '../config';
 import type { IpRangeRow, EtlRun, Source } from '../types';
-
-let SCHEMA_SQL: string | null = null;
-async function loadSchema(): Promise<string> {
-  if (SCHEMA_SQL) return SCHEMA_SQL;
-  const p = path.join(__dirname, 'schema.sql');
-  SCHEMA_SQL = await fs.readFile(p, 'utf8');
-  return SCHEMA_SQL;
-}
 
 export function createPool(cfg: AppConfig): mysql.Pool {
   return mysql.createPool({
@@ -26,11 +16,6 @@ export function createPool(cfg: AppConfig): mysql.Pool {
     timezone: 'Z',
     dateStrings: false,
   });
-}
-
-export async function initSchema(pool: mysql.Pool): Promise<void> {
-  const sql = await loadSchema();
-  await pool.query(sql);
 }
 
 export async function truncateNew(pool: mysql.Pool): Promise<void> {
@@ -155,3 +140,5 @@ export async function lastSuccessfulEtl(pool: mysql.Pool): Promise<Date | null> 
   if (rows.length === 0 || !rows[0]?.finished_at) return null;
   return rows[0].finished_at as Date;
 }
+
+export { runMigrations, getAppliedVersions, migrationStatus } from './migrations/runner';

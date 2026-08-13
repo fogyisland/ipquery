@@ -4,7 +4,7 @@ import request from 'supertest';
 import * as mysql from 'mysql2/promise';
 import { buildServer } from '../../src/api/server';
 import { loadConfig } from '../../src/config';
-import { createPool, initSchema, recordEtlStart, recordEtlFinish } from '../../src/storage/mysql';
+import { createPool, runMigrations, recordEtlStart, recordEtlFinish } from '../../src/storage/mysql';
 
 const TEST_DB = 'ipquery_stats_test';
 let cfg = loadConfig();
@@ -17,7 +17,7 @@ beforeAll(async () => {
   await root.query(`CREATE DATABASE ${TEST_DB}`);
   await root.end();
   const pool = createPool(cfg);
-  await initSchema(pool);
+  await runMigrations(pool);
   const id = await recordEtlStart(pool);
   await recordEtlFinish(pool, id, 'success', { mergedRecords: 42 });
   await pool.end();
