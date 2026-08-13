@@ -21,6 +21,10 @@ export async function registerView(app: FastifyInstance, cfg: { baseUrl: string 
   Handlebars.registerHelper('ne', (a: unknown, b: unknown) => a !== b);
   Handlebars.registerHelper('and', (a: unknown, b: unknown) => Boolean(a) && Boolean(b));
   Handlebars.registerHelper('or', (a: unknown, b: unknown) => Boolean(a) || Boolean(b));
+  Handlebars.registerHelper('gt', (a: unknown, b: unknown) => Number(a) > Number(b));
+  Handlebars.registerHelper('lt', (a: unknown, b: unknown) => Number(a) < Number(b));
+  Handlebars.registerHelper('add', (a: unknown, b: unknown) => Number(a) + Number(b));
+  Handlebars.registerHelper('subtract', (a: unknown, b: unknown) => Number(a) - Number(b));
   Handlebars.registerHelper('json', (v: unknown) => JSON.stringify(v));
   Handlebars.registerHelper('formatDate', (d: Date | string | null | undefined) => {
     if (!d) return '';

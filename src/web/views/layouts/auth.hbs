@@ -1,0 +1,20 @@
+{{!-- SPDX-License-Identifier: MIT --}}
+<!DOCTYPE html>
+<html lang="{{req.locale}}">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{title}} - IPQuery</title>
+  <link rel="stylesheet" href="/assets/css/base.css">
+  <link rel="stylesheet" href="/assets/css/layout.css">
+  <link rel="stylesheet" href="/assets/css/forms.css">
+</head>
+<body class="layout-auth">
+  <main class="auth-container">
+    {{> flash }}
+    <h1>{{title}}</h1>
+    {{{body}}}
+    <p class="auth-footer"><a href="/">{{req.t 'common.back'}}</a></p>
+  </main>
+</body>
+</html>

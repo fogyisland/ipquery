@@ -1,0 +1,33 @@
+{{!-- SPDX-License-Identifier: MIT --}}
+<!DOCTYPE html>
+<html lang="{{req.locale}}">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{title}} - IPQuery Admin</title>
+  <link rel="stylesheet" href="/assets/css/base.css">
+  <link rel="stylesheet" href="/assets/css/layout.css">
+  <link rel="stylesheet" href="/assets/css/forms.css">
+</head>
+<body class="layout-admin">
+  {{> nav }}
+  <div class="dashboard-shell">
+    <aside class="sidebar">
+      <h2>{{req.t 'admin.title'}}</h2>
+      <nav>
+        <ul>
+          <li><a href="/admin/users">{{req.t 'admin.users.title'}}</a></li>
+          <li><a href="/admin/etl/runs">{{req.t 'admin.etl.title'}}</a></li>
+          <li><a href="/admin/keys">{{req.t 'admin.keys.title'}}</a></li>
+          <li><a href="/admin/audit">{{req.t 'admin.audit.title'}}</a></li>
+          <li><a href="/dashboard">{{req.t 'nav.dashboard'}}</a></li>
+        </ul>
+      </nav>
+    </aside>
+    <main class="dashboard-main">
+      {{> flash }}
+      {{{body}}}
+    </main>
+  </div>
+</body>
+</html>
