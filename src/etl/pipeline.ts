@@ -2,7 +2,7 @@
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import * as mysql from 'mysql2/promise';
-import { createPool, initSchema, truncateNew, insertIntoNew, atomicSwapRanges, recordEtlStart, recordEtlFinish } from '../storage/mysql';
+import { createPool, runMigrations, truncateNew, insertIntoNew, atomicSwapRanges, recordEtlStart, recordEtlFinish } from '../storage/mysql';
 import { parseDbipCsv } from './sources/dbip';
 import { parseIp2regionXdb } from './sources/ip2region';
 import { parseMaxmindMmdb } from './sources/maxmind';
@@ -16,7 +16,7 @@ export interface PipelineResult { runId: number; merged: number; }
 
 async function ensurePool(cfg: AppConfig): Promise<mysql.Pool> {
   const pool = createPool(cfg);
-  await initSchema(pool);
+  await runMigrations(pool);
   return pool;
 }
 

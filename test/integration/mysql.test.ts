@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import * as mysql from 'mysql2/promise';
-import { createPool, initSchema, atomicSwapRanges, insertIntoNew, truncateNew, findRange, recordEtlStart, recordEtlFinish, lastEtlRun } from '../../src/storage/mysql';
+import { createPool, runMigrations, atomicSwapRanges, insertIntoNew, truncateNew, findRange, recordEtlStart, recordEtlFinish, lastEtlRun } from '../../src/storage/mysql';
 import { loadConfig } from '../../src/config';
 
 const TEST_DB = 'ipquery_test';
@@ -18,7 +18,7 @@ describe('mysql storage', () => {
     await root.query(`CREATE DATABASE ${TEST_DB}`);
     await root.end();
     pool = createPool(cfg);
-    await initSchema(pool);
+    await runMigrations(pool);
   });
 
   afterAll(async () => {
@@ -30,13 +30,13 @@ describe('mysql storage', () => {
     await root.end();
   });
 
-  it('initSchema creates tables', async () => {
+  it('runMigrations creates tables', async () => {
     const [rows] = await pool.query<mysql.RowDataPacket[]>(
       `SELECT TABLE_NAME FROM information_schema.tables WHERE TABLE_SCHEMA = ?`,
       [TEST_DB]
     );
     const names = rows.map(r => r.TABLE_NAME).sort();
-    expect(names).toEqual(['etl_runs', 'ip_ranges', 'ip_ranges_new']);
+    expect(names).toEqual(['api_keys','email_verifications','etl_runs','ip_ranges','ip_ranges_new','password_resets','query_log','schema_migrations','sessions','users']);
   });
 
   it('insertIntoNew + atomicSwapRanges moves data', async () => {
