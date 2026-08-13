@@ -1,0 +1,25 @@
+{{!-- SPDX-License-Identifier: MIT --}}
+<nav class="topnav">
+  <a href="/" class="brand">IPQuery</a>
+  <ul>
+    <li><a href="/">{{req.t 'nav.home'}}</a></li>
+    <li><a href="/docs">{{req.t 'nav.docs'}}</a></li>
+    <li><a href="/pricing">{{req.t 'nav.pricing'}}</a></li>
+    <li><a href="/status">{{req.t 'nav.status'}}</a></li>
+    <li><a href="/try">{{req.t 'nav.try'}}</a></li>
+  </ul>
+  <div class="topnav-user">
+    {{#if req.user}}
+      <span>{{req.user.displayName}}</span>
+      {{#if (eq req.user.role 'admin')}}<a href="/admin/users">{{req.t 'nav.admin'}}</a>{{/if}}
+      <a href="/dashboard">{{req.t 'nav.dashboard'}}</a>
+      <form method="POST" action="/logout" style="display:inline">
+        <input type="hidden" name="csrf" value="{{req.csrfToken}}">
+        <button type="submit" class="link">{{req.t 'nav.logout'}}</button>
+      </form>
+    {{else}}
+      <a href="/login">{{req.t 'common.login'}}</a>
+      <a href="/signup">{{req.t 'common.signup'}}</a>
+    {{/if}}
+  </div>
+</nav>

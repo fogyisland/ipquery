@@ -1,0 +1,15 @@
+/* SPDX-License-Identifier: MIT */
+.topnav { display: flex; align-items: center; padding: 1rem 2rem; border-bottom: 1px solid #e5e5e5; }
+.topnav .brand { font-weight: 700; margin-right: 2rem; }
+.topnav ul { display: flex; gap: 1rem; list-style: none; padding: 0; margin: 0; }
+.topnav-user { margin-left: auto; display: flex; gap: 1rem; align-items: center; }
+.main { max-width: 1100px; margin: 2rem auto; padding: 0 1rem; }
+.footer { border-top: 1px solid #e5e5e5; padding: 2rem; text-align: center; margin-top: 4rem; }
+.dashboard-shell { display: grid; grid-template-columns: 220px 1fr; gap: 2rem; max-width: 1200px; margin: 2rem auto; padding: 0 1rem; }
+.sidebar { padding: 1rem; background: #f5f5f5; border-radius: 8px; }
+.sidebar ul { list-style: none; padding: 0; }
+.sidebar li { margin: 0.5rem 0; }
+.dashboard-main { min-width: 0; }
+.layout-auth { display: flex; align-items: center; justify-content: center; min-height: 100vh; }
+.auth-container { max-width: 400px; width: 100%; padding: 2rem; }
+@media (prefers-color-scheme: dark) { .sidebar { background: #2a2a2a; } }

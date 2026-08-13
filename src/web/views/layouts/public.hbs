@@ -1,1 +1,21 @@
-{{{body}}}
+{{!-- SPDX-License-Identifier: MIT --}}
+<!DOCTYPE html>
+<html lang="{{req.locale}}">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{#if title}}{{title}} - IPQuery{{else}}IPQuery{{/if}}</title>
+  <link rel="stylesheet" href="/assets/css/base.css">
+  <link rel="stylesheet" href="/assets/css/layout.css">
+  <link rel="stylesheet" href="/assets/css/forms.css">
+  <script src="/assets/js/htmx.min.js" defer></script>
+</head>
+<body class="layout-public">
+  {{> nav }}
+  <main class="main">
+    {{> flash }}
+    {{{body}}}
+  </main>
+  {{> footer }}
+</body>
+</html>
