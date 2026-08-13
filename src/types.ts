@@ -104,6 +104,7 @@ export interface EmailVerification {
   tokenHash: string;
   expiresAt: Date;
   consumedAt: Date | null;
+  createdAt: Date;
 }
 
 export interface PasswordReset {

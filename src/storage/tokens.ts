@@ -9,6 +9,7 @@ function mapVerRow(r: RowDataPacket): EmailVerification {
     tokenHash: r.token_hash as string,
     expiresAt: r.expires_at as Date,
     consumedAt: r.consumed_at as Date | null,
+    createdAt: r.created_at as Date,
   };
 }
 
