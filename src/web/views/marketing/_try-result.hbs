@@ -1,0 +1,17 @@
+{{!-- SPDX-License-Identifier: MIT --}}
+{{#if result}}
+<section>
+  <h2>{{req.t 'lookup.found' ip=result.ip country=result.country.name}}</h2>
+  <dl>
+    <dt>国家</dt><dd>{{result.country.name}} ({{result.country.code}})</dd>
+    {{#if result.city}}<dt>城市</dt><dd>{{result.city.name}}</dd>{{/if}}
+    {{#if result.region}}<dt>地区</dt><dd>{{result.region}}</dd>{{/if}}
+    {{#if result.isp}}<dt>ISP</dt><dd>{{result.isp.name}}</dd>{{/if}}
+    {{#if result.asn}}<dt>ASN</dt><dd>{{result.asn.number}} {{result.asn.org}}</dd>{{/if}}
+  </dl>
+</section>
+{{else if notFound}}
+<p>{{req.t 'lookup.notfound' ip=ip}}</p>
+{{else if invalid}}
+<p>{{req.t 'lookup.invalid'}}</p>
+{{/if}}
