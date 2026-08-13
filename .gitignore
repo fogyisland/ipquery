@@ -1,0 +1,11 @@
+node_modules/
+dist/
+coverage/
+data/
+*.mmdb
+*.xdb
+*.csv.gz
+*.csv
+.env
+.env.local
+*.log
