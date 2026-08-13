@@ -1,3 +1,5 @@
+-- SPDX-License-Identifier: MIT
+
 CREATE TABLE IF NOT EXISTS etl_runs (
   id BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
   started_at  DATETIME(3) NOT NULL,
