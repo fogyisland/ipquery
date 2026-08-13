@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+import 'dotenv/config'; // side-effect import: auto-loads .env into process.env at module load
 import * as cronParser from 'node-cron';
 
 export interface AppConfig {
