@@ -66,3 +66,62 @@ export interface IpRangeRow {
   asnSource?: Source;
   geoSource?: Source;
 }
+
+export type Role = 'user' | 'admin';
+export type QueryStatus = 'hit' | 'miss' | 'invalid';
+
+export interface User {
+  id: number;
+  email: string;
+  displayName: string;
+  role: Role;
+  emailVerified: boolean;
+  isDisabled: boolean;
+  createdAt: Date;
+  lastLoginAt: Date | null;
+}
+
+export interface ApiKey {
+  id: number;
+  userId: number;
+  label: string;
+  keyPrefix: string;
+  lastUsedAt: Date | null;
+  revokedAt: Date | null;
+  createdAt: Date;
+}
+
+export interface Session {
+  id: string;
+  userId: number;
+  expiresAt: Date;
+  createdAt: Date;
+}
+
+export interface EmailVerification {
+  id: number;
+  userId: number;
+  tokenHash: string;
+  expiresAt: Date;
+  consumedAt: Date | null;
+}
+
+export interface PasswordReset {
+  id: number;
+  userId: number;
+  tokenHash: string;
+  expiresAt: Date;
+  consumedAt: Date | null;
+}
+
+export interface QueryLogEntry {
+  ts: Date;
+  ip: Buffer;
+  ipText: string;
+  status: QueryStatus;
+  userId: number | null;
+  apiKeyId: number | null;
+  sessionId: string | null;
+  remoteAddr: Buffer | null;
+  userAgent: string | null;
+}
