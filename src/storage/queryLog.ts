@@ -133,7 +133,7 @@ export async function streamQueryLogsCsv(pool: Pool, q: QueryLogQuery, write: (c
          ${whereSql}
          ORDER BY q.id ASC`,
       params,
-    ).then((r) => r as [unknown, unknown]);
+    );
     const rows = stream as Record<string, unknown>[];
     for (const r of rows) {
       const cells = [
