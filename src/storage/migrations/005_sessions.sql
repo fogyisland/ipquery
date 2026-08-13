@@ -1,5 +1,5 @@
 -- SPDX-License-Identifier: MIT
-CREATE TABLE sessions (
+CREATE TABLE IF NOT EXISTS sessions (
   id CHAR(32) NOT NULL PRIMARY KEY,
   user_id BIGINT UNSIGNED NOT NULL,
   expires_at DATETIME(3) NOT NULL,

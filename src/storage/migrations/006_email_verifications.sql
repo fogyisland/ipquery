@@ -1,5 +1,5 @@
 -- SPDX-License-Identifier: MIT
-CREATE TABLE email_verifications (
+CREATE TABLE IF NOT EXISTS email_verifications (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   user_id BIGINT UNSIGNED NOT NULL,
   token_hash CHAR(64) NOT NULL UNIQUE,

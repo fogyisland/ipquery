@@ -1,5 +1,5 @@
 -- SPDX-License-Identifier: MIT
-CREATE TABLE password_resets (
+CREATE TABLE IF NOT EXISTS password_resets (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   user_id BIGINT UNSIGNED NOT NULL,
   token_hash CHAR(64) NOT NULL UNIQUE,

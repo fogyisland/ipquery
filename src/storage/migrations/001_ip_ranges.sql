@@ -1,3 +1,5 @@
+-- SPDX-License-Identifier: MIT
+
 CREATE TABLE IF NOT EXISTS ip_ranges (
   id BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
   start_ip BINARY(16) NOT NULL,
