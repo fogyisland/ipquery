@@ -27,9 +27,11 @@
   },
   "auth": {
     "email": "邮箱",
-    "password": "密码",
-    "password.help": "至少 10 位,包含字母和数字",
-    "password.confirm": "确认密码",
+    "password": {
+      "label": "密码",
+      "help": "至少 10 位,包含字母和数字",
+      "confirm": "确认密码"
+    },
     "displayName": "昵称",
     "signup": {
       "title": "注册账号",
@@ -125,8 +127,9 @@
     "profile": {
       "title": "个人资料",
       "displayName": "昵称",
-      "email": "邮箱",
-      "email.help": "修改邮箱需重新验证",
+      "email": {
+        "help": "修改邮箱需重新验证"
+      },
       "oldPassword": "当前密码",
       "newPassword": "新密码",
       "save": "保存修改",
