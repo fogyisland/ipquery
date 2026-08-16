@@ -22,7 +22,7 @@ describe('zh-CN dictionary', () => {
   it('required keys present', () => {
     const required = [
       'common.signup', 'common.login', 'common.logout',
-      'auth.email', 'auth.password', 'auth.signup.submit',
+      'auth.email', 'auth.password.label', 'auth.signup.submit',
       'lookup.found', 'lookup.notfound',
     ];
     const flatten = (obj: Record<string, unknown>, prefix = ''): [string, unknown][] => {
