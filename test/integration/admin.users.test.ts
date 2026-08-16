@@ -71,6 +71,21 @@ describe('admin users', () => {
     expect((await findUserByEmail(app.pool, 'u@x.com'))?.emailVerified).toBe(true);
   });
 
+  it('reset-password renders temp password instead of redirecting', async () => {
+    const { cookie, token } = await csrfOf();
+    const r = await request(app.server).post('/admin/users/' + userUid + '/reset-password')
+      .set('Cookie', 'sid=' + adminSid + '; ' + cookie)
+      .type('form').send({ csrf: token });
+    expect(r.status).toBe(200);
+    // BUG 2: temp password must be surfaced in the rendered page (not silently lost).
+    expect(r.text).toMatch(/Temp[A-Za-z0-9]{8}1/);
+    expect(r.text).toContain('temp-password-value');
+    // Subsequent reload must NOT contain a temp password.
+    const r2 = await request(app.server).get('/admin/users/' + userUid).set('Cookie', 'sid=' + adminSid);
+    expect(r2.status).toBe(200);
+    expect(r2.text).not.toContain('temp-password-value');
+  });
+
   it('delete user', async () => {
     const victim = await createUser(app.pool, { email: 'victim@x.com', passwordHash: 'h', displayName: 'V' });
     const { cookie, token } = await csrfOf();

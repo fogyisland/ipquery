@@ -78,6 +78,17 @@ export default async function dashboardRoutes(app: FastifyInstance): Promise<voi
     return reply.code(302).redirect('/dashboard/keys');
   });
 
+  app.get<{ Params: { id: string } }>('/dashboard/keys/:id/revoke/confirm', async (req, reply) => {
+    const id = Number(req.params.id);
+    const key = await findApiKeyById(app.pool, id);
+    if (!key || key.userId !== req.user!.id) {
+      return reply.code(404).view('errors/404.hbs', { layout: 'layouts/public', title: req.t('error.404.title'), req });
+    }
+    return reply.view('dashboard/key-revoke-confirm.hbs', {
+      layout: 'layouts/dashboard', title: req.t('dashboard.keys.revoke.confirm.title'), key, req,
+    });
+  });
+
   app.get('/dashboard/profile', async (req, reply) => {
     // req.user is guaranteed non-null: registerAuthGuards already 302-redirects
     // unauthenticated requests for /dashboard/* paths before this handler runs.

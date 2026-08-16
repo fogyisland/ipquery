@@ -9,6 +9,14 @@
 </dl>
 {{#if flash.success}}<div class="flash flash-success">{{flash.success}}</div>{{/if}}
 
+{{#if tempPassword}}
+<div class="flash flash-warning" id="temp-password-banner">
+  <strong>{{req.t 'admin.users.resetPassword.tempNotice'}}</strong>
+  <code id="temp-password-value">{{tempPassword}}</code>
+  <small>{{req.t 'admin.users.resetPassword.tempWarn'}}</small>
+</div>
+{{/if}}
+
 <form method="POST" action="/admin/users/{{user.id}}/enable" style="display:inline">
   <input type="hidden" name="csrf" value="{{req.csrfToken}}">
   <button type="submit">{{req.t 'admin.users.action.enable'}}</button>
@@ -25,7 +33,4 @@
   <input type="hidden" name="csrf" value="{{req.csrfToken}}">
   <button type="submit">{{req.t 'admin.users.action.resetPassword'}}</button>
 </form>
-<form method="POST" action="/admin/users/{{user.id}}/delete" style="display:inline" onsubmit="return confirm('{{req.t 'admin.users.delete.confirm'}}')">
-  <input type="hidden" name="csrf" value="{{req.csrfToken}}">
-  <button type="submit">{{req.t 'admin.users.action.delete'}}</button>
-</form>
+<a href="/admin/users/{{user.id}}/delete/confirm" style="display:inline">{{req.t 'admin.users.action.delete'}}</a>
