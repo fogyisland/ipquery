@@ -22,6 +22,7 @@ import healthRoute from './routes/health';
 import lookupRoute from './routes/lookup';
 import statsRoute from './routes/stats';
 import marketingRoute from '../web/routes/marketing';
+import dashboardRoute from '../web/routes/dashboard';
 
 declare module 'fastify' {
   interface FastifyInstance {
@@ -62,6 +63,7 @@ export async function buildServer(cfg: AppConfig, opts?: { extraRoutes?: (app: F
   await app.register(lookupRoute);
   await app.register(statsRoute);
   await app.register(marketingRoute);
+  await app.register(dashboardRoute);
 
   if (opts?.extraRoutes) {
     await opts.extraRoutes(app);
