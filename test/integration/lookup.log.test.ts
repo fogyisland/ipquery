@@ -37,16 +37,13 @@ afterAll(async () => {
   await dropTestDb(td);
 });
 
-// Helper: wait for the batched writer (5s interval) to flush
-function waitForFlush(): Promise<void> {
-  // wait 5.5s + a little buffer
-  return new Promise((resolve) => setTimeout(resolve, 5500));
-}
+// Helper: force-flush the batched writer via the exposed decoration.
+const flush = (): Promise<void> => app.flushQueryLog();
 
 describe('query_log population on /lookup', () => {
   it('records a hit when key is provided', async () => {
     await request(app.server).get('/lookup').query({ ip: '8.8.8.8', key: rawKey });
-    await waitForFlush();
+    await flush();
     const [rows] = await td.pool.query(
       `SELECT * FROM query_log WHERE ip_text = ? AND status = 'hit' ORDER BY id DESC LIMIT 1`,
       ['8.8.8.8'],
@@ -61,7 +58,7 @@ describe('query_log population on /lookup', () => {
 
   it('records a miss when key is provided and IP not seeded', async () => {
     await request(app.server).get('/lookup').query({ ip: '1.1.1.1', key: rawKey });
-    await waitForFlush();
+    await flush();
     const [rows] = await td.pool.query(
       `SELECT * FROM query_log WHERE ip_text = ? AND status = 'miss' ORDER BY id DESC LIMIT 1`,
       ['1.1.1.1'],
@@ -77,7 +74,7 @@ describe('query_log population on /lookup', () => {
     );
     const before = Number((beforeRows as { n: number }[])[0].n);
     await request(app.server).get('/lookup').query({ ip: '8.8.8.8' });
-    await waitForFlush();
+    await flush();
     const [afterRows] = await td.pool.query(
       `SELECT COUNT(*) AS n FROM query_log`,
     );
