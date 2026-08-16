@@ -56,6 +56,63 @@ make lint
 - Single-process, single-host. No horizontal scaling.
 - IPv6 support is functional but coverage is uneven across sources.
 
+## Web Frontend
+
+The application ships with a server-rendered admin console and user dashboard at the same origin as the API. Pages are rendered with Handlebars + Fastify; interactive fragments use htmx.
+
+### Pages
+
+- **Marketing & docs** — `/`, `/about`, `/docs`, `/pricing`, `/status`, `/try` (htmx-powered demo)
+- **Auth** — `/signup`, `/login`, `/verify`, `/forgot`, `/reset`
+- **Dashboard** — `/dashboard`, `/dashboard/history`, `/dashboard/keys`, `/dashboard/profile`
+- **Admin** — `/admin` (redirects to `/admin/users`), `/admin/users`, `/admin/etl` (redirects to `/admin/etl/runs`), `/admin/keys`, `/admin/audit`
+- **API** — `/lookup[/:ip]`, `/healthz`, `/stats`
+
+### First-deploy guide
+
+The web app and API share one Fastify process. You need a reachable MySQL — run it however you prefer (locally, in your own container, `make docker-up` for the bundled compose, etc.). The steps below are native and assume MySQL is already listening on the host.
+
+1. `cp .env.example .env` and set `SESSION_SECRET` (long random string), `WEB_BASE_URL` (defaults to `http://localhost:3100`), `DB_*` for your MySQL, and `MAXMIND_LICENSE_KEY`. Configure `SMTP_*` if you want real email delivery; otherwise verification/reset emails print to stdout.
+2. `make install` then `make build` (compile TypeScript + copy schema into `dist/`).
+3. `make migrate` — apply pending DB migrations from `db/migrations/`.
+4. `ADMIN_EMAIL=you@example.com ADMIN_PASSWORD=$(openssl rand -base64 16) make create-admin` — creates the first admin user non-interactively. Or run `make create-admin` with the three vars exported in your shell.
+5. `make run` to start the server once (or use your process manager of choice with `node dist/cli.js serve`).
+6. Open `http://localhost:3100/login` (or your `WEB_BASE_URL`) and sign in.
+
+### Local development
+
+```bash
+make install        # npm install
+make build          # tsc + copy schema
+make migrate        # apply DB schema
+make create-admin   # interactive bootstrap (or set ADMIN_EMAIL / ADMIN_PASSWORD / ADMIN_NAME)
+make run            # node dist/cli.js serve --once  (loads .env automatically)
+make test-web       # unit + integration tests
+make e2e            # end-to-end tests
+```
+
+### Internationalization
+
+Default locale is `zh-CN`. `en-US` is also bundled; switch via the language toggle in the header — the preference is stored in a non-httpOnly `lang` cookie. To add a new locale, create `src/web/i18n/<locale>.json` and register it in `src/web/i18n/index.ts` (extend `SUPPORTED_LOCALES` and `DEFAULT_LOCALE` and add the dictionary to the `dictionaries` map).
+
+### Email delivery
+
+When `SMTP_HOST` is unset, emails are printed to stdout (dev mode). In production set `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` (and `SMTP_SECURE` if your relay requires TLS) and the console transport is replaced automatically.
+
+### CSRF, sessions, rate limits
+
+- Sessions live in the MySQL `sessions` table — httpOnly cookies, `SameSite=Lax`, **7-day** rolling expiry (configurable via `SESSION_TTL_HOURS`, default 168).
+- Forms include a CSRF token (`csrf` cookie + `csrf` body field, 4-hour TTL); the dashboard middleware rejects mismatched or expired tokens with HTTP 403.
+- `POST /signup` — 5 requests per hour per IP (`SIGNUP_RATE_PER_IP_PER_HOUR`).
+- `POST /login` — 20 requests per hour per IP (Fastify built-in rate limit) plus a per-account lockout: 5 consecutive failures (`LOGIN_MAX_ATTEMPTS`) triggers a 15-minute lockout (`LOGIN_LOCKOUT_MINUTES`).
+- `POST /forgot` — 5 requests per hour per IP.
+
+### Operator notes
+
+- The bundled `make docker-up` brings up MySQL + the app via `docker compose`; use it if you don't already have MySQL running.
+- `make migrate-status` reports which migrations from `db/migrations/` are applied or pending.
+- `node dist/cli.js migrate` / `migrate:status` / `create-admin` are the same commands the Makefile targets wrap; call them directly when scripting.
+
 ## License
 
 MIT for code in this repository.
