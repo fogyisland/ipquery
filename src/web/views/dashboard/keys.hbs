@@ -6,8 +6,8 @@
 <section id="key-created">
   {{#if newKeyPlain}}
   <h2>{{req.t 'dashboard.keys.created_once'}}</h2>
-  <pre><code id="key-plain">{{newKeyPlain}}</code></pre>
-  <button onclick="navigator.clipboard.writeText(document.getElementById('key-plain').textContent)">{{req.t 'dashboard.keys.copy'}}</button>
+  <p>{{req.t 'dashboard.keys.copy_hint'}}</p>
+  <input type="text" readonly value="{{newKeyPlain}}" id="key-plain">
   {{/if}}
 </section>
 
@@ -29,10 +29,7 @@
       <td>{{formatDate this.createdAt}}</td>
       <td>
         {{#if (not this.revokedAt)}}
-        <form method="POST" action="/dashboard/keys/{{this.id}}/revoke" onsubmit="return confirm('{{../req.t 'dashboard.keys.revoke.confirm'}}')">
-          <input type="hidden" name="csrf" value="{{../req.csrfToken}}">
-          <button type="submit">{{../req.t 'dashboard.keys.revoke'}}</button>
-        </form>
+        <a href="/dashboard/keys/{{this.id}}/revoke/confirm">{{../req.t 'dashboard.keys.revoke'}}</a>
         {{else}}<span>(revoked)</span>{{/if}}
       </td>
     </tr>

@@ -79,4 +79,10 @@ describe('dashboard API keys', () => {
       .type('form').send({ csrf: token });
     expect(r.status).toBe(404);
   });
+
+  it('rendered HTML has no inline event handlers (CSP-safe)', async () => {
+    const r = await request(app.server).get('/dashboard/keys').set('Cookie', 'sid=' + sid);
+    expect(r.status).toBe(200);
+    expect(r.text).not.toMatch(/on(?:click|submit)=/);
+  });
 });

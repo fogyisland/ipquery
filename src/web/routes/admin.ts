@@ -57,15 +57,31 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
 
   app.post<{ Params: { id: string } }>('/admin/users/:id/reset-password', async (req, reply) => {
     if (!verifyCsrfRequest(req)) return reply.code(403).view('errors/csrf.hbs', { layout: 'layouts/public', req });
+    const id = Number(req.params.id);
     const tempPassword = `Temp${Math.random().toString(36).slice(2, 10)}1`;
-    await updatePassword(app.pool, Number(req.params.id), await hashPassword(tempPassword));
-    return reply.redirect('/admin/users/' + req.params.id);
+    await updatePassword(app.pool, id, await hashPassword(tempPassword));
+    // Render the user-detail page with tempPassword in context so the admin
+    // can copy it. The field is only set on this single render and is gone
+    // on the next GET (req.t resolves to undefined since it's not in context).
+    const u = await findUserById(app.pool, id);
+    if (!u) return reply.code(404).view('errors/404.hbs', { layout: 'layouts/public', title: req.t('error.404.title'), req });
+    return reply.view('admin/user-detail.hbs', {
+      layout: 'layouts/admin', title: u.email, user: u, tempPassword, req,
+    });
   });
 
   app.post<{ Params: { id: string } }>('/admin/users/:id/delete', async (req, reply) => {
     if (!verifyCsrfRequest(req)) return reply.code(403).view('errors/csrf.hbs', { layout: 'layouts/public', req });
     await deleteUser(app.pool, Number(req.params.id));
     return reply.redirect('/admin/users');
+  });
+
+  app.get<{ Params: { id: string } }>('/admin/users/:id/delete/confirm', async (req, reply) => {
+    const u = await findUserById(app.pool, Number(req.params.id));
+    if (!u) return reply.code(404).view('errors/404.hbs', { layout: 'layouts/public', title: req.t('error.404.title'), req });
+    return reply.view('admin/user-delete-confirm.hbs', {
+      layout: 'layouts/admin', title: req.t('admin.users.delete.confirm.title'), user: u, req,
+    });
   });
 
   app.get('/admin/etl', async (_req, reply) => reply.redirect('/admin/etl/runs'));
@@ -98,6 +114,12 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
     if (!verifyCsrfRequest(req)) return reply.code(403).view('errors/csrf.hbs', { layout: 'layouts/public', req });
     void runPipeline({ cfg: app.cfg }).catch((err) => app.log.error({ err }, 'manual ETL failed'));
     return reply.redirect('/admin/etl/runs');
+  });
+
+  app.get('/admin/etl/trigger/confirm', async (req, reply) => {
+    return reply.view('admin/etl-trigger-confirm.hbs', {
+      layout: 'layouts/admin', title: req.t('admin.etl.trigger.confirm.title'), req,
+    });
   });
 
   app.get('/admin/keys', async (req, reply) => {
