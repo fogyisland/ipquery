@@ -31,6 +31,7 @@ declare module 'fastify' {
     pool: ReturnType<typeof createPool>;
     mailer: ReturnType<typeof createMailer>;
     resetLoginLimit: () => void;
+    flushQueryLog: () => Promise<void>;
   }
 }
 
@@ -58,7 +59,8 @@ export async function buildServer(cfg: AppConfig, opts?: { extraRoutes?: (app: F
   app.decorate('resetLoginLimit', resetLoginLimit);
 
   app.decorate('mailer', createMailer(cfg));
-  registerQueryLogWriter(app, app.pool);
+  const queryLogWriter = registerQueryLogWriter(app, app.pool);
+  app.decorate('flushQueryLog', () => queryLogWriter.flush());
 
   await app.register(healthRoute);
   await app.register(lookupRoute);
