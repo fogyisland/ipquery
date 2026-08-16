@@ -70,3 +70,9 @@ export async function migrationStatus(pool: mysql.Pool): Promise<{
     pending: allVersions.filter((v) => !applied.has(v)),
   };
 }
+
+export async function listMigrationFiles(): Promise<string[]> {
+  const migrationsDir = path.join(__dirname);
+  const entries = await fs.readdir(migrationsDir);
+  return entries.filter((f) => /^\d{3}_.+\.sql$/.test(f)).sort();
+}
