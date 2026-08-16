@@ -2,7 +2,9 @@
 import type { FastifyInstance } from 'fastify';
 import { countQueriesByStatusSince, listQueryLogs } from '../../storage/queryLog';
 import { createApiKey, listApiKeysForUser, revokeApiKey, findApiKeyById } from '../../storage/apiKeys';
+import { updateDisplayName, updateEmail, updatePassword, getUserPasswordHash } from '../../storage/users';
 import { generateApiKey, hashToken } from '../auth/tokens';
+import { hashPassword, verifyPassword, validatePassword } from '../auth/password';
 import { verifyCsrfRequest } from '../plugins/csrf';
 
 export default async function dashboardRoutes(app: FastifyInstance): Promise<void> {
@@ -74,5 +76,71 @@ export default async function dashboardRoutes(app: FastifyInstance): Promise<voi
     }
     await revokeApiKey(app.pool, id);
     return reply.code(302).redirect('/dashboard/keys');
+  });
+
+  app.get('/dashboard/profile', async (req, reply) => {
+    // req.user is guaranteed non-null: registerAuthGuards already 302-redirects
+    // unauthenticated requests for /dashboard/* paths before this handler runs.
+    return reply.view('dashboard/profile.hbs', { layout: 'layouts/dashboard', title: req.t('dashboard.profile.title'), req });
+  });
+
+  app.post('/dashboard/profile', async (req, reply) => {
+    if (!verifyCsrfRequest(req)) return reply.code(403).view('errors/csrf.hbs', { layout: 'layouts/public', req });
+    const body = req.body as { action?: string; displayName?: string; email?: string; oldPassword?: string; newPassword?: string };
+    const action = body.action ?? '';
+
+    if (action === 'displayName') {
+      const dn = (body.displayName ?? '').trim();
+      if (!dn || dn.length > 64) {
+        return reply.code(400).view('dashboard/profile.hbs', {
+          layout: 'layouts/dashboard', title: req.t('dashboard.profile.title'),
+          flash: { error: 'invalid display_name' }, req,
+        });
+      }
+      await updateDisplayName(app.pool, req.user!.id, dn);
+      return reply.view('dashboard/profile.hbs', {
+        layout: 'layouts/dashboard', title: req.t('dashboard.profile.title'),
+        flash: { success: req.t('dashboard.profile.saved') }, req,
+      });
+    }
+    if (action === 'email') {
+      const email = (body.email ?? '').trim().toLowerCase();
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        return reply.code(400).view('dashboard/profile.hbs', {
+          layout: 'layouts/dashboard', title: req.t('dashboard.profile.title'),
+          flash: { error: 'invalid email' }, req,
+        });
+      }
+      await updateEmail(app.pool, req.user!.id, email);
+      // email_verified is reset by updateEmail; re-verify by admin or via verification flow (out of scope here)
+      // For simplicity in MVP, we just save the new email. Production: trigger re-verification.
+      return reply.view('dashboard/profile.hbs', {
+        layout: 'layouts/dashboard', title: req.t('dashboard.profile.title'),
+        flash: { success: req.t('dashboard.profile.saved') }, req,
+      });
+    }
+    if (action === 'password') {
+      const old = body.oldPassword ?? '';
+      const newPw = body.newPassword ?? '';
+      const v = validatePassword(newPw);
+      if (!v.ok) return reply.code(400).view('dashboard/profile.hbs', {
+        layout: 'layouts/dashboard', title: req.t('dashboard.profile.title'),
+        flash: { error: req.t('auth.signup.error.password_weak') }, req,
+      });
+      const hash = await getUserPasswordHash(app.pool, req.user!.id);
+      if (!hash || !await verifyPassword(hash, old)) return reply.code(401).view('dashboard/profile.hbs', {
+        layout: 'layouts/dashboard', title: req.t('dashboard.profile.title'),
+        flash: { error: 'old_password_incorrect' }, req,
+      });
+      await updatePassword(app.pool, req.user!.id, await hashPassword(newPw));
+      return reply.view('dashboard/profile.hbs', {
+        layout: 'layouts/dashboard', title: req.t('dashboard.profile.title'),
+        flash: { success: req.t('dashboard.profile.saved') }, req,
+      });
+    }
+    return reply.code(400).view('dashboard/profile.hbs', {
+      layout: 'layouts/dashboard', title: req.t('dashboard.profile.title'),
+      flash: { error: 'unknown action' }, req,
+    });
   });
 }

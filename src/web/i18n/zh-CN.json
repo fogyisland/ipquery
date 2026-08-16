@@ -127,9 +127,8 @@
     "profile": {
       "title": "个人资料",
       "displayName": "昵称",
-      "email": {
-        "help": "修改邮箱需重新验证"
-      },
+      "email": "邮箱",
+      "emailHint": "修改邮箱需重新验证",
       "oldPassword": "当前密码",
       "newPassword": "新密码",
       "save": "保存修改",
