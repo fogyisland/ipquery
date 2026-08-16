@@ -1,14 +1,14 @@
 // SPDX-License-Identifier: MIT
 import type { FastifyInstance } from 'fastify';
 import * as Handlebars from 'handlebars';
-import { createUser, findUserByEmail, findUserById, markEmailVerified, setLastLogin, getUserPasswordHash } from '../../storage/users';
-import { createVerification, findVerificationByHash, consumeVerification, lastVerificationForUser } from '../../storage/tokens';
-import { hashPassword, verifyPassword } from '../auth/password';
+import { createUser, findUserByEmail, findUserById, markEmailVerified, setLastLogin, getUserPasswordHash, updatePassword } from '../../storage/users';
+import { createVerification, findVerificationByHash, consumeVerification, lastVerificationForUser, createPasswordReset, findPasswordResetByHash, consumePasswordReset } from '../../storage/tokens';
+import { hashPassword, verifyPassword, validatePassword } from '../auth/password';
 import { generateToken, hashToken } from '../auth/tokens';
 import { verifyCsrfRequest } from '../plugins/csrf';
 import { setSessionCookie, clearSessionCookie } from '../plugins/auth';
 import { recordLoginFailure, recordLoginSuccess, isLocked } from '../plugins/loginRateLimit';
-import { createSession, destroySession } from '../../storage/sessions';
+import { createSession, destroySession, destroyAllForUser } from '../../storage/sessions';
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 
@@ -20,6 +20,14 @@ async function getVerifyEmailTpl(): Promise<Handlebars.TemplateDelegate> {
   const src = await fs.readFile(path.join(EMAIL_TEMPLATES_DIR, 'verify-email.hbs'), 'utf8');
   verifyEmailTemplate = Handlebars.compile(src);
   return verifyEmailTemplate;
+}
+
+let resetPasswordTemplate: Handlebars.TemplateDelegate | null = null;
+async function getResetPasswordTpl(): Promise<Handlebars.TemplateDelegate> {
+  if (resetPasswordTemplate) return resetPasswordTemplate;
+  const src = await fs.readFile(path.join(EMAIL_TEMPLATES_DIR, 'reset-password.hbs'), 'utf8');
+  resetPasswordTemplate = Handlebars.compile(src);
+  return resetPasswordTemplate;
 }
 
 export default async function authRoutes(app: FastifyInstance): Promise<void> {
@@ -197,5 +205,77 @@ export default async function authRoutes(app: FastifyInstance): Promise<void> {
     if (req.session) await destroySession(app.pool, req.session.id);
     await clearSessionCookie(reply, app.cfg.web.cookieDomain);
     return reply.code(302).redirect('/');
+  });
+
+  // GET /forgot
+  app.get('/forgot', async (req, reply) => {
+    return reply.view('auth/forgot.hbs', { layout: 'layouts/auth', title: req.t('auth.forgot.title'), req });
+  });
+
+  // POST /forgot
+  app.post('/forgot', {
+    config: { rateLimit: { max: 5, timeWindow: '1 hour' } },
+  }, async (req, reply) => {
+    if (!verifyCsrfRequest(req)) return reply.code(403).view('errors/csrf.hbs', { layout: 'layouts/public', req });
+    const email = ((req.body as { email?: string }).email ?? '').trim().toLowerCase();
+    const user = await findUserByEmail(app.pool, email);
+    if (user) {
+      const token = generateToken();
+      const tokenHash = hashToken(token);
+      await createPasswordReset(app.pool, user.id, tokenHash, new Date(Date.now() + 2 * 3600_000));
+      const resetUrl = `${app.cfg.web.baseUrl}/reset?token=${encodeURIComponent(token)}`;
+      const html = await (await getResetPasswordTpl())({ resetUrl });
+      await app.mailer.send({
+        to: user.email, subject: 'IPQuery 密码重置', text: `请访问以下链接重置密码:\n${resetUrl}`, html,
+      });
+    }
+    return reply.view('auth/forgot.hbs', {
+      layout: 'layouts/auth', title: req.t('auth.forgot.title'),
+      flash: { success: req.t('auth.forgot.done') }, req,
+    });
+  });
+
+  // GET /reset
+  app.get('/reset', async (req, reply) => {
+    const token = (req.query as { token?: string }).token ?? '';
+    if (!token) return reply.code(400).view('errors/404.hbs', { layout: 'layouts/auth', title: req.t('error.404.title'), req });
+    const v = await findPasswordResetByHash(app.pool, hashToken(token));
+    if (!v || v.consumedAt || v.expiresAt.getTime() < Date.now()) {
+      return reply.code(410).view('auth/reset.hbs', {
+        layout: 'layouts/auth', title: req.t('auth.reset.title'),
+        error: req.t('verify.expired'), token: '', req,
+      });
+    }
+    return reply.view('auth/reset.hbs', { layout: 'layouts/auth', title: req.t('auth.reset.title'), token, req });
+  });
+
+  // POST /reset
+  app.post('/reset', async (req, reply) => {
+    if (!verifyCsrfRequest(req)) return reply.code(403).view('errors/csrf.hbs', { layout: 'layouts/public', req });
+    const body = req.body as { token?: string; password?: string; passwordConfirm?: string };
+    const token = body.token ?? '';
+    const password = body.password ?? '';
+    const passwordConfirm = body.passwordConfirm ?? '';
+    const v = await findPasswordResetByHash(app.pool, hashToken(token));
+    if (!v || v.consumedAt || v.expiresAt.getTime() < Date.now()) {
+      return reply.code(410).view('auth/reset.hbs', {
+        layout: 'layouts/auth', title: req.t('auth.reset.title'),
+        error: req.t('verify.expired'), token, req,
+      });
+    }
+    const v1 = validatePassword(password);
+    if (!v1.ok) return reply.code(400).view('auth/reset.hbs', {
+      layout: 'layouts/auth', title: req.t('auth.reset.title'),
+      error: req.t('auth.signup.error.password_weak'), token, req,
+    });
+    if (password !== passwordConfirm) return reply.code(400).view('auth/reset.hbs', {
+      layout: 'layouts/auth', title: req.t('auth.reset.title'),
+      error: req.t('auth.signup.error.password_mismatch'), token, req,
+    });
+    const newHash = await hashPassword(password);
+    await updatePassword(app.pool, v.userId, newHash);
+    await consumePasswordReset(app.pool, v.id);
+    await destroyAllForUser(app.pool, v.userId);
+    return reply.code(302).redirect('/login?reset=1');
   });
 }
