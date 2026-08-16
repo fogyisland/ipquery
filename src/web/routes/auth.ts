@@ -1,11 +1,14 @@
 // SPDX-License-Identifier: MIT
 import type { FastifyInstance } from 'fastify';
 import * as Handlebars from 'handlebars';
-import { createUser, findUserByEmail, findUserById, markEmailVerified } from '../../storage/users';
+import { createUser, findUserByEmail, findUserById, markEmailVerified, setLastLogin, getUserPasswordHash } from '../../storage/users';
 import { createVerification, findVerificationByHash, consumeVerification, lastVerificationForUser } from '../../storage/tokens';
-import { hashPassword } from '../auth/password';
+import { hashPassword, verifyPassword } from '../auth/password';
 import { generateToken, hashToken } from '../auth/tokens';
 import { verifyCsrfRequest } from '../plugins/csrf';
+import { setSessionCookie, clearSessionCookie } from '../plugins/auth';
+import { recordLoginFailure, recordLoginSuccess, isLocked } from '../plugins/loginRateLimit';
+import { createSession, destroySession } from '../../storage/sessions';
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 
@@ -113,5 +116,86 @@ export default async function authRoutes(app: FastifyInstance): Promise<void> {
       to: u.email, subject: 'IPQuery 邮箱验证', text: `请访问以下链接验证邮箱:\n${verifyUrl}`, html,
     });
     return reply.code(302).redirect('/login?resent=1');
+  });
+
+  // GET /login
+  app.get('/login', async (req, reply) => {
+    const q = req.query as { next?: string; verified?: string; disabled?: string; verify_required?: string; userId?: string };
+    const viewData: Record<string, unknown> = { req };
+    let notice: { success?: string; error?: string; info?: string } = {};
+    if (q.verified) notice.success = req.t('verify.success');
+    if (q.disabled) notice.error = req.t('auth.login.error.disabled');
+    if (q.verify_required) notice.info = req.t('auth.verify.required');
+    viewData.flash = notice;
+    if (q.verify_required && q.userId) {
+      viewData.verifyRequired = true;
+      viewData.verifyUserId = q.userId;
+    }
+    return reply.view('auth/login.hbs', {
+      layout: 'layouts/auth', title: req.t('auth.login.title'), ...viewData,
+    });
+  });
+
+  // POST /login
+  app.post('/login', {
+    config: { rateLimit: { max: 20, timeWindow: '1 hour' } },
+  }, async (req, reply) => {
+    if (!verifyCsrfRequest(req)) return reply.code(403).view('errors/csrf.hbs', { layout: 'layouts/public', req });
+    const body = req.body as { email?: string; password?: string; next?: string };
+    const email = (body.email ?? '').trim().toLowerCase();
+    const password = body.password ?? '';
+
+    const lock = isLocked(email);
+    if (lock.locked) {
+      return reply.code(429).view('auth/login.hbs', {
+        layout: 'layouts/auth', title: req.t('auth.login.title'),
+        error: req.t('auth.login.error.locked', { minutes: Math.ceil(lock.retryAfterSec / 60) }),
+        req,
+      });
+    }
+
+    const user = await findUserByEmail(app.pool, email);
+    if (!user) {
+      recordLoginFailure(email, app.cfg.security.loginMaxAttempts, app.cfg.security.loginLockoutMinutes);
+      return reply.code(401).view('auth/login.hbs', {
+        layout: 'layouts/auth', title: req.t('auth.login.title'),
+        error: req.t('auth.login.error.credentials'), email, req,
+      });
+    }
+
+    const hash = await getUserPasswordHash(app.pool, user.id);
+    const ok = hash ? await verifyPassword(hash, password) : false;
+    if (!ok) {
+      recordLoginFailure(email, app.cfg.security.loginMaxAttempts, app.cfg.security.loginLockoutMinutes);
+      return reply.code(401).view('auth/login.hbs', {
+        layout: 'layouts/auth', title: req.t('auth.login.title'),
+        error: req.t('auth.login.error.credentials'), email, req,
+      });
+    }
+
+    if (!user.emailVerified) {
+      return reply.code(302).redirect(`/login?verify_required=1&userId=${user.id}`);
+    }
+    if (user.isDisabled) {
+      return reply.code(302).redirect('/login?disabled=1');
+    }
+
+    recordLoginSuccess(email);
+    const sid = generateToken(16);
+    const expiresAt = new Date(Date.now() + app.cfg.web.sessionTtlHours * 3600_000);
+    await createSession(app.pool, sid, user.id, expiresAt);
+    await setLastLogin(app.pool, user.id);
+    await setSessionCookie(reply, sid, app.cfg.web.sessionTtlHours * 3600, app.cfg.web.cookieSecure, app.cfg.web.cookieDomain);
+
+    const next = (body.next && body.next.startsWith('/')) ? body.next : '/dashboard';
+    return reply.code(302).redirect(next);
+  });
+
+  // POST /logout
+  app.post('/logout', async (req, reply) => {
+    if (!verifyCsrfRequest(req)) return reply.code(403).view('errors/csrf.hbs', { layout: 'layouts/public', req });
+    if (req.session) await destroySession(app.pool, req.session.id);
+    await clearSessionCookie(reply, app.cfg.web.cookieDomain);
+    return reply.code(302).redirect('/');
   });
 }
