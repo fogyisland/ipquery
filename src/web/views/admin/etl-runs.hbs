@@ -1,0 +1,19 @@
+{{!-- SPDX-License-Identifier: MIT --}}
+<h1>{{req.t 'admin.etl.title'}}</h1>
+<form method="POST" action="/admin/etl/trigger" onsubmit="return confirm('{{req.t 'admin.etl.trigger.confirm'}}')">
+  <input type="hidden" name="csrf" value="{{req.csrfToken}}">
+  <button type="submit" class="btn-primary">{{req.t 'admin.etl.trigger'}}</button>
+</form>
+<table>
+  <thead><tr><th>ID</th><th>{{req.t 'admin.etl.col.started'}}</th><th>{{req.t 'admin.etl.col.finished'}}</th><th>{{req.t 'admin.etl.col.status'}}</th><th>{{req.t 'admin.etl.col.merged'}}</th></tr></thead>
+  <tbody>
+    {{#each runs}}<tr>
+      <td><a href="/admin/etl/runs/{{this.id}}">{{this.id}}</a></td>
+      <td>{{formatDate this.started_at}}</td>
+      <td>{{formatDate this.finished_at}}</td>
+      <td>{{this.status}}</td>
+      <td>{{this.merged_records}}</td>
+    </tr>{{/each}}
+  </tbody>
+</table>
+{{> pagination baseUrl="/admin/etl/runs" page=page totalPages=totalPages queryString="" }}
