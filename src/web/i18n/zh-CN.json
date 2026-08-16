@@ -140,6 +140,9 @@
     "users": {
       "title": "用户管理",
       "search": "按邮箱搜索",
+      "detail": {
+        "title": "用户 #{id}: {email}"
+      },
       "col": {
         "email": "邮箱",
         "role": "角色",

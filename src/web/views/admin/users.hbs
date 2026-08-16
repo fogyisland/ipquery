@@ -1,0 +1,27 @@
+{{!-- SPDX-License-Identifier: MIT --}}
+<h1>{{req.t 'admin.users.title'}}</h1>
+<form method="GET" action="/admin/users">
+  <input type="text" name="q" placeholder="{{req.t 'admin.users.search'}}" value="{{q}}">
+  <select name="role">
+    <option value="">{{req.t 'dashboard.history.filter.all'}}</option>
+    <option value="user" {{#if (eq role 'user')}}selected{{/if}}>user</option>
+    <option value="admin" {{#if (eq role 'admin')}}selected{{/if}}>admin</option>
+  </select>
+  <button type="submit">{{req.t 'common.search'}}</button>
+</form>
+<table>
+  <thead><tr><th>{{req.t 'admin.users.col.email'}}</th><th>{{req.t 'admin.users.col.role'}}</th><th>{{req.t 'admin.users.col.verified'}}</th><th>{{req.t 'admin.users.col.disabled'}}</th><th>{{req.t 'admin.users.col.created'}}</th><th></th></tr></thead>
+  <tbody>
+    {{#each users}}
+    <tr>
+      <td><a href="/admin/users/{{this.id}}">{{this.email}}</a></td>
+      <td>{{this.role}}</td>
+      <td>{{#if this.emailVerified}}&#10003;{{else}}&#10007;{{/if}}</td>
+      <td>{{#if this.isDisabled}}&#10003;{{else}}&mdash;{{/if}}</td>
+      <td>{{formatDate this.createdAt}}</td>
+      <td></td>
+    </tr>
+    {{/each}}
+  </tbody>
+</table>
+{{> pagination baseUrl="/admin/users" page=page totalPages=totalPages queryString=queryString }}
