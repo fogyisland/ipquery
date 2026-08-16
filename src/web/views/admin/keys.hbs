@@ -1,0 +1,20 @@
+{{!-- SPDX-License-Identifier: MIT --}}
+<h1>{{req.t 'admin.keys.title'}}</h1>
+<form method="GET" action="/admin/keys">
+  <input type="number" name="userId" placeholder="user_id" value="{{userId}}">
+  <button type="submit">{{req.t 'common.search'}}</button>
+</form>
+<table>
+  <thead><tr><th>ID</th><th>{{req.t 'admin.keys.col.owner'}}</th><th>Label</th><th>{{req.t 'admin.keys.col.prefix'}}</th><th>{{req.t 'admin.keys.col.lastUsed'}}</th><th>Revoked</th></tr></thead>
+  <tbody>
+    {{#each keys}}<tr>
+      <td>{{this.id}}</td>
+      <td>{{this.ownerEmail}}</td>
+      <td>{{this.label}}</td>
+      <td><code>{{this.keyPrefix}}</code></td>
+      <td>{{formatRelative this.lastUsedAt}}</td>
+      <td>{{#if this.revokedAt}}{{formatDate this.revokedAt}}{{else}}—{{/if}}</td>
+    </tr>{{/each}}
+  </tbody>
+</table>
+{{> pagination baseUrl="/admin/keys" page=page totalPages=totalPages queryString=queryString }}

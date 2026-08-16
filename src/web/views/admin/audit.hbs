@@ -1,0 +1,27 @@
+{{!-- SPDX-License-Identifier: MIT --}}
+<h1>{{req.t 'admin.audit.title'}}</h1>
+<p><a href="/admin/audit.csv?{{queryString}}">{{req.t 'admin.audit.export'}}</a></p>
+<form method="GET" action="/admin/audit">
+  <input type="text" name="userEmail" placeholder="user email" value="{{userEmail}}">
+  <select name="status">
+    <option value="">{{req.t 'dashboard.history.filter.all'}}</option>
+    <option value="hit" {{#if (eq status 'hit')}}selected{{/if}}>hit</option>
+    <option value="miss" {{#if (eq status 'miss')}}selected{{/if}}>miss</option>
+    <option value="invalid" {{#if (eq status 'invalid')}}selected{{/if}}>invalid</option>
+  </select>
+  <input type="text" name="ipText" placeholder="8.8.8.8" value="{{ipText}}">
+  <button type="submit">{{req.t 'common.search'}}</button>
+</form>
+<table>
+  <thead><tr><th>{{req.t 'admin.audit.col.time'}}</th><th>{{req.t 'admin.audit.col.ip'}}</th><th>{{req.t 'admin.audit.col.status'}}</th><th>{{req.t 'admin.audit.col.user'}}</th><th>{{req.t 'admin.audit.col.apiKey'}}</th></tr></thead>
+  <tbody>
+    {{#each rows}}<tr>
+      <td>{{formatDate this.ts}}</td>
+      <td><code>{{this.ipText}}</code></td>
+      <td>{{this.status}}</td>
+      <td>{{#if this.userEmail}}{{this.userEmail}}{{else}}—{{/if}}</td>
+      <td>{{#if this.apiKeyPrefix}}<code>{{this.apiKeyPrefix}}</code>{{else}}—{{/if}}</td>
+    </tr>{{/each}}
+  </tbody>
+</table>
+{{> pagination baseUrl="/admin/audit" page=page totalPages=totalPages queryString=queryString }}
