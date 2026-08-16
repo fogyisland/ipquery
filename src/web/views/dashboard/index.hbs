@@ -1,0 +1,12 @@
+{{!-- SPDX-License-Identifier: MIT --}}
+<h1>{{req.t 'dashboard.title'}}</h1>
+<p>{{req.t 'dashboard.welcome' name=req.user.displayName}}</p>
+<section>
+  <h2>最近 7 天查询统计</h2>
+  <ul>
+    <li>命中:{{counts.hit}}</li>
+    <li>未命中:{{counts.miss}}</li>
+    <li>无效:{{counts.invalid}}</li>
+  </ul>
+</section>
+<p><a href="/dashboard/history">{{req.t 'dashboard.history.title'}}</a></p>
