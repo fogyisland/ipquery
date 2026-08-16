@@ -19,6 +19,7 @@ export async function registerView(app: FastifyInstance, cfg: { baseUrl: string 
 
   Handlebars.registerHelper('eq', (a: unknown, b: unknown) => a === b);
   Handlebars.registerHelper('ne', (a: unknown, b: unknown) => a !== b);
+  Handlebars.registerHelper('not', (v: unknown) => !v);
   Handlebars.registerHelper('and', (a: unknown, b: unknown) => Boolean(a) && Boolean(b));
   Handlebars.registerHelper('or', (a: unknown, b: unknown) => Boolean(a) || Boolean(b));
   Handlebars.registerHelper('gt', (a: unknown, b: unknown) => Number(a) > Number(b));

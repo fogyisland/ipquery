@@ -1,0 +1,44 @@
+{{!-- SPDX-License-Identifier: MIT --}}
+<h1>{{req.t 'dashboard.keys.title'}}</h1>
+{{#if flash.success}}<div class="flash flash-success">{{flash.success}}</div>{{/if}}
+{{#if flash.error}}<div class="flash flash-error">{{flash.error}}</div>{{/if}}
+
+<section id="key-created">
+  {{#if newKeyPlain}}
+  <h2>{{req.t 'dashboard.keys.created_once'}}</h2>
+  <pre><code id="key-plain">{{newKeyPlain}}</code></pre>
+  <button onclick="navigator.clipboard.writeText(document.getElementById('key-plain').textContent)">{{req.t 'dashboard.keys.copy'}}</button>
+  {{/if}}
+</section>
+
+<form method="POST" action="/dashboard/keys">
+  <input type="hidden" name="csrf" value="{{req.csrfToken}}">
+  {{> form-field name="label" label=(req.t 'dashboard.keys.label') required=true }}
+  <button type="submit" class="btn-primary">{{req.t 'dashboard.keys.create'}}</button>
+</form>
+
+{{#if keys.length}}
+<table>
+  <thead><tr><th>{{req.t 'dashboard.keys.label'}}</th><th>{{req.t 'dashboard.keys.prefix'}}</th><th>{{req.t 'dashboard.keys.lastUsed'}}</th><th>{{req.t 'dashboard.keys.created'}}</th><th></th></tr></thead>
+  <tbody>
+    {{#each keys}}
+    <tr>
+      <td>{{this.label}}</td>
+      <td><code>{{this.keyPrefix}}</code></td>
+      <td>{{formatRelative this.lastUsedAt}}</td>
+      <td>{{formatDate this.createdAt}}</td>
+      <td>
+        {{#if (not this.revokedAt)}}
+        <form method="POST" action="/dashboard/keys/{{this.id}}/revoke" onsubmit="return confirm('{{../req.t 'dashboard.keys.revoke.confirm'}}')">
+          <input type="hidden" name="csrf" value="{{../req.csrfToken}}">
+          <button type="submit">{{../req.t 'dashboard.keys.revoke'}}</button>
+        </form>
+        {{else}}<span>(revoked)</span>{{/if}}
+      </td>
+    </tr>
+    {{/each}}
+  </tbody>
+</table>
+{{else}}
+<p>{{req.t 'dashboard.keys.empty'}}</p>
+{{/if}}
