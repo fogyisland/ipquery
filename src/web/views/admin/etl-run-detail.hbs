@@ -1,0 +1,9 @@
+{{!-- SPDX-License-Identifier: MIT --}}
+<h1>{{req.t 'admin.etl.detail.title' id=run.id}}</h1>
+<dl>
+  <dt>{{req.t 'admin.etl.col.started'}}</dt><dd>{{formatDate run.started_at}}</dd>
+  <dt>{{req.t 'admin.etl.col.finished'}}</dt><dd>{{formatDate run.finished_at}}</dd>
+  <dt>{{req.t 'admin.etl.col.status'}}</dt><dd>{{run.status}}</dd>
+  <dt>{{req.t 'admin.etl.col.merged'}}</dt><dd>{{run.merged_records}}</dd>
+  {{#if run.error_message}}<dt>Error</dt><dd><pre>{{run.error_message}}</pre></dd>{{/if}}
+</dl>
