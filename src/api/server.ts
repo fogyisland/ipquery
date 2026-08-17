@@ -16,6 +16,7 @@ import { registerQueryLogWriter } from '../web/plugins/queryLog';
 import { registerSession } from '../web/plugins/session';
 import { registerAuthGuards } from '../web/plugins/auth';
 import { registerCsrf } from '../web/plugins/csrf';
+import { registerAuditLog } from '../web/plugins/auditLog';
 import { _resetForTests as resetLoginLimit } from '../web/plugins/loginRateLimit';
 import { createMailer } from '../mailer';
 import healthRoute from './routes/health';
@@ -68,6 +69,7 @@ export async function buildServer(cfg: AppConfig, opts?: { extraRoutes?: (app: F
   await app.register(marketingRoute);
   await app.register(dashboardRoute);
   await app.register(adminRoute);
+  registerAuditLog(app);
 
   if (opts?.extraRoutes) {
     await opts.extraRoutes(app);
