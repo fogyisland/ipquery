@@ -7,12 +7,19 @@ import { verifyCsrfRequest } from '../plugins/csrf';
 import { runPipeline } from '../../etl/pipeline';
 import { listAllApiKeys, revokeApiKey } from '../../storage/apiKeys';
 import { listQueryLogs, streamQueryLogsCsv } from '../../storage/queryLog';
+import { getOverview } from '../admin/overview';
 
 // /admin/* is already gated by the auth guard in src/web/plugins/auth.ts:
 // non-admins are 403-redirected before this handler runs, so req.user is
 // guaranteed to be an admin here.
 export default async function adminRoutes(app: FastifyInstance): Promise<void> {
-  app.get('/admin', async (_req, reply) => reply.code(302).redirect('/admin/users'));
+  app.get('/admin', async (req, reply) => {
+    const overview = await getOverview(app.pool);
+    return reply.view('admin/dashboard.hbs', {
+      layout: 'layouts/admin', title: req.t('admin.dashboard.title'),
+      overview, csrfToken: req.csrfToken, req,
+    });
+  });
 
   app.get('/admin/users', async (req, reply) => {
     const q = req.query as { page?: string; q?: string; role?: 'user' | 'admin' };

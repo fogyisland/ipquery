@@ -216,6 +216,21 @@
         "apiKey": "API key"
       },
       "export": "Export CSV"
+    },
+    "dashboard": {
+      "title": "Overview",
+      "etlStatus": "ETL status",
+      "runsToday": "runs today",
+      "ipRanges": "IP ranges",
+      "users": "Users",
+      "verified": "verified",
+      "apiKeys": "API keys",
+      "queries24h": "Queries (24h)",
+      "hitRate": "Hit rate",
+      "lastSuccess": "Last success",
+      "never": "never",
+      "recentActivity": "Recent activity",
+      "noActivity": "No recent activity"
     }
   },
   "footer": {

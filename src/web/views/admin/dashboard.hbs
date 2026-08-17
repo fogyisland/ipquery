@@ -1,0 +1,63 @@
+{{!-- SPDX-License-Identifier: MIT --}}
+<section hx-get="/admin" hx-trigger="every 30s" hx-swap="outerHTML" hx-select="section">
+<h2>{{req.t 'admin.dashboard.title'}}</h2>
+
+<div class="dashboard-grid">
+  <div class="card">
+    <p class="card-title">{{req.t 'admin.dashboard.etlStatus'}}</p>
+    <p class="card-value">
+      {{#if overview.etl.lastRun}}
+        {{> pill kind=(ternary (eq overview.etl.lastRun.status 'success') 'success' (ternary (eq overview.etl.lastRun.status 'failed') 'danger' 'muted')) text=overview.etl.lastRun.status}}
+      {{else}}
+        {{> pill kind='muted' text='never'}}
+      {{/if}}
+    </p>
+    <p class="card-sub">{{overview.etl.runsToday}} {{req.t 'admin.dashboard.runsToday'}}</p>
+  </div>
+
+  <div class="card">
+    <p class="card-title">{{req.t 'admin.dashboard.ipRanges'}}</p>
+    <p class="card-value">{{overview.db.ipRanges}}</p>
+  </div>
+
+  <div class="card">
+    <p class="card-title">{{req.t 'admin.dashboard.users'}}</p>
+    <p class="card-value">{{overview.db.users.total}}</p>
+    <p class="card-sub">{{overview.db.users.verified}} {{req.t 'admin.dashboard.verified'}}</p>
+  </div>
+
+  <div class="card">
+    <p class="card-title">{{req.t 'admin.dashboard.apiKeys'}}</p>
+    <p class="card-value">{{overview.db.apiKeys.active}}</p>
+    <p class="card-sub">/ {{overview.db.apiKeys.total}}</p>
+  </div>
+
+  <div class="card">
+    <p class="card-title">{{req.t 'admin.dashboard.queries24h'}}</p>
+    <p class="card-value">{{overview.queries24h.total}}</p>
+    <p class="card-sub">{{req.t 'admin.dashboard.hitRate'}} {{percent overview.queries24h.hitRate 0}}</p>
+    {{> sparkline data=overview.queries24h.trend max=(max overview.queries24h.trend 1)}}
+  </div>
+
+  <div class="card">
+    <p class="card-title">{{req.t 'admin.dashboard.lastSuccess'}}</p>
+    <p class="card-value" style="font-size:16px">{{#if overview.etl.lastSuccessAt}}{{formatRelative overview.etl.lastSuccessAt}}{{else}}{{req.t 'admin.dashboard.never'}}{{/if}}</p>
+  </div>
+</div>
+
+<div class="card">
+  <h3 class="card-title">{{req.t 'admin.dashboard.recentActivity'}}</h3>
+  <div class="activity-feed">
+    {{#each overview.recentActivity}}
+    <div class="activity-row">
+      <span class="activity-time">{{formatRelative this.created_at}}</span>
+      <span class="pill pill-info">{{this.action}}</span>
+      <span>{{this.actor_email}}</span>
+      {{#if this.target_type}}<span>&rarr; {{this.target_type}}#{{this.target_id}}</span>{{/if}}
+    </div>
+    {{else}}
+    <p class="card-sub">{{req.t 'admin.dashboard.noActivity'}}</p>
+    {{/each}}
+  </div>
+</div>
+</section>

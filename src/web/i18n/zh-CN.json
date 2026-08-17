@@ -216,6 +216,21 @@
         "apiKey": "API Key"
       },
       "export": "导出 CSV"
+    },
+    "dashboard": {
+      "title": "总览",
+      "etlStatus": "ETL 状态",
+      "runsToday": "今日运行次数",
+      "ipRanges": "IP 段数",
+      "users": "用户",
+      "verified": "已验证",
+      "apiKeys": "API Keys",
+      "queries24h": "24h 查询",
+      "hitRate": "命中率",
+      "lastSuccess": "上次成功",
+      "never": "从未",
+      "recentActivity": "近期活动",
+      "noActivity": "暂无活动"
     }
   },
   "footer": {
