@@ -1,0 +1,26 @@
+{{!-- SPDX-License-Identifier: MIT --}}
+{{!-- Task 4: new app shell layout used by non-admin pages once Task 14-15
+     migrate them away from layouts/public.hbs. Mirrors layouts/admin.hbs
+     shape so the same CSS tokens apply uniformly. --}}
+<!doctype html>
+<html lang="{{req.locale}}">
+<head>
+  <meta charset="utf-8">
+  <title>{{title}} · IPQuery</title>
+  <link rel="stylesheet" href="/assets/style.css">
+</head>
+<body class="layout-app">
+  <div class="app-shell">
+    {{> sidebar}}
+    <main class="app-main">
+      <header class="app-header">
+        <h1 class="app-title">{{title}}</h1>
+      </header>
+      <div class="app-content">
+        {{{body}}}
+      </div>
+    </main>
+  </div>
+  <script src="/assets/htmx.min.js" defer></script>
+</body>
+</html>

@@ -1,0 +1,11 @@
+{{!-- SPDX-License-Identifier: MIT --}}
+{{!-- expects: data (number[]), max (number), width=80, height=24 --}}
+{{!-- CSP forbids inline scripts so the path is generated server-side by the
+     'sparkline-path' helper registered in src/web/plugins/view.ts. --}}
+<svg class="sparkline" viewBox="0 0 {{width}} {{height}}" width="{{width}}" height="{{height}}" preserveAspectRatio="none">
+  {{#if (gt max 0)}}
+    <path d="{{sparkline-path data max width height}}" fill="none" stroke="#2563eb" stroke-width="1.5"/>
+  {{else}}
+    <line x1="0" y1="{{height}}" x2="{{width}}" y2="{{height}}" stroke="#e5e7eb"/>
+  {{/if}}
+</svg>

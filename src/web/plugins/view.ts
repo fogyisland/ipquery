@@ -27,6 +27,27 @@ export async function registerView(app: FastifyInstance, cfg: { baseUrl: string 
   Handlebars.registerHelper('add', (a: unknown, b: unknown) => Number(a) + Number(b));
   Handlebars.registerHelper('subtract', (a: unknown, b: unknown) => Number(a) - Number(b));
   Handlebars.registerHelper('json', (v: unknown) => JSON.stringify(v));
+  Handlebars.registerHelper('lookup', (obj: unknown, key: unknown) => {
+    if (obj == null || typeof obj !== 'object') return undefined;
+    return (obj as Record<string, unknown>)[String(key)];
+  });
+  Handlebars.registerHelper('sparkline-path', (data: unknown, max: unknown, width: unknown, height: unknown) => {
+    const arr = Array.isArray(data) ? data.map(Number) : [];
+    const m = Number(max) || 1;
+    const w = Number(width) || 80;
+    const h = Number(height) || 24;
+    if (arr.length === 0) return '';
+    if (arr.length === 1) {
+      const y = (h - (arr[0]! / m) * h * 0.85 + h * 0.075).toFixed(1);
+      return `M 0,${y}`;
+    }
+    const step = w / (arr.length - 1);
+    return arr.map((v, i) => {
+      const x = (i * step).toFixed(1);
+      const y = (h - (v / m) * h * 0.85 + h * 0.075).toFixed(1);
+      return `${i === 0 ? 'M' : 'L'} ${x},${y}`;
+    }).join(' ');
+  });
   Handlebars.registerHelper('formatDate', (d: Date | string | null | undefined) => {
     if (!d) return '';
     const date = typeof d === 'string' ? new Date(d) : d;
