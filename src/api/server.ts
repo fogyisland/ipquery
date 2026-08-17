@@ -82,4 +82,5 @@ export async function buildServer(cfg: AppConfig, opts?: { extraRoutes?: (app: F
   await app.ready();
 
   return app;
+
 }
