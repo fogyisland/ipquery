@@ -59,6 +59,19 @@ export async function registerView(app: FastifyInstance, cfg: { baseUrl: string 
     return formatDistanceToNow(date, { addSuffix: true, locale: zhCN });
   });
   Handlebars.registerHelper('year', () => new Date().getFullYear());
+  Handlebars.registerHelper('ternary', (cond: unknown, a: unknown, b: unknown) => (cond ? a : b));
+  Handlebars.registerHelper('percent', (n: unknown, digits?: unknown) => {
+    const d = digits == null ? 0 : Number(digits);
+    return `${(Number(n) * 100).toFixed(d)}%`;
+  });
+  Handlebars.registerHelper('max', (...args: unknown[]) => {
+    // Handlebars may append an options object as the last arg; detect by shape.
+    const last = args[args.length - 1];
+    const vals = (last && typeof last === 'object' && 'name' in (last as object) && 'fn' in (last as object)
+      ? args.slice(0, -1)
+      : args) as unknown[];
+    return vals.reduce((m: number, v: unknown) => Math.max(m, Number(v)), 0);
+  });
 
   // Register all Handlebars partials globally so layouts (e.g. public.hbs) can
   // include them with `{{> nav }}` / `{{> footer }}` / `{{> flash }}`. The
