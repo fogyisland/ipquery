@@ -39,7 +39,7 @@
     {{#if req.session.userId}}
       <span class="sidebar-user">{{req.session.email}}</span>
       <form method="POST" action="/logout" class="sidebar-logout-form">
-        <input type="hidden" name="csrf" value="{{@root.csrfToken}}">
+        <input type="hidden" name="csrf" value="{{req.csrfToken}}">
         <button type="submit" class="sidebar-link sidebar-logout">{{req.t 'nav.logout'}}</button>
       </form>
     {{else}}

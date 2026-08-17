@@ -12,20 +12,6 @@
 <body class="layout-dashboard">
   {{> nav }}
   <div class="dashboard-shell">
-    <aside class="sidebar">
-      <h2>{{req.t 'dashboard.title'}}</h2>
-      <nav>
-        <ul>
-          <li><a href="/dashboard">{{req.t 'dashboard.welcome' name=req.user.displayName}}</a></li>
-          <li><a href="/dashboard/history">{{req.t 'dashboard.history.title'}}</a></li>
-          <li><a href="/dashboard/keys">{{req.t 'dashboard.keys.title'}}</a></li>
-          <li><a href="/dashboard/profile">{{req.t 'dashboard.profile.title'}}</a></li>
-          {{#if (eq req.user.role 'admin')}}
-          <li><a href="/admin/users">{{req.t 'nav.admin.users'}}</a></li>
-          {{/if}}
-        </ul>
-      </nav>
-    </aside>
     <main class="dashboard-main">
       {{> flash }}
       {{{body}}}
