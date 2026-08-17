@@ -1,0 +1,50 @@
+{{!-- SPDX-License-Identifier: MIT --}}
+{{!-- Task 4: redesigned navigation sidebar. Rendered by layouts/app.hbs and
+     (transitively) by every existing layout that still uses {{> nav}}. --}}
+<aside class="sidebar">
+  <a class="sidebar-brand" href="/">IPQuery</a>
+  <nav class="sidebar-nav">
+    <div class="sidebar-group">
+      <div class="sidebar-group-label">{{req.t 'sidebar.group.public'}}</div>
+      <a href="/" class="sidebar-link">{{req.t 'nav.home'}}</a>
+      <a href="/try" class="sidebar-link">{{req.t 'nav.try'}}</a>
+      <a href="/docs" class="sidebar-link">{{req.t 'nav.docs'}}</a>
+      <a href="/status" class="sidebar-link">{{req.t 'nav.status'}}</a>
+      <a href="/about" class="sidebar-link">{{req.t 'nav.about'}}</a>
+    </div>
+    {{#if req.session.userId}}
+    <div class="sidebar-group">
+      <div class="sidebar-group-label">{{req.t 'sidebar.group.user'}}</div>
+      <a href="/dashboard" class="sidebar-link">{{req.t 'nav.dashboard'}}</a>
+      <a href="/dashboard/history" class="sidebar-link">{{req.t 'nav.history'}}</a>
+      <a href="/dashboard/keys" class="sidebar-link">{{req.t 'nav.apiKeys'}}</a>
+      <a href="/dashboard/profile" class="sidebar-link">{{req.t 'nav.profile'}}</a>
+    </div>
+    {{/if}}
+    {{#if (eq req.session.role 'admin')}}
+    <div class="sidebar-group">
+      <div class="sidebar-group-label">{{req.t 'sidebar.group.admin'}}</div>
+      <a href="/admin" class="sidebar-link">{{req.t 'nav.admin.dashboard'}}</a>
+      <a href="/admin/users" class="sidebar-link">{{req.t 'nav.admin.users'}}</a>
+      <a href="/admin/etl/runs" class="sidebar-link">{{req.t 'nav.admin.etl'}}</a>
+      <a href="/admin/queries" class="sidebar-link">{{req.t 'nav.admin.queries'}}</a>
+      <a href="/admin/keys" class="sidebar-link">{{req.t 'nav.admin.keys'}}</a>
+      <a href="/admin/audit" class="sidebar-link">{{req.t 'nav.admin.audit'}}</a>
+      <a href="/admin/audit-log" class="sidebar-link">{{req.t 'nav.admin.auditLog'}}</a>
+      <a href="/admin/settings" class="sidebar-link">{{req.t 'nav.admin.settings'}}</a>
+    </div>
+    {{/if}}
+  </nav>
+  <div class="sidebar-footer">
+    {{#if req.session.userId}}
+      <span class="sidebar-user">{{req.session.email}}</span>
+      <form method="POST" action="/logout" class="sidebar-logout-form">
+        <input type="hidden" name="csrf" value="{{@root.csrfToken}}">
+        <button type="submit" class="sidebar-link sidebar-logout">{{req.t 'nav.logout'}}</button>
+      </form>
+    {{else}}
+      <a href="/login" class="sidebar-link">{{req.t 'nav.login'}}</a>
+      <a href="/signup" class="sidebar-link">{{req.t 'nav.signup'}}</a>
+    {{/if}}
+  </div>
+</aside>

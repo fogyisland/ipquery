@@ -8,8 +8,14 @@ describe('web i18n t()', () => {
     expect(t('zh-CN', 'common.signup')).toBe('注册');
   });
 
-  it('falls back to Chinese when locale missing', () => {
-    expect(t('en-US', 'common.signup')).toBe('注册');
+  it('returns English value when both locales have the key', () => {
+    expect(t('en-US', 'common.signup')).toBe('Sign up');
+  });
+
+  it('falls back to Chinese when locale missing the key', () => {
+    // 'dashboard.keys.copy' is intentionally absent from en-US.json so the
+    // fallback branch in t() is exercised by this test.
+    expect(t('en-US', 'dashboard.keys.copy')).toBe('复制');
   });
 
   it('returns key itself when key missing everywhere', () => {

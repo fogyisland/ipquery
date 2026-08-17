@@ -12,7 +12,17 @@
     "search": "搜索",
     "loading": "加载中...",
     "yes": "是",
-    "no": "否"
+    "no": "否",
+    "filter": "筛选",
+    "exportCsv": "导出 CSV",
+    "any": "全部"
+  },
+  "sidebar": {
+    "group": {
+      "public": "公开",
+      "user": "个人",
+      "admin": "管理"
+    }
   },
   "nav": {
     "home": "首页",
@@ -22,8 +32,22 @@
     "about": "关于",
     "try": "在线试查",
     "dashboard": "控制台",
-    "admin": "管理后台",
-    "logout": "登出"
+    "admin": {
+      "dashboard": "总览",
+      "users": "用户",
+      "etl": "ETL 运维",
+      "queries": "查询日志",
+      "keys": "API Keys",
+      "audit": "查询审计",
+      "auditLog": "操作审计",
+      "settings": "设置"
+    },
+    "logout": "登出",
+    "history": "查询历史",
+    "apiKeys": "API Keys",
+    "profile": "个人资料",
+    "signup": "注册",
+    "login": "登录"
   },
   "auth": {
     "email": "邮箱",

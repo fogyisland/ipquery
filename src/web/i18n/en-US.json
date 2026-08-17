@@ -1,1 +1,242 @@
-{}
+{
+  "common": {
+    "signup": "Sign up",
+    "login": "Log in",
+    "logout": "Log out",
+    "submit": "Submit",
+    "cancel": "Cancel",
+    "save": "Save",
+    "back": "Back",
+    "next": "Next",
+    "prev": "Previous",
+    "search": "Search",
+    "loading": "Loading...",
+    "yes": "Yes",
+    "no": "No",
+    "filter": "Filter",
+    "exportCsv": "Export CSV",
+    "any": "Any"
+  },
+  "sidebar": {
+    "group": {
+      "public": "Public",
+      "user": "Account",
+      "admin": "Admin"
+    }
+  },
+  "nav": {
+    "home": "Home",
+    "docs": "Docs",
+    "pricing": "Pricing",
+    "status": "Status",
+    "about": "About",
+    "try": "Try",
+    "dashboard": "Dashboard",
+    "admin": "Admin",
+    "logout": "Log out",
+    "history": "History",
+    "apiKeys": "API Keys",
+    "profile": "Profile",
+    "signup": "Sign up",
+    "login": "Log in",
+    "admin": {
+      "dashboard": "Overview",
+      "users": "Users",
+      "etl": "ETL Runs",
+      "queries": "Query Log",
+      "keys": "API Keys",
+      "audit": "Query Audit",
+      "auditLog": "Audit Log",
+      "settings": "Settings"
+    }
+  },
+  "auth": {
+    "email": "Email",
+    "password": {
+      "label": "Password",
+      "help": "At least 10 characters, must include letters and digits",
+      "confirm": "Confirm password"
+    },
+    "displayName": "Display name",
+    "signup": {
+      "title": "Sign up",
+      "submit": "Create account",
+      "success": {
+        "title": "Check your email",
+        "body": "Click the verification link in the email to activate your account."
+      },
+      "error": {
+        "duplicate": "This email is already registered",
+        "email_format": "Invalid email format",
+        "password_weak": "Password must be at least 10 chars with letters and digits",
+        "password_mismatch": "Passwords do not match",
+        "displayName_invalid": "Display name must be 1-64 characters"
+      }
+    },
+    "verify": {
+      "title": "Email verification",
+      "success": "Email verified, please log in",
+      "invalid": "Invalid link",
+      "expired": "Link expired, request a new one",
+      "consumed": "Link already used",
+      "resend": "Resend verification email",
+      "resend.cooldown": "Try again in {seconds} seconds",
+      "required": "Please verify your email first"
+    },
+    "login": {
+      "title": "Log in",
+      "submit": "Log in",
+      "error": {
+        "credentials": "Wrong email or password",
+        "disabled": "Account disabled, contact admin",
+        "locked": "Too many attempts, try again in {minutes} minutes"
+      }
+    },
+    "logout": {
+      "title": "Log out",
+      "confirm": "Log out?"
+    },
+    "forgot": {
+      "title": "Reset password",
+      "submit": "Send reset link",
+      "done": "If that email is registered, you will receive a reset link"
+    },
+    "reset": {
+      "title": "Reset password",
+      "submit": "Reset password"
+    }
+  },
+  "greeting": {
+    "hello": "Hello, {name}"
+  },
+  "lookup": {
+    "title": "IP Lookup",
+    "input": {
+      "placeholder": "Enter an IP address, e.g. 8.8.8.8"
+    },
+    "submit": "Lookup",
+    "found": "{ip} is in {country}",
+    "notfound": "{ip} not found",
+    "invalid": "Invalid IP format"
+  },
+  "dashboard": {
+    "title": "Dashboard",
+    "welcome": "Welcome, {name}",
+    "history": {
+      "title": "Query history",
+      "empty": "No queries yet",
+      "col": {
+        "time": "Time",
+        "ip": "IP",
+        "status": "Status",
+        "source": "Source"
+      },
+      "filter": {
+        "status": "Filter by status",
+        "all": "All"
+      }
+    },
+    "keys": {
+      "title": "API Keys",
+      "empty": "No API keys yet",
+      "create": "Create new key",
+      "label": "Label",
+      "prefix": "Prefix",
+      "lastUsed": "Last used",
+      "created": "Created",
+      "revoke": "Revoke",
+      "revoke.confirm": "Revoke this key? It cannot be undone.",
+      "created_once": "Save this key now, you will not see it again:"
+    },
+    "profile": {
+      "title": "Profile",
+      "displayName": "Display name",
+      "email": "Email",
+      "emailHint": "Changing email requires re-verification",
+      "oldPassword": "Current password",
+      "newPassword": "New password",
+      "save": "Save changes",
+      "saved": "Profile saved"
+    }
+  },
+  "admin": {
+    "title": "Admin",
+    "users": {
+      "title": "Users",
+      "search": "Search by email",
+      "detail": {
+        "title": "User #{id}: {email}"
+      },
+      "col": {
+        "email": "Email",
+        "role": "Role",
+        "verified": "Verified",
+        "disabled": "Disabled",
+        "created": "Created",
+        "lastLogin": "Last login"
+      },
+      "action": {
+        "enable": "Enable",
+        "disable": "Disable",
+        "verify": "Mark verified",
+        "resetPassword": "Reset password",
+        "delete": "Delete"
+      },
+      "delete.confirm": "Delete this user? All related data will be removed."
+    },
+    "etl": {
+      "title": "ETL runs",
+      "trigger": "Run now",
+      "trigger.confirm": "Trigger ETL manually?",
+      "col": {
+        "started": "Started",
+        "finished": "Finished",
+        "status": "Status",
+        "merged": "Merged records"
+      },
+      "detail": {
+        "title": "ETL Run #{id}"
+      }
+    },
+    "keys": {
+      "title": "API Keys (global)",
+      "col": {
+        "owner": "Owner",
+        "prefix": "Prefix",
+        "lastUsed": "Last used"
+      }
+    },
+    "audit": {
+      "title": "Query audit",
+      "col": {
+        "time": "Time",
+        "ip": "Queried IP",
+        "status": "Status",
+        "user": "User",
+        "apiKey": "API key"
+      },
+      "export": "Export CSV"
+    }
+  },
+  "footer": {
+    "copyright": "© {year} IPQuery",
+    "license": "MIT"
+  },
+  "error": {
+    "csrf": {
+      "title": "Session expired",
+      "body": "Please refresh and try again"
+    },
+    "403": {
+      "title": "Forbidden",
+      "body": "You do not have permission to view this page"
+    },
+    "404": {
+      "title": "Not found"
+    },
+    "500": {
+      "title": "Server error",
+      "body": "Please try again later"
+    }
+  }
+}

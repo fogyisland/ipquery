@@ -1,0 +1,89 @@
+/* SPDX-License-Identifier: MIT */
+/* Task 4: design tokens + base component styles. Existing layouts that still
+   reference /assets/css/base.css keep their styles; this file is consumed by
+   the new layouts/app.hbs shell so the sidebar, cards, pills, buttons,
+   sparkline, and table primitives look consistent with the admin layouts. */
+
+:root {
+  --color-bg: #f7f8fa;
+  --color-surface: #ffffff;
+  --color-border: #e5e7eb;
+  --color-text: #111827;
+  --color-text-muted: #6b7280;
+  --color-accent: #2563eb;
+  --color-success: #16a34a;
+  --color-warning: #d97706;
+  --color-danger: #dc2626;
+  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.05);
+  --shadow-md: 0 4px 8px rgba(0,0,0,0.08);
+  --sidebar-w: 220px;
+  --header-h: 56px;
+}
+
+.layout-app, .layout-admin {
+  font-family: var(--font-sans);
+  color: var(--color-text);
+  background: var(--color-bg);
+}
+.app-shell, .admin-shell { display: grid; grid-template-columns: var(--sidebar-w) 1fr; min-height: 100vh; }
+.app-main, .admin-main { display: flex; flex-direction: column; min-width: 0; }
+.app-header, .admin-header { height: var(--header-h); display: flex; align-items: center; padding: 0 24px; background: var(--color-surface); border-bottom: 1px solid var(--color-border); }
+.app-title, .admin-title { font-size: 16px; font-weight: 600; margin: 0; }
+.app-content, .admin-content { padding: 24px; max-width: 1400px; width: 100%; box-sizing: border-box; }
+
+.sidebar { background: #0f172a; color: #e5e7eb; padding: 16px 12px; display: flex; flex-direction: column; }
+.sidebar-brand { color: #fff; font-weight: 700; font-size: 18px; text-decoration: none; padding: 8px 12px; margin-bottom: 12px; }
+.sidebar-nav { flex: 1; }
+.sidebar-group { margin-bottom: 16px; }
+.sidebar-group-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: #94a3b8; padding: 4px 12px; }
+.sidebar-link { display: block; padding: 6px 12px; color: #cbd5e1; text-decoration: none; border-radius: var(--radius-sm); font-size: 14px; }
+.sidebar-link:hover { background: #1e293b; color: #fff; }
+.sidebar-footer { border-top: 1px solid #1e293b; padding-top: 12px; }
+.sidebar-user { display: block; padding: 4px 12px; color: #94a3b8; font-size: 12px; word-break: break-all; }
+.sidebar-logout-form { display: inline; }
+.sidebar-logout { background: none; border: none; cursor: pointer; text-align: left; width: 100%; font: inherit; }
+
+.card { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: 16px; box-shadow: var(--shadow-sm); }
+.card-title { font-size: 13px; color: var(--color-text-muted); margin: 0 0 8px; font-weight: 500; }
+.card-value { font-size: 28px; font-weight: 700; color: var(--color-text); margin: 0; font-variant-numeric: tabular-nums; }
+.card-sub { font-size: 12px; color: var(--color-text-muted); margin-top: 4px; }
+
+.pill { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 500; line-height: 1.5; }
+.pill-success { background: #dcfce7; color: #166534; }
+.pill-warning { background: #fef3c7; color: #92400e; }
+.pill-danger { background: #fee2e2; color: #991b1b; }
+.pill-info { background: #dbeafe; color: #1e40af; }
+.pill-muted { background: #f3f4f6; color: #4b5563; }
+
+.filter-bar { display: flex; gap: 12px; align-items: flex-end; margin-bottom: 16px; flex-wrap: wrap; }
+.filter-label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--color-text-muted); }
+.filter-select, .filter-input { padding: 6px 10px; border: 1px solid var(--color-border); border-radius: var(--radius-sm); font: inherit; background: var(--color-surface); min-width: 120px; }
+
+.button { display: inline-block; padding: 6px 14px; background: var(--color-accent); color: #fff; border: none; border-radius: var(--radius-sm); cursor: pointer; font: inherit; text-decoration: none; }
+.button:hover { background: #1d4ed8; }
+.button-secondary { background: var(--color-surface); color: var(--color-text); border: 1px solid var(--color-border); }
+.button-secondary:hover { background: #f3f4f6; }
+.button-danger { background: var(--color-danger); }
+.button-danger:hover { background: #b91c1c; }
+.button-small { padding: 4px 10px; font-size: 12px; }
+
+.sparkline { display: inline-block; vertical-align: middle; }
+
+.table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.table th, .table td { padding: 8px 12px; text-align: left; border-bottom: 1px solid var(--color-border); }
+.table th { background: #f9fafb; font-weight: 600; color: var(--color-text-muted); font-size: 12px; text-transform: uppercase; letter-spacing: 0.03em; }
+.table tbody tr:hover { background: #f9fafb; }
+.table .table-num { text-align: right; font-variant-numeric: tabular-nums; font-family: var(--font-mono); }
+.table .table-actions { white-space: nowrap; }
+
+.dashboard-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px; }
+.dashboard-row { display: grid; grid-template-columns: 2fr 1fr; gap: 16px; margin-bottom: 24px; }
+@media (max-width: 900px) { .dashboard-row { grid-template-columns: 1fr; } }
+
+.activity-feed { font-size: 13px; }
+.activity-row { padding: 6px 0; border-bottom: 1px solid var(--color-border); display: flex; gap: 12px; align-items: baseline; }
+.activity-time { color: var(--color-text-muted); font-family: var(--font-mono); font-size: 12px; min-width: 80px; }
