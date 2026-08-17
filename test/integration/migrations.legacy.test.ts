@@ -62,14 +62,14 @@ describe('migrations legacy upgrade', () => {
     // also checks for their absence before applying, they would normally be
     // reapplied -- except IF NOT EXISTS makes the CREATE TABLE a no-op
     // so the table-version sync is allowed to record.
-    // Either way: no error, and all 8 versions end up in schema_migrations.
+    // Either way: no error, and all 9 versions end up in schema_migrations.
     expect(result.applied.length).toBeGreaterThanOrEqual(0);
 
     const applied = await pool.query<mysql.RowDataPacket[]>(
       'SELECT version FROM schema_migrations ORDER BY version ASC',
     );
     const versions = (applied[0] as Array<{ version: string }>).map((r) => r.version);
-    expect(versions).toEqual(['001', '002', '003', '004', '005', '006', '007', '008']);
+    expect(versions).toEqual(['001', '002', '003', '004', '005', '006', '007', '008', '010']);
 
     // The 10 expected tables all still exist after the upgrade.
     const [rows] = await pool.query<mysql.RowDataPacket[]>('SHOW TABLES');

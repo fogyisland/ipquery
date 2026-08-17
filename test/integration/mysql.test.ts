@@ -36,7 +36,7 @@ describe('mysql storage', () => {
       [TEST_DB]
     );
     const names = rows.map(r => r.TABLE_NAME).sort();
-    expect(names).toEqual(['api_keys','email_verifications','etl_runs','ip_ranges','ip_ranges_new','password_resets','query_log','schema_migrations','sessions','users']);
+    expect(names).toEqual(['admin_audit_log','api_keys','email_verifications','etl_runs','ip_ranges','ip_ranges_new','password_resets','query_log','schema_migrations','sessions','users']);
   });
 
   it('insertIntoNew + atomicSwapRanges moves data', async () => {
