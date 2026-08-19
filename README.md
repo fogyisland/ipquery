@@ -60,12 +60,14 @@ make lint
 
 The application ships with a server-rendered admin console and user dashboard at the same origin as the API. Pages are rendered with Handlebars + Fastify; interactive fragments use htmx.
 
+The UI follows a tool-style layout: a persistent left sidebar groups links by audience (public / user / admin) and every layout — `layouts/app`, `layouts/admin`, `layouts/dashboard`, `layouts/public` — shares the same sidebar partial (`partials/sidebar.hbs`) and the same design tokens (`/assets/style.css`). Legacy marketing chrome was removed: `/pricing` no longer exists; `/` and `/docs` use the tool shell instead of the old landing page.
+
 ### Pages
 
-- **Marketing & docs** — `/`, `/about`, `/docs`, `/pricing`, `/status`, `/try` (htmx-powered demo)
+- **Marketing & docs** — `/`, `/about`, `/docs`, `/status`, `/try` (htmx-powered demo)
 - **Auth** — `/signup`, `/login`, `/verify`, `/forgot`, `/reset`
 - **Dashboard** — `/dashboard`, `/dashboard/history`, `/dashboard/keys`, `/dashboard/profile`
-- **Admin** — `/admin` (redirects to `/admin/users`), `/admin/users`, `/admin/etl` (redirects to `/admin/etl/runs`), `/admin/keys`, `/admin/audit`
+- **Admin** — `/admin` (overview with ETL/DB/widgets/sparklines), `/admin/users`, `/admin/etl/runs`, `/admin/keys`, `/admin/audit` (query log), `/admin/audit-log` (admin action log), `/admin/queries` (stats + top users + hourly), `/admin/settings` (DB pool + secrets + ETL restart)
 - **API** — `/lookup[/:ip]`, `/healthz`, `/stats`
 
 ### First-deploy guide
