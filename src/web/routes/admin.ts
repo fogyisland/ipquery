@@ -12,6 +12,7 @@ import { getOverview } from '../admin/overview';
 import { getQueryStats } from '../admin/queries';
 import { parseListQuery } from '../admin/queryString';
 import { csvForRows, withBom } from '../admin/csv';
+import { redactSecret } from '../../config';
 
 // /admin/* is already gated by the auth guard in src/web/plugins/auth.ts:
 // non-admins are 403-redirected before this handler runs, so req.user is
@@ -456,5 +457,71 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
     reply.header('Content-Type', 'text/csv; charset=utf-8');
     reply.header('Content-Disposition', 'attachment; filename="queries.csv"');
     return csv;
+  });
+
+  app.get('/admin/settings', async (req, reply) => {
+    const cfg = app.cfg;
+    const display = {
+      db: {
+        host: cfg.db.host,
+        port: cfg.db.port,
+        database: cfg.db.database,
+        user: cfg.db.user,
+        poolSize: cfg.db.poolSize,
+        password: cfg.db.password ? redactSecret(cfg.db.password) : '(unset)',
+      },
+      api: { port: cfg.api.port, rateLimit: cfg.api.rateLimit },
+      etl: { schedule: cfg.etl.schedule, timezone: cfg.etl.timezone, dataDir: cfg.etl.dataDir },
+      web: {
+        baseUrl: cfg.web.baseUrl,
+        cookieDomain: cfg.web.cookieDomain,
+        cookieSecure: cfg.web.cookieSecure,
+        sessionTtlHours: cfg.web.sessionTtlHours,
+        sessionSecret: cfg.web.sessionSecret ? redactSecret(cfg.web.sessionSecret) : '(unset)',
+        csrfSecret: cfg.web.csrfSecret ? redactSecret(cfg.web.csrfSecret) : '(unset)',
+      },
+      smtp: {
+        host: cfg.smtp.host || '(console)',
+        port: cfg.smtp.port,
+        secure: cfg.smtp.secure,
+        user: cfg.smtp.user,
+        pass: cfg.smtp.pass ? redactSecret(cfg.smtp.pass) : '(unset)',
+        from: cfg.smtp.from,
+      },
+      security: { ...cfg.security },
+      maxmind: {
+        licenseKey: cfg.maxmind.licenseKey ? redactSecret(cfg.maxmind.licenseKey) : '(unset)',
+        editions: cfg.maxmind.editions,
+      },
+    };
+    let pool: Record<string, string> = {};
+    try {
+      const [poolRows] = await app.pool.query<RowDataPacket[]>(
+        'SHOW STATUS WHERE Variable_name IN (?, ?)',
+        ['Threads_connected', 'Max_used_connections'],
+      );
+      pool = Object.fromEntries(
+        (poolRows as unknown as { Variable_name: string; Value: string }[])
+          .map((r) => [r.Variable_name, r.Value]),
+      );
+    } catch (err) {
+      // Pool status is informational; do not fail the page render.
+      app.log.warn({ err }, 'failed to read DB pool status');
+    }
+    return reply.view('admin/settings.hbs', {
+      layout: 'layouts/admin',
+      title: req.t('admin.settings.title'),
+      config: display,
+      pool,
+      req,
+      csrfToken: req.csrfToken,
+    });
+  });
+
+  app.post('/admin/settings/etl-restart', async (req, reply) => {
+    if (!verifyCsrfRequest(req)) return reply.code(403).view('errors/csrf.hbs', { layout: 'layouts/public', req });
+    req.auditAction = { action: 'etl.restart', targetType: 'etl_run' };
+    void runPipeline({ cfg: app.cfg }).catch((err) => app.log.error({ err }, 'manual ETL restart failed'));
+    return reply.redirect('/admin/settings');
   });
 }

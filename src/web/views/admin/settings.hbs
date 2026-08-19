@@ -1,0 +1,87 @@
+{{!-- SPDX-License-Identifier: MIT --}}
+<h2>{{req.t 'admin.settings.title'}}</h2>
+
+<div class="dashboard-grid">
+  <div class="card">
+    <h3 class="card-title">{{req.t 'admin.settings.section.db'}}</h3>
+    <dl class="settings-dl">
+      <dt>{{req.t 'admin.settings.field.host'}}</dt><dd>{{config.db.host}}</dd>
+      <dt>{{req.t 'admin.settings.field.port'}}</dt><dd>{{config.db.port}}</dd>
+      <dt>{{req.t 'admin.settings.field.database'}}</dt><dd>{{config.db.database}}</dd>
+      <dt>{{req.t 'admin.settings.field.user'}}</dt><dd>{{config.db.user}}</dd>
+      <dt>{{req.t 'admin.settings.field.password'}}</dt><dd><code class="secret">{{config.db.password}}</code></dd>
+      <dt>{{req.t 'admin.settings.field.poolSize'}}</dt><dd>{{config.db.poolSize}}</dd>
+    </dl>
+  </div>
+
+  <div class="card">
+    <h3 class="card-title">{{req.t 'admin.settings.section.api'}}</h3>
+    <dl class="settings-dl">
+      <dt>{{req.t 'admin.settings.field.port'}}</dt><dd>{{config.api.port}}</dd>
+      <dt>{{req.t 'admin.settings.field.rateLimit'}}</dt><dd>{{config.api.rateLimit}}</dd>
+    </dl>
+  </div>
+
+  <div class="card">
+    <h3 class="card-title">{{req.t 'admin.settings.section.etl'}}</h3>
+    <dl class="settings-dl">
+      <dt>{{req.t 'admin.settings.field.schedule'}}</dt><dd><code>{{config.etl.schedule}}</code></dd>
+      <dt>{{req.t 'admin.settings.field.timezone'}}</dt><dd>{{config.etl.timezone}}</dd>
+      <dt>{{req.t 'admin.settings.field.dataDir'}}</dt><dd>{{config.etl.dataDir}}</dd>
+    </dl>
+    <form method="POST" action="/admin/settings/etl-restart" style="margin-top:12px">
+      <input type="hidden" name="csrf" value="{{req.csrfToken}}">
+      <button type="submit" class="btn-primary">{{req.t 'admin.settings.etlRestart'}}</button>
+      <small class="card-sub">{{req.t 'admin.settings.etlRestart.confirm'}}</small>
+    </form>
+  </div>
+
+  <div class="card">
+    <h3 class="card-title">{{req.t 'admin.settings.section.web'}}</h3>
+    <dl class="settings-dl">
+      <dt>{{req.t 'admin.settings.field.baseUrl'}}</dt><dd>{{config.web.baseUrl}}</dd>
+      <dt>{{req.t 'admin.settings.field.cookieDomain'}}</dt><dd>{{config.web.cookieDomain}}</dd>
+      <dt>{{req.t 'admin.settings.field.cookieSecure'}}</dt><dd>{{#if config.web.cookieSecure}}&#10003;{{else}}&mdash;{{/if}}</dd>
+      <dt>{{req.t 'admin.settings.field.sessionTtl'}}</dt><dd>{{config.web.sessionTtlHours}}</dd>
+      <dt>{{req.t 'admin.settings.field.sessionSecret'}}</dt><dd><code class="secret">{{config.web.sessionSecret}}</code></dd>
+      <dt>{{req.t 'admin.settings.field.csrfSecret'}}</dt><dd><code class="secret">{{config.web.csrfSecret}}</code></dd>
+    </dl>
+  </div>
+
+  <div class="card">
+    <h3 class="card-title">{{req.t 'admin.settings.section.smtp'}}</h3>
+    <dl class="settings-dl">
+      <dt>{{req.t 'admin.settings.field.host'}}</dt><dd>{{config.smtp.host}}</dd>
+      <dt>{{req.t 'admin.settings.field.port'}}</dt><dd>{{config.smtp.port}}</dd>
+      <dt>{{req.t 'admin.settings.field.user'}}</dt><dd>{{config.smtp.user}}</dd>
+      <dt>{{req.t 'admin.settings.field.password'}}</dt><dd><code class="secret">{{config.smtp.pass}}</code></dd>
+      <dt>{{req.t 'admin.settings.field.from'}}</dt><dd>{{config.smtp.from}}</dd>
+    </dl>
+  </div>
+
+  <div class="card">
+    <h3 class="card-title">{{req.t 'admin.settings.section.security'}}</h3>
+    <dl class="settings-dl">
+      <dt>{{req.t 'admin.settings.field.loginMax'}}</dt><dd>{{config.security.loginMaxAttempts}}</dd>
+      <dt>{{req.t 'admin.settings.field.loginLockout'}}</dt><dd>{{config.security.loginLockoutMinutes}}</dd>
+      <dt>{{req.t 'admin.settings.field.signupRate'}}</dt><dd>{{config.security.signupRatePerIpPerHour}}</dd>
+      <dt>{{req.t 'admin.settings.field.verifyResend'}}</dt><dd>{{config.security.verifyResendCooldownSeconds}}</dd>
+    </dl>
+  </div>
+
+  <div class="card">
+    <h3 class="card-title">{{req.t 'admin.settings.section.maxmind'}}</h3>
+    <dl class="settings-dl">
+      <dt>{{req.t 'admin.settings.field.licenseKey'}}</dt><dd><code class="secret">{{config.maxmind.licenseKey}}</code></dd>
+      <dt>{{req.t 'admin.settings.field.editions'}}</dt><dd>{{#each config.maxmind.editions}}<span class="pill pill-info">{{this}}</span> {{/each}}</dd>
+    </dl>
+  </div>
+
+  <div class="card">
+    <h3 class="card-title">{{req.t 'admin.settings.poolStatus.title'}}</h3>
+    <dl class="settings-dl">
+      <dt>{{req.t 'admin.settings.poolStatus.threadsConnected'}}</dt><dd>{{#if pool.Threads_connected}}{{pool.Threads_connected}}{{else}}&mdash;{{/if}}</dd>
+      <dt>{{req.t 'admin.settings.poolStatus.maxUsedConnections'}}</dt><dd>{{#if pool.Max_used_connections}}{{pool.Max_used_connections}}{{else}}&mdash;{{/if}}</dd>
+    </dl>
+  </div>
+</div>
