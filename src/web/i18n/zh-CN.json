@@ -282,6 +282,15 @@
       "never": "从未",
       "recentActivity": "近期活动",
       "noActivity": "暂无活动"
+    },
+    "queries": {
+      "title": "查询统计",
+      "total": "查询总数",
+      "hitRate": "命中率",
+      "topIps": "热门 IP",
+      "topUsers": "活跃用户",
+      "since": "起始",
+      "until": "结束"
     }
   },
   "footer": {

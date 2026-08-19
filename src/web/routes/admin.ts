@@ -9,6 +9,7 @@ import { listAllApiKeys, revokeApiKey } from '../../storage/apiKeys';
 import { listQueryLogs, streamQueryLogsCsv } from '../../storage/queryLog';
 import { listAuditLog } from '../../storage/auditLog';
 import { getOverview } from '../admin/overview';
+import { getQueryStats } from '../admin/queries';
 import { parseListQuery } from '../admin/queryString';
 import { csvForRows, withBom } from '../admin/csv';
 
@@ -408,6 +409,52 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
     ]));
     reply.header('Content-Type', 'text/csv; charset=utf-8');
     reply.header('Content-Disposition', 'attachment; filename="audit-log.csv"');
+    return csv;
+  });
+
+  app.get('/admin/queries', async (req, reply) => {
+    const q = parseListQuery(req.url.split('?')[1] ?? '', {
+      filters: ['since', 'until'], sort: [],
+    });
+    const opts: Parameters<typeof getQueryStats>[1] = {};
+    if (q.filters.since) opts.since = new Date(q.filters.since);
+    if (q.filters.until) opts.until = new Date(q.filters.until);
+    const stats = await getQueryStats(app.pool, opts);
+    const hitRate = stats.total > 0 ? stats.byStatus.hit / stats.total : 0;
+    const queryParts: string[] = [];
+    if (q.filters.since) queryParts.push(`since=${encodeURIComponent(q.filters.since)}`);
+    if (q.filters.until) queryParts.push(`until=${encodeURIComponent(q.filters.until)}`);
+    const queryString = queryParts.join('&');
+    return reply.view('admin/queries.hbs', {
+      layout: 'layouts/admin', title: req.t('admin.queries.title'),
+      stats, hitRate, filters: q.filters, queryString, req, csrfToken: req.csrfToken,
+    });
+  });
+
+  app.get('/admin/queries.csv', async (req, reply) => {
+    const q = parseListQuery(req.url.split('?')[1] ?? '', {
+      filters: ['since', 'until'], sort: [],
+    });
+    const where: string[] = []; const params: unknown[] = [];
+    if (q.filters.since) { where.push('q.ts >= ?'); params.push(new Date(q.filters.since)); }
+    if (q.filters.until) { where.push('q.ts <= ?'); params.push(new Date(q.filters.until)); }
+    const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
+    const [rows] = await app.pool.query<RowDataPacket[]>(
+      `SELECT q.ts, q.ip_text, q.status, u.email AS user_email
+         FROM query_log q
+         LEFT JOIN users u ON u.id = q.user_id
+         ${whereSql}
+         ORDER BY q.ts DESC`,
+      params,
+    );
+    const csv = withBom(csvForRows(rows as RowDataPacket[], [
+      { header: 'ts', get: (r) => (r.ts as Date).toISOString() },
+      { header: 'ip_text', get: (r) => r.ip_text },
+      { header: 'status', get: (r) => r.status },
+      { header: 'user_email', get: (r) => r.user_email ?? '' },
+    ]));
+    reply.header('Content-Type', 'text/csv; charset=utf-8');
+    reply.header('Content-Disposition', 'attachment; filename="queries.csv"');
     return csv;
   });
 }
