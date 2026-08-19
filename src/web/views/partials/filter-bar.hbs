@@ -1,16 +1,16 @@
 {{!-- SPDX-License-Identifier: MIT --}}
-{{!-- expects: action (URL), filters (array of {name,label,options:[{value,label}]}), values (object), csvUrl (optional) --}}
+{{!-- expects: action (URL), filters (array of {name,label,options:[{value,label}]}), values (object), csvUrl (optional), req, anyLabel (pre-translated "any" label), filterLabel (pre-translated "Filter"), exportLabel (pre-translated "Export CSV") --}}
 {{!-- Values for each select are read via the `lookup` helper; required key
-     names are looked up from the parent `values` object using ../name. --}}
+     names are looked up from the partial's `values` object using ../name. --}}
 <form method="GET" action="{{action}}" class="filter-bar">
   {{#each filters}}
     <label class="filter-label">{{label}}
       <select name="{{name}}" class="filter-select">
-        <option value="">{{{../req.t 'common.any'}}}</option>
-        {{#each options}}<option value="{{value}}" {{#if (eq value (lookup ../values ../name))}}selected{{/if}}>{{label}}</option>{{/each}}
+        <option value="">{{{../anyLabel}}}</option>
+        {{#each options}}<option value="{{value}}" {{#if (eq value (lookup ../../values ../name))}}selected{{/if}}>{{label}}</option>{{/each}}
       </select>
     </label>
   {{/each}}
-  <button type="submit" class="button">{{req.t 'common.filter'}}</button>
-  {{#if csvUrl}}<a class="button button-secondary" href="{{csvUrl}}">{{req.t 'common.exportCsv'}}</a>{{/if}}
+  <button type="submit" class="button">{{filterLabel}}</button>
+  {{#if csvUrl}}<a class="button button-secondary" href="{{csvUrl}}">{{exportLabel}}</a>{{/if}}
 </form>

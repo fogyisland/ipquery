@@ -15,7 +15,10 @@
     "no": "否",
     "filter": "筛选",
     "exportCsv": "导出 CSV",
-    "any": "全部"
+    "any": "全部",
+    "enableJs": "请启用 JavaScript 以使用批量操作",
+    "view": "查看",
+    "actions": "操作"
   },
   "sidebar": {
     "group": {
@@ -164,6 +167,18 @@
     "users": {
       "title": "用户管理",
       "search": "按邮箱搜索",
+      "id": "ID",
+      "email": "邮箱",
+      "role": "角色",
+      "status": "状态",
+      "created": "创建时间",
+      "disabled": "已禁用",
+      "verified": "已验证",
+      "bulk": {
+        "enable": "批量启用",
+        "disable": "批量禁用",
+        "verify": "批量验证"
+      },
       "detail": {
         "title": "用户 #{id}: {email}"
       },

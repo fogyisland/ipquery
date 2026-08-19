@@ -1,13 +1,15 @@
 // SPDX-License-Identifier: MIT
 import type { FastifyInstance } from 'fastify';
 import type { RowDataPacket } from 'mysql2';
-import { listUsers, findUserById, setDisabled, markEmailVerified, deleteUser, updatePassword, findUserByEmail } from '../../storage/users';
+import { findUserById, setDisabled, markEmailVerified, deleteUser, updatePassword, findUserByEmail } from '../../storage/users';
 import { hashPassword } from '../auth/password';
 import { verifyCsrfRequest } from '../plugins/csrf';
 import { runPipeline } from '../../etl/pipeline';
 import { listAllApiKeys, revokeApiKey } from '../../storage/apiKeys';
 import { listQueryLogs, streamQueryLogsCsv } from '../../storage/queryLog';
 import { getOverview } from '../admin/overview';
+import { parseListQuery } from '../admin/queryString';
+import { csvForRows, withBom } from '../admin/csv';
 
 // /admin/* is already gated by the auth guard in src/web/plugins/auth.ts:
 // non-admins are 403-redirected before this handler runs, so req.user is
@@ -22,20 +24,74 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.get('/admin/users', async (req, reply) => {
-    const q = req.query as { page?: string; q?: string; role?: 'user' | 'admin' };
-    const page = Math.max(1, Number(q.page) || 1);
-    const limit = 25;
-    const offset = (page - 1) * limit;
-    const { rows, total } = await listUsers(app.pool, { offset, limit, search: q.q, role: q.role });
-    const totalPages = Math.max(1, Math.ceil(total / limit));
-    const queryParts: string[] = [];
-    if (q.q) queryParts.push(`q=${encodeURIComponent(q.q)}`);
-    if (q.role) queryParts.push(`role=${encodeURIComponent(q.role)}`);
-    const queryString = queryParts.join('&');
-    return reply.view('admin/users.hbs', {
-      layout: 'layouts/admin', title: req.t('admin.users.title'),
-      users: rows, page, totalPages, q: q.q ?? '', role: q.role ?? '', queryString, req,
+    const q = parseListQuery(req.url.split('?')[1] ?? '', {
+      filters: ['role', 'disabled', 'verified', 'search'],
+      sort: ['id', 'created_at', 'email'],
     });
+    const where: string[] = []; const params: unknown[] = [];
+    if (q.filters.role) { where.push('role = ?'); params.push(q.filters.role); }
+    if (q.filters.disabled) { where.push('is_disabled = ?'); params.push(Number(q.filters.disabled)); }
+    if (q.filters.verified) { where.push('email_verified = ?'); params.push(Number(q.filters.verified)); }
+    if (q.filters.search) { where.push('email LIKE ?'); params.push(`%${q.filters.search}%`); }
+    const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
+    const orderBy = q.sort ? `ORDER BY ${q.sort.col} ${q.sort.dir === 'desc' ? 'DESC' : 'ASC'}` : 'ORDER BY id DESC';
+    const offset = (q.page - 1) * q.limit;
+
+    const [rows] = await app.pool.query<RowDataPacket[]>(
+      `SELECT * FROM users ${whereSql} ${orderBy} LIMIT ? OFFSET ?`, [...params, q.limit, offset],
+    );
+    const [totalRows] = await app.pool.query<RowDataPacket[]>(
+      `SELECT COUNT(*) AS c FROM users ${whereSql}`, params,
+    );
+    const total = Number((totalRows[0] as { c: number }).c);
+
+    return reply.view('admin/users-list.hbs', {
+      layout: 'layouts/admin', title: req.t('admin.users.title'),
+      users: rows, page: q.page, totalPages: Math.max(1, Math.ceil(total / q.limit)),
+      filters: q.filters, sort: q.sort, req, csrfToken: req.csrfToken,
+    });
+  });
+
+  app.get('/admin/users.csv', async (req, reply) => {
+    const q = parseListQuery(req.url.split('?')[1] ?? '', {
+      filters: ['role', 'disabled', 'verified', 'search'], sort: ['id', 'created_at'],
+    });
+    const where: string[] = []; const params: unknown[] = [];
+    if (q.filters.role) { where.push('role = ?'); params.push(q.filters.role); }
+    if (q.filters.disabled) { where.push('is_disabled = ?'); params.push(Number(q.filters.disabled)); }
+    if (q.filters.search) { where.push('email LIKE ?'); params.push(`%${q.filters.search}%`); }
+    const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
+    const orderBy = q.sort ? `ORDER BY ${q.sort.col} ${q.sort.dir === 'desc' ? 'DESC' : 'ASC'}` : 'ORDER BY id DESC';
+    const [rows] = await app.pool.query<RowDataPacket[]>(`SELECT * FROM users ${whereSql} ${orderBy}`, params);
+    const csv = withBom(csvForRows(rows as RowDataPacket[], [
+      { header: 'id', get: (r) => r.id },
+      { header: 'email', get: (r) => r.email },
+      { header: 'role', get: (r) => r.role },
+      { header: 'email_verified', get: (r) => r.email_verified },
+      { header: 'is_disabled', get: (r) => r.is_disabled },
+      { header: 'created_at', get: (r) => (r.created_at as Date).toISOString() },
+    ]));
+    reply.header('Content-Type', 'text/csv; charset=utf-8');
+    reply.header('Content-Disposition', 'attachment; filename="users.csv"');
+    return csv;
+  });
+
+  app.post('/admin/users/bulk', async (req, reply) => {
+    if (!verifyCsrfRequest(req)) return reply.code(403).view('errors/csrf.hbs', { layout: 'layouts/public', req });
+    const body = req.body as { action?: string; ids?: string };
+    const ids = (body.ids ?? '').split(',').map((s) => Number(s.trim())).filter((n) => Number.isFinite(n) && n > 0).slice(0, 100);
+    if (ids.length === 0) return reply.redirect('/admin/users');
+    req.auditAction = { action: `user.bulk.${body.action}`, targetType: 'user', metadata: { ids, count: ids.length } };
+    if (body.action === 'disable') {
+      await app.pool.query('UPDATE users SET is_disabled = 1 WHERE id IN (?)', [ids]);
+    } else if (body.action === 'enable') {
+      await app.pool.query('UPDATE users SET is_disabled = 0 WHERE id IN (?)', [ids]);
+    } else if (body.action === 'verify') {
+      await app.pool.query('UPDATE users SET email_verified = 1 WHERE id IN (?)', [ids]);
+    } else {
+      return reply.code(400).send({ error: 'unknown action' });
+    }
+    return reply.redirect('/admin/users');
   });
 
   app.get<{ Params: { id: string } }>('/admin/users/:id', async (req, reply) => {

@@ -15,7 +15,10 @@
     "no": "No",
     "filter": "Filter",
     "exportCsv": "Export CSV",
-    "any": "Any"
+    "any": "Any",
+    "enableJs": "Enable JavaScript to use bulk actions",
+    "view": "View",
+    "actions": "Actions"
   },
   "sidebar": {
     "group": {
@@ -164,6 +167,18 @@
     "users": {
       "title": "Users",
       "search": "Search by email",
+      "id": "ID",
+      "email": "Email",
+      "role": "Role",
+      "status": "Status",
+      "created": "Created",
+      "disabled": "Disabled",
+      "verified": "Verified",
+      "bulk": {
+        "enable": "Bulk enable",
+        "disable": "Bulk disable",
+        "verify": "Bulk verify"
+      },
       "detail": {
         "title": "User #{id}: {email}"
       },
