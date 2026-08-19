@@ -249,6 +249,24 @@
       "option-status-invalid": "Invalid",
       "export": "Export CSV"
     },
+    "auditLog": {
+      "title": "Audit log",
+      "id": "ID",
+      "time": "Time",
+      "actor": "Actor",
+      "action": "Action",
+      "target": "Target",
+      "ip": "IP",
+      "created": "Created",
+      "option-action-user.delete": "Delete user",
+      "option-action-user.reset_password": "Reset password",
+      "option-action-user.bulk.disable": "Bulk disable",
+      "option-action-etl.trigger": "Trigger ETL",
+      "option-action-key.revoke": "Revoke key",
+      "option-target_type-user": "User",
+      "option-target_type-api_key": "API key",
+      "option-target_type-etl_run": "ETL run"
+    },
     "dashboard": {
       "title": "Overview",
       "etlStatus": "ETL status",

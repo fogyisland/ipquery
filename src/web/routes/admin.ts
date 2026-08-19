@@ -7,6 +7,7 @@ import { verifyCsrfRequest } from '../plugins/csrf';
 import { runPipeline } from '../../etl/pipeline';
 import { listAllApiKeys, revokeApiKey } from '../../storage/apiKeys';
 import { listQueryLogs, streamQueryLogsCsv } from '../../storage/queryLog';
+import { listAuditLog } from '../../storage/auditLog';
 import { getOverview } from '../admin/overview';
 import { parseListQuery } from '../admin/queryString';
 import { csvForRows, withBom } from '../admin/csv';
@@ -338,5 +339,75 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
     reply.header('Content-Type', 'text/csv; charset=utf-8');
     reply.header('Content-Disposition', 'attachment; filename="audit.csv"');
     return reply.send(chunks.join(''));
+  });
+
+  app.get('/admin/audit-log', async (req, reply) => {
+    const q = parseListQuery(req.url.split('?')[1] ?? '', {
+      filters: ['action', 'actor', 'target_type', 'since', 'until'],
+      sort: ['id', 'created_at'],
+    });
+    const opts: Parameters<typeof listAuditLog>[1] = {
+      offset: (q.page - 1) * q.limit, limit: q.limit,
+    };
+    if (q.filters.action) opts.action = q.filters.action;
+    if (q.filters.target_type) opts.targetType = q.filters.target_type;
+    if (q.filters.since) opts.since = new Date(q.filters.since);
+    if (q.filters.until) opts.until = new Date(q.filters.until);
+    if (q.filters.actor) {
+      const u = await findUserByEmail(app.pool, q.filters.actor);
+      // Sentinel -1 (no user has this id) forces zero rows when the email
+      // doesn't resolve — listAuditLog filters on actor_user_id !== undefined.
+      opts.actorUserId = u ? u.id : -1;
+    }
+    if (q.sort) opts.sort = { col: q.sort.col as 'id' | 'created_at', dir: q.sort.dir };
+    const { rows, total } = await listAuditLog(app.pool, opts);
+    const totalPages = Math.max(1, Math.ceil(total / q.limit));
+    // Build a queryString that preserves filter+sort state for pagination
+    // links, mirroring the Task 8/9 pattern.
+    const queryParts: string[] = [];
+    if (q.filters.action) queryParts.push(`action=${encodeURIComponent(q.filters.action)}`);
+    if (q.filters.actor) queryParts.push(`actor=${encodeURIComponent(q.filters.actor)}`);
+    if (q.filters.target_type) queryParts.push(`target_type=${encodeURIComponent(q.filters.target_type)}`);
+    if (q.filters.since) queryParts.push(`since=${encodeURIComponent(q.filters.since)}`);
+    if (q.filters.until) queryParts.push(`until=${encodeURIComponent(q.filters.until)}`);
+    if (q.sort) queryParts.push(`sort=${q.sort.dir === 'desc' ? '-' : ''}${q.sort.col}`);
+    const queryString = queryParts.join('&');
+    return reply.view('admin/audit-log.hbs', {
+      layout: 'layouts/admin', title: req.t('admin.auditLog.title'),
+      rows, page: q.page, totalPages, queryString,
+      filters: q.filters, sort: q.sort, req, csrfToken: req.csrfToken,
+    });
+  });
+
+  app.get('/admin/audit-log.csv', async (req, reply) => {
+    const q = parseListQuery(req.url.split('?')[1] ?? '', {
+      filters: ['action', 'actor', 'target_type', 'since', 'until'],
+      sort: ['id', 'created_at'],
+    });
+    const opts: Parameters<typeof listAuditLog>[1] = {
+      offset: 0, limit: 1_000_000,
+    };
+    if (q.filters.action) opts.action = q.filters.action;
+    if (q.filters.target_type) opts.targetType = q.filters.target_type;
+    if (q.filters.since) opts.since = new Date(q.filters.since);
+    if (q.filters.until) opts.until = new Date(q.filters.until);
+    if (q.filters.actor) {
+      const u = await findUserByEmail(app.pool, q.filters.actor);
+      opts.actorUserId = u ? u.id : -1;
+    }
+    if (q.sort) opts.sort = { col: q.sort.col as 'id' | 'created_at', dir: q.sort.dir };
+    const { rows } = await listAuditLog(app.pool, opts);
+    const csv = withBom(csvForRows(rows as unknown as RowDataPacket[], [
+      { header: 'id', get: (r) => r.id },
+      { header: 'created_at', get: (r) => (r.created_at as Date).toISOString() },
+      { header: 'actor_email', get: (r) => r.actor_email },
+      { header: 'action', get: (r) => r.action },
+      { header: 'target_type', get: (r) => r.target_type ?? '' },
+      { header: 'target_id', get: (r) => r.target_id ?? '' },
+      { header: 'ip', get: (r) => r.ip ?? '' },
+    ]));
+    reply.header('Content-Type', 'text/csv; charset=utf-8');
+    reply.header('Content-Disposition', 'attachment; filename="audit-log.csv"');
+    return csv;
   });
 }
