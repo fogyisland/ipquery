@@ -117,12 +117,14 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
 
   app.post<{ Params: { id: string } }>('/admin/users/:id/verify-email', async (req, reply) => {
     if (!verifyCsrfRequest(req)) return reply.code(403).view('errors/csrf.hbs', { layout: 'layouts/public', req });
+    req.auditAction = { action: 'user.verify_email', targetType: 'user', targetId: Number(req.params.id) };
     await markEmailVerified(app.pool, Number(req.params.id));
     return reply.redirect('/admin/users/' + req.params.id);
   });
 
   app.post<{ Params: { id: string } }>('/admin/users/:id/reset-password', async (req, reply) => {
     if (!verifyCsrfRequest(req)) return reply.code(403).view('errors/csrf.hbs', { layout: 'layouts/public', req });
+    req.auditAction = { action: 'user.reset_password', targetType: 'user', targetId: Number(req.params.id) };
     const id = Number(req.params.id);
     const tempPassword = `Temp${Math.random().toString(36).slice(2, 10)}1`;
     await updatePassword(app.pool, id, await hashPassword(tempPassword));
@@ -138,6 +140,7 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
 
   app.post<{ Params: { id: string } }>('/admin/users/:id/delete', async (req, reply) => {
     if (!verifyCsrfRequest(req)) return reply.code(403).view('errors/csrf.hbs', { layout: 'layouts/public', req });
+    req.auditAction = { action: 'user.delete', targetType: 'user', targetId: Number(req.params.id) };
     await deleteUser(app.pool, Number(req.params.id));
     return reply.redirect('/admin/users');
   });
@@ -216,6 +219,7 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
 
   app.post('/admin/etl/trigger', async (req, reply) => {
     if (!verifyCsrfRequest(req)) return reply.code(403).view('errors/csrf.hbs', { layout: 'layouts/public', req });
+    req.auditAction = { action: 'etl.trigger', targetType: 'etl_run' };
     void runPipeline({ cfg: app.cfg }).catch((err) => app.log.error({ err }, 'manual ETL failed'));
     return reply.redirect('/admin/etl/runs');
   });
@@ -286,6 +290,7 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
 
   app.post<{ Params: { id: string } }>('/admin/keys/:id/revoke', async (req, reply) => {
     if (!verifyCsrfRequest(req)) return reply.code(403).view('errors/csrf.hbs', { layout: 'layouts/public', req });
+    req.auditAction = { action: 'key.revoke', targetType: 'api_key', targetId: Number(req.params.id) };
     await revokeApiKey(app.pool, Number(req.params.id));
     return reply.redirect('/admin/keys');
   });

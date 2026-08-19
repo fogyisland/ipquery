@@ -74,6 +74,7 @@ export default async function dashboardRoutes(app: FastifyInstance): Promise<voi
     if (!key || key.userId !== req.user!.id) {
       return reply.code(404).view('errors/404.hbs', { layout: 'layouts/public', title: req.t('error.404.title'), req });
     }
+    req.auditAction = { action: 'key.revoke', targetType: 'api_key', targetId: id, metadata: { source: 'dashboard' } };
     await revokeApiKey(app.pool, id);
     return reply.code(302).redirect('/dashboard/keys');
   });
