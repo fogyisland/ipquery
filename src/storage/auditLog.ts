@@ -46,6 +46,7 @@ export async function listAuditLog(pool: Pool, opts: {
   offset: number; limit: number;
   actorUserId?: number; action?: string; targetType?: string;
   since?: Date; until?: Date;
+  sort?: { col: 'id' | 'created_at'; dir: 'asc' | 'desc' };
 }): Promise<{ rows: AuditLogEntry[]; total: number }> {
   const where: string[] = []; const params: unknown[] = [];
   if (opts.actorUserId !== undefined) { where.push('actor_user_id = ?'); params.push(opts.actorUserId); }
@@ -54,13 +55,16 @@ export async function listAuditLog(pool: Pool, opts: {
   if (opts.since) { where.push('created_at >= ?'); params.push(opts.since); }
   if (opts.until) { where.push('created_at <= ?'); params.push(opts.until); }
   const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
+  // Whitelist sort col/dir; fall back to id DESC for backward compatibility.
+  const sortCol = opts.sort?.col === 'created_at' ? 'created_at' : 'id';
+  const sortDir = opts.sort?.dir === 'asc' ? 'ASC' : 'DESC';
 
   const [totalRows] = await pool.query<RowDataPacket[]>(
     `SELECT COUNT(*) AS c FROM admin_audit_log ${whereSql}`, params,
   );
   const total = Number((totalRows[0] as { c: number }).c);
   const [rows] = await pool.query<RowDataPacket[]>(
-    `SELECT * FROM admin_audit_log ${whereSql} ORDER BY id DESC LIMIT ? OFFSET ?`,
+    `SELECT * FROM admin_audit_log ${whereSql} ORDER BY \`${sortCol}\` ${sortDir} LIMIT ? OFFSET ?`,
     [...params, opts.limit, opts.offset],
   );
   return {

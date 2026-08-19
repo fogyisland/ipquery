@@ -250,6 +250,24 @@
       "option-status-invalid": "无效",
       "export": "导出 CSV"
     },
+    "auditLog": {
+      "title": "操作审计",
+      "id": "ID",
+      "time": "时间",
+      "actor": "操作者",
+      "action": "操作",
+      "target": "目标",
+      "ip": "IP",
+      "created": "创建时间",
+      "option-action-user.delete": "删除用户",
+      "option-action-user.reset_password": "重置密码",
+      "option-action-user.bulk.disable": "批量禁用",
+      "option-action-etl.trigger": "触发 ETL",
+      "option-action-key.revoke": "吊销 Key",
+      "option-target_type-user": "用户",
+      "option-target_type-api_key": "API Key",
+      "option-target_type-etl_run": "ETL 运行"
+    },
     "dashboard": {
       "title": "总览",
       "etlStatus": "ETL 状态",
