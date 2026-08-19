@@ -1,16 +1,48 @@
 {{!-- SPDX-License-Identifier: MIT --}}
-<h1>{{req.t 'admin.etl.title'}}</h1>
+<h2>{{req.t 'admin.etl.title'}}</h2>
+
 <a href="/admin/etl/trigger/confirm" class="btn-primary">{{req.t 'admin.etl.trigger'}}</a>
-<table>
-  <thead><tr><th>ID</th><th>{{req.t 'admin.etl.col.started'}}</th><th>{{req.t 'admin.etl.col.finished'}}</th><th>{{req.t 'admin.etl.col.status'}}</th><th>{{req.t 'admin.etl.col.merged'}}</th></tr></thead>
+
+<form method="GET" action="/admin/etl/runs" class="filter-bar">
+  <label class="filter-label">{{req.t 'admin.etl.col.status'}}
+    <select name="status" class="filter-select">
+      <option value="">{{req.t 'common.any'}}</option>
+      <option value="running" {{#if (eq filters.status 'running')}}selected{{/if}}>{{req.t 'admin.etl.status.running'}}</option>
+      <option value="success" {{#if (eq filters.status 'success')}}selected{{/if}}>{{req.t 'admin.etl.status.success'}}</option>
+      <option value="failed" {{#if (eq filters.status 'failed')}}selected{{/if}}>{{req.t 'admin.etl.status.failed'}}</option>
+    </select>
+  </label>
+  <label class="filter-label">{{req.t 'admin.etl.col.started'}}
+    <input type="date" name="since" class="filter-select" value="{{filters.since}}">
+  </label>
+  <label class="filter-label">{{req.t 'admin.etl.col.finished'}}
+    <input type="date" name="until" class="filter-select" value="{{filters.until}}">
+  </label>
+  <button type="submit" class="button">{{req.t 'common.filter'}}</button>
+  <a class="button button-secondary" href="/admin/etl/runs.csv?{{#if filters.status}}status={{filters.status}}&{{/if}}{{#if filters.since}}since={{filters.since}}&{{/if}}{{#if filters.until}}until={{filters.until}}&{{/if}}{{#if sort}}sort={{#if (eq sort.dir 'desc')}}-{{/if}}{{sort.col}}{{/if}}">{{req.t 'common.exportCsv'}}</a>
+</form>
+
+<table class="table">
+  <thead>
+    <tr>
+      <th><a href="?sort={{ternary (eq sort.col 'id') (ternary (eq sort.dir 'asc') '-id' 'id') (ternary (eq sort.dir 'asc') 'id' '-id')}}">ID</a></th>
+      <th><a href="?sort={{ternary (eq sort.col 'started_at') (ternary (eq sort.dir 'asc') '-started_at' 'started_at') (ternary (eq sort.dir 'asc') 'started_at' '-started_at')}}">{{req.t 'admin.etl.col.started'}}</a></th>
+      <th>{{req.t 'admin.etl.col.status'}}</th>
+      <th>{{req.t 'admin.etl.col.merged'}}</th>
+      <th>{{req.t 'admin.etl.col.finished'}}</th>
+    </tr>
+  </thead>
   <tbody>
-    {{#each runs}}<tr>
-      <td><a href="/admin/etl/runs/{{this.id}}">{{this.id}}</a></td>
-      <td>{{formatDate this.started_at}}</td>
-      <td>{{formatDate this.finished_at}}</td>
-      <td>{{this.status}}</td>
-      <td>{{this.merged_records}}</td>
-    </tr>{{/each}}
+    {{#each runs}}
+    <tr>
+      <td class="table-num"><a href="/admin/etl/runs/{{this.id}}">{{this.id}}</a></td>
+      <td class="table-num">{{formatDate this.started_at}}</td>
+      <td>{{> pill kind=(ternary (eq this.status 'success') 'success' (ternary (eq this.status 'failed') 'danger' 'warning')) text=this.status}}</td>
+      <td class="table-num">{{this.merged_records}}</td>
+      <td class="table-num">{{formatDate this.finished_at}}</td>
+    </tr>
+    {{/each}}
   </tbody>
 </table>
+
 {{> pagination baseUrl="/admin/etl/runs" page=page totalPages=totalPages queryString="" }}

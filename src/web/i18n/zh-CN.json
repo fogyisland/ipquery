@@ -213,6 +213,11 @@
         "status": "状态",
         "merged": "合并记录数"
       },
+      "status": {
+        "running": "运行中",
+        "success": "成功",
+        "failed": "失败"
+      },
       "detail": {
         "title": "ETL Run #{id}"
       }

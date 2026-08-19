@@ -150,20 +150,58 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
   app.get('/admin/etl', async (_req, reply) => reply.redirect('/admin/etl/runs'));
 
   app.get('/admin/etl/runs', async (req, reply) => {
-    const q = req.query as { page?: string };
-    const page = Math.max(1, Number(q.page) || 1);
-    const limit = 25;
-    const offset = (page - 1) * limit;
-    const [runs] = await app.pool.query<RowDataPacket[]>(
-      `SELECT * FROM etl_runs ORDER BY id DESC LIMIT ? OFFSET ?`, [limit, offset],
+    const q = parseListQuery(req.url.split('?')[1] ?? '', {
+      filters: ['status', 'since', 'until'],
+      sort: ['id', 'started_at'],
+    });
+    const where: string[] = []; const params: unknown[] = [];
+    if (q.filters.status) { where.push('status = ?'); params.push(q.filters.status); }
+    if (q.filters.since) { where.push('started_at >= ?'); params.push(new Date(q.filters.since)); }
+    if (q.filters.until) { where.push('started_at <= ?'); params.push(new Date(q.filters.until)); }
+    const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
+    const orderBy = q.sort ? `ORDER BY ${q.sort.col} ${q.sort.dir === 'desc' ? 'DESC' : 'ASC'}` : 'ORDER BY id DESC';
+    const offset = (q.page - 1) * q.limit;
+    const [rows] = await app.pool.query<RowDataPacket[]>(
+      `SELECT * FROM etl_runs ${whereSql} ${orderBy} LIMIT ? OFFSET ?`, [...params, q.limit, offset],
     );
-    const [totalRows] = await app.pool.query<RowDataPacket[]>(`SELECT COUNT(*) AS c FROM etl_runs`);
-    const total = Number(totalRows[0]?.c ?? 0);
-    const totalPages = Math.max(1, Math.ceil(total / limit));
+    const [totalRows] = await app.pool.query<RowDataPacket[]>(
+      `SELECT COUNT(*) AS c FROM etl_runs ${whereSql}`, params,
+    );
+    const total = Number((totalRows[0] as { c: number }).c);
     return reply.view('admin/etl-runs.hbs', {
       layout: 'layouts/admin', title: req.t('admin.etl.title'),
-      runs, page, totalPages, req,
+      runs: rows, page: q.page, totalPages: Math.max(1, Math.ceil(total / q.limit)),
+      filters: q.filters, sort: q.sort, req, csrfToken: req.csrfToken,
     });
+  });
+
+  app.get('/admin/etl/runs.csv', async (req, reply) => {
+    const q = parseListQuery(req.url.split('?')[1] ?? '', {
+      filters: ['status', 'since', 'until'], sort: ['id', 'started_at'],
+    });
+    const where: string[] = []; const params: unknown[] = [];
+    if (q.filters.status) { where.push('status = ?'); params.push(q.filters.status); }
+    if (q.filters.since) { where.push('started_at >= ?'); params.push(new Date(q.filters.since)); }
+    if (q.filters.until) { where.push('started_at <= ?'); params.push(new Date(q.filters.until)); }
+    const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
+    const orderBy = q.sort ? `ORDER BY ${q.sort.col} ${q.sort.dir === 'desc' ? 'DESC' : 'ASC'}` : 'ORDER BY id DESC';
+    const [rows] = await app.pool.query<RowDataPacket[]>(
+      `SELECT * FROM etl_runs ${whereSql} ${orderBy}`, params,
+    );
+    const csv = withBom(csvForRows(rows as RowDataPacket[], [
+      { header: 'id', get: (r) => r.id },
+      { header: 'started_at', get: (r) => (r.started_at as Date).toISOString() },
+      { header: 'finished_at', get: (r) => r.finished_at ? (r.finished_at as Date).toISOString() : '' },
+      { header: 'status', get: (r) => r.status },
+      { header: 'maxmind_records', get: (r) => r.maxmind_records ?? '' },
+      { header: 'ip2region_records', get: (r) => r.ip2region_records ?? '' },
+      { header: 'dbip_records', get: (r) => r.dbip_records ?? '' },
+      { header: 'merged_records', get: (r) => r.merged_records ?? '' },
+      { header: 'error_message', get: (r) => r.error_message ?? '' },
+    ]));
+    reply.header('Content-Type', 'text/csv; charset=utf-8');
+    reply.header('Content-Disposition', 'attachment; filename="etl-runs.csv"');
+    return csv;
   });
 
   app.get<{ Params: { id: string } }>('/admin/etl/runs/:id', async (req, reply) => {

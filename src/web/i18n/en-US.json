@@ -212,6 +212,11 @@
         "status": "Status",
         "merged": "Merged records"
       },
+      "status": {
+        "running": "Running",
+        "success": "Success",
+        "failed": "Failed"
+      },
       "detail": {
         "title": "ETL Run #{id}"
       }
