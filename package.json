@@ -14,7 +14,8 @@
     "test:coverage": "vitest run --coverage",
     "lint": "tsc --noEmit",
     "dev": "tsx src/cli.ts",
-    "start": "node dist/cli.js"
+    "start": "node dist/cli.js",
+    "serve:4001": "node -e \"require('child_process').spawnSync(process.execPath,['dist/cli.js','serve'],{env:{...process.env,PORT:'4001'},stdio:'inherit'})\""
   },
   "dependencies": {
     "@fastify/compress": "^7.0.3",
