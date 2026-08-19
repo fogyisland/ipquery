@@ -291,6 +291,50 @@
       "topUsers": "活跃用户",
       "since": "起始",
       "until": "结束"
+    },
+    "settings": {
+      "title": "系统设置",
+      "section": {
+        "db": "数据库",
+        "api": "API",
+        "etl": "ETL",
+        "web": "Web",
+        "smtp": "SMTP",
+        "security": "安全",
+        "maxmind": "MaxMind"
+      },
+      "field": {
+        "host": "主机",
+        "port": "端口",
+        "database": "数据库",
+        "user": "用户",
+        "password": "密码",
+        "poolSize": "连接池大小",
+        "rateLimit": "速率限制",
+        "schedule": "Cron",
+        "timezone": "时区",
+        "dataDir": "数据目录",
+        "baseUrl": "Base URL",
+        "cookieDomain": "Cookie 域",
+        "cookieSecure": "Cookie Secure",
+        "sessionTtl": "会话有效期(h)",
+        "sessionSecret": "会话密钥",
+        "csrfSecret": "CSRF 密钥",
+        "from": "发件人",
+        "loginMax": "登录失败上限",
+        "loginLockout": "锁定时长(分钟)",
+        "signupRate": "注册速率(每小时/IP)",
+        "verifyResend": "验证邮件冷却(秒)",
+        "licenseKey": "License Key",
+        "editions": "数据库版本"
+      },
+      "poolStatus": {
+        "title": "数据库连接池",
+        "threadsConnected": "当前连接",
+        "maxUsedConnections": "峰值连接"
+      },
+      "etlRestart": "立即运行 ETL",
+      "etlRestart.confirm": "手动触发 ETL 流水线(异步)"
     }
   },
   "footer": {

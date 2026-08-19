@@ -290,6 +290,50 @@
       "topUsers": "Top users",
       "since": "Since",
       "until": "Until"
+    },
+    "settings": {
+      "title": "Settings",
+      "section": {
+        "db": "Database",
+        "api": "API",
+        "etl": "ETL",
+        "web": "Web",
+        "smtp": "SMTP",
+        "security": "Security",
+        "maxmind": "MaxMind"
+      },
+      "field": {
+        "host": "Host",
+        "port": "Port",
+        "database": "Database",
+        "user": "User",
+        "password": "Password",
+        "poolSize": "Pool size",
+        "rateLimit": "Rate limit",
+        "schedule": "Cron",
+        "timezone": "Timezone",
+        "dataDir": "Data dir",
+        "baseUrl": "Base URL",
+        "cookieDomain": "Cookie domain",
+        "cookieSecure": "Cookie secure",
+        "sessionTtl": "Session TTL (h)",
+        "sessionSecret": "Session secret",
+        "csrfSecret": "CSRF secret",
+        "from": "From",
+        "loginMax": "Login max attempts",
+        "loginLockout": "Lockout (minutes)",
+        "signupRate": "Signups / hour / IP",
+        "verifyResend": "Verify resend cooldown (s)",
+        "licenseKey": "License key",
+        "editions": "Editions"
+      },
+      "poolStatus": {
+        "title": "DB pool status",
+        "threadsConnected": "Threads connected",
+        "maxUsedConnections": "Max used connections"
+      },
+      "etlRestart": "Run ETL now",
+      "etlRestart.confirm": "Trigger ETL pipeline manually (fire-and-forget)"
     }
   },
   "footer": {
