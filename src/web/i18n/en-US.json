@@ -281,6 +281,15 @@
       "never": "never",
       "recentActivity": "Recent activity",
       "noActivity": "No recent activity"
+    },
+    "queries": {
+      "title": "Query volume",
+      "total": "Total queries",
+      "hitRate": "Hit rate",
+      "topIps": "Top IPs",
+      "topUsers": "Top users",
+      "since": "Since",
+      "until": "Until"
     }
   },
   "footer": {
