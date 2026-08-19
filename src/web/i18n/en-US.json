@@ -35,13 +35,6 @@
     "about": "About",
     "try": "Try",
     "dashboard": "Dashboard",
-    "admin": "Admin",
-    "logout": "Log out",
-    "history": "History",
-    "apiKeys": "API Keys",
-    "profile": "Profile",
-    "signup": "Sign up",
-    "login": "Log in",
     "admin": {
       "dashboard": "Overview",
       "users": "Users",
@@ -51,7 +44,13 @@
       "audit": "Query Audit",
       "auditLog": "Audit Log",
       "settings": "Settings"
-    }
+    },
+    "logout": "Log out",
+    "history": "History",
+    "apiKeys": "API Keys",
+    "profile": "Profile",
+    "signup": "Sign up",
+    "login": "Log in"
   },
   "auth": {
     "email": "Email",
@@ -197,7 +196,11 @@
         "resetPassword": "Reset password",
         "delete": "Delete"
       },
-      "delete.confirm": "Delete this user? All related data will be removed."
+      "delete.confirm": "Delete this user? All related data will be removed.",
+      "option-role-admin": "Admin",
+      "option-role-user": "User",
+      "option-status-active": "Active",
+      "option-status-disabled": "Disabled"
     },
     "etl": {
       "title": "ETL runs",
@@ -253,10 +256,6 @@
     "license": "MIT"
   },
   "error": {
-    "csrf": {
-      "title": "Session expired",
-      "body": "Please refresh and try again"
-    },
     "403": {
       "title": "Forbidden",
       "body": "You do not have permission to view this page"
@@ -267,6 +266,10 @@
     "500": {
       "title": "Server error",
       "body": "Please try again later"
+    },
+    "csrf": {
+      "title": "Session expired",
+      "body": "Please refresh and try again"
     }
   }
 }
