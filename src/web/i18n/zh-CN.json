@@ -198,6 +198,8 @@
         "delete": "删除"
       },
       "delete.confirm": "确定删除该用户?所有相关数据将被清除。",
+      "delete.confirm.title": "确认删除用户",
+      "delete.confirm.body": "此操作将永久删除 {email} 及其所有相关数据,且不可恢复。",
       "option-role-admin": "管理员",
       "option-role-user": "用户",
       "option-status-active": "正常",
@@ -207,6 +209,8 @@
       "title": "ETL 运维",
       "trigger": "立即运行",
       "trigger.confirm": "确定手动触发 ETL?",
+      "trigger.confirm.title": "确认触发 ETL",
+      "trigger.confirm.body": "此操作将立即开始一次计划外的 ETL 运行,已下载的源数据将覆盖现有数据。",
       "col": {
         "started": "开始时间",
         "finished": "结束时间",

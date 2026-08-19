@@ -197,6 +197,8 @@
         "delete": "Delete"
       },
       "delete.confirm": "Delete this user? All related data will be removed.",
+      "delete.confirm.title": "Delete user?",
+      "delete.confirm.body": "This will permanently delete {email} and all related data. This action cannot be undone.",
       "option-role-admin": "Admin",
       "option-role-user": "User",
       "option-status-active": "Active",
@@ -206,6 +208,8 @@
       "title": "ETL runs",
       "trigger": "Run now",
       "trigger.confirm": "Trigger ETL manually?",
+      "trigger.confirm.title": "Trigger ETL pipeline?",
+      "trigger.confirm.body": "This will start an out-of-schedule ETL run. Existing data will be replaced with the freshly downloaded source files.",
       "col": {
         "started": "Started",
         "finished": "Finished",
