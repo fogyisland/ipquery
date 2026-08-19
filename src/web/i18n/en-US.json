@@ -244,6 +244,9 @@
         "user": "User",
         "apiKey": "API key"
       },
+      "option-status-hit": "Hit",
+      "option-status-miss": "Miss",
+      "option-status-invalid": "Invalid",
       "export": "Export CSV"
     },
     "dashboard": {

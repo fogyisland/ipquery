@@ -41,6 +41,7 @@ export interface QueryLogQuery {
   ipText?: string;
   startTime?: Date;
   endTime?: Date;
+  sort?: { col: 'id' | 'ts'; dir: 'asc' | 'desc' };
 }
 
 export interface QueryLogRow extends QueryLogEntry {
@@ -75,6 +76,8 @@ export async function listQueryLogs(pool: Pool, q: QueryLogQuery): Promise<{ row
   if (q.startTime) { where.push('q.ts >= ?'); params.push(q.startTime); }
   if (q.endTime) { where.push('q.ts <= ?'); params.push(q.endTime); }
   const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
+  const orderCol = q.sort?.col ?? 'id';
+  const orderDir = q.sort?.dir === 'asc' ? 'ASC' : 'DESC';
 
   const [rows] = await pool.query(
     `SELECT q.*, u.email AS user_email, k.key_prefix AS api_key_prefix
@@ -82,7 +85,7 @@ export async function listQueryLogs(pool: Pool, q: QueryLogQuery): Promise<{ row
        LEFT JOIN users u ON u.id = q.user_id
        LEFT JOIN api_keys k ON k.id = q.api_key_id
        ${whereSql}
-       ORDER BY q.id DESC
+       ORDER BY q.${orderCol} ${orderDir}
        LIMIT ? OFFSET ?`,
     [...params, q.limit, q.offset],
   );

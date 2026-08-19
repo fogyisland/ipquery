@@ -245,6 +245,9 @@
         "user": "用户",
         "apiKey": "API Key"
       },
+      "option-status-hit": "命中",
+      "option-status-miss": "未命中",
+      "option-status-invalid": "无效",
       "export": "导出 CSV"
     },
     "dashboard": {

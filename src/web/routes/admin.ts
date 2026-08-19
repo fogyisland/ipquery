@@ -288,27 +288,37 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.get('/admin/audit', async (req, reply) => {
-    const q = req.query as { page?: string; userEmail?: string; status?: 'hit' | 'miss' | 'invalid'; ipText?: string };
-    const page = Math.max(1, Number(q.page) || 1);
-    const limit = 50;
-    const offset = (page - 1) * limit;
+    const q = parseListQuery(req.url.split('?')[1] ?? '', {
+      filters: ['userEmail', 'status', 'ipText'],
+      sort: ['id', 'ts'],
+    });
     let userId: number | undefined;
-    if (q.userEmail) {
-      const u = await findUserByEmail(app.pool, q.userEmail);
+    if (q.filters.userEmail) {
+      const u = await findUserByEmail(app.pool, q.filters.userEmail);
       // Sentinel -1 (no user has this id) forces zero rows when the email
       // doesn't resolve — listQueryLogs filters on user_id !== undefined.
       userId = u ? u.id : -1;
     }
-    const { rows, total } = await listQueryLogs(app.pool, { offset, limit, userId, status: q.status, ipText: q.ipText });
+    const status = q.filters.status as 'hit' | 'miss' | 'invalid' | undefined;
+    const limit = q.limit;
+    const offset = (q.page - 1) * limit;
+    const sort = q.sort ? { col: q.sort.col as 'id' | 'ts', dir: q.sort.dir } : undefined;
+    const { rows, total } = await listQueryLogs(app.pool, {
+      offset, limit, userId, status, ipText: q.filters.ipText, sort,
+    });
     const totalPages = Math.max(1, Math.ceil(total / limit));
+    // Build a queryString that preserves filter+sort state for pagination
+    // links, mirroring the Task 8 keys.hbs pattern.
     const queryParts: string[] = [];
-    if (q.userEmail) queryParts.push(`userEmail=${encodeURIComponent(q.userEmail)}`);
-    if (q.status) queryParts.push(`status=${encodeURIComponent(q.status)}`);
-    if (q.ipText) queryParts.push(`ipText=${encodeURIComponent(q.ipText)}`);
+    if (q.filters.userEmail) queryParts.push(`userEmail=${encodeURIComponent(q.filters.userEmail)}`);
+    if (q.filters.status) queryParts.push(`status=${encodeURIComponent(q.filters.status)}`);
+    if (q.filters.ipText) queryParts.push(`ipText=${encodeURIComponent(q.filters.ipText)}`);
+    if (q.sort) queryParts.push(`sort=${q.sort.dir === 'desc' ? '-' : ''}${q.sort.col}`);
     const queryString = queryParts.join('&');
     return reply.view('admin/audit.hbs', {
       layout: 'layouts/admin', title: req.t('admin.audit.title'),
-      rows, page, totalPages, userEmail: q.userEmail ?? '', status: q.status ?? '', ipText: q.ipText ?? '', queryString, req,
+      rows, page: q.page, totalPages, queryString,
+      filters: q.filters, sort: q.sort, req, csrfToken: req.csrfToken,
     });
   });
 
