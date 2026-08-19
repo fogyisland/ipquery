@@ -9,7 +9,7 @@
       {{#if overview.etl.lastRun}}
         {{> pill kind=(ternary (eq overview.etl.lastRun.status 'success') 'success' (ternary (eq overview.etl.lastRun.status 'failed') 'danger' 'muted')) text=overview.etl.lastRun.status}}
       {{else}}
-        {{> pill kind='muted' text='never'}}
+        {{> pill kind='muted' text=(req.t 'admin.dashboard.never')}}
       {{/if}}
     </p>
     <p class="card-sub">{{overview.etl.runsToday}} {{req.t 'admin.dashboard.runsToday'}}</p>
