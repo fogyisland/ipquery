@@ -225,10 +225,16 @@
     "keys": {
       "title": "API Keys 全局",
       "col": {
+        "id": "ID",
         "owner": "所属用户",
+        "label": "标签",
         "prefix": "前缀",
+        "created": "创建时间",
+        "revoked": "已吊销",
         "lastUsed": "最后使用"
-      }
+      },
+      "option-revoked-yes": "已吊销",
+      "option-revoked-no": "有效"
     },
     "audit": {
       "title": "查询审计",
