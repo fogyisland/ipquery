@@ -1,20 +1,33 @@
 {{!-- SPDX-License-Identifier: MIT --}}
-<h1>{{req.t 'admin.keys.title'}}</h1>
-<form method="GET" action="/admin/keys">
-  <input type="number" name="userId" placeholder="user_id" value="{{userId}}">
-  <button type="submit">{{req.t 'common.search'}}</button>
-</form>
-<table>
-  <thead><tr><th>ID</th><th>{{req.t 'admin.keys.col.owner'}}</th><th>Label</th><th>{{req.t 'admin.keys.col.prefix'}}</th><th>{{req.t 'admin.keys.col.lastUsed'}}</th><th>Revoked</th></tr></thead>
+<h2>{{req.t 'admin.keys.title'}}</h2>
+
+{{> filter-bar action='/admin/keys' filters=(array
+  (hash name='revoked' label=(req.t 'admin.keys.col.revoked') options=(array (hash value='yes' label=(req.t 'admin.keys.option-revoked-yes')) (hash value='no' label=(req.t 'admin.keys.option-revoked-no'))))
+) values=filters csvUrl='/admin/keys.csv' anyLabel=(req.t 'common.any') filterLabel=(req.t 'common.filter') exportLabel=(req.t 'common.exportCsv')}}
+
+<table class="table">
+  <thead>
+    <tr>
+      <th><a href="?sort={{ternary (eq sort.col 'id') (ternary (eq sort.dir 'asc') '-id' 'id') (ternary (eq sort.dir 'asc') 'id' '-id')}}">{{@root.req.t 'admin.keys.col.id'}}</a></th>
+      <th>{{@root.req.t 'admin.keys.col.owner'}}</th>
+      <th><a href="?sort={{ternary (eq sort.col 'label') (ternary (eq sort.dir 'asc') '-label' 'label') (ternary (eq sort.dir 'asc') 'label' '-label')}}">{{@root.req.t 'admin.keys.col.label'}}</a></th>
+      <th><a href="?sort={{ternary (eq sort.col 'key_prefix') (ternary (eq sort.dir 'asc') '-key_prefix' 'key_prefix') (ternary (eq sort.dir 'asc') 'key_prefix' '-key_prefix')}}">{{@root.req.t 'admin.keys.col.prefix'}}</a></th>
+      <th><a href="?sort={{ternary (eq sort.col 'created_at') (ternary (eq sort.dir 'asc') '-created_at' 'created_at') (ternary (eq sort.dir 'asc') 'created_at' '-created_at')}}">{{@root.req.t 'admin.keys.col.created'}}</a></th>
+      <th>{{@root.req.t 'admin.keys.col.revoked'}}</th>
+    </tr>
+  </thead>
   <tbody>
-    {{#each keys}}<tr>
-      <td>{{this.id}}</td>
+    {{#each keys}}
+    <tr>
+      <td class="table-num">{{this.id}}</td>
       <td>{{this.ownerEmail}}</td>
       <td>{{this.label}}</td>
       <td><code>{{this.keyPrefix}}</code></td>
-      <td>{{formatRelative this.lastUsedAt}}</td>
-      <td>{{#if this.revokedAt}}{{formatDate this.revokedAt}}{{else}}—{{/if}}</td>
-    </tr>{{/each}}
+      <td class="table-num">{{formatDate this.createdAt}}</td>
+      <td class="table-num">{{#if this.revokedAt}}{{formatDate this.revokedAt}}{{else}}—{{/if}}</td>
+    </tr>
+    {{/each}}
   </tbody>
 </table>
+
 {{> pagination baseUrl="/admin/keys" page=page totalPages=totalPages queryString=queryString }}

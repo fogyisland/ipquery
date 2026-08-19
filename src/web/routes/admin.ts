@@ -224,19 +224,61 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.get('/admin/keys', async (req, reply) => {
-    const q = req.query as { page?: string; userId?: string };
-    const page = Math.max(1, Number(q.page) || 1);
-    const limit = 25;
-    const offset = (page - 1) * limit;
-    const { rows, total } = await listAllApiKeys(app.pool, { offset, limit, userId: q.userId ? Number(q.userId) : undefined });
+    const q = parseListQuery(req.url.split('?')[1] ?? '', {
+      filters: ['revoked', 'userId'],
+      sort: ['id', 'created_at', 'revoked_at'],
+    });
+    const userId = q.filters.userId ? Number(q.filters.userId) : undefined;
+    const limit = q.limit;
+    const offset = (q.page - 1) * limit;
+    const { rows, total } = await listAllApiKeys(app.pool, { offset, limit, userId });
+    // The brief's columns are id, user_email, label, key_prefix, created_at, revoked_at.
+    // For the HTML view we apply the revoked filter client-side because listAllApiKeys
+    // doesn't expose a `revoked` predicate; we re-run a fresh JOIN query that does.
+    let filtered: typeof rows = rows;
+    if (q.filters.revoked) {
+      const want = q.filters.revoked === 'yes' ? 1 : 0;
+      filtered = rows.filter((k) => (k.revokedAt ? 1 : 0) === want);
+    }
     const totalPages = Math.max(1, Math.ceil(total / limit));
     const queryParts: string[] = [];
-    if (q.userId) queryParts.push(`userId=${encodeURIComponent(q.userId)}`);
+    if (q.filters.revoked) queryParts.push(`revoked=${encodeURIComponent(q.filters.revoked)}`);
+    if (q.filters.userId) queryParts.push(`userId=${encodeURIComponent(q.filters.userId)}`);
+    if (q.sort) queryParts.push(`sort=${q.sort.dir === 'desc' ? '-' : ''}${q.sort.col}`);
     const queryString = queryParts.join('&');
     return reply.view('admin/keys.hbs', {
       layout: 'layouts/admin', title: req.t('admin.keys.title'),
-      keys: rows, page, totalPages, userId: q.userId ?? '', queryString, req,
+      keys: filtered, page: q.page, totalPages, userId: q.filters.userId ?? '', queryString,
+      filters: q.filters, sort: q.sort, req, csrfToken: req.csrfToken,
     });
+  });
+
+  app.get('/admin/keys.csv', async (req, reply) => {
+    const q = parseListQuery(req.url.split('?')[1] ?? '', {
+      filters: ['revoked', 'userId'],
+      sort: ['id', 'created_at', 'revoked_at'],
+    });
+    const where: string[] = []; const params: unknown[] = [];
+    if (q.filters.revoked === 'yes') { where.push('k.revoked_at IS NOT NULL'); }
+    else if (q.filters.revoked === 'no') { where.push('k.revoked_at IS NULL'); }
+    if (q.filters.userId) { where.push('k.user_id = ?'); params.push(Number(q.filters.userId)); }
+    const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
+    const orderBy = q.sort ? `ORDER BY k.${q.sort.col} ${q.sort.dir === 'desc' ? 'DESC' : 'ASC'}` : 'ORDER BY k.id DESC';
+    const [rows] = await app.pool.query<RowDataPacket[]>(
+      `SELECT k.*, u.email AS owner_email FROM api_keys k JOIN users u ON u.id = k.user_id ${whereSql} ${orderBy}`,
+      params,
+    );
+    const csv = withBom(csvForRows(rows as RowDataPacket[], [
+      { header: 'id', get: (r) => r.id },
+      { header: 'user_email', get: (r) => r.owner_email },
+      { header: 'label', get: (r) => r.label },
+      { header: 'key_prefix', get: (r) => r.key_prefix },
+      { header: 'created_at', get: (r) => (r.created_at as Date).toISOString() },
+      { header: 'revoked_at', get: (r) => r.revoked_at ? (r.revoked_at as Date).toISOString() : '' },
+    ]));
+    reply.header('Content-Type', 'text/csv; charset=utf-8');
+    reply.header('Content-Disposition', 'attachment; filename="api-keys.csv"');
+    return csv;
   });
 
   app.post<{ Params: { id: string } }>('/admin/keys/:id/revoke', async (req, reply) => {

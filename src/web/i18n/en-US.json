@@ -224,10 +224,16 @@
     "keys": {
       "title": "API Keys (global)",
       "col": {
+        "id": "ID",
         "owner": "Owner",
+        "label": "Label",
         "prefix": "Prefix",
+        "created": "Created",
+        "revoked": "Revoked",
         "lastUsed": "Last used"
-      }
+      },
+      "option-revoked-yes": "Revoked",
+      "option-revoked-no": "Active"
     },
     "audit": {
       "title": "Query audit",
