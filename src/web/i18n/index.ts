@@ -14,11 +14,29 @@ const dictionaries: Record<Locale, Record<string, unknown>> = {
 function lookup(dict: Record<string, unknown>, key: string): unknown {
   const parts = key.split('.');
   let cur: unknown = dict;
-  for (const p of parts) {
+  for (let i = 0; i < parts.length; i++) {
     if (!cur || typeof cur !== 'object') return undefined;
-    cur = (cur as Record<string, unknown>)[p];
+    const obj = cur as Record<string, unknown>;
+    const p = parts[i] as string;
+    const direct = obj[p];
+    if (typeof direct === 'string') {
+      // String leaf: resolve directly if it's the final segment. If intermediate
+      // (e.g. `admin.users.delete` is a string but key continues to `.confirm.title`),
+      // fall through to the literal-dotted-key fallback below.
+      if (i === parts.length - 1) return direct;
+    } else if (direct && typeof direct === 'object') {
+      cur = direct;
+      continue;
+    }
+    // Direct segment didn't yield an object. Try literal-dotted-key fallback in
+    // the current object — handles JSON files that intermix flat string leaves
+    // with nested dotted keys (e.g. both `delete: "..."` and `delete.confirm.title: "..."`).
+    const remaining = parts.slice(i).join('.');
+    if (typeof obj[remaining] === 'string') return obj[remaining];
+    return undefined;
   }
-  return cur;
+  if (typeof cur === 'string') return cur;
+  return undefined;
 }
 
 export function t(locale: Locale, key: string, vars?: Record<string, string | number>): string {
