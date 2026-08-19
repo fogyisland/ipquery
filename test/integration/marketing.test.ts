@@ -30,10 +30,10 @@ describe('marketing routes', () => {
     expect(r.status).toBe(200);
     expect(r.text).toContain('/lookup');
   });
-  it('GET /pricing returns 200', async () => {
+  // Task 14: /pricing route dropped per brief — expect 404 instead.
+  it('GET /pricing returns 404 (route removed in Task 14)', async () => {
     const r = await request(app.server).get('/pricing');
-    expect(r.status).toBe(200);
-    expect(r.text).toContain('免费');
+    expect(r.status).toBe(404);
   });
   it('GET /status returns 200', async () => {
     const r = await request(app.server).get('/status');

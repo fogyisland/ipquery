@@ -1,14 +1,28 @@
 // SPDX-License-Identifier: MIT
 import type { FastifyInstance } from 'fastify';
+import type { RowDataPacket } from 'mysql2';
 import { lastEtlRun } from '../../storage/mysql';
 import { parseIp, isValidIp } from '../../ip';
 import { findRange } from '../../storage/mysql';
 import { verifyCsrfRequest } from '../plugins/csrf';
 
 export default async function marketingRoutes(app: FastifyInstance): Promise<void> {
+  // Task 14: tool-style landing. Replaces marketing/home.hbs with the new
+  // top-level home.hbs rendered inside layouts/app (the Task 4 shell that
+  // includes the redesigned sidebar). query_log column is `ts`, not
+  // `created_at` (migration 008). CSRF token is exposed via req.csrfToken
+  // (decoration registered by registerCsrf in src/web/plugins/csrf.ts).
   app.get('/', async (req, reply) => {
-    return reply.view('marketing/home.hbs', {
-      layout: 'layouts/public', title: '首页', req, viewBaseUrl: app.viewBaseUrl,
+    const [ipCountRows] = await app.pool.query<RowDataPacket[]>('SELECT COUNT(*) AS c FROM ip_ranges');
+    const [q24Rows] = await app.pool.query<RowDataPacket[]>(
+      `SELECT COUNT(*) AS c FROM query_log WHERE ts >= ?`,
+      [new Date(Date.now() - 86400_000)],
+    );
+    const ipCount = Number((ipCountRows[0] as { c: number }).c);
+    const q24 = Number((q24Rows[0] as { c: number }).c);
+    return reply.view('home.hbs', {
+      layout: 'layouts/app', title: req.t('home.title'),
+      ipCount, q24, csrfToken: req.csrfToken, viewBaseUrl: app.viewBaseUrl, req,
     });
   });
   app.get('/about', async (req, reply) => {
@@ -16,16 +30,16 @@ export default async function marketingRoutes(app: FastifyInstance): Promise<voi
       layout: 'layouts/public', title: '关于', req, viewBaseUrl: app.viewBaseUrl,
     });
   });
+  // Task 14: tool-style docs page rendered inside layouts/app. Lists the 4
+  // public API endpoints (lookup, lookup/:ip, stats, healthz) with curl
+  // examples. Mirrors Task 5 dashboard pattern (rendered view, no async data).
   app.get('/docs', async (req, reply) => {
-    return reply.view('marketing/docs.hbs', {
-      layout: 'layouts/public', title: 'API 文档', req, viewBaseUrl: app.viewBaseUrl,
+    return reply.view('docs.hbs', {
+      layout: 'layouts/app', title: req.t('docs.title'), req,
     });
   });
-  app.get('/pricing', async (req, reply) => {
-    return reply.view('marketing/pricing.hbs', {
-      layout: 'layouts/public', title: '定价', req, viewBaseUrl: app.viewBaseUrl,
-    });
-  });
+  // /pricing removed in Task 14 — see brief. /status, /about, /try stay on
+  // layouts/public per spec §2.1 "保留,无大改" (preserve, no major changes).
   app.get('/status', async (req, reply) => {
     const lastRun = await lastEtlRun(app.pool);
     return reply.view('marketing/status.hbs', {
