@@ -2,9 +2,9 @@
 <h2>{{req.t 'admin.users.title'}}</h2>
 
 {{> filter-bar action='/admin/users' filters=(array
-  (hash name='role' label=(req.t 'admin.users.role') options=(array (hash value='admin' label='admin') (hash value='user' label='user')))
-  (hash name='disabled' label=(req.t 'admin.users.disabled') options=(array (hash value='0' label='active') (hash value='1' label='disabled')))
-  (hash name='verified' label=(req.t 'admin.users.verified') options=(array (hash value='0' label='no') (hash value='1' label='yes')))
+  (hash name='role' label=(req.t 'admin.users.role') options=(array (hash value='admin' label=(req.t 'admin.users.option-role-admin')) (hash value='user' label=(req.t 'admin.users.option-role-user'))))
+  (hash name='disabled' label=(req.t 'admin.users.disabled') options=(array (hash value='0' label=(req.t 'admin.users.option-status-active')) (hash value='1' label=(req.t 'admin.users.option-status-disabled'))))
+  (hash name='verified' label=(req.t 'admin.users.verified') options=(array (hash value='0' label=(req.t 'common.no')) (hash value='1' label=(req.t 'common.yes'))))
 ) values=filters csvUrl='/admin/users.csv' anyLabel=(req.t 'common.any') filterLabel=(req.t 'common.filter') exportLabel=(req.t 'common.exportCsv')}}
 
 <form method="POST" action="/admin/users/bulk" id="bulk-form">
