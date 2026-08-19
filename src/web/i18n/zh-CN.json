@@ -337,6 +337,37 @@
       "etlRestart.confirm": "手动触发 ETL 流水线(异步)"
     }
   },
+  "home": {
+    "title": "首页 · IPQuery",
+    "heroTitle": "IP 地理位置查询",
+    "heroSubtitle": "聚合 MaxMind / ip2region / DB-IP 三大数据源,每天自动 ETL 更新",
+    "quickQuery": "快速查询",
+    "status": "API 状态",
+    "online": "在线",
+    "ipRanges": "IP 段数",
+    "queries24h": "24h 查询",
+    "queries24hSub": "过去 24 小时",
+    "apiExample": "API 示例",
+    "apiDocs": "查看完整文档",
+    "fullDocs": "查看完整 API 文档"
+  },
+  "docs": {
+    "title": "API 文档",
+    "subtitle": "公开 HTTP API,无需鉴权;注册后可获取 API Key 提升速率限制。",
+    "endpointsTitle": "接口列表",
+    "colMethod": "方法",
+    "colPath": "路径",
+    "colDescription": "说明",
+    "endpoints": {
+      "lookup": "查询 IP 的国家 / 地区 / 城市 / ISP / ASN",
+      "lookupPath": "同上,IP 作为路径参数",
+      "stats": "查询 ETL 最近一次运行的元数据",
+      "healthz": "健康检查,返回 { status: \"ok\" }"
+    },
+    "examplesTitle": "调用示例",
+    "authTitle": "API Key 认证",
+    "authBody": "登录后在控制台创建 API Key,然后用 key= 或 Authorization: Bearer 传递。"
+  },
   "footer": {
     "copyright": "© {year} IPQuery",
     "license": "MIT"

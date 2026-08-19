@@ -336,6 +336,37 @@
       "etlRestart.confirm": "Trigger ETL pipeline manually (fire-and-forget)"
     }
   },
+  "home": {
+    "title": "IPQuery · IP Geolocation",
+    "heroTitle": "IP Geolocation Lookup",
+    "heroSubtitle": "Aggregating MaxMind / ip2region / DB-IP with daily ETL refresh",
+    "quickQuery": "Quick lookup",
+    "status": "API status",
+    "online": "Online",
+    "ipRanges": "IP ranges",
+    "queries24h": "Queries (24h)",
+    "queries24hSub": "Past 24 hours",
+    "apiExample": "API example",
+    "apiDocs": "Read full docs",
+    "fullDocs": "Read full API documentation"
+  },
+  "docs": {
+    "title": "API Documentation",
+    "subtitle": "Public HTTP API, no auth required; sign up for an API key for higher rate limits.",
+    "endpointsTitle": "Endpoints",
+    "colMethod": "Method",
+    "colPath": "Path",
+    "colDescription": "Description",
+    "endpoints": {
+      "lookup": "Lookup IP country / region / city / ISP / ASN",
+      "lookupPath": "Same, with IP as a path parameter",
+      "stats": "Last ETL run metadata (started / finished / status / merged records)",
+      "healthz": "Health check, returns { status: \"ok\" }"
+    },
+    "examplesTitle": "Examples",
+    "authTitle": "API key authentication",
+    "authBody": "Create an API key in the dashboard, then pass it via key= or Authorization: Bearer."
+  },
   "footer": {
     "copyright": "© {year} IPQuery",
     "license": "MIT"
