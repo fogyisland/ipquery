@@ -73,6 +73,20 @@ export async function registerView(app: FastifyInstance, cfg: { baseUrl: string 
     return vals.reduce((m: number, v: unknown) => Math.max(m, Number(v)), 0);
   });
 
+  // `array` collects variadic args (Handlebars drops trailing options object).
+  // Used in templates to build literal arrays inline, e.g. `(array (hash ...))`.
+  Handlebars.registerHelper('array', (...args: unknown[]) => {
+    const last = args[args.length - 1];
+    const vals = (last && typeof last === 'object' && 'name' in (last as object) && 'fn' in (last as object)
+      ? args.slice(0, -1)
+      : args) as unknown[];
+    return vals;
+  });
+
+  // `hash` returns its argument unchanged. Combined with subexpressions it lets
+  // templates declare object literals inline: `(hash name='role' label='Role')`.
+  Handlebars.registerHelper('hash', (obj: unknown) => obj);
+
   // Register all Handlebars partials globally so layouts (e.g. public.hbs) can
   // include them with `{{> nav }}` / `{{> footer }}` / `{{> flash }}`. The
   // view plugin resolves partials by directory path; registering via the
