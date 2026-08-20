@@ -71,7 +71,7 @@ describe('migrations legacy upgrade', () => {
     const versions = (applied[0] as Array<{ version: string }>).map((r) => r.version);
     expect(versions).toEqual(['001', '002', '003', '004', '005', '006', '007', '008', '010', '011', '012']);
 
-    // The 10 expected tables all still exist after the upgrade.
+    // The 11 expected tables all still exist after the upgrade.
     const [rows] = await pool.query<mysql.RowDataPacket[]>('SHOW TABLES');
     const tables = rows.map((r) => Object.values(r)[0] as string).sort();
     expect(tables).toContain('ip_ranges');
