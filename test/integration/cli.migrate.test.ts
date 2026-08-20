@@ -52,7 +52,7 @@ describe('ipq migrate', () => {
   it('applies all migrations to a fresh DB', async () => {
     await dropAndCreateDb();
     const { stdout } = await exec('node', [TSX_BIN, CLI_SRC, 'migrate'], { env: makeEnv() });
-    expect(stdout).toMatch(/applied 9 migration/);
+    expect(stdout).toMatch(/applied 11 migration/);
 
     const cfg = loadConfig();
     const pool = mysql.createPool({
