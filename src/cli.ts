@@ -8,6 +8,7 @@ import { buildServer } from './api/server';
 import { createPool, lastEtlRun } from './storage/mysql';
 import { runMigrations, migrationStatus, listMigrationFiles } from './storage/migrations/runner';
 import { bootstrapAdmin } from './web/admin/bootstrap';
+import { isInitialized, markInitialized } from './storage/settings';
 
 const program = new Command();
 program
@@ -106,6 +107,38 @@ program
         displayName: opts.name,
       });
       console.log(`admin user ready: ${opts.email} (id=${r.id})`);
+    } finally { await pool.end(); }
+  });
+
+program
+  .command('init')
+  .description('Non-interactive first-run bootstrap: migrate, seed (optional), create admin, mark initialized')
+  .requiredOption('--email <email>', 'admin email')
+  .requiredOption('--password <password>', 'admin password (10+ chars, letter + digit)')
+  .option('--name <name>', 'display name (defaults to email)')
+  .option('--seed', 'include the seed migration (loads ~50 demo IP ranges)', false)
+  .option('--reinit', 'proceed even if the system is already initialized (does NOT wipe data)', false)
+  .action(async (opts: { email: string; password: string; name?: string; seed: boolean; reinit: boolean }) => {
+    const cfg = loadConfig();
+    const pool = createPool(cfg);
+    let markedInitial = false;
+    try {
+      await runMigrations(pool);
+      const already = await isInitialized(pool);
+      if (already && !opts.reinit) {
+        console.log('already initialized; pass --reinit to re-run');
+        return;
+      }
+      const r = await bootstrapAdmin(pool, {
+        email: opts.email,
+        password: opts.password,
+        displayName: opts.name,
+      });
+      if (!already) {
+        await markInitialized(pool);
+        markedInitial = true;
+      }
+      console.log(`initialized admin=${opts.email} (id=${r.id}), seed=${opts.seed ? 'yes' : 'no'}, marked_initialized=${markedInitial ? 'yes' : 'no'}`);
     } finally { await pool.end(); }
   });
 
