@@ -17,6 +17,7 @@ import { registerSession } from '../web/plugins/session';
 import { registerAuthGuards } from '../web/plugins/auth';
 import { registerCsrf } from '../web/plugins/csrf';
 import { registerAuditLog } from '../web/plugins/auditLog';
+import { registerSetupGuard } from '../web/plugins/setupGuard';
 import { _resetForTests as resetLoginLimit } from '../web/plugins/loginRateLimit';
 import { createMailer } from '../mailer';
 import healthRoute from './routes/health';
@@ -47,6 +48,8 @@ export async function buildServer(cfg: AppConfig, opts?: { extraRoutes?: (app: F
 
   app.decorate('cfg', cfg);
   app.decorate('pool', createPool(cfg));
+
+  await registerSetupGuard(app);
 
   await app.register(cookie, { secret: cfg.web.sessionSecret || cfg.web.csrfSecret || 'dev-only-secret-change-me' });
   await app.register(formbody);
