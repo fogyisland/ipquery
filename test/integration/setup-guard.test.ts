@@ -46,18 +46,13 @@ beforeAll(async () => {
   td = await dropAndCreate();
   const cfg = loadConfig(); cfg.db.database = td.dbName;
 
-  // The setupGuard plugin no-ops when NODE_ENV === 'test' so existing test
-  // suites aren't broken. For this test, force the guard on by clearing the
-  // env var before buildServer so we exercise the redirect + lock-out paths.
-  const prevEnv = process.env.NODE_ENV;
-  delete process.env.NODE_ENV;
-  try {
-    appPre = await buildServer(cfg);
-    await markInitialized(td.pool);
-    appPost = await buildServer(cfg);
-  } finally {
-    process.env.NODE_ENV = prevEnv;
-  }
+  // The setupGuard plugin enforces on every non-setup request when
+  // `initialized_at` is missing. Test fixture: build pre-init server
+  // (initialized_at NOT set yet), then mark initialized and rebuild
+  // to exercise the post-init lock-out.
+  appPre = await buildServer(cfg);
+  await markInitialized(td.pool);
+  appPost = await buildServer(cfg);
 });
 
 afterAll(async () => {
