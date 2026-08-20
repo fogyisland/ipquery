@@ -26,11 +26,6 @@ function isSetupCompletePath(url: string, method: string): boolean {
 }
 
 export async function registerSetupGuard(app: FastifyInstance): Promise<void> {
-  if (process.env.NODE_ENV === 'test') {
-    app.decorate('requireSetup', false);
-    return;
-  }
-
   const initialized = await isInitialized(app.pool);
   app.decorate('requireSetup', !initialized);
 

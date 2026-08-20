@@ -2,6 +2,7 @@
 import * as mysql from 'mysql2/promise';
 import { loadConfig } from '../../src/config';
 import { runMigrations } from '../../src/storage/migrations/runner';
+import { markInitialized } from '../../src/storage/settings';
 
 export interface TestDb {
   pool: mysql.Pool;
@@ -22,6 +23,7 @@ export async function createTestDb(suffix: string): Promise<TestDb> {
     database: dbName, connectionLimit: 2, multipleStatements: true, timezone: 'Z', dateStrings: false,
   });
   await runMigrations(pool);
+  await markInitialized(pool);
   return { pool, dbName };
 }
 
