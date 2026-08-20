@@ -5,6 +5,7 @@ import * as mysql from 'mysql2/promise';
 import { buildServer } from '../../src/api/server';
 import { loadConfig } from '../../src/config';
 import { createPool, runMigrations, recordEtlStart, recordEtlFinish } from '../../src/storage/mysql';
+import { markInitialized } from '../../src/storage/settings';
 
 const TEST_DB = 'ipquery_stats_test';
 let cfg = loadConfig();
@@ -18,6 +19,7 @@ beforeAll(async () => {
   await root.end();
   const pool = createPool(cfg);
   await runMigrations(pool);
+  await markInitialized(pool);
   const id = await recordEtlStart(pool);
   await recordEtlFinish(pool, id, 'success', { mergedRecords: 42 });
   await pool.end();

@@ -29,6 +29,8 @@ describe('settings storage', () => {
   });
 
   it('isInitialized flips false → true after markInitialized', async () => {
+    // createTestDb marks the DB initialized; clear that row to test the flip.
+    await td.pool.query(`DELETE FROM settings WHERE k = 'initialized_at'`);
     expect(await isInitialized(td.pool)).toBe(false);
     await markInitialized(td.pool);
     expect(await isInitialized(td.pool)).toBe(true);

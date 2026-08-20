@@ -8,6 +8,7 @@ import request from 'supertest';
 import { buildServer } from '../../src/api/server';
 import { loadConfig } from '../../src/config';
 import { runPipeline } from '../../src/etl/pipeline';
+import { markInitialized } from '../../src/storage/settings';
 
 const TEST_DB = 'ipquery_e2e_test';
 let cfg = loadConfig();
@@ -34,6 +35,12 @@ beforeAll(async () => {
   await root.end();
 
   await runPipeline({ cfg });
+  const postPool = mysql.createPool({
+    host: cfg.db.host, port: cfg.db.port, user: cfg.db.user, password: cfg.db.password,
+    database: TEST_DB, connectionLimit: 1,
+  });
+  await markInitialized(postPool);
+  await postPool.end();
   app = await buildServer(cfg);
 }, 60_000);
 
