@@ -1,0 +1,13 @@
+{{!-- SPDX-License-Identifier: MIT --}}
+<section class="setup-step">
+  <h1>Ready to finish</h1>
+  <ul>
+    <li>Site name: {{summary.siteName}}</li>
+    <li>Admin email: {{summary.adminEmail}}</li>
+    <li>Seed loaded: {{#if summary.seedLoaded}}yes{{else}}no{{/if}}</li>
+  </ul>
+  <form method="POST" action="/setup/complete">
+    <input type="hidden" name="csrf" value="{{csrfToken}}">
+    <button type="submit" class="btn-primary">Finish</button>
+  </form>
+</section>

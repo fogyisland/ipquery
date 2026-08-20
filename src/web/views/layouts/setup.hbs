@@ -1,0 +1,21 @@
+{{!-- SPDX-License-Identifier: MIT --}}
+{{!-- Task 5: minimal placeholder for the 5-step setup wizard. Full-width,
+     no sidebar (the wizard is the first thing the user sees). Task 6 will
+     polish the styling and add step indicators. --}}
+<!DOCTYPE html>
+<html lang="{{req.locale}}">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{#if title}}{{title}} - IPQuery{{else}}IPQuery{{/if}}</title>
+  <link rel="stylesheet" href="/assets/css/base.css">
+  <link rel="stylesheet" href="/assets/css/layout.css">
+  <link rel="stylesheet" href="/assets/css/forms.css">
+</head>
+<body class="layout-setup">
+  <main class="setup-container">
+    {{> flash }}
+    {{{body}}}
+  </main>
+</body>
+</html>

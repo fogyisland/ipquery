@@ -1,0 +1,20 @@
+{{!-- SPDX-License-Identifier: MIT --}}
+<section class="setup-step">
+  <h1>Admin account</h1>
+  <form method="POST" action="/setup/admin">
+    <input type="hidden" name="csrf" value="{{csrfToken}}">
+    <div class="form-field">
+      <label for="email">Email</label>
+      <input type="email" name="email" id="email" required autocomplete="email">
+    </div>
+    <div class="form-field">
+      <label for="password">Password</label>
+      <input type="password" name="password" id="password" required autocomplete="new-password">
+    </div>
+    <div class="form-field">
+      <label for="displayName">Display name</label>
+      <input type="text" name="displayName" id="displayName" required autocomplete="nickname">
+    </div>
+    <button type="submit" class="btn-primary">Next</button>
+  </form>
+</section>
