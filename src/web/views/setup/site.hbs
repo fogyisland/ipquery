@@ -1,0 +1,16 @@
+{{!-- SPDX-License-Identifier: MIT --}}
+<section class="setup-step">
+  <h1>Site</h1>
+  <form method="POST" action="/setup/site">
+    <input type="hidden" name="csrf" value="{{csrfToken}}">
+    <div class="form-field">
+      <label for="name">Site name</label>
+      <input type="text" name="name" id="name" value="{{siteName}}" required>
+    </div>
+    <div class="form-field">
+      <label for="tagline">Tagline</label>
+      <input type="text" name="tagline" id="tagline" value="{{siteTagline}}">
+    </div>
+    <button type="submit" class="btn-primary">Next</button>
+  </form>
+</section>
