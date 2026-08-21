@@ -11,17 +11,7 @@ let app: Awaited<ReturnType<typeof buildServer>>;
 beforeAll(async () => {
   td = await createTestDb('csrf');
   const cfg = loadConfig(); cfg.db.database = td.dbName;
-  // Stub POST /login so we can exercise verifyCsrfRequest in isolation.
-  // The real /login handler is delivered in Task 15; this stub mirrors its
-  // CSRF gate so the test can validate the verifyCsrfRequest helper now.
-  app = await buildServer(cfg, {
-    extraRoutes: async (a) => {
-      a.post('/login', async (req, reply) => {
-        if (!verifyCsrfRequest(req)) return reply.code(403).send();
-        return reply.code(200).send();
-      });
-    },
-  });
+  app = await buildServer(cfg);
 });
 afterAll(async () => { await app.close(); await dropTestDb(td); });
 beforeEach(() => { app.resetLoginLimit(); });

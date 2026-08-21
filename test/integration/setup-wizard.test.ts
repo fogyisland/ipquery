@@ -5,20 +5,12 @@
 // behavior (routes + guard + bootstrap + login flow). Follows the same
 // beforeAll/afterAll pattern as setup-routes.test.ts (drop+create DB, do NOT
 // call markInitialized so we can test the uninitialized path).
-//
-// NOTE: as of commit `2ab50f6`, `src/api/server.ts:buildServer` does not
-// register `src/web/routes/auth.ts` (which owns /login, /signup, /logout,
-// /forgot, /reset, /verify). This is an existing omission in the production
-// builder — production wires it differently. The auth.login test covers the
-// login route by passing `extraRoutes` to `buildServer`. We do the same here
-// so we can hit /login and /admin after the wizard completes.
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import request from 'supertest';
 import * as mysql from 'mysql2/promise';
 import { loadConfig } from '../../src/config';
 import { runMigrations } from '../../src/storage/migrations/runner';
 import { buildServer } from '../../src/api/server';
-import authRoutes from '../../src/web/routes/auth';
 import { getSetting, isInitialized } from '../../src/storage/settings';
 
 const TEST_DB = 'ipquery_test_setup_wizard_e2e';
@@ -63,11 +55,9 @@ async function dropDb(dbName: string): Promise<void> {
   await root.end();
 }
 
-// Build a server that includes /login + the rest of authRoutes. The default
-// buildServer does not register authRoutes — see file header.
-async function buildServerWithAuth(): Promise<Awaited<ReturnType<typeof buildServer>>> {
+async function freshApp(): Promise<Awaited<ReturnType<typeof buildServer>>> {
   const cfg = loadConfig(); cfg.db.database = td.dbName;
-  return buildServer(cfg, { extraRoutes: async (a) => { await a.register(authRoutes); } });
+  return buildServer(cfg);
 }
 
 // Extract the csrf hidden input value from a rendered HBS page.
@@ -104,7 +94,7 @@ async function wizardPost(
 
 beforeAll(async () => {
   td = await dropAndCreate();
-  appPre = await buildServerWithAuth();
+  appPre = await freshApp();
 });
 
 afterAll(async () => {
@@ -175,8 +165,7 @@ describe('setup wizard E2E', () => {
     expect(Number(seedRows[0]!.n)).toBe(50);
 
     // Rebuild server post-init: setupGuard re-reads `initialized_at` at boot.
-    // Need authRoutes registered too so /login works.
-    appPost = await buildServerWithAuth();
+    appPost = await freshApp();
 
     // /login must now be reachable (200, not redirected to /setup).
     const loginPage = await request(appPost.server).get('/login');
@@ -205,7 +194,7 @@ describe('setup wizard E2E', () => {
     // happy-path test above. We need to delete that row, then build a fresh
     // server so the guard reads requireSetup=true at boot.
     await td.pool.query(`DELETE FROM settings WHERE k = 'initialized_at'`);
-    const appGuard = await buildServerWithAuth();
+    const appGuard = await freshApp();
     try {
       const r = await request(appGuard.server).get('/login');
       expect(r.status).toBe(302);
