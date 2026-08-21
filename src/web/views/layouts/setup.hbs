@@ -1,13 +1,14 @@
 {{!-- SPDX-License-Identifier: MIT --}}
-{{!-- Task 5: minimal placeholder for the 5-step setup wizard. Full-width,
-     no sidebar (the wizard is the first thing the user sees). Task 6 will
-     polish the styling and add step indicators. --}}
+{{!-- Task 6: setup wizard layout. Full-width centered card, no sidebar
+     (the wizard is pre-auth; no nav applies). The stepper is rendered via
+     Handlebars; the route pre-translates each label so we avoid {{req.t}}
+     inside {{#each}} (Phase B Task 6 finding). --}}
 <!DOCTYPE html>
 <html lang="{{req.locale}}">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>{{#if title}}{{title}} - IPQuery{{else}}IPQuery{{/if}}</title>
+  <title>{{title}} - IPQuery</title>
   <link rel="stylesheet" href="/assets/css/base.css">
   <link rel="stylesheet" href="/assets/css/layout.css">
   <link rel="stylesheet" href="/assets/css/forms.css">
@@ -15,6 +16,15 @@
 <body class="layout-setup">
   <main class="setup-container">
     {{> flash }}
+    {{#if steps}}
+    <ol class="setup-stepper">
+      {{#each steps}}
+      <li class="setup-step{{#if active}} active{{/if}}">
+        <a href="{{href}}"><span class="setup-step-n">{{n}}</span><span class="setup-step-label">{{label}}</span></a>
+      </li>
+      {{/each}}
+    </ol>
+    {{/if}}
     {{{body}}}
   </main>
 </body>

@@ -1,16 +1,11 @@
 {{!-- SPDX-License-Identifier: MIT --}}
 <section class="setup-step">
-  <h1>Site</h1>
+  <h1>{{req.t 'setup.site.title'}}</h1>
+  {{#if error}}<p class="form-error">{{error}}</p>{{/if}}
   <form method="POST" action="/setup/site">
     <input type="hidden" name="csrf" value="{{csrfToken}}">
-    <div class="form-field">
-      <label for="name">Site name</label>
-      <input type="text" name="name" id="name" value="{{siteName}}" required>
-    </div>
-    <div class="form-field">
-      <label for="tagline">Tagline</label>
-      <input type="text" name="tagline" id="tagline" value="{{siteTagline}}">
-    </div>
-    <button type="submit" class="btn-primary">Next</button>
+    {{> form-field name="name" label=(req.t 'setup.site.nameLabel') required=true value=siteName }}
+    {{> form-field name="tagline" label=(req.t 'setup.site.taglineLabel') value=siteTagline }}
+    <button type="submit" class="btn-primary">{{req.t 'setup.site.submit'}}</button>
   </form>
 </section>

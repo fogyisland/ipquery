@@ -391,5 +391,80 @@
       "title": "Session expired",
       "body": "Please refresh and try again"
     }
+  },
+  "setup": {
+    "title": "Setup Wizard",
+    "steps": {
+      "1": "Welcome",
+      "2": "Database",
+      "3": "Site",
+      "4": "Admin",
+      "5": "Seed Data",
+      "6": "Finish"
+    },
+    "welcome": {
+      "title": "Welcome",
+      "body": "This wizard will set up IPQuery for first use: site name, database connection, administrator account, and seed data.",
+      "cta": "Start"
+    },
+    "database": {
+      "title": "Database",
+      "intro": "Current database connection (loaded from .env):",
+      "hostLabel": "Host",
+      "portLabel": "Port",
+      "userLabel": "User",
+      "dbLabel": "Database",
+      "test": "Test connection",
+      "envHint": "These values are loaded from .env. To change them, edit .env and restart the server, then return to this page.",
+      "success": "Database connection successful",
+      "failure": "Cannot reach the database. Check .env and make sure the server is running."
+    },
+    "site": {
+      "title": "Site",
+      "nameLabel": "Site name",
+      "taglineLabel": "Tagline",
+      "submit": "Next",
+      "success": "Site settings saved",
+      "error": "Site name is required (1-128 characters); tagline up to 256 characters"
+    },
+    "admin": {
+      "title": "Admin account",
+      "emailLabel": "Email",
+      "passwordLabel": "Password",
+      "nameLabel": "Display name",
+      "passwordHint": "At least 10 characters, must include a letter and a digit",
+      "submit": "Next",
+      "success": "Admin account created",
+      "error": "Invalid email, display name, or password"
+    },
+    "seed": {
+      "title": "Seed IP ranges",
+      "intro": "Load 50 hand-picked IP ranges (public DNS, cloud providers, RFC reserved ranges) so the dashboard has data on day one, even before the first ETL run.",
+      "yes": "Yes, load 50 seed IPs",
+      "no": "No, skip seed data",
+      "submit": "Next",
+      "success": "Seed data loaded",
+      "skipped": "Seed data skipped"
+    },
+    "complete": {
+      "title": "Ready to finish",
+      "body": "Review the summary below. Once you click Finish, the wizard marks the install as initialized and locks /setup out.",
+      "summary": "Summary",
+      "siteName": "Site name",
+      "adminEmail": "Admin email",
+      "seedLoaded": "Seed loaded",
+      "yes": "yes",
+      "no": "no",
+      "submit": "Finish",
+      "success": "Setup complete. You can now log in."
+    },
+    "errors": {
+      "csrf": "Session expired. Please refresh and try again.",
+      "password_weak": "Password too weak",
+      "email_invalid": "Invalid email format",
+      "db_unreachable": "Database is unreachable",
+      "site_name_required": "Site name is required",
+      "displayName_invalid": "Display name must be 1-64 characters"
+    }
   }
 }

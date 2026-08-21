@@ -66,7 +66,9 @@ describe('setup wizard routes', () => {
   it('GET /setup returns 200 with the welcome page', async () => {
     const r = await request(appPre.server).get('/setup');
     expect(r.status).toBe(200);
-    expect(r.text).toContain('Welcome');
+    // Default locale is zh-CN; the welcome title is the localized "Welcome".
+    expect(r.text).toContain('欢迎');
+    expect(r.text).toContain('class="setup-stepper"');
   });
 
   it('GET / redirects to /setup when uninitialized', async () => {

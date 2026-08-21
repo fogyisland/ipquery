@@ -392,5 +392,80 @@
       "title": "会话过期",
       "body": "请刷新页面后重试"
     }
+  },
+  "setup": {
+    "title": "初始化设置",
+    "steps": {
+      "1": "欢迎",
+      "2": "数据库",
+      "3": "站点",
+      "4": "管理员",
+      "5": "种子数据",
+      "6": "完成"
+    },
+    "welcome": {
+      "title": "欢迎",
+      "body": "本向导将引导你完成 IPQuery 的首次配置:站点名称、数据库连接、管理员账号以及种子数据。",
+      "cta": "开始"
+    },
+    "database": {
+      "title": "数据库",
+      "intro": "当前数据库连接(从 .env 加载):",
+      "hostLabel": "主机",
+      "portLabel": "端口",
+      "userLabel": "用户",
+      "dbLabel": "数据库名",
+      "test": "测试连接",
+      "envHint": "这些值从 .env 加载。如需修改,请编辑 .env 并重启服务器,然后返回此页。",
+      "success": "数据库连接成功",
+      "failure": "无法连接数据库,请检查 .env 配置并确认服务器已启动。"
+    },
+    "site": {
+      "title": "站点",
+      "nameLabel": "站点名称",
+      "taglineLabel": "副标题",
+      "submit": "下一步",
+      "success": "站点信息已保存",
+      "error": "站点名称必填(1-128 字符),副标题不超过 256 字符"
+    },
+    "admin": {
+      "title": "管理员账号",
+      "emailLabel": "邮箱",
+      "passwordLabel": "密码",
+      "nameLabel": "昵称",
+      "passwordHint": "密码至少 10 位,包含字母和数字",
+      "submit": "下一步",
+      "success": "管理员账号已创建",
+      "error": "邮箱、昵称或密码格式不正确"
+    },
+    "seed": {
+      "title": "种子 IP 数据",
+      "intro": "加载 50 条精选 IP 段(公共 DNS、云服务商、RFC 保留段),让首次部署就有数据展示,无需等待 ETL 首次运行。",
+      "yes": "是,加载 50 条种子 IP",
+      "no": "否,跳过种子数据",
+      "submit": "下一步",
+      "success": "种子数据已加载",
+      "skipped": "已跳过种子数据"
+    },
+    "complete": {
+      "title": "准备完成",
+      "body": "请检查下方汇总信息。点击完成后,向导会将本安装标记为已初始化,并锁定 /setup 路径。",
+      "summary": "汇总信息",
+      "siteName": "站点名称",
+      "adminEmail": "管理员邮箱",
+      "seedLoaded": "已加载种子",
+      "yes": "是",
+      "no": "否",
+      "submit": "完成",
+      "success": "初始化完成,可以登录了。"
+    },
+    "errors": {
+      "csrf": "会话已过期,请刷新页面后重试。",
+      "password_weak": "密码强度不足",
+      "email_invalid": "邮箱格式不正确",
+      "db_unreachable": "无法连接数据库",
+      "site_name_required": "站点名称必填",
+      "displayName_invalid": "昵称长度应为 1-64 字符"
+    }
   }
 }

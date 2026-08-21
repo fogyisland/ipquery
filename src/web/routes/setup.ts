@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { verifyCsrfRequest } from '../plugins/csrf';
 import { setSetting, getSetting, markInitialized } from '../../storage/settings';
 import { bootstrapAdmin } from '../admin/bootstrap';
@@ -9,6 +9,29 @@ const SITE_NAME_MAX = 128;
 const TAGLINE_MAX = 256;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+// Build the 6-step indicator. Labels are pre-translated here (Phase B Task 6
+// finding: avoid {{req.t '...'}} inside {{#each}}).
+function buildSteps(req: FastifyRequest, current: number): Array<{ n: number; label: string; href: string; active: boolean }> {
+  return [
+    { n: 1, label: req.t('setup.steps.1'), href: '/setup', active: current === 1 },
+    { n: 2, label: req.t('setup.steps.2'), href: '/setup/database', active: current === 2 },
+    { n: 3, label: req.t('setup.steps.3'), href: '/setup/site', active: current === 3 },
+    { n: 4, label: req.t('setup.steps.4'), href: '/setup/admin', active: current === 4 },
+    { n: 5, label: req.t('setup.steps.5'), href: '/setup/seed', active: current === 5 },
+    { n: 6, label: req.t('setup.steps.6'), href: '/setup/complete', active: current === 6 },
+  ];
+}
+
+// Map ?flash=success|error on redirect to a flash object whose message is the
+// translated text for the route-specific key. Returns undefined if no flash.
+function getFlash(req: FastifyRequest, successKey: string, errorKey: string): { success?: string; error?: string } {
+  const q = req.query as { flash?: string };
+  const kind = q.flash;
+  if (kind === 'success') return { success: req.t(successKey) };
+  if (kind === 'error') return { error: req.t(errorKey) };
+  return {};
+}
+
 export default async function setupRoutes(app: FastifyInstance): Promise<void> {
   // GET /setup — landing page. No form, no CSRF required.
   app.get('/setup', async (req, reply) => {
@@ -16,6 +39,10 @@ export default async function setupRoutes(app: FastifyInstance): Promise<void> {
       layout: 'layouts/setup',
       title: req.t('setup.welcome.title'),
       csrfToken: req.csrfToken,
+      steps: buildSteps(req, 1),
+      step: 1,
+      total: 6,
+      flash: getFlash(req, 'setup.welcome.title', 'setup.welcome.title'),
       req,
     });
   });
@@ -26,12 +53,17 @@ export default async function setupRoutes(app: FastifyInstance): Promise<void> {
       layout: 'layouts/setup',
       title: req.t('setup.database.title'),
       csrfToken: req.csrfToken,
+      steps: buildSteps(req, 2),
+      step: 2,
+      total: 6,
       db: {
         host: app.cfg.db.host,
         port: app.cfg.db.port,
         user: app.cfg.db.user,
         database: app.cfg.db.database,
       },
+      flash: getFlash(req, 'setup.database.success', 'setup.database.failure'),
+      error: (req.query as { flash?: string }).flash === 'error' ? req.t('setup.database.failure') : undefined,
       req,
     });
   });
@@ -70,8 +102,13 @@ export default async function setupRoutes(app: FastifyInstance): Promise<void> {
       layout: 'layouts/setup',
       title: req.t('setup.site.title'),
       csrfToken: req.csrfToken,
+      steps: buildSteps(req, 3),
+      step: 3,
+      total: 6,
       siteName: siteName ?? '',
       siteTagline: siteTagline ?? '',
+      flash: getFlash(req, 'setup.site.success', 'setup.site.error'),
+      error: (req.query as { flash?: string }).flash === 'error' ? req.t('setup.site.error') : undefined,
       req,
     });
   });
@@ -102,6 +139,11 @@ export default async function setupRoutes(app: FastifyInstance): Promise<void> {
       layout: 'layouts/setup',
       title: req.t('setup.admin.title'),
       csrfToken: req.csrfToken,
+      steps: buildSteps(req, 4),
+      step: 4,
+      total: 6,
+      flash: getFlash(req, 'setup.admin.success', 'setup.admin.error'),
+      error: (req.query as { flash?: string }).flash === 'error' ? req.t('setup.admin.error') : undefined,
       req,
     });
   });
@@ -137,6 +179,10 @@ export default async function setupRoutes(app: FastifyInstance): Promise<void> {
       layout: 'layouts/setup',
       title: req.t('setup.seed.title'),
       csrfToken: req.csrfToken,
+      steps: buildSteps(req, 5),
+      step: 5,
+      total: 6,
+      flash: getFlash(req, 'setup.seed.success', 'setup.seed.skipped'),
       req,
     });
   });
@@ -173,11 +219,15 @@ export default async function setupRoutes(app: FastifyInstance): Promise<void> {
       layout: 'layouts/setup',
       title: req.t('setup.complete.title'),
       csrfToken: req.csrfToken,
+      steps: buildSteps(req, 6),
+      step: 6,
+      total: 6,
       summary: {
         siteName: siteName ?? '',
         adminEmail,
         seedLoaded: seedLoaded === 'true',
       },
+      flash: getFlash(req, 'setup.complete.success', 'setup.complete.success'),
       req,
     });
   });
