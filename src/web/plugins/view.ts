@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyReply } from 'fastify';
 import view from '@fastify/view';
 import * as Handlebars from 'handlebars';
 import * as path from 'node:path';
@@ -44,8 +44,8 @@ export async function registerView(app: FastifyInstance, cfg: { baseUrl: string 
     const step = w / (arr.length - 1);
     return arr.map((v, i) => {
       const x = (i * step).toFixed(1);
-      const y = (h - (v / m) * h * 0.85 + h * 0.075).toFixed(1);
-      return `${i === 0 ? 'M' : 'L'} ${x},${y}`;
+      const y = `(${(h - (v / m) * h * 0.85 + h * 0.075).toFixed(1)})`;
+      return `${i === 0 ? 'M' : 'L'} ${x},${y.slice(1, -1)}`;
     }).join(' ');
   });
   Handlebars.registerHelper('formatDate', (d: Date | string | null | undefined) => {
@@ -65,16 +65,12 @@ export async function registerView(app: FastifyInstance, cfg: { baseUrl: string 
     return `${(Number(n) * 100).toFixed(d)}%`;
   });
   Handlebars.registerHelper('max', (...args: unknown[]) => {
-    // Handlebars may append an options object as the last arg; detect by shape.
     const last = args[args.length - 1];
     const vals = (last && typeof last === 'object' && 'name' in (last as object) && 'fn' in (last as object)
       ? args.slice(0, -1)
       : args) as unknown[];
     return vals.reduce((m: number, v: unknown) => Math.max(m, Number(v)), 0);
   });
-
-  // `array` collects variadic args (Handlebars drops trailing options object).
-  // Used in templates to build literal arrays inline, e.g. `(array (hash ...))`.
   Handlebars.registerHelper('array', (...args: unknown[]) => {
     const last = args[args.length - 1];
     const vals = (last && typeof last === 'object' && 'name' in (last as object) && 'fn' in (last as object)
@@ -82,15 +78,8 @@ export async function registerView(app: FastifyInstance, cfg: { baseUrl: string 
       : args) as unknown[];
     return vals;
   });
-
-  // `hash` returns its argument unchanged. Combined with subexpressions it lets
-  // templates declare object literals inline: `(hash name='role' label='Role')`.
   Handlebars.registerHelper('hash', (obj: unknown) => obj);
 
-  // Register all Handlebars partials globally so layouts (e.g. public.hbs) can
-  // include them with `{{> nav }}` / `{{> footer }}` / `{{> flash }}`. The
-  // view plugin resolves partials by directory path; registering via the
-  // engine makes them available regardless of layout.
   const partialsDir = path.join(viewsDir, 'partials');
   if (fs.existsSync(partialsDir)) {
     for (const name of fs.readdirSync(partialsDir)) {
@@ -102,16 +91,76 @@ export async function registerView(app: FastifyInstance, cfg: { baseUrl: string 
   }
 
   // @fastify/view validates the layout file at *registration* time (accessSync on
-  // `<root>/layouts/public.hbs`) and throws if it is missing. The layout ships with
-  // Task 11, so only opt into it once the file is actually on disk; every template
-  // may still declare its own layout via the `layout` render option.
+  // `<root>/layouts/public.hbs`) and throws if it's missing. The layout ships with
+  // Task 11, so only opt into it once the file is actually on disk.
+  //
+  // Task 6: we no longer register a global `layout` here. @fastify/view's
+  // handlebars render path only honors per-render layouts when no global layout
+  // is set -- once a global layout is registered, `viewHandlebars` short-circuits
+  // and ignores any per-render override. Instead we register only `defaultLayout`
+  // (used when a render omits a layout entirely) and wrap the reply's view impl
+  // in an onRequest hook below so routes that pass `{ layout: 'layouts/X' }`
+  // inside `data` actually switch away from the public default.
   const defaultLayout = 'layouts/public';
   const hasDefaultLayout = fs.existsSync(path.join(viewsDir, `${defaultLayout}.hbs`));
 
   await app.register(view, {
     engine: { handlebars: Handlebars },
     root: viewsDir,
-    ...(hasDefaultLayout ? { defaultLayout, layout: defaultLayout } : {}),
+    ...(hasDefaultLayout ? { defaultLayout } : {}),
+  });
+
+  // We can't re-decorate `reply.view` (Fastify forbids duplicates), so we
+  // shim by wrapping the underlying `viewAsync` impl. Capture it on the
+  // first request, then replace with a wrapper that promotes `data.layout`
+  // into the third-arg position (which `viewHandlebars` actually honors).
+
+  app.addHook('onRequest', async (_req, reply) => {
+    const r = reply as unknown as Record<string, unknown>;
+    if (r.__ipqViewWrapped) return;
+    r.__ipqViewWrapped = true;
+
+    const raw = (reply as unknown as { viewAsync: (p: string, d: Record<string, unknown>, o?: { layout?: string }) => Promise<unknown> }).viewAsync
+      .bind(reply);
+    (reply as unknown as { viewAsync: (p: string, d: Record<string, unknown>, o?: { layout?: string }) => Promise<unknown> }).viewAsync =
+      async function (page: string, data?: Record<string, unknown>, opts?: { layout?: string }) {
+        const mergedOpts: { layout?: string } = { ...(opts ?? {}) };
+        if (
+          !mergedOpts.layout &&
+          data &&
+          typeof data === 'object' &&
+          typeof (data as { layout?: unknown }).layout === 'string'
+        ) {
+          mergedOpts.layout = (data as { layout: string }).layout;
+        }
+        const cleanData: Record<string, unknown> = data ? { ...data } : {};
+        if ('layout' in cleanData) delete cleanData.layout;
+        return raw(page, cleanData, mergedOpts);
+      };
+
+    const rawView = (reply as unknown as { view: (p: string, d: Record<string, unknown>, o?: { layout?: string }) => Promise<unknown> }).view
+      .bind(reply);
+    (reply as unknown as { view: (p: string, d: Record<string, unknown>, o?: { layout?: string }) => Promise<unknown> }).view =
+      async function (page: string, data?: Record<string, unknown>, opts?: { layout?: string }) {
+        const mergedOpts: { layout?: string } = { ...(opts ?? {}) };
+        if (
+          !mergedOpts.layout &&
+          data &&
+          typeof data === 'object' &&
+          typeof (data as { layout?: unknown }).layout === 'string'
+        ) {
+          mergedOpts.layout = (data as { layout: string }).layout;
+        }
+        const cleanData: Record<string, unknown> = data ? { ...data } : {};
+        if ('layout' in cleanData) delete cleanData.layout;
+        try {
+          const html = await raw(page, cleanData, mergedOpts);
+          (reply as unknown as FastifyReply).send(html);
+        } catch (err) {
+          (reply as unknown as FastifyReply).send(err as Error);
+        }
+        return reply;
+      };
   });
 
   app.decorate('viewBaseUrl', cfg.baseUrl);
