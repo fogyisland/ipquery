@@ -26,6 +26,7 @@ import statsRoute from './routes/stats';
 import marketingRoute from '../web/routes/marketing';
 import dashboardRoute from '../web/routes/dashboard';
 import adminRoute from '../web/routes/admin';
+import authRoute from '../web/routes/auth';
 import setupRoute from '../web/routes/setup';
 
 declare module 'fastify' {
@@ -73,6 +74,7 @@ export async function buildServer(cfg: AppConfig, opts?: { extraRoutes?: (app: F
   await app.register(marketingRoute);
   await app.register(dashboardRoute);
   await app.register(adminRoute);
+  await app.register(authRoute);
   await app.register(setupRoute);
   registerAuditLog(app);
 

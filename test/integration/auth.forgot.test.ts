@@ -3,7 +3,6 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from
 import { createTestDb, dropTestDb, type TestDb } from '../helpers/db';
 import { loadConfig } from '../../src/config';
 import { buildServer } from '../../src/api/server';
-import authRoutes from '../../src/web/routes/auth';
 import { createUser, findUserByEmail } from '../../src/storage/users';
 import { createSession } from '../../src/storage/sessions';
 import { createPasswordReset } from '../../src/storage/tokens';
@@ -15,10 +14,7 @@ let td: TestDb;
 
 async function freshApp(): Promise<Awaited<ReturnType<typeof buildServer>>> {
   const cfg = loadConfig(); cfg.db.database = td.dbName;
-  const built = await buildServer(cfg, {
-    extraRoutes: async (a) => { await a.register(authRoutes); },
-  });
-  return built;
+  return buildServer(cfg);
 }
 
 // FIX (Task 16): CSRF plugin requires BOTH `csrf` and `csrf_issued` cookies

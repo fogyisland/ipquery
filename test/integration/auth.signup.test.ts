@@ -3,17 +3,13 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { createTestDb, dropTestDb, type TestDb } from '../helpers/db';
 import { loadConfig } from '../../src/config';
 import { buildServer } from '../../src/api/server';
-import authRoutes from '../../src/web/routes/auth';
 import request from 'supertest';
 
 let td: TestDb;
 
 async function freshApp(): Promise<Awaited<ReturnType<typeof buildServer>>> {
   const cfg = loadConfig(); cfg.db.database = td.dbName;
-  const built = await buildServer(cfg, {
-    extraRoutes: async (a) => { await a.register(authRoutes); },
-  });
-  return built;
+  return buildServer(cfg);
 }
 
 // FIX (Task 14): CSRF plugin requires BOTH `csrf` and `csrf_issued` cookies
