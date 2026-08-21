@@ -45,7 +45,12 @@ export async function registerSetupGuard(app: FastifyInstance): Promise<void> {
 
   app.addHook('onResponse', async (req, reply) => {
     if (!isSetupCompletePath(req.url.split('?')[0]!, req.method)) return;
-    if (reply.statusCode >= 300) return;
+    // Only skip on 4xx/5xx: `POST /setup/complete` returns 302, and that
+    // redirect is the entire point of the hook (the wizard has just called
+    // `markInitialized(app.pool)` and we need to flip the boot-cached flag
+    // before the user's next request). Skipping on 3xx left the cache stale
+    // and `/login` got redirected back to `/setup`.
+    if (reply.statusCode >= 400) return;
     const fresh = await isInitialized(app.pool);
     app.requireSetup = !fresh;
   });
