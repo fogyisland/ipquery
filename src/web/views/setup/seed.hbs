@@ -1,14 +1,16 @@
 {{!-- SPDX-License-Identifier: MIT --}}
 <section class="setup-step">
-  <h1>Seed IP ranges</h1>
+  <h1>{{req.t 'setup.seed.title'}}</h1>
+  <p>{{req.t 'setup.seed.intro'}}</p>
+  {{#if error}}<p class="form-error">{{error}}</p>{{/if}}
   <form method="POST" action="/setup/seed">
     <input type="hidden" name="csrf" value="{{csrfToken}}">
     <div class="form-field">
-      <label><input type="radio" name="load" value="true" checked> Load 50 seed IPs</label>
+      <label><input type="radio" name="load" value="true" checked> {{req.t 'setup.seed.yes'}}</label>
     </div>
     <div class="form-field">
-      <label><input type="radio" name="load" value="false"> Skip seed</label>
+      <label><input type="radio" name="load" value="false"> {{req.t 'setup.seed.no'}}</label>
     </div>
-    <button type="submit" class="btn-primary">Next</button>
+    <button type="submit" class="btn-primary">{{req.t 'setup.seed.submit'}}</button>
   </form>
 </section>

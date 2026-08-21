@@ -1,20 +1,12 @@
 {{!-- SPDX-License-Identifier: MIT --}}
 <section class="setup-step">
-  <h1>Admin account</h1>
+  <h1>{{req.t 'setup.admin.title'}}</h1>
+  {{#if error}}<p class="form-error">{{error}}</p>{{/if}}
   <form method="POST" action="/setup/admin">
     <input type="hidden" name="csrf" value="{{csrfToken}}">
-    <div class="form-field">
-      <label for="email">Email</label>
-      <input type="email" name="email" id="email" required autocomplete="email">
-    </div>
-    <div class="form-field">
-      <label for="password">Password</label>
-      <input type="password" name="password" id="password" required autocomplete="new-password">
-    </div>
-    <div class="form-field">
-      <label for="displayName">Display name</label>
-      <input type="text" name="displayName" id="displayName" required autocomplete="nickname">
-    </div>
-    <button type="submit" class="btn-primary">Next</button>
+    {{> form-field name="email" type="email" label=(req.t 'setup.admin.emailLabel') required=true autocomplete="email" }}
+    {{> form-field name="password" type="password" label=(req.t 'setup.admin.passwordLabel') required=true autocomplete="new-password" help=(req.t 'setup.admin.passwordHint') }}
+    {{> form-field name="displayName" label=(req.t 'setup.admin.nameLabel') required=true autocomplete="nickname" }}
+    <button type="submit" class="btn-primary">{{req.t 'setup.admin.submit'}}</button>
   </form>
 </section>
