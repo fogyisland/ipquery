@@ -93,4 +93,78 @@ describe('setupGuard plugin', () => {
       expect(r.status).toBe(404);
     });
   });
+
+  describe('onResponse cache refresh (regression)', () => {
+    // Regression test for the production bug where `setupGuard`'s onResponse
+    // hook skipped cache refresh on 3xx responses. POST /setup/complete returns
+    // 302, so the cache was never refreshed in production: after the wizard
+    // completed, /login got redirected back to /setup, trapping the user in a
+    // loop. The fix is `reply.statusCode >= 400` instead of `>= 300`.
+    //
+    // Build a fresh pre-init server, walk the wizard up to /setup/complete on
+    // THE SAME instance, and assert /login reaches the real handler (200) — no
+    // redirect to /setup, no server rebuild between steps.
+    let liveApp: Awaited<ReturnType<typeof buildServer>>;
+    beforeAll(async () => {
+      const cfg = loadConfig();
+      const dbName = 'ipquery_test_setup_guard_refresh';
+      const root = await mysql.createConnection({
+        host: cfg.db.host, port: cfg.db.port, user: cfg.db.user, password: cfg.db.password,
+      });
+      await root.query(`DROP DATABASE IF EXISTS \`${dbName}\``);
+      await root.query(`CREATE DATABASE \`${dbName}\``);
+      await root.end();
+      const pool = mysql.createPool({
+        host: cfg.db.host, port: cfg.db.port, user: cfg.db.user, password: cfg.db.password,
+        database: dbName, connectionLimit: 2, multipleStatements: true, timezone: 'Z', dateStrings: false,
+      });
+      await runMigrations(pool);
+      await pool.end();
+      const liveCfg = loadConfig(); liveCfg.db.database = dbName;
+      liveApp = await buildServer(liveCfg);
+    });
+
+    afterAll(async () => {
+      await liveApp.close();
+      const cfg = loadConfig();
+      const root = await mysql.createConnection({
+        host: cfg.db.host, port: cfg.db.port, user: cfg.db.user, password: cfg.db.password,
+      });
+      await root.query(`DROP DATABASE IF EXISTS \`ipquery_test_setup_guard_refresh\``);
+      await root.end();
+    });
+
+    function extractCsrf(html: string, setCookie: string[] | undefined): string {
+      const tokenMatch = /<input[^>]+name="csrf"[^>]+value="([^"]+)"/.exec(html);
+      if (!tokenMatch) throw new Error('csrf token not found in page');
+      const csrfCookie = setCookie?.find((c) => c.startsWith('csrf='))!.split(';')[0]!;
+      const issuedCookie = setCookie?.find((c) => c.startsWith('csrf_issued='))!.split(';')[0]!;
+      void csrfCookie;
+      void issuedCookie;
+      return tokenMatch[1]!;
+    }
+
+    async function wizardStep(agent: ReturnType<typeof request.agent>, path: string, fields: Record<string, string> = {}): Promise<void> {
+      const getR = await agent.get(path.replace(/^POST_/, ''));
+      const token = extractCsrf(getR.text, getR.headers['set-cookie'] as string[] | undefined);
+      const r = await agent.post(path.replace(/^POST_/, '')).type('form').send({ csrf: token, ...fields });
+      expect(r.status).toBe(302);
+    }
+
+    it('POST /setup/complete (302) refreshes cache so GET /login is NOT redirected', async () => {
+      const agent = request.agent(liveApp.server);
+      await wizardStep(agent, 'POST_/setup/site', { name: 'X', tagline: 'Y' });
+      await wizardStep(agent, 'POST_/setup/admin', { email: 'x@y.z', password: 'longpassword1', displayName: 'X' });
+      await wizardStep(agent, 'POST_/setup/seed', { load: 'true' });
+      await wizardStep(agent, 'POST_/setup/complete');
+
+      // Same server instance — no rebuild. Pre-fix this redirected 302 to /setup.
+      const loginR = await request(liveApp.server).get('/login');
+      expect(loginR.status).toBe(200);
+      expect(loginR.headers['location']).toBeUndefined();
+
+      const setupR = await request(liveApp.server).get('/setup');
+      expect(setupR.status).toBe(404);
+    });
+  });
 });
