@@ -1,0 +1,46 @@
+IPQuery
+Copyright 2026 IPQuery contributors
+
+This product includes software developed by third parties:
+
+================================================================================
+ip2region
+Copyright (c) 2014-2024 lion <lionsoul2014>
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+    http://www.apache.org/licenses/LICENSE-2.0
+Source: https://github.com/lionsoul2014/ip2region
+
+================================================================================
+DB-IP
+The DB-IP datasets (db-ip.com/db/download/ip-to-city) are licensed under
+Creative Commons Attribution 4.0 International (CC BY 4.0).
+Derivative works must display the attribution "IP Geolocation by DB-IP"
+in a user-visible location. Source: https://db-ip.com
+
+================================================================================
+MaxMind GeoLite2
+The MaxMind GeoLite2 datasets are licensed under the GeoLite2 End User
+License Agreement. They are NOT open source and may NOT be redistributed.
+Use of these datasets requires a registered MaxMind license key.
+Source: https://www.maxmind.com/en/geolite2/eula
+
+This repository does NOT bundle any geolocation data files. The user is
+solely responsible for downloading these datasets at runtime and complying
+with their respective licenses.
+
+================================================================================
+Other open-source dependencies (see package.json for the full list)
+- Fastify, MIT
+- @fastify/* plugins, MIT
+- mysql2, MIT
+- pino, MIT (transitive via Fastify)
+- handlebars, MIT
+- argon2, MIT
+- commander, MIT
+- maxmind, Apache-2.0
+- node-cron, MIT
+- nodemailer, MIT
+- vitest, MIT (dev)
+- typescript, Apache-2.0 (dev)
