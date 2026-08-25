@@ -10,13 +10,17 @@ declare module 'fastify' {
 
 const SETUP_PATH = '/setup';
 const SETUP_COMPLETE_PATH = '/setup/complete';
-const HEALTHZ_PATH = '/healthz';
+
+// Public routes that must remain reachable while the wizard is up. Adding a
+// new public API route? Add it here too, otherwise setupGuard will redirect
+// it to /setup and external integrations / probes will break.
+const PUBLIC_API_PATHS = new Set(['/healthz', '/lookup', '/stats']);
 const ASSETS_PREFIX = '/assets/';
 
 function isAllowedUrl(url: string): boolean {
   if (url === SETUP_PATH) return true;
   if (url.startsWith(`${SETUP_PATH}/`)) return true;
-  if (url === HEALTHZ_PATH) return true;
+  if (PUBLIC_API_PATHS.has(url)) return true;
   if (url.startsWith(ASSETS_PREFIX)) return true;
   return false;
 }
@@ -55,3 +59,4 @@ export async function registerSetupGuard(app: FastifyInstance): Promise<void> {
     app.requireSetup = !fresh;
   });
 }
+
