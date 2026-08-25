@@ -136,20 +136,16 @@ export async function registerView(app: FastifyInstance, cfg: { baseUrl: string 
     // @fastify/view; the type system won't accept our widened signatures
     // without a cast at the assignment boundary. The wrappers themselves
     // stay strictly typed via `ReplyView`.
+    //
+    // Note: `reply.view` already calls `reply.send()` internally
+    // (see node_modules/@fastify/view/index.js decorateReply), so the
+    // wrapper must NOT call send again — doing so causes FST_ERR_REP_ALREADY_SENT.
     const r = reply as unknown as { view: ReplyView; viewAsync: ReplyView };
     const rawAsync = r.viewAsync.bind(reply);
     r.viewAsync = (page, data, opts) => promoteLayout(page, data, opts, rawAsync);
 
     const rawView = r.view.bind(reply);
-    r.view = async (page, data, opts) => {
-      try {
-        const html = await promoteLayout(page, data, opts, rawView);
-        reply.send(html as string);
-      } catch (err) {
-        reply.send(err as Error);
-      }
-      return reply;
-    };
+    r.view = (page, data, opts) => promoteLayout(page, data, opts, rawView);
   });
 
   app.decorate('viewBaseUrl', cfg.baseUrl);
@@ -160,5 +156,6 @@ declare module 'fastify' {
     viewBaseUrl: string;
   }
 }
+
 
 
