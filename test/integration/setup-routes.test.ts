@@ -125,15 +125,23 @@ describe('setup wizard routes', () => {
     expect(rows[0]!.role).toBe('admin');
   });
 
-  it('POST /setup/admin with weak password redirects back with no user created', async () => {
+  it('POST /setup/admin with weak password re-renders form with no user created', async () => {
+    // Validation failures re-render the form (200) so email/displayName are
+    // preserved — see fix(web): preserve form input on setup wizard
+    // validation failure. The critical invariant is: weak password must NOT
+    // create a user row.
     const agent = request.agent(appPre.server);
     const page = await agent.get('/setup/admin');
     const csrf = extractCsrf(page.text);
     const r = await agent.post('/setup/admin').type('form').send({
       csrf, email: 'weak@setup.test', password: 'short', displayName: 'Weak',
     });
-    expect(r.status).toBe(302);
-    expect(r.headers['location']).toMatch(/^\/setup\/admin/);
+    expect(r.status).toBe(200);
+    expect(r.text).toContain('class="form-error"');
+    // Password intentionally NOT echoed back; email + displayName round-trip.
+    expect(r.text).toContain('value="weak@setup.test"');
+    expect(r.text).toContain('value="Weak"');
+    expect(r.text).not.toContain('value="short"');
 
     const [rows] = await td.pool.query<mysql.RowDataPacket[]>(
       `SELECT id FROM users WHERE email = ?`,
