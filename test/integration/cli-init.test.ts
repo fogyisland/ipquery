@@ -119,4 +119,24 @@ describe('ipq init', () => {
 
     expect(await isInitialized(pool)).toBe(true);
   }, 90_000);
+
+  it('--reinit with mismatched email throws (prevents silent second-admin creation)', async () => {
+    let err: Error | null = null;
+    try {
+      await exec('node', [
+        TSX_BIN, CLI_SRC, 'init',
+        '--reinit',
+        '--email', 'different@x.com',
+        '--password', 'rotatedpwd1',
+      ], { env: makeEnv() });
+    } catch (e) { err = e as Error; }
+    expect(err).not.toBeNull();
+    expect(String(err!.message)).toMatch(/existing admin is admin@x\.com/);
+
+    const [rows] = await pool.query<mysql.RowDataPacket[]>(
+      "SELECT email FROM users ORDER BY id",
+    );
+    expect(rows.map((r) => r.email)).toEqual(['admin@x.com']);
+  }, 90_000);
 });
+

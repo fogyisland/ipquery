@@ -9,6 +9,7 @@ import { createPool, lastEtlRun } from './storage/mysql';
 import { runMigrations, migrationStatus, listMigrationFiles } from './storage/migrations/runner';
 import { bootstrapAdmin } from './web/admin/bootstrap';
 import { isInitialized, markInitialized } from './storage/settings';
+import { findUserByEmail } from './storage/users';
 
 const program = new Command();
 program
@@ -117,7 +118,7 @@ program
   .requiredOption('--password <password>', 'admin password (10+ chars, letter + digit)')
   .option('--name <name>', 'display name (defaults to email)')
   .option('--seed', 'include the seed migration (loads ~50 demo IP ranges)', false)
-  .option('--reinit', 'proceed even if the system is already initialized (does NOT wipe data)', false)
+  .option('--reinit', 'proceed even if the system is already initialized; --email must match the existing admin (does NOT wipe data)', false)
   .action(async (opts: { email: string; password: string; name?: string; seed: boolean; reinit: boolean }) => {
     const cfg = loadConfig();
     const pool = createPool(cfg);
@@ -128,6 +129,19 @@ program
       if (already && !opts.reinit) {
         console.log('already initialized; pass --reinit to re-run');
         return;
+      }
+      if (opts.reinit) {
+        const existing = await findUserByEmail(pool, opts.email);
+        const anyAdmin = existing
+          ? existing
+          : await pool.query<import('mysql2').RowDataPacket[]>(
+              "SELECT id, email FROM users WHERE role = 'admin' ORDER BY id LIMIT 1",
+            ).then(([rows]) => rows[0] as { id: number; email: string } | undefined);
+        if (anyAdmin && anyAdmin.email !== opts.email) {
+          throw new Error(
+            `--reinit: existing admin is ${anyAdmin.email}; pass --email ${anyAdmin.email} to rotate its password, or drop the user manually first`,
+          );
+        }
       }
       const r = await bootstrapAdmin(pool, {
         email: opts.email,
@@ -143,3 +157,4 @@ program
   });
 
 program.parseAsync().catch((err) => { console.error(err); process.exit(1); });
+
