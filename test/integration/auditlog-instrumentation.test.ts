@@ -49,11 +49,22 @@ describe('admin POSTs set req.auditAction', () => {
       .type('form')
       .send({ csrf: token });
     expect(r.status).toBe(302);
-    // Allow the onResponse hook's fire-and-forget recordAuditLog to flush.
-    await new Promise((res) => setTimeout(res, 200));
-    const [rows] = await td.pool.query(
-      "SELECT * FROM admin_audit_log WHERE action = 'user.verify_email'",
-    );
+    // Wait for the onResponse hook's fire-and-forget recordAuditLog to flush.
+    // Polling rather than a fixed timeout: the hook awaits a real DB write
+    // (no fake timer), so under heavy parallel-suite load a fixed 200ms wait
+    // can race and produce a flaky failure here.
+    const deadline = Date.now() + 2000;
+    let rows: unknown[] = [];
+    while (Date.now() < deadline) {
+      const [r2] = await td.pool.query(
+        "SELECT * FROM admin_audit_log WHERE action = 'user.verify_email'",
+      );
+      if (r2.length > 0) { rows = r2; break; }
+      await new Promise((res) => setTimeout(res, 25));
+    }
+    if (rows.length === 0) {
+      throw new Error('audit log row did not appear within 2000ms');
+    }
     const arr = rows as unknown as { id: number; action: string; target_type: string; target_id: number; actor_email: string }[];
     expect(arr.length).toBe(1);
     expect(arr[0].target_type).toBe('user');
