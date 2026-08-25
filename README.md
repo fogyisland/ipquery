@@ -14,7 +14,7 @@ cp .env.example .env
 # Edit .env, set MAXMIND_LICENSE_KEY
 
 # 3. Run
-make docker-up           # mysql + app
+make docker-up           # mysql + app (optional)
 # OR
 make install build run    # local node + uses local MySQL
 ```
@@ -45,7 +45,7 @@ ETL pipeline → MySQL → Fastify. See [`docs/superpowers/specs/2026-08-13-ip-a
 
 ```bash
 make test-unit    # fast
-make test-int     # requires docker compose up mysql
+make test-int     # requires a reachable MySQL (DB_* env vars or `make docker-up`)
 make lint
 ```
 
@@ -112,7 +112,7 @@ When `SMTP_HOST` is unset, emails are printed to stdout (dev mode). In productio
 
 ### Operator notes
 
-- The bundled `make docker-up` brings up MySQL + the app via `docker compose`; use it if you don't already have MySQL running.
+- `make docker-up` (optional) brings up MySQL + the app via `docker compose` if you have it installed; otherwise point `DB_*` env vars at any existing MySQL instance.
 - `make migrate-status` reports which migrations from `db/migrations/` are applied or pending.
 - `node dist/cli.js migrate` / `migrate:status` / `create-admin` are the same commands the Makefile targets wrap; call them directly when scripting.
 
