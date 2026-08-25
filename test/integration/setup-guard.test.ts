@@ -80,6 +80,20 @@ describe('setupGuard plugin', () => {
       const r = await request(appPre.server).get('/healthz');
       expect(r.status).toBe(200);
     });
+
+    it('allows GET /lookup through (public IP-API works during setup)', async () => {
+      const r = await request(appPre.server).get('/lookup');
+      // Endpoint is reachable; status depends on whether seed data was loaded.
+      // We only care that setupGuard didn't redirect to /setup.
+      expect(r.status).not.toBe(302);
+      expect(r.headers['location']).toBeUndefined();
+    });
+
+    it('allows GET /stats through (public stats API works during setup)', async () => {
+      const r = await request(appPre.server).get('/stats');
+      expect(r.status).not.toBe(302);
+      expect(r.headers['location']).toBeUndefined();
+    });
   });
 
   describe('after init', () => {
@@ -168,3 +182,4 @@ describe('setupGuard plugin', () => {
     });
   });
 });
+
