@@ -109,24 +109,16 @@ export async function registerView(app: FastifyInstance, cfg: { baseUrl: string 
     }
   }
 
-  // @fastify/view validates the layout file at *registration* time (accessSync on
-  // `<root>/layouts/public.hbs`) and throws if it's missing. The layout ships with
-  // Task 11, so only opt into it once the file is actually on disk.
-  //
-  // Task 6: we no longer register a global `layout` here. @fastify/view's
-  // handlebars render path only honors per-render layouts when no global layout
-  // is set -- once a global layout is registered, `viewHandlebars` short-circuits
-  // and ignores any per-render override. Instead we register only `defaultLayout`
-  // (used when a render omits a layout entirely) and wrap the reply's view impl
-  // in an onRequest hook below so routes that pass `{ layout: 'layouts/X' }`
-  // inside `data` actually switch away from the public default.
-  const defaultLayout = 'layouts/public';
-  const hasDefaultLayout = fs.existsSync(path.join(viewsDir, `${defaultLayout}.hbs`));
-
+  // We deliberately do NOT pass `opts.layout` here. @fastify/view's handlebars
+  // render path only honors per-render layouts when no global layout is set --
+  // once a global layout is registered, `viewHandlebars` short-circuits and
+  // ignores any per-render override. The wrapper below promotes `data.layout`
+  // into `opts.layout` so routes that pass `{ layout: 'layouts/X' }` inside
+  // `data` actually switch away from any default. (`defaultLayout` is not a
+  // recognized @fastify/view option; only `opts.layout` is.)
   await app.register(view, {
     engine: { handlebars: Handlebars },
     root: viewsDir,
-    ...(hasDefaultLayout ? { defaultLayout } : {}),
   });
 
   // We can't re-decorate `reply.view` (Fastify forbids duplicates), so we
@@ -168,4 +160,5 @@ declare module 'fastify' {
     viewBaseUrl: string;
   }
 }
+
 
