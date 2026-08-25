@@ -7,6 +7,25 @@ import * as fs from 'node:fs';
 import { formatDistanceToNow } from 'date-fns';
 import { zhCN } from 'date-fns/locale';
 
+type ReplyView = (page: string, data?: Record<string, unknown>, opts?: { layout?: string }) => Promise<unknown>;
+
+const wrapped = new WeakSet<FastifyReply>();
+
+function promoteLayout(
+  page: string,
+  data: Record<string, unknown> | undefined,
+  opts: { layout?: string } | undefined,
+  raw: ReplyView,
+): Promise<unknown> {
+  const mergedOpts: { layout?: string } = { ...(opts ?? {}) };
+  if (!mergedOpts.layout && data && typeof data.layout === 'string') {
+    mergedOpts.layout = data.layout;
+  }
+  const cleanData: Record<string, unknown> = data ? { ...data } : {};
+  if ('layout' in cleanData) delete cleanData.layout;
+  return raw(page, cleanData, mergedOpts);
+}
+
 export async function registerView(app: FastifyInstance, cfg: { baseUrl: string }): Promise<void> {
   const viewsDir = path.join(__dirname, '..', 'views');
 
@@ -114,53 +133,31 @@ export async function registerView(app: FastifyInstance, cfg: { baseUrl: string 
   // shim by wrapping the underlying `viewAsync` impl. Capture it on the
   // first request, then replace with a wrapper that promotes `data.layout`
   // into the third-arg position (which `viewHandlebars` actually honors).
+  // Tracking wrapped replies in a module-scoped WeakSet instead of mutating
+  // an instance property keeps the reply object untouched.
 
   app.addHook('onRequest', async (_req, reply) => {
-    const r = reply as unknown as Record<string, unknown>;
-    if (r.__ipqViewWrapped) return;
-    r.__ipqViewWrapped = true;
+    if (wrapped.has(reply)) return;
+    wrapped.add(reply);
 
-    const raw = (reply as unknown as { viewAsync: (p: string, d: Record<string, unknown>, o?: { layout?: string }) => Promise<unknown> }).viewAsync
-      .bind(reply);
-    (reply as unknown as { viewAsync: (p: string, d: Record<string, unknown>, o?: { layout?: string }) => Promise<unknown> }).viewAsync =
-      async function (page: string, data?: Record<string, unknown>, opts?: { layout?: string }) {
-        const mergedOpts: { layout?: string } = { ...(opts ?? {}) };
-        if (
-          !mergedOpts.layout &&
-          data &&
-          typeof data === 'object' &&
-          typeof (data as { layout?: unknown }).layout === 'string'
-        ) {
-          mergedOpts.layout = (data as { layout: string }).layout;
-        }
-        const cleanData: Record<string, unknown> = data ? { ...data } : {};
-        if ('layout' in cleanData) delete cleanData.layout;
-        return raw(page, cleanData, mergedOpts);
-      };
+    // Fastify's `reply.view`/`reply.viewAsync` are heavily overloaded by
+    // @fastify/view; the type system won't accept our widened signatures
+    // without a cast at the assignment boundary. The wrappers themselves
+    // stay strictly typed via `ReplyView`.
+    const r = reply as unknown as { view: ReplyView; viewAsync: ReplyView };
+    const rawAsync = r.viewAsync.bind(reply);
+    r.viewAsync = (page, data, opts) => promoteLayout(page, data, opts, rawAsync);
 
-    const rawView = (reply as unknown as { view: (p: string, d: Record<string, unknown>, o?: { layout?: string }) => Promise<unknown> }).view
-      .bind(reply);
-    (reply as unknown as { view: (p: string, d: Record<string, unknown>, o?: { layout?: string }) => Promise<unknown> }).view =
-      async function (page: string, data?: Record<string, unknown>, opts?: { layout?: string }) {
-        const mergedOpts: { layout?: string } = { ...(opts ?? {}) };
-        if (
-          !mergedOpts.layout &&
-          data &&
-          typeof data === 'object' &&
-          typeof (data as { layout?: unknown }).layout === 'string'
-        ) {
-          mergedOpts.layout = (data as { layout: string }).layout;
-        }
-        const cleanData: Record<string, unknown> = data ? { ...data } : {};
-        if ('layout' in cleanData) delete cleanData.layout;
-        try {
-          const html = await raw(page, cleanData, mergedOpts);
-          (reply as unknown as FastifyReply).send(html);
-        } catch (err) {
-          (reply as unknown as FastifyReply).send(err as Error);
-        }
-        return reply;
-      };
+    const rawView = r.view.bind(reply);
+    r.view = async (page, data, opts) => {
+      try {
+        const html = await promoteLayout(page, data, opts, rawView);
+        reply.send(html as string);
+      } catch (err) {
+        reply.send(err as Error);
+      }
+      return reply;
+    };
   });
 
   app.decorate('viewBaseUrl', cfg.baseUrl);
@@ -171,3 +168,4 @@ declare module 'fastify' {
     viewBaseUrl: string;
   }
 }
+
