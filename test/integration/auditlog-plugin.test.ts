@@ -28,10 +28,16 @@ afterAll(async () => { await app.close(); await dropTestDb(td); });
 describe('auditLog plugin', () => {
   it('writes an audit entry when handler sets req.auditAction', async () => {
     await request(app.server).get('/_test/audit');
-    // Allow async hook to flush (best-effort)
-    await new Promise((r) => setTimeout(r, 200));
-    const [rows] = await td.pool.query('SELECT * FROM admin_audit_log');
-    const found = (rows as { action: string }[]).find((r) => r.action === 'test.ping');
+    // Wait for the onResponse hook's fire-and-forget recordAuditLog to flush
+    // (polling rather than a fixed timeout — see auditlog-instrumentation.test.ts).
+    const deadline = Date.now() + 2000;
+    let found: { action: string } | undefined;
+    while (Date.now() < deadline) {
+      const [rows] = await td.pool.query('SELECT * FROM admin_audit_log');
+      found = (rows as { action: string }[]).find((r) => r.action === 'test.ping');
+      if (found) break;
+      await new Promise((r) => setTimeout(r, 25));
+    }
     expect(found).toBeDefined();
   });
 
