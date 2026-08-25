@@ -122,11 +122,24 @@ export default async function setupRoutes(app: FastifyInstance): Promise<void> {
     const name = (body.name ?? '').trim();
     const tagline = (body.tagline ?? '').trim();
 
-    if (!name || name.length > SITE_NAME_MAX) {
-      return reply.code(302).header('Location', '/setup/site?flash=error').send();
-    }
-    if (tagline.length > TAGLINE_MAX) {
-      return reply.code(302).header('Location', '/setup/site?flash=error').send();
+    // On validation failure, re-render the form directly (200) with the
+    // user's input preserved — better UX than redirect+flash+empty form.
+    let fieldError: string | undefined;
+    if (!name) fieldError = req.t('setup.errors.site_name_required');
+    else if (name.length > SITE_NAME_MAX || tagline.length > TAGLINE_MAX) fieldError = req.t('setup.site.error');
+    if (fieldError) {
+      return reply.view('setup/site.hbs', {
+        layout: 'layouts/setup',
+        title: req.t('setup.site.title'),
+        csrfToken: req.csrfToken,
+        steps: buildSteps(req, 3),
+        step: 3,
+        total: 6,
+        siteName: name,
+        siteTagline: tagline,
+        error: fieldError,
+        req,
+      });
     }
     await setSetting(app.pool, 'site.name', name);
     await setSetting(app.pool, 'site.tagline', tagline);
@@ -143,7 +156,6 @@ export default async function setupRoutes(app: FastifyInstance): Promise<void> {
       step: 4,
       total: 6,
       flash: getFlash(req, 'setup.admin.success', 'setup.admin.error'),
-      error: (req.query as { flash?: string }).flash === 'error' ? req.t('setup.admin.error') : undefined,
       req,
     });
   });
@@ -158,17 +170,31 @@ export default async function setupRoutes(app: FastifyInstance): Promise<void> {
     const password = body.password ?? '';
     const displayName = (body.displayName ?? '').trim();
 
-    if (!EMAIL_RE.test(email)) {
-      return reply.code(302).header('Location', '/setup/admin?flash=error').send();
+    // On validation failure, re-render the form directly (200) with email
+    // and displayName preserved (password is intentionally NOT echoed back).
+    let fieldError: string | undefined;
+    if (!EMAIL_RE.test(email)) fieldError = req.t('setup.errors.email_invalid');
+    else if (!displayName || displayName.length > 64) fieldError = req.t('setup.errors.displayName_invalid');
+    else {
+      try {
+        await bootstrapAdmin(app.pool, { email, password, displayName });
+      } catch {
+        fieldError = req.t('setup.errors.password_weak');
+      }
     }
-    if (!displayName || displayName.length > 64) {
-      return reply.code(302).header('Location', '/setup/admin?flash=error').send();
-    }
-    try {
-      await bootstrapAdmin(app.pool, { email, password, displayName });
-    } catch {
-      // bootstrapAdmin throws on weak password or hash failure.
-      return reply.code(302).header('Location', '/setup/admin?flash=error').send();
+    if (fieldError) {
+      return reply.view('setup/admin.hbs', {
+        layout: 'layouts/setup',
+        title: req.t('setup.admin.title'),
+        csrfToken: req.csrfToken,
+        steps: buildSteps(req, 4),
+        step: 4,
+        total: 6,
+        email,
+        displayName,
+        error: fieldError,
+        req,
+      });
     }
     return reply.code(302).header('Location', '/setup/seed?flash=success').send();
   });
@@ -241,3 +267,4 @@ export default async function setupRoutes(app: FastifyInstance): Promise<void> {
     return reply.code(302).header('Location', '/login?flash=success').send();
   });
 }
+

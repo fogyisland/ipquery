@@ -287,4 +287,54 @@ describe('setup wizard E2E', () => {
       await appFail.close();
     }
   });
+
+  it('site validation failure: re-renders form (200) with name preserved', async () => {
+    // Wizard requires initialized_at cleared so /setup/site is reachable.
+    await td.pool.query(`DELETE FROM settings WHERE k = 'initialized_at'`);
+    const cfg = loadConfig(); cfg.db.database = td.dbName;
+    const appFx = await buildServer(cfg);
+    try {
+      const page = await request(appFx.server).get('/setup/site');
+      const { cookie, token } = extractCsrfPair(page.headers);
+      const r = await request(appFx.server).post('/setup/site')
+        .set('Cookie', cookie)
+        .type('form')
+        .send({ csrf: token, name: '   ', tagline: 'kept on the page' });
+      // Re-render the form directly, NOT redirect+flash.
+      expect(r.status).toBe(200);
+      expect(r.text).toContain('class="form-error"');
+      // Empty name → granular "site_name_required" error.
+      expect(r.text).toMatch(/站点名称必填|site name required/i);
+      // Preserved input must round-trip into the form (tagline only; name was
+      // empty so nothing to preserve).
+      expect(r.text).toContain('value="kept on the page"');
+    } finally {
+      await appFx.close();
+    }
+  });
+
+  it('admin validation failure: re-renders form (200) with email + displayName preserved', async () => {
+    await td.pool.query(`DELETE FROM settings WHERE k = 'initialized_at'`);
+    const cfg = loadConfig(); cfg.db.database = td.dbName;
+    const appFx = await buildServer(cfg);
+    try {
+      const page = await request(appFx.server).get('/setup/admin');
+      const { cookie, token } = extractCsrfPair(page.headers);
+      const r = await request(appFx.server).post('/setup/admin')
+        .set('Cookie', cookie)
+        .type('form')
+        .send({ csrf: token, email: 'not-an-email', password: 'weak', displayName: 'KEEP ME' });
+      expect(r.status).toBe(200);
+      expect(r.text).toContain('class="form-error"');
+      // Granular error for invalid email.
+      expect(r.text).toMatch(/邮箱格式不正确|email invalid/i);
+      // Email and displayName echoed back; password intentionally NOT echoed.
+      expect(r.text).toContain('value="not-an-email"');
+      expect(r.text).toContain('value="KEEP ME"');
+      expect(r.text).not.toContain('value="weak"');
+    } finally {
+      await appFx.close();
+    }
+  });
 });
+
