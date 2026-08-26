@@ -10,6 +10,7 @@ import { runMigrations, migrationStatus, listMigrationFiles } from './storage/mi
 import { bootstrapAdmin } from './web/admin/bootstrap';
 import { isInitialized, markInitialized } from './storage/settings';
 import { findUserByEmail } from './storage/users';
+import { downloadAll, DEFAULT_SPECS, type DownloadSpec } from './etl/download';
 
 const program = new Command();
 program
@@ -154,6 +155,37 @@ program
       }
       console.log(`initialized admin=${opts.email} (id=${r.id}), seed=${opts.seed ? 'yes' : 'no'}, marked_initialized=${markedInitial ? 'yes' : 'no'}`);
     } finally { await pool.end(); }
+  });
+
+const SPEC_BY_KIND: Record<DownloadSpec['kind'], DownloadSpec> = Object.fromEntries(
+  DEFAULT_SPECS.map((s) => [s.kind, s] as const),
+) as Record<DownloadSpec['kind'], DownloadSpec>;
+
+program
+  .command('download')
+  .description('Fetch the free DB-IP CSV.gz files (city-lite, country-lite, asn-lite) into data/raw/ for the ETL pipeline')
+  .option('--only <kinds>', 'comma-separated subset: city,country,asn (default: all)')
+  .option('--out <dir>', 'override output directory (default: ${DATA_DIR}/raw)')
+  .action(async (opts: { only?: string; out?: string }) => {
+    const cfg = loadConfig();
+    const outDir = opts.out ?? `${cfg.etl.dataDir}/raw`;
+    const kinds = opts.only
+      ? opts.only.split(',').map((s) => s.trim()).filter(Boolean)
+      : DEFAULT_SPECS.map((s) => s.kind);
+    const bad = kinds.filter((k) => !(k in SPEC_BY_KIND));
+    if (bad.length > 0) {
+      console.error(`unknown --only value(s): ${bad.join(', ')}; valid: ${Object.keys(SPEC_BY_KIND).join(', ')}`);
+      process.exit(2);
+    }
+    const specs = kinds.map((k) => SPEC_BY_KIND[k as DownloadSpec['kind']]);
+    console.log(`[download] target dir: ${outDir}`);
+    const { results, failures } = await downloadAll(specs, outDir);
+    if (failures.length > 0) {
+      console.error(`[download] ${failures.length}/${specs.length} file(s) failed`);
+      process.exit(1);
+    }
+    const total = results.reduce((s, r) => s + r.bytes, 0);
+    console.log(`[download] done: ${results.length} file(s), ${(total / 1024 / 1024).toFixed(1)} MB total`);
   });
 
 program.parseAsync().catch((err) => { console.error(err); process.exit(1); });
