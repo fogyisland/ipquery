@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-export type Source = 'maxmind' | 'ip2region' | 'dbip';
+export type Source = 'maxmind' | 'ip2region' | 'dbip' | 'dbip-country' | 'dbip-asn' | 'ipinfo';
 
 export interface NormalizedRecord {
   startIp: Buffer;

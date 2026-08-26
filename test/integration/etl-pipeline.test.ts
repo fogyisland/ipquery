@@ -20,7 +20,10 @@ beforeAll(async () => {
   const rawDir = path.join(cfg.etl.dataDir, 'raw');
   await fs.mkdir(rawDir, { recursive: true });
 
-  const csv = 'ip_start,ip_end,country,stateprov,city\n9.9.9.0,9.9.9.255,GB,England,London\n';
+  // DB-IP city-lite column layout: start, end, continent, country, region,
+  // city, lat, lon. The parser indexes cols[3] as the ISO country code
+  // (cols[2] is the continent we ignore), so the column order matters.
+  const csv = 'ip_start,ip_end,continent,country,stateprov,city,latitude,longitude\n9.9.9.0,9.9.9.255,EU,GB,England,London,51.5074,-0.1278\n';
   await fs.writeFile(path.join(rawDir, 'dbip.csv.gz'), zlib.gzipSync(Buffer.from(csv)));
   await fs.writeFile(path.join(rawDir, 'ip2region.xdb'), JSON.stringify([
     { start: '9.9.9.0', end: '9.9.9.255', country: '英国', city: 'London' },

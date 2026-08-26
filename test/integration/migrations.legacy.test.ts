@@ -69,7 +69,7 @@ describe('migrations legacy upgrade', () => {
       'SELECT version FROM schema_migrations ORDER BY version ASC',
     );
     const versions = (applied[0] as Array<{ version: string }>).map((r) => r.version);
-    expect(versions).toEqual(['001', '002', '003', '004', '005', '006', '007', '008', '010', '011', '012']);
+    expect(versions).toEqual(['001', '002', '003', '004', '005', '006', '007', '008', '010', '011', '012', '013', '014']);
 
     // The 11 expected tables all still exist after the upgrade.
     const [rows] = await pool.query<mysql.RowDataPacket[]>('SHOW TABLES');

@@ -21,6 +21,10 @@ CREATE TABLE IF NOT EXISTS ip_ranges (
   geo_source     VARCHAR(16) NULL,
   INDEX idx_start_end (start_ip, end_ip)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+-- NOTE: newer columns/keys (uniq_start_end, range_size, idx_range_size) live
+-- in migrations 013/014. Don't add them here — legacy installs that bootstrap
+-- with this file and then call runMigrations() must be able to apply those
+-- migrations without hitting "Duplicate key name" / "Duplicate column name".
 
 CREATE TABLE IF NOT EXISTS ip_ranges_new LIKE ip_ranges;
 

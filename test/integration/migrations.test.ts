@@ -26,15 +26,15 @@ afterAll(async () => {
 });
 
 describe('migrations', () => {
-  it('applies all 11 versions on fresh DB', async () => {
+  it('applies all versions on fresh DB', async () => {
     const r = await runMigrations(pool);
-    expect(r.applied.sort()).toEqual(['001','002','003','004','005','006','007','008','010','011','012']);
+    expect(r.applied.sort()).toEqual(['001','002','003','004','005','006','007','008','010','011','012','013','014']);
   });
 
   it('is idempotent on second run', async () => {
     const r = await runMigrations(pool);
     expect(r.applied).toEqual([]);
-    expect(r.skipped.sort()).toEqual(['001','002','003','004','005','006','007','008','010','011','012']);
+    expect(r.skipped.sort()).toEqual(['001','002','003','004','005','006','007','008','010','011','012','013','014']);
   });
 
   it('all expected tables exist', async () => {
@@ -55,7 +55,7 @@ describe('migrations', () => {
     const before = await getAppliedVersions(pool);
     expect(before.has('003')).toBe(true);
     const r = await runMigrations(pool);
-    expect(r.skipped.length).toBe(11);
+    expect(r.skipped.length).toBe(13);
   });
 
   it('records apply timestamps', async () => {

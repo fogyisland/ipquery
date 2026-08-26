@@ -2,16 +2,49 @@
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import * as mysql from 'mysql2/promise';
-import { createPool, runMigrations, truncateNew, insertIntoNew, atomicSwapRanges, recordEtlStart, recordEtlFinish } from '../storage/mysql';
-import { parseDbipCsv, parseDbipCsvStream } from './sources/dbip';
-import { parseIp2regionXdb } from './sources/ip2region';
-import { parseMaxmindMmdb } from './sources/maxmind';
-import { mergeByPriority } from './merger';
+import { createPool, runMigrations, truncateNew, insertIntoNewUpsert, atomicSwapRanges, recordEtlStart, recordEtlFinish } from '../storage/mysql';
+import { parseDbipCityCsvStream, parseDbipCountryCsvStream, parseDbipAsnCsvStream } from './sources/dbip';
 import type { AppConfig } from '../config';
 import type { Source, NormalizedRecord, IpRangeRow } from '../types';
 
-const PRIORITY: Source[] = ['maxmind', 'ip2region', 'dbip'];
-const SOURCE_FILES: Record<Source, string> = { maxmind: 'maxmind.mmdb', ip2region: 'ip2region.xdb', dbip: 'dbip.csv.gz' };
+// A streaming ingest target: one physical file from one logical source.
+// `fillCols` says which columns this file contributes; the upsert path in
+// storage/mysql.ts uses that to gate INSERT ... ON DUPLICATE KEY UPDATE so
+// a later, lower-priority file (inserted later) doesn't clobber a value
+// already filled by an earlier, higher-priority one. Higher priority wins
+// because COALESCE(existing, new) keeps the already-present value.
+interface StreamFile {
+  source: Source;
+  filename: string;
+  parse: (p: string) => AsyncIterable<NormalizedRecord>;
+  fillCols: ReadonlySet<keyof IpRangeRow>;
+}
+
+// Priority order matches the cross-source merger: insert maxmind first if
+// present, then ip2region, then DB-IP files (city, country, asn).
+const DBIP_FILES: StreamFile[] = [
+  {
+    source: 'dbip',
+    filename: 'dbip.csv.gz',
+    parse: parseDbipCityCsvStream,
+    fillCols: new Set<keyof IpRangeRow>([
+      'countryCode', 'region', 'city', 'latitude', 'longitude',
+      'countrySource', 'citySource', 'geoSource',
+    ]),
+  },
+  {
+    source: 'dbip-country',
+    filename: 'dbip-country.csv.gz',
+    parse: parseDbipCountryCsvStream,
+    fillCols: new Set<keyof IpRangeRow>(['countryCode', 'countrySource']),
+  },
+  {
+    source: 'dbip-asn',
+    filename: 'dbip-asn.csv.gz',
+    parse: parseDbipAsnCsvStream,
+    fillCols: new Set<keyof IpRangeRow>(['asn', 'asnOrg', 'asnSource']),
+  },
+];
 
 export interface PipelineResult { runId: number; merged: number; }
 
@@ -25,50 +58,47 @@ async function fileExists(p: string): Promise<boolean> {
   try { await fs.access(p); return true; } catch { return false; }
 }
 
-async function loadLocalSource(
-  rawDir: string, filename: string, parser: (p: string) => Promise<NormalizedRecord[]>,
-): Promise<NormalizedRecord[]> {
-  const p = path.join(rawDir, filename);
-  if (!(await fileExists(p))) {
-    console.warn(`[etl] source file missing, skipping: ${p}`);
-    return [];
+function toIpRangeRow(rec: NormalizedRecord, source: Source, fillCols: ReadonlySet<keyof IpRangeRow>): IpRangeRow {
+  const row: IpRangeRow = { startIp: rec.startIp, endIp: rec.endIp };
+  if (fillCols.has('countryCode') && rec.countryCode) {
+    row.countryCode = rec.countryCode;
+    if (fillCols.has('countrySource')) row.countrySource = source;
   }
-  try {
-    return await parser(p);
-  } catch (err) {
-    console.error(`[etl] source parse failed for ${filename}:`, err);
-    return [];
+  if (fillCols.has('region') && rec.region) row.region = rec.region;
+  if (fillCols.has('city') && rec.city) {
+    row.city = rec.city;
+    if (fillCols.has('citySource')) row.citySource = source;
   }
+  if (fillCols.has('latitude') && rec.latitude !== undefined) {
+    row.latitude = rec.latitude;
+    if (fillCols.has('geoSource')) row.geoSource = source;
+  }
+  if (fillCols.has('longitude') && rec.longitude !== undefined) row.longitude = rec.longitude;
+  if (fillCols.has('asn') && rec.asn !== undefined) {
+    row.asn = rec.asn;
+    if (fillCols.has('asnSource')) row.asnSource = source;
+  }
+  if (fillCols.has('asnOrg') && rec.asnOrg) row.asnOrg = rec.asnOrg;
+  return row;
 }
 
-// Single-source fast path: stream rows straight from the DB-IP gzipped CSV
-// into `ip_ranges_new` in batches of 1000, never materialising the full row
-// array. Skips the priority merger (which assumes multiple sources). DB-IP
-// city-lite rows are non-overlapping by construction, so a 1:1 row insert
-// is correct without range consolidation.
-async function streamDbipToDb(pool: mysql.Pool, gzPath: string): Promise<number> {
+// Streaming ingest: walks the parser one record at a time and flushes
+// 1000-row batches into `ip_ranges_new` via INSERT ... ON DUPLICATE KEY
+// UPDATE. Never materialises the full row array — this is what keeps the
+// 7.9M-row DB-IP city-lite set from exhausting the V8 heap.
+async function streamFileToDb(pool: mysql.Pool, file: StreamFile, fullPath: string): Promise<number> {
   let count = 0;
   let batch: IpRangeRow[] = [];
-  for await (const rec of parseDbipCsvStream(gzPath)) {
-    const row: IpRangeRow = { startIp: rec.startIp, endIp: rec.endIp };
-    if (rec.countryCode) {
-      row.countryCode = rec.countryCode;
-      row.countrySource = 'dbip';
-    }
-    if (rec.region) row.region = rec.region;
-    if (rec.city) {
-      row.city = rec.city;
-      row.citySource = 'dbip';
-    }
-    batch.push(row);
+  for await (const rec of file.parse(fullPath)) {
+    batch.push(toIpRangeRow(rec, file.source, file.fillCols));
     if (batch.length >= 1000) {
-      await insertIntoNew(pool, batch);
+      await insertIntoNewUpsert(pool, batch, file.fillCols);
       count += batch.length;
       batch = [];
     }
   }
   if (batch.length > 0) {
-    await insertIntoNew(pool, batch);
+    await insertIntoNewUpsert(pool, batch, file.fillCols);
     count += batch.length;
   }
   return count;
@@ -81,50 +111,29 @@ export async function runPipeline(opts: { cfg: AppConfig }): Promise<PipelineRes
   const rawDir = path.join(cfg.etl.dataDir, 'raw');
 
   try {
-    const present = (await Promise.all(
-      PRIORITY.map(async (src) => (await fileExists(path.join(rawDir, SOURCE_FILES[src]))) ? src : null),
-    )).filter((s): s is Source => s !== null);
+    const presentDbip: StreamFile[] = [];
+    for (const f of DBIP_FILES) {
+      if (await fileExists(path.join(rawDir, f.filename))) presentDbip.push(f);
+    }
 
     await truncateNew(pool);
 
-    let maxmindRecords = 0;
-    let ip2regionRecords = 0;
-    let dbipRecords = 0;
-
-    if (present.length === 1 && present[0] === 'dbip') {
-      // DB-IP-only fast path: stream rows from disk to MySQL without
-      // materialising the ~7.9M-row array (which exhausts the V8 heap).
-      dbipRecords = await streamDbipToDb(pool, path.join(rawDir, SOURCE_FILES.dbip));
-    } else {
-      // General path: load every present source into memory and merge by
-      // priority. Multi-source merger still requires all data resident, so
-      // this path stays materialising.
-      const [maxmind, ip2region, dbip] = await Promise.all([
-        loadLocalSource(rawDir, SOURCE_FILES.maxmind, (p) => parseMaxmindMmdb(p, 'city')),
-        loadLocalSource(rawDir, SOURCE_FILES.ip2region, parseIp2regionXdb),
-        loadLocalSource(rawDir, SOURCE_FILES.dbip, parseDbipCsv),
-      ]);
-      maxmindRecords = maxmind.length;
-      ip2regionRecords = ip2region.length;
-      dbipRecords = dbip.length;
-      const bySource = new Map<Source, NormalizedRecord[]>();
-      bySource.set('maxmind', maxmind);
-      bySource.set('ip2region', ip2region);
-      bySource.set('dbip', dbip);
-      const merged = mergeByPriority(bySource, PRIORITY);
-      await insertIntoNew(pool, merged);
+    const counts = new Map<Source, number>();
+    for (const f of presentDbip) {
+      counts.set(f.source, await streamFileToDb(pool, f, path.join(rawDir, f.filename)));
     }
 
     await atomicSwapRanges(pool);
 
-    const total = maxmindRecords + ip2regionRecords + dbipRecords;
+    const dbipRecords = counts.get('dbip') ?? 0;
+    const dbipCountryRecords = counts.get('dbip-country') ?? 0;
+    const dbipAsnRecords = counts.get('dbip-asn') ?? 0;
+    const total = dbipRecords + dbipCountryRecords + dbipAsnRecords;
     await recordEtlFinish(pool, runId, 'success', {
-      maxmindRecords,
-      ip2regionRecords,
-      dbipRecords,
+      dbipRecords: total,
       mergedRecords: total,
     });
-    console.log(`[etl] success run=${runId} merged=${total} (maxmind=${maxmindRecords}, ip2region=${ip2regionRecords}, dbip=${dbipRecords})`);
+    console.log(`[etl] success run=${runId} merged=${total} (dbip=${dbipRecords}, dbip-country=${dbipCountryRecords}, dbip-asn=${dbipAsnRecords})`);
     return { runId, merged: total };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
