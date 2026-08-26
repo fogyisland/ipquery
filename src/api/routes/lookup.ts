@@ -88,7 +88,15 @@ export default async function lookupRoute(app: FastifyInstance): Promise<void> {
   };
 
   const logOnSend = async (req: FastifyRequest, reply: FastifyReply, payload: unknown): Promise<unknown> => {
-    if (!req.apiKey) return payload;
+    // Two auth paths produce an attributable caller: an API key (X-API-key
+    // / Bearer / ?key=) or a logged-in web session. Without one of those
+    // we have no userId and the row would be anonymous — better to skip
+    // than to inflate analytics with unattributable traffic. The public
+    // /lookup endpoint stays usable for unauthenticated callers; we just
+    // don't log it.
+    const sessionUserId = req.session?.userId;
+    const isAuthed = req.apiKey !== undefined || sessionUserId !== undefined;
+    if (!isAuthed) return payload;
     // In Fastify 4, payload is already serialized to a string by the time onSend runs.
     // Detect status from reply.statusCode + request context (which IP was asked).
     const statusCode = reply.statusCode;
@@ -112,9 +120,12 @@ export default async function lookupRoute(app: FastifyInstance): Promise<void> {
       ip: buf,
       ipText,
       status,
-      userId: req.apiKey.userId,
-      apiKeyId: req.apiKey.keyId,
-      sessionId: null,
+      // API-key auth: attribute to the key's owning user + the key itself.
+      // Session auth: attribute to the session user + the session id; no
+      // api_key_id since the lookup was made from the browser, not a key.
+      userId: req.apiKey?.userId ?? sessionUserId ?? null,
+      apiKeyId: req.apiKey?.keyId ?? null,
+      sessionId: req.apiKey ? null : (req.session?.id ?? null),
       remoteAddr: remoteBuf,
       userAgent: (req.headers['user-agent'] as string | undefined) ?? null,
     };
