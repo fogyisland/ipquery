@@ -79,4 +79,33 @@ describe('profile', () => {
       .type('form').send({ action: 'password', oldPassword: 'wrong-old-pass', newPassword: 'NewPassword3', csrf: token });
     expect(r.status).toBe(401);
   });
+
+  it('changing password evicts other active sessions but keeps the current one', async () => {
+    // Pre-MVP parked follow-up #10: forgot/reset flow destroys all
+    // sessions for the user; the in-app change-password flow should do
+    // the same for *other* sessions (kill any stolen-cookie browser)
+    // without logging the user out of their own active browser.
+    const otherSid = generateToken(16);
+    await createSession(app.pool, otherSid, userId, new Date(Date.now() + 3600_000));
+    // Sanity check: both sessions exist before the change.
+    const [before] = await app.pool.query<{ n: number }[] & { n: number }>(
+      `SELECT COUNT(*) AS n FROM sessions WHERE user_id = ?`, [userId],
+    );
+    expect(Number((before as unknown as { n: number }[])[0]!.n)).toBeGreaterThanOrEqual(2);
+
+    const { cookie, token } = await csrfOf();
+    const r = await request(app.server).post('/dashboard/profile').set('Cookie', 'sid=' + sid + '; ' + cookie)
+      .type('form').send({ action: 'password', oldPassword: 'NewPassword2', newPassword: 'NewPassword4', csrf: token });
+    expect(r.status).toBe(200);
+
+    // The other session is gone; the current one survives.
+    const [others] = await app.pool.query<{ id: string }[]>(
+      `SELECT id FROM sessions WHERE id = ?`, [otherSid],
+    );
+    expect(others).toHaveLength(0);
+    const [current] = await app.pool.query<{ id: string }[]>(
+      `SELECT id FROM sessions WHERE id = ?`, [sid],
+    );
+    expect(current).toHaveLength(1);
+  });
 });

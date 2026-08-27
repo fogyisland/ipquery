@@ -159,7 +159,8 @@
       "oldPassword": "当前密码",
       "newPassword": "新密码",
       "save": "保存修改",
-      "saved": "资料已保存"
+      "saved": "资料已保存",
+      "savedWithEviction": "资料已保存。已退出 {{count}} 个其他会话。"
     }
   },
   "admin": {

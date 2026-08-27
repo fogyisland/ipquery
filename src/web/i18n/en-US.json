@@ -158,7 +158,8 @@
       "oldPassword": "Current password",
       "newPassword": "New password",
       "save": "Save changes",
-      "saved": "Profile saved"
+      "saved": "Profile saved",
+      "savedWithEviction": "Profile saved. {{count}} other session(s) signed out."
     }
   },
   "admin": {
