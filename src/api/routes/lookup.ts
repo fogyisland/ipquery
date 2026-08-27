@@ -2,7 +2,7 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { parseIp, isValidIp } from '../../ip';
 import { findRange, lastSuccessfulEtl } from '../../storage/mysql';
-import { findActiveApiKeyByHash } from '../../storage/apiKeys';
+import { findActiveApiKeyByHash, touchApiKey } from '../../storage/apiKeys';
 import { hashToken } from '../../web/auth/tokens';
 import type { LookupResult } from '../../types';
 
@@ -85,6 +85,11 @@ export default async function lookupRoute(app: FastifyInstance): Promise<void> {
       throw err;
     }
     req.apiKey = { keyId: found.id, userId: found.userId, prefix: found.keyPrefix };
+    // Stamp last_used_at so /dashboard/keys shows when each key was last
+    // exercised. UPDATE on PK is microseconds; await it so the timestamp is
+    // durable before we return (fire-and-forget risks losing the stamp if
+    // the request is the last thing the process services).
+    await touchApiKey(app.pool, found.id);
   };
 
   const logOnSend = async (req: FastifyRequest, reply: FastifyReply, payload: unknown): Promise<unknown> => {
