@@ -5,6 +5,7 @@ import { createApiKey, listApiKeysForUser, revokeApiKey, findApiKeyById } from '
 import { updateDisplayName, updateEmail, updatePassword, getUserPasswordHash } from '../../storage/users';
 import { generateApiKey, hashToken } from '../auth/tokens';
 import { hashPassword, verifyPassword, validatePassword } from '../auth/password';
+import { destroyAllForUserExcept } from '../../storage/sessions';
 import { verifyCsrfRequest } from '../plugins/csrf';
 
 export default async function dashboardRoutes(app: FastifyInstance): Promise<void> {
@@ -145,9 +146,21 @@ export default async function dashboardRoutes(app: FastifyInstance): Promise<voi
         flash: { error: 'old_password_incorrect' }, req,
       });
       await updatePassword(app.pool, req.user!.id, await hashPassword(newPw));
+      // Evict any other browser/device that was logged in as this user
+      // (matching the forgot/reset flow's security posture). Keep the
+      // current session alive — the user is actively using their own
+      // browser; booting them out of a successful save would be hostile.
+      // req.session is guaranteed non-null inside /dashboard/* (auth
+      // guard would have redirected otherwise).
+      const evicted = await destroyAllForUserExcept(app.pool, req.user!.id, req.session!.id);
       return reply.view('dashboard/profile.hbs', {
         layout: 'layouts/dashboard', title: req.t('dashboard.profile.title'),
-        flash: { success: req.t('dashboard.profile.saved') }, req,
+        flash: {
+          success: evicted > 0
+            ? req.t('dashboard.profile.savedWithEviction', { count: String(evicted) })
+            : req.t('dashboard.profile.saved'),
+        },
+        req,
       });
     }
     return reply.code(400).view('dashboard/profile.hbs', {

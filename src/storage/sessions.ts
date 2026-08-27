@@ -38,6 +38,22 @@ export async function destroyAllForUser(pool: Pool, userId: number): Promise<voi
   await pool.query(`DELETE FROM sessions WHERE user_id = ?`, [userId]);
 }
 
+// Destroy every session for a user EXCEPT the given session id. Used by
+// the in-app change-password flow: we want to evict any browser/phone
+// the attacker might have stolen a cookie from, without booting the user
+// out of their own current browser. The forgot/reset flow still calls
+// destroyAllForUser (no current session to preserve there — the user
+// is resetting because they forgot the password).
+export async function destroyAllForUserExcept(
+  pool: Pool, userId: number, keepSid: string,
+): Promise<number> {
+  const [res] = await pool.query<ResultSetHeader>(
+    `DELETE FROM sessions WHERE user_id = ? AND id != ?`,
+    [userId, keepSid],
+  );
+  return res.affectedRows;
+}
+
 export async function purgeExpired(pool: Pool): Promise<number> {
   const [res] = await pool.query<ResultSetHeader>(`DELETE FROM sessions WHERE expires_at <= UTC_TIMESTAMP(3)`);
   return res.affectedRows;
