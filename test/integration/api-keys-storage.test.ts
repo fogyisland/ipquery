@@ -2,7 +2,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { createTestDb, dropTestDb, type TestDb } from '../helpers/db';
 import { createUser } from '../../src/storage/users';
-import { createApiKey, findActiveApiKeyByHash, revokeApiKey, listApiKeysForUser } from '../../src/storage/apiKeys';
+import { createApiKey, findActiveApiKeyByHash, revokeApiKey, listApiKeysForUser, touchApiKey } from '../../src/storage/apiKeys';
 import { generateApiKey, hashToken } from '../../src/web/auth/tokens';
 
 let td: TestDb;
@@ -40,5 +40,20 @@ describe('api_keys storage', () => {
     const hash = hashToken(generateApiKey());
     await createApiKey(td.pool, userId, 'k1', hash, 'ipq_xxxx');
     await expect(createApiKey(td.pool, userId, 'k2', hash, 'ipq_yyyy')).rejects.toThrow();
+  });
+
+  it('touchApiKey stamps last_used_at', async () => {
+    // Pre-MVP parked follow-up: /lookup was wiring the apiKey into req but
+    // never stamping last_used_at, so /dashboard/keys always showed
+    // "Last used: never" for keys that were actually in use.
+    const plaintext = generateApiKey();
+    const key = await createApiKey(td.pool, userId, 'touchme', hashToken(plaintext), plaintext.slice(0, 8));
+    expect(key.lastUsedAt).toBeNull();
+    const before = await findActiveApiKeyByHash(td.pool, hashToken(plaintext));
+    expect(before?.lastUsedAt).toBeNull();
+    await touchApiKey(td.pool, key.id);
+    const after = await findActiveApiKeyByHash(td.pool, hashToken(plaintext));
+    expect(after?.lastUsedAt).not.toBeNull();
+    expect(after!.lastUsedAt!.getTime()).toBeGreaterThan(Date.now() - 5000);
   });
 });
