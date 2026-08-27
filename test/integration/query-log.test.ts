@@ -37,6 +37,26 @@ describe('query_log', () => {
     expect(counts.hit).toBeGreaterThanOrEqual(1);
   });
 
+  it('countQueriesByStatusSince with userId isolates per-user counts', async () => {
+    // Pre-MVP parked: /dashboard used to show every user's hit/miss/invalid
+    // counts (no userId filter on countQueriesByStatusSince) — leaked other
+    // users' query volume + hit rate. Verify userId scoping works.
+    const ua = parseIp('10.0.0.1')!;
+    const ub = parseIp('10.0.0.2')!;
+    const since = new Date(Date.now() - 60_000);
+    await insertQueryLogs(td.pool, [
+      { ip: ua, ipText: '10.0.0.1', status: 'hit',   userId: 7001, apiKeyId: null, sessionId: null, remoteAddr: null, userAgent: null },
+      { ip: ua, ipText: '10.0.0.1', status: 'hit',   userId: 7001, apiKeyId: null, sessionId: null, remoteAddr: null, userAgent: null },
+      { ip: ub, ipText: '10.0.0.2', status: 'miss',  userId: 7002, apiKeyId: null, sessionId: null, remoteAddr: null, userAgent: null },
+    ]);
+    const aCounts = await countQueriesByStatusSince(td.pool, since, { userId: 7001 });
+    const bCounts = await countQueriesByStatusSince(td.pool, since, { userId: 7002 });
+    expect(aCounts.hit).toBeGreaterThanOrEqual(2);
+    expect(aCounts.miss).toBe(0);
+    expect(bCounts.hit).toBe(0);
+    expect(bCounts.miss).toBeGreaterThanOrEqual(1);
+  });
+
   it('large batch chunks at 200', async () => {
     const entries = Array.from({ length: 250 }, (_, i) => ({
       ip: parseIp('127.0.0.1')!, ipText: `127.0.0.${i % 256}`, status: 'miss' as const,
