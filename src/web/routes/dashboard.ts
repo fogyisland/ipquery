@@ -13,7 +13,11 @@ export default async function dashboardRoutes(app: FastifyInstance): Promise<voi
   // unauthenticated requests are redirected to /login?next=... before this
   // handler runs, so req.user is guaranteed non-null here.
   app.get('/dashboard', async (req, reply) => {
-    const counts = await countQueriesByStatusSince(app.pool, new Date(Date.now() - 7 * 86400_000));
+    // Filter to the current user: each /dashboard is per-account, so showing
+    // global counts would leak other users' query volume + hit rate.
+    const counts = await countQueriesByStatusSince(
+      app.pool, new Date(Date.now() - 7 * 86400_000), { userId: req.user!.id },
+    );
     return reply.view('dashboard/index.hbs', { layout: 'layouts/dashboard', title: req.t('dashboard.title'), counts, req });
   });
 

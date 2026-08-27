@@ -100,12 +100,20 @@ export async function listQueryLogs(pool: Pool, q: QueryLogQuery): Promise<{ row
   };
 }
 
-export async function countQueriesByStatusSince(pool: Pool, since: Date): Promise<{
+export async function countQueriesByStatusSince(
+  pool: Pool, since: Date, opts?: { userId?: number },
+): Promise<{
   hit: number; miss: number; invalid: number;
 }> {
+  const where: string[] = ['ts >= ?'];
+  const params: unknown[] = [since];
+  if (opts?.userId !== undefined) {
+    where.push('user_id = ?');
+    params.push(opts.userId);
+  }
   const [rows] = await pool.query(
-    `SELECT status, COUNT(*) AS c FROM query_log WHERE ts >= ? GROUP BY status`,
-    [since],
+    `SELECT status, COUNT(*) AS c FROM query_log WHERE ${where.join(' AND ')} GROUP BY status`,
+    params,
   );
   const out = { hit: 0, miss: 0, invalid: 0 };
   for (const r of rows as Record<string, unknown>[]) {
