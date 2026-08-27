@@ -15,19 +15,23 @@ beforeAll(async () => {
 });
 afterAll(async () => { await app.close(); await dropTestDb(td); });
 
-describe('home (tool-style landing)', () => {
-  it('GET / returns 200 with sidebar, query form, and status cards', async () => {
+describe('home (marketing landing)', () => {
+  // Marketing redesign: home renders inside layouts/marketing — top nav +
+  // hero + footer, no sidebar. The hero carries the IP query form (plain
+  // POST, CSP-compliant) plus signature 16x16 byte grid.
+  it('GET / returns 200 with marketing chrome, hero form, and IP byte grid', async () => {
     const r = await request(app.server).get('/');
     expect(r.status).toBe(200);
-    // Tool-style layout shell (Task 4 + Task 14): renders the sidebar partial.
-    expect(r.text).toMatch(/<aside class="sidebar">/);
-    expect(r.text).toContain('/docs');
-    // Quick query form: POST to /try (no JS — plain form per CSP).
+    expect(r.text).not.toMatch(/<aside class="sidebar">/);
+    expect(r.text).toMatch(/class="m-topnav"/);
+    expect(r.text).toMatch(/class="m-hero"/);
+    expect(r.text).toMatch(/class="m-ipgrid"/);
+    // Query form: POST to /try (plain form — no JS, CSP compliant).
     expect(r.text).toMatch(/<form[^>]*method="POST"[^>]*action="\/try"/);
     expect(r.text).toMatch(/name="ip"/);
     // CSRF token embedded in form
     expect(r.text).toMatch(/name="csrf"/);
-    // Status cards: API status + 24h query volume (home.title etc come from i18n).
-    expect(r.text).toMatch(/home\.status|home\.ipRanges|home\.queries24h|IP 段数|24h 查询|API 状态/);
+    // Footer with brand
+    expect(r.text).toMatch(/class="m-footer"/);
   });
 });

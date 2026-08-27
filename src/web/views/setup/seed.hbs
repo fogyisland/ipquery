@@ -1,16 +1,97 @@
 {{!-- SPDX-License-Identifier: MIT --}}
+{{!-- Seed step. Two visual modes selected by which block the GET handler
+     populated: the three-option choice form (default) OR a progress panel
+     while a background ETL is running. --}}
+
+{{#if progress}}
+<section class="setup-step">
+  <h1>{{req.t 'setup.seed.progress.title'}}</h1>
+
+  {{#if progress.run}}
+    <p class="setup-progress-status setup-progress-status--{{progress.run.status}}">
+      {{#if (eq progress.run.status 'success')}}
+        {{req.t 'setup.seed.progress.success' rows=progress.run.mergedRecords}}
+      {{else if (eq progress.run.status 'failed')}}
+        {{req.t 'setup.seed.progress.failed'}}
+      {{else}}
+        {{req.t 'setup.seed.progress.running'}}
+      {{/if}}
+    </p>
+
+    {{#if (eq progress.run.status 'running')}}
+    <div class="setup-progress-spinner" aria-hidden="true"></div>
+    {{/if}}
+
+    <dl class="setup-progress-meta">
+      <dt>{{req.t 'setup.seed.progress.runId'}}</dt><dd>#{{progress.run.id}}</dd>
+      <dt>{{req.t 'setup.seed.progress.started'}}</dt><dd>{{formatDate progress.run.startedAt}}</dd>
+      {{#if progress.run.finishedAt}}
+        <dt>{{req.t 'setup.seed.progress.finished'}}</dt><dd>{{formatDate progress.run.finishedAt}}</dd>
+      {{/if}}
+      {{#if progress.run.mergedRecords}}
+        <dt>{{req.t 'setup.seed.progress.merged'}}</dt><dd>{{progress.run.mergedRecords}}</dd>
+      {{/if}}
+      {{#if progress.run.errorMessage}}
+        <dt>{{req.t 'setup.seed.progress.error'}}</dt><dd><code>{{progress.run.errorMessage}}</code></dd>
+      {{/if}}
+    </dl>
+
+    {{#if (eq progress.run.status 'success')}}
+    <form method="POST" action="/setup/seed">
+        <input type="hidden" name="csrf" value="{{csrfToken}}">
+        <input type="hidden" name="mode" value="etl-done">
+        <p class="form-hint">{{req.t 'setup.seed.progress.successHint'}}</p>
+        <button type="submit" class="btn-primary">{{req.t 'setup.seed.progress.continue'}}</button>
+      </form>
+    {{else if (eq progress.run.status 'failed')}}
+      <form method="POST" action="/setup/seed">
+        <input type="hidden" name="csrf" value="{{csrfToken}}">
+        <div class="form-field">
+          <label><input type="radio" name="mode" value="demo" checked> {{req.t 'setup.seed.demo.label'}}</label>
+          <p class="form-hint">{{req.t 'setup.seed.demo.hint'}}</p>
+        </div>
+        <div class="form-field">
+          <label><input type="radio" name="mode" value="etl"> {{req.t 'setup.seed.etl.label'}}</label>
+          <p class="form-hint">{{req.t 'setup.seed.etl.retryHint'}}</p>
+        </div>
+        <button type="submit" class="btn-primary">{{req.t 'setup.seed.retry'}}</button>
+      </form>
+    {{else}}
+      {{!-- Auto-refresh while running so the page updates without JS --}}
+      <meta http-equiv="refresh" content="3">
+      <p class="form-hint">{{req.t 'setup.seed.progress.autoRefresh'}}</p>
+    {{/if}}
+  {{else}}
+    <p class="setup-progress-status setup-progress-status--running">{{req.t 'setup.seed.progress.starting'}}</p>
+    <div class="setup-progress-spinner" aria-hidden="true"></div>
+    <meta http-equiv="refresh" content="2">
+  {{/if}}
+</section>
+{{else}}
 <section class="setup-step">
   <h1>{{req.t 'setup.seed.title'}}</h1>
   <p>{{req.t 'setup.seed.intro'}}</p>
   {{#if error}}<p class="form-error">{{error}}</p>{{/if}}
+
   <form method="POST" action="/setup/seed">
     <input type="hidden" name="csrf" value="{{csrfToken}}">
+
     <div class="form-field">
-      <label><input type="radio" name="load" value="true" checked> {{req.t 'setup.seed.yes'}}</label>
+      <label><input type="radio" name="mode" value="etl" checked> <b>{{req.t 'setup.seed.etl.label'}}</b></label>
+      <p class="form-hint">{{req.t 'setup.seed.etl.hint'}}</p>
     </div>
+
     <div class="form-field">
-      <label><input type="radio" name="load" value="false"> {{req.t 'setup.seed.no'}}</label>
+      <label><input type="radio" name="mode" value="demo"> <b>{{req.t 'setup.seed.demo.label'}}</b></label>
+      <p class="form-hint">{{req.t 'setup.seed.demo.hint'}}</p>
     </div>
+
+    <div class="form-field">
+      <label><input type="radio" name="mode" value="skip"> <b>{{req.t 'setup.seed.skip.label'}}</b></label>
+      <p class="form-hint">{{req.t 'setup.seed.skip.hint'}}</p>
+    </div>
+
     <button type="submit" class="btn-primary">{{req.t 'setup.seed.submit'}}</button>
   </form>
 </section>
+{{/if}}
