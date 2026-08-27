@@ -41,16 +41,6 @@ export function verifyCsrf(presented: string, expected: string, issuedAt: number
   return true;
 }
 
-export function parseApiKeyPlaintext(plain: string): { keyHash: string; keyPrefix: string } {
-  if (!plain.startsWith('ipq_') || plain.length !== 40) {
-    throw new Error('invalid api key format');
-  }
-  return {
-    keyHash: hashToken(plain),
-    keyPrefix: plain.slice(0, 8),
-  };
-}
-
 export function generateApiKey(): string {
   return `ipq_${randomBase32(32)}`;
 }
