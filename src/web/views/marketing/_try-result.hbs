@@ -1,17 +1,12 @@
 {{!-- SPDX-License-Identifier: MIT --}}
-{{#if result}}
-<section>
-  <h2>{{req.t 'lookup.found' ip=result.ip country=result.country.name}}</h2>
-  <dl>
-    <dt>国家</dt><dd>{{result.country.name}} ({{result.country.code}})</dd>
-    {{#if result.city}}<dt>城市</dt><dd>{{result.city.name}}</dd>{{/if}}
-    {{#if result.region}}<dt>地区</dt><dd>{{result.region}}</dd>{{/if}}
-    {{#if result.isp}}<dt>ISP</dt><dd>{{result.isp.name}}</dd>{{/if}}
-    {{#if result.asn}}<dt>ASN</dt><dd>{{result.asn.number}} {{result.asn.org}}</dd>{{/if}}
+<div class="m-card m-card--result">
+  <h3 class="m-card-title">{{req.t 'lookup.found' ip=result.ip country=result.country.name}}</h3>
+  <dl class="m-result-grid">
+    <dt>{{req.t 'try.country'}}</dt>
+    <dd>{{result.country.name}} (<code>{{result.country.code}}</code>) <span class="m-source">{{result.country.source}}</span></dd>
+    {{#if result.region}}<dt>{{req.t 'try.region'}}</dt><dd>{{result.region}}</dd>{{/if}}
+    {{#if result.city}}<dt>{{req.t 'try.city'}}</dt><dd>{{result.city.name}} <span class="m-source">{{result.city.source}}</span></dd>{{/if}}
+    {{#if result.isp}}<dt>{{req.t 'try.isp'}}</dt><dd>{{result.isp.name}} <span class="m-source">{{result.isp.source}}</span></dd>{{/if}}
+    {{#if result.asn}}<dt>{{req.t 'try.asn'}}</dt><dd>{{result.asn.number}} {{result.asn.org}} <span class="m-source">{{result.asn.source}}</span></dd>{{/if}}
   </dl>
-</section>
-{{else if notFound}}
-<p>{{req.t 'lookup.notfound' ip=ip}}</p>
-{{else if invalid}}
-<p>{{req.t 'lookup.invalid'}}</p>
-{{/if}}
+</div>

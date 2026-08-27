@@ -1,0 +1,33 @@
+{{!-- SPDX-License-Identifier: MIT --}}
+<section class="m-section">
+  <div class="m-section-inner">
+    <div class="m-section-head">
+      <span class="m-eyebrow">{{req.t 'home.code.eyebrow'}}</span>
+      <h2 class="m-section-title">{{req.t 'home.code.title'}}</h2>
+      <p class="m-section-sub">{{req.t 'home.code.sub'}}</p>
+    </div>
+
+    <div class="m-codeblock">
+      <div class="m-codeblock-tabs">
+        <button type="button" class="m-codeblock-tab active" data-tab="curl">curl</button>
+        <button type="button" class="m-codeblock-tab" data-tab="js">JavaScript</button>
+        <button type="button" class="m-codeblock-tab" data-tab="py">Python</button>
+      </div>
+      <pre data-pane="curl"><code><span class="tok-com"># No auth required for basic lookups</span>
+<span class="tok-key">curl</span> <span class="tok-str">"{{viewBaseUrl}}/lookup?ip=8.8.8.8"</span>
+
+<span class="tok-com"># With API key (signed-up users get 60/min)</span>
+<span class="tok-key">curl</span> <span class="tok-str">"{{viewBaseUrl}}/lookup?ip=8.8.8.8&amp;key=YOUR_KEY"</span></code></pre>
+      <pre data-pane="js" style="display:none"><code><span class="tok-key">const</span> res = <span class="tok-key">await</span> <span class="tok-key">fetch</span>(<span class="tok-str">"{{viewBaseUrl}}/lookup?ip=8.8.8.8"</span>);
+<span class="tok-key">const</span> data = <span class="tok-key">await</span> res.<span class="tok-key">json</span>();
+<span class="tok-com">// { ip: "8.8.8.8", country: { code: "US", ... }, asn: { number: 15169, ... } }</span>
+<span class="tok-key">console</span>.log(data.country.code, data.asn.org);</code></pre>
+      <pre data-pane="py" style="display:none"><code><span class="tok-key">import</span> requests
+
+r = requests.<span class="tok-key">get</span>(<span class="tok-str">"{{viewBaseUrl}}/lookup"</span>, params={<span class="tok-str">"ip"</span>: <span class="tok-str">"8.8.8.8"</span>})
+data = r.<span class="tok-key">json</span>()
+<span class="tok-com"># data["country"]["code"] == "US"</span>
+<span class="tok-key">print</span>(data[<span class="tok-str">"country"</span>][<span class="tok-str">"code"</span>], data[<span class="tok-str">"asn"</span>][<span class="tok-str">"org"</span>])</code></pre>
+    </div>
+  </div>
+</section>

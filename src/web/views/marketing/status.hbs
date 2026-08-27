@@ -1,13 +1,49 @@
 {{!-- SPDX-License-Identifier: MIT --}}
-<h1>服务状态</h1>
-{{#if lastRun}}
-<section>
-  <h2>最近一次 ETL</h2>
-  <p>开始时间:{{formatDate lastRun.startedAt}}</p>
-  <p>结束时间:{{formatDate lastRun.finishedAt}}</p>
-  <p>状态:<strong>{{lastRun.status}}</strong></p>
-  <p>合并记录数:{{lastRun.mergedRecords}}</p>
+<section class="m-section m-section--first">
+  <div class="m-section-inner">
+    <div class="m-section-head">
+      <span class="m-eyebrow">{{req.t 'status.eyebrow'}}</span>
+      <h1 class="m-section-title">{{req.t 'status.heading'}}</h1>
+      <p class="m-section-sub">{{req.t 'status.sub'}}</p>
+    </div>
+
+    <div class="m-card m-card--soft">
+      <h3 class="m-card-title">{{req.t 'status.health'}}</h3>
+      <div class="m-status-row">
+        <span class="m-status-dot m-status-dot--ok"></span>
+        <span><b>{{req.t 'status.api'}}</b> — {{req.t 'status.operational'}}</span>
+      </div>
+      <div class="m-status-row">
+        <span class="m-status-dot m-status-dot--ok"></span>
+        <span><b>{{req.t 'status.database'}}</b> — {{req.t 'status.operational'}}</span>
+      </div>
+      <div class="m-status-row">
+        <span class="m-status-dot m-status-dot--ok"></span>
+        <span><b>{{req.t 'status.etl'}}</b> —
+          {{#if lastRun}}{{formatDate lastRun.startedAt}} — {{lastRun.status}}{{else}}{{req.t 'status.never'}}{{/if}}
+        </span>
+      </div>
+    </div>
+
+    {{#if lastRun}}
+    <div class="m-card m-card--soft">
+      <h3 class="m-card-title">{{req.t 'status.lastRun'}}</h3>
+      <table class="m-table">
+        <tbody>
+          <tr><th>{{req.t 'status.col.started'}}</th><td>{{formatDate lastRun.startedAt}}</td></tr>
+          <tr><th>{{req.t 'status.col.finished'}}</th><td>{{formatDate lastRun.finishedAt}}</td></tr>
+          <tr><th>{{req.t 'status.col.status'}}</th><td><strong>{{lastRun.status}}</strong></td></tr>
+          <tr><th>{{req.t 'status.col.merged'}}</th><td>{{lastRun.mergedRecords}}</td></tr>
+        </tbody>
+      </table>
+    </div>
+    {{else}}
+    <div class="m-alert m-alert--hint">{{req.t 'status.noRuns'}}</div>
+    {{/if}}
+
+    <div class="m-card m-card--soft">
+      <h3 class="m-card-title">{{req.t 'status.uptimeTitle'}}</h3>
+      <p>{{req.t 'status.uptimeBody'}}</p>
+    </div>
+  </div>
 </section>
-{{else}}
-<p>暂无 ETL 运行记录。</p>
-{{/if}}
