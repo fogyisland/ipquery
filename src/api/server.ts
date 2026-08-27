@@ -18,6 +18,7 @@ import { registerAuthGuards } from '../web/plugins/auth';
 import { registerCsrf } from '../web/plugins/csrf';
 import { registerAuditLog } from '../web/plugins/auditLog';
 import { registerSetupGuard } from '../web/plugins/setupGuard';
+import { registerSessionPurger } from '../web/plugins/sessionPurger';
 import { _resetForTests as resetLoginLimit } from '../web/plugins/loginRateLimit';
 import { createMailer } from '../mailer';
 import healthRoute from './routes/health';
@@ -60,6 +61,7 @@ export async function buildServer(cfg: AppConfig, opts?: { extraRoutes?: (app: F
   await registerI18n(app);
   await registerSecurityHeaders(app, { cookieSecure: cfg.web.cookieSecure });
   await registerSession(app);
+  registerSessionPurger(app, app.pool);
   await registerAuthGuards(app);
   await registerCsrf(app);
   app.decorate('resetLoginLimit', resetLoginLimit);
