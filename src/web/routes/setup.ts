@@ -1,9 +1,14 @@
 // SPDX-License-Identifier: MIT
 import type { FastifyInstance, FastifyRequest } from 'fastify';
+import type { RowDataPacket } from 'mysql2';
+import * as path from 'node:path';
 import { verifyCsrfRequest } from '../plugins/csrf';
 import { setSetting, getSetting, markInitialized } from '../../storage/settings';
 import { bootstrapAdmin } from '../admin/bootstrap';
 import { runMigrations } from '../../storage/migrations/runner';
+import { runPipeline } from '../../etl/pipeline';
+import { recordEtlStart } from '../../storage/mysql';
+import { downloadAll, DEFAULT_SPECS } from '../../etl/download';
 
 const SITE_NAME_MAX = 128;
 const TAGLINE_MAX = 256;
@@ -30,6 +35,82 @@ function getFlash(req: FastifyRequest, successKey: string, errorKey: string): { 
   if (kind === 'success') return { success: req.t(successKey) };
   if (kind === 'error') return { error: req.t(errorKey) };
   return {};
+}
+
+interface EtlRunLite {
+  id: number;
+  status: 'running' | 'success' | 'failed';
+  startedAt: Date;
+  finishedAt: Date | null;
+  mergedRecords: number | null;
+  errorMessage: string | null;
+}
+
+// Read the most recent ETL run row (any status). Returns null if the table is
+// empty (i.e. the wizard has never triggered an ETL during this install).
+async function readLatestRun(pool: import('mysql2/promise').Pool): Promise<EtlRunLite | null> {
+  const [rows] = await pool.query<RowDataPacket[]>(
+    `SELECT id, status, started_at, finished_at, merged_records, error_message
+       FROM etl_runs ORDER BY id DESC LIMIT 1`,
+  );
+  const r = rows[0];
+  if (!r) return null;
+  return {
+    id: Number(r.id),
+    status: r.status as EtlRunLite['status'],
+    startedAt: r.started_at as Date,
+    finishedAt: (r.finished_at as Date | null) ?? null,
+    mergedRecords: r.merged_records == null ? null : Number(r.merged_records),
+    errorMessage: (r.error_message as string | null) ?? null,
+  };
+}
+
+// Spawn a background ETL run for the wizard. The wizard's POST handler calls
+// this and redirects immediately; the progress page polls /setup/seed while
+// a `running` row exists in etl_runs.
+//
+// Guarded: refuses to start if another ETL is already in progress (etl_runs
+// row with status='running'). Without this guard, double-clicking submit
+// would spawn two pipelines that race on truncateNew + atomicSwapRanges.
+async function startBackgroundEtl(app: FastifyInstance): Promise<{ runId: number } | { busy: true }> {
+  const [running] = await app.pool.query<RowDataPacket[]>(
+    `SELECT id FROM etl_runs WHERE status = 'running' LIMIT 1`,
+  );
+  if (running.length > 0) return { busy: true };
+
+  // Pre-create the run row so the progress page can find it the instant the
+  // client lands on /setup/seed after the redirect.
+  const runId = await recordEtlStart(app.pool);
+  await setSetting(app.pool, 'etl.setup.inProgress', 'true');
+
+  // Fire-and-forget. The setup wizard should NEVER block on this — full
+  // DB-IP city-lite ingest takes 5-15 minutes. setImmediate moves the task
+  // out of the current microtask so the response handler returns first.
+  setImmediate(() => {
+    void (async (): Promise<void> => {
+      try {
+        // Step 1: download DB-IP free CSVs (best-effort per file; failures
+        // don't throw, they're returned in `failures`).
+        const outDir = path.join(app.cfg.etl.dataDir, 'raw');
+        const dl = await downloadAll(DEFAULT_SPECS, outDir);
+        app.log.info(
+          { results: dl.results.length, failures: dl.failures.length, runId },
+          'setup: DB-IP download complete',
+        );
+
+        // Step 2: run the pipeline against the freshly-downloaded files.
+        // runPipeline creates its own pool and ends it — fine, the web server
+        // keeps using app.pool. It updates the pre-created runId row.
+        await runPipeline({ cfg: app.cfg, runId });
+      } catch (err) {
+        app.log.error({ err, runId }, 'setup: background ETL failed');
+      } finally {
+        await setSetting(app.pool, 'etl.setup.inProgress', 'false').catch(() => undefined);
+      }
+    })();
+  });
+
+  return { runId };
 }
 
 export default async function setupRoutes(app: FastifyInstance): Promise<void> {
@@ -199,8 +280,38 @@ export default async function setupRoutes(app: FastifyInstance): Promise<void> {
     return reply.code(302).header('Location', '/setup/seed?flash=success').send();
   });
 
-  // GET /setup/seed — radio: load 50 seed IPs (yes/no).
+  // GET /setup/seed — three-mode form OR progress view if an ETL is running.
+  //
+  // Modes:
+  //   demo  — load the 50 hand-picked seed rows from migration 012 (instant)
+  //   etl   — trigger a real DB-IP ETL run; page renders progress until done
+  //   skip  — leave ip_ranges empty; cron will pick it up later
   app.get('/setup/seed', async (req, reply) => {
+    const latest = await readLatestRun(app.pool);
+    const inProgress = latest?.status === 'running';
+    const etlSetting = await getSetting(app.pool, 'etl.setup.inProgress');
+
+    // While a background ETL is in flight, render the progress page and let
+    // it auto-refresh until the run finishes.
+    if (inProgress || etlSetting === 'true') {
+      return reply.view('setup/seed.hbs', {
+        layout: 'layouts/setup',
+        title: req.t('setup.seed.title'),
+        csrfToken: req.csrfToken,
+        steps: buildSteps(req, 5),
+        step: 5,
+        total: 6,
+        progress: {
+          run: latest,
+          // Pre-row state: a click happened but recordEtlStart hasn't been
+          // observed yet (sub-second window). Show "starting…" instead of a
+          // blank spinner.
+          starting: !latest,
+        },
+        req,
+      });
+    }
+
     return reply.view('setup/seed.hbs', {
       layout: 'layouts/setup',
       title: req.t('setup.seed.title'),
@@ -213,19 +324,58 @@ export default async function setupRoutes(app: FastifyInstance): Promise<void> {
     });
   });
 
-  // POST /setup/seed — always run migrations (idempotent); load flag is advisory.
+  // POST /setup/seed — three modes: demo (instant), etl (background), skip.
+  // Accepts both `mode=demo|etl|skip` (new) and legacy `load=true|false` for
+  // backwards compat with the existing test suite.
   app.post('/setup/seed', async (req, reply) => {
     if (!verifyCsrfRequest(req)) {
       return reply.code(403).view('errors/csrf.hbs', { layout: 'layouts/setup', req });
     }
-    const body = req.body as { load?: string };
-    const load = body.load === 'true';
+    const body = req.body as { mode?: string; load?: string };
     await runMigrations(app.pool);
-    // Migration 012 already inserted 50 seed rows via INSERT IGNORE. The
-    // `load` flag is purely a UI preference; we persist it for the summary
-    // page and possible later audit.
-    await setSetting(app.pool, 'seed.loaded', load ? 'true' : 'false');
-    return reply.code(302).header('Location', '/setup/complete?flash=success').send();
+
+    const mode = body.mode ?? (body.load === 'true' ? 'demo' : body.load === 'false' ? 'skip' : undefined);
+
+    if (mode === 'demo') {
+      // Migration 012 inserts the 50 seed rows via INSERT IGNORE (idempotent).
+      await setSetting(app.pool, 'seed.loaded', 'true');
+      return reply.code(302).header('Location', '/setup/complete?flash=success').send();
+    }
+
+    if (mode === 'skip') {
+      await setSetting(app.pool, 'seed.loaded', 'false');
+      return reply.code(302).header('Location', '/setup/complete?flash=success').send();
+    }
+
+    if (mode === 'etl') {
+      const started = await startBackgroundEtl(app);
+      if ('busy' in started) {
+        // Another ETL is already running; just send the user to the progress
+        // page where they'll see the existing run.
+        return reply.code(302).header('Location', '/setup/seed').send();
+      }
+      return reply.code(302).header('Location', `/setup/seed?runId=${started.runId}`).send();
+    }
+
+    if (mode === 'etl-done') {
+      // Confirmation step after the background ETL finished. Persist the
+      // flag and proceed to /setup/complete. Distinct from `etl` so a
+      // double-submit can't re-trigger the pipeline.
+      await setSetting(app.pool, 'seed.loaded', 'true');
+      return reply.code(302).header('Location', '/setup/complete?flash=success').send();
+    }
+
+    // Unknown mode — re-render the form with a generic error.
+    return reply.view('setup/seed.hbs', {
+      layout: 'layouts/setup',
+      title: req.t('setup.seed.title'),
+      csrfToken: req.csrfToken,
+      steps: buildSteps(req, 5),
+      step: 5,
+      total: 6,
+      error: req.t('setup.seed.invalidMode'),
+      req,
+    });
   });
 
   // GET /setup/complete — summary page.
@@ -267,4 +417,3 @@ export default async function setupRoutes(app: FastifyInstance): Promise<void> {
     return reply.code(302).header('Location', '/login?flash=success').send();
   });
 }
-

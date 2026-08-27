@@ -183,6 +183,38 @@ describe('setup wizard routes', () => {
     expect(await getSetting(td.pool, 'seed.loaded')).toBe('false');
   });
 
+  it('POST /setup/seed with mode=etl kicks off a background ETL and renders the progress page', async () => {
+    const agent = request.agent(appPre.server);
+    const page = await agent.get('/setup/seed');
+    const csrf = extractCsrf(page.text);
+    const r = await agent.post('/setup/seed').type('form').send({ csrf, mode: 'etl' });
+    // Redirects straight back to the progress page (runId in URL).
+    expect(r.status).toBe(302);
+    expect(r.headers['location']).toMatch(/^\/setup\/seed\?runId=/);
+
+    // The progress page is reachable and surfaces an etl_runs row.
+    const progress = await agent.get(r.headers['location']);
+    expect(progress.status).toBe(200);
+    // Will be one of: running, success, failed — depending on whether the
+    // background downloader can reach db-ip.com from the test environment.
+    expect(progress.text).toMatch(/setup-progress-status--(running|success|failed)/);
+
+    // A run row exists. Either still running or already finished.
+    const [rows] = await td.pool.query<mysql.RowDataPacket[]>(
+      `SELECT id, status FROM etl_runs ORDER BY id DESC LIMIT 1`,
+    );
+    expect(rows.length).toBe(1);
+    expect(['running', 'success', 'failed']).toContain(rows[0]!.status);
+
+    // Guard: a second click while running does NOT spawn a second pipeline.
+    const r2 = await agent.post('/setup/seed').type('form').send({ csrf, mode: 'etl' });
+    expect(r2.status).toBe(302);
+    const [count] = await td.pool.query<mysql.RowDataPacket[]>(
+      `SELECT COUNT(*) AS n FROM etl_runs`,
+    );
+    expect(Number(count[0]!.n)).toBe(1);
+  });
+
   it('POST /setup/complete marks initialized, redirects to /login, and locks /setup out', async () => {
     const agent = request.agent(appPre.server);
     const page = await agent.get('/setup/complete');

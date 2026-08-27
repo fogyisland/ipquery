@@ -16,17 +16,20 @@ beforeAll(async () => {
 afterAll(async () => { await app.close(); await dropTestDb(td); });
 
 describe('/docs API reference', () => {
-  it('GET /docs returns 200 with tool-style sidebar and 4 API endpoint rows', async () => {
+  // Marketing redesign: /docs renders inside layouts/marketing (no sidebar).
+  // Content is the same (4 endpoint rows + curl/JS/Python examples + auth).
+  it('GET /docs returns 200 with marketing chrome and 4 API endpoint rows', async () => {
     const r = await request(app.server).get('/docs');
     expect(r.status).toBe(200);
-    // Tool-style layout shell: sidebar present.
-    expect(r.text).toMatch(/<aside class="sidebar">/);
+    // Marketing chrome
+    expect(r.text).not.toMatch(/<aside class="sidebar">/);
+    expect(r.text).toMatch(/class="m-topnav"/);
     // 4 API endpoints: /lookup, /lookup/:ip, /stats, /healthz
-    expect(r.text).toContain('/lookup');
+    expect(r.text).toContain('/lookup?ip=');
     expect(r.text).toContain('/lookup/');
     expect(r.text).toContain('/stats');
     expect(r.text).toContain('/healthz');
     // At least one curl example block
-    expect(r.text).toMatch(/<pre><code>curl/);
+    expect(r.text).toMatch(/data-pane="curl"/);
   });
 });

@@ -25,23 +25,31 @@ beforeAll(async () => {
 });
 afterAll(async () => { await app.close(); await dropTestDb(td); });
 
-describe('sidebar layout', () => {
-  it('renders on / (public marketing)', async () => {
+describe('public vs authed chrome', () => {
+  // Marketing redesign: public pages (home / about / try / docs / status)
+  // now render inside layouts/marketing — top nav + footer, NO sidebar.
+  // The sidebar lives only on authed pages (admin / dashboard), where the
+  // user needs quick navigation to all their screens.
+  it('public / uses marketing chrome (no sidebar, has top nav + footer)', async () => {
     const r = await request(app.server).get('/');
     expect(r.status).toBe(200);
-    expect(r.text).toMatch(/class="sidebar"/);
+    expect(r.text).not.toMatch(/class="sidebar"/);
+    expect(r.text).toMatch(/class="m-topnav"/);
+    expect(r.text).toMatch(/class="m-footer"/);
     expect(r.text).toMatch(/\/try/);
   });
 
-  it('renders on /about (marketing page)', async () => {
+  it('public /about uses marketing chrome (no sidebar)', async () => {
     const r = await request(app.server).get('/about');
     expect(r.status).toBe(200);
-    expect(r.text).toMatch(/class="sidebar"/);
+    expect(r.text).not.toMatch(/class="sidebar"/);
+    expect(r.text).toMatch(/class="m-topnav"/);
   });
 
   it('admin sidebar links appear once authenticated', async () => {
     const r = await request(app.server).get('/admin/users').set('Cookie', 'sid=' + adminSid);
     expect(r.status).toBe(200);
+    expect(r.text).toMatch(/class="sidebar"/);
     expect(r.text).toMatch(/\/admin\/queries/);
     expect(r.text).toMatch(/\/admin\/audit-log/);
     expect(r.text).toContain('admin@x.com');
