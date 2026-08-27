@@ -1,8 +1,37 @@
 {{!-- SPDX-License-Identifier: MIT --}}
-<h1>{{req.t 'lookup.title'}}</h1>
-<form hx-post="/try" hx-target="#try-result" hx-swap="innerHTML">
-  <input type="hidden" name="csrf" value="{{req.csrfToken}}">
-  <input type="text" name="ip" placeholder="{{req.t 'lookup.input.placeholder'}}" required>
-  <button type="submit" class="btn-primary">{{req.t 'lookup.submit'}}</button>
-</form>
-<div id="try-result"></div>
+<section class="m-section m-section--first">
+  <div class="m-section-inner">
+    <div class="m-section-head">
+      <span class="m-eyebrow">{{req.t 'try.eyebrow'}}</span>
+      <h1 class="m-section-title">{{req.t 'try.heading'}}</h1>
+      <p class="m-section-sub">{{req.t 'try.sub'}}</p>
+    </div>
+
+    <div class="m-card m-card--try">
+      <form method="POST" action="/try" class="m-try-form">
+        <input type="hidden" name="csrf" value="{{req.csrfToken}}">
+        <input type="text" name="ip" placeholder="{{req.t 'lookup.input.placeholder'}}" required autofocus autocomplete="off">
+        <button type="submit" class="button">{{req.t 'lookup.submit'}}</button>
+      </form>
+      <div class="m-try-chips">
+        <span class="m-try-chips-label">{{req.t 'try.chipsLabel'}}</span>
+        <button type="button" class="m-try-chip" data-ip="8.8.8.8">8.8.8.8</button>
+        <button type="button" class="m-try-chip" data-ip="1.1.1.1">1.1.1.1</button>
+        <button type="button" class="m-try-chip" data-ip="114.114.114.114">114.114.114.114</button>
+        <button type="button" class="m-try-chip" data-ip="9.9.9.9">9.9.9.9</button>
+      </div>
+    </div>
+
+    <div id="try-result">
+      {{#if result}}
+        {{> marketing/_try-result}}
+      {{else if notFound}}
+        <div class="m-alert m-alert--warn">{{req.t 'lookup.notfound' ip=ip}}</div>
+      {{else if invalid}}
+        <div class="m-alert m-alert--error">{{req.t 'lookup.invalid'}}</div>
+      {{else}}
+        <div class="m-alert m-alert--hint">{{req.t 'try.hint'}}</div>
+      {{/if}}
+    </div>
+  </div>
+</section>

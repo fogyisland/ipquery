@@ -344,25 +344,163 @@
   },
   "home": {
     "title": "首页 · IPQuery",
+    "heroEyebrow": "IP 地理位置 API",
+    "heroTitleAccent": "查询任何 <em>IP 地址</em>,<br>都能拿到<strong>可信的国家、城市与 ASN</strong>",
+    "heroSubLong": "聚合 MaxMind GeoLite2、ip2region、DB-IP 三大免费数据源,按字段互补策略返回结果。100% 自托管,亚 100ms 中位延迟。",
+    "ipRanges": "IP 段",
+    "metaSources": "数据源",
+    "metaLatency": "中位延迟",
+    "ipgrid": {
+      "demoLabel": "示例查询",
+      "country": "国家",
+      "region": "地区",
+      "city": "城市",
+      "asn": "ASN"
+    },
+    "features": {
+      "eyebrow": "为什么选 IPQuery",
+      "title": "一个查询,三个数据源",
+      "sub": "主源优先,备源补字段。每个字段都标注来源,你来判断取舍。",
+      "sources": {
+        "title": "多源聚合",
+        "sub": "MaxMind / ip2region / DB-IP 互相补位,字段缺失率远低于单源方案。",
+        "stat": "数据源"
+      },
+      "coverage": {
+        "title": "IPv4 + IPv6 全覆盖",
+        "sub": "按段而非按 IP 存储,8.3M+ 段覆盖了绝大多数公共网络。",
+        "stat": "已索引段"
+      },
+      "speed": {
+        "title": "亚 100ms",
+        "sub": "空间索引 + range_size 排序,实测中位延迟远低于行业平均水平。",
+        "stat": "中位响应"
+      }
+    },
+    "steps": {
+      "eyebrow": "工作原理",
+      "title": "三步搞定",
+      "sub": "不需要联网下载任何东西,也不需要构建庞大的 IP 数据库。",
+      "s1": {
+        "title": "输入 IP",
+        "sub": "浏览器表单或 API 调用,任意 IPv4/IPv6 地址都可以。"
+      },
+      "s2": {
+        "title": "命中段位",
+        "sub": "MySQL 索引按 range_size 排序,先小后大,毫秒内定位 IP 所属 CIDR。"
+      },
+      "s3": {
+        "title": "返回 JSON",
+        "sub": "国家/地区/城市/ISP/ASN 一次性返回,字段来源一并给出。"
+      }
+    },
+    "code": {
+      "eyebrow": "快速上手",
+      "title": "三行代码开始",
+      "sub": "公开 API 不需要鉴权;注册账号后 API Key 可提升速率限制到 60/min。"
+    },
+    "cta": {
+      "title": "立即开始使用",
+      "sub": "无需信用卡。注册账号后获得 API Key,生产环境随时切换。",
+      "primary": "免费注册",
+      "primaryAuthed": "进入控制台",
+      "secondary": "查看 API 文档"
+    },
+    "footer": {
+      "product": "产品",
+      "account": "账号",
+      "company": "公司"
+    },
     "heroTitle": "IP 地理位置查询",
     "heroSubtitle": "聚合 MaxMind / ip2region / DB-IP 三大数据源,每天自动 ETL 更新",
     "quickQuery": "快速查询",
     "status": "API 状态",
     "online": "在线",
-    "ipRanges": "IP 段数",
     "queries24h": "24h 查询",
     "queries24hSub": "过去 24 小时",
     "apiExample": "API 示例",
     "apiDocs": "查看完整文档",
     "fullDocs": "查看完整 API 文档"
   },
+  "about": {
+    "eyebrow": "关于 IPQuery",
+    "heading": "一个轻量级、自托管的 IP 地理查询服务",
+    "intro": "为开发者搭建,只做一件事:把分散的免费 IP 数据源聚合起来,给出一个简单、稳定、可审计的查询接口。",
+    "storyTitle": "为什么做它",
+    "storyP1": "市面上的 IP 查询服务要么贵(按 QPS 计费),要么数据陈旧(免费数据源常年不更新),要么黑盒(你看不到字段来源,无法判断信任度)。",
+    "storyP2": "IPQuery 的目标是把这一切反过来:免费、自托管、字段来源透明。每天自动 ETL,把数据装配到一张 MySQL 表里,查询就是一次普通的 SQL。",
+    "principles": {
+      "sources": {
+        "title": "多源融合",
+        "sub": "每个字段都标注来源( maxmind / ip2region / dbip ),便于审计与回溯。"
+      },
+      "speed": {
+        "title": "索引优先",
+        "sub": "range_size 排序的复合索引,先小段再大段,避开大范围的全表扫描。"
+      },
+      "opensource": {
+        "title": "代码开源",
+        "sub": "MIT 协议,你可以审计 ETL 逻辑、查询路径、调度代码——不存在看不见的部分。"
+      },
+      "selfhosted": {
+        "title": "完全自托管",
+        "sub": "数据在你自己的数据库里,API 部署在你自己的服务器上,用户查询不上行。"
+      }
+    },
+    "stackTitle": "技术栈",
+    "stack": {
+      "node": "Node.js 20 + TypeScript 5",
+      "fastify": "Fastify + Handlebars SSR",
+      "mysql": "MySQL 8(8.3M+ IP 段)",
+      "handlebars": "服务端模板,零客户端依赖,轻量到极致"
+    },
+    "licenseTitle": "许可与数据",
+    "licenseBody": "代码以 MIT 协议开源;数据文件由使用者自行下载并遵守各源(MaxMind / ip2region / DB-IP)各自的授权约束。"
+  },
+  "try": {
+    "eyebrow": "在线试查",
+    "heading": "随便输入一个 IP",
+    "sub": "无需注册,无需 Key。点击下面的示例 IP 快速体验。",
+    "chipsLabel": "试试这些:",
+    "hint": "提示:输入框可直接粘贴,结果会显示在下方。",
+    "country": "国家",
+    "region": "地区",
+    "city": "城市",
+    "isp": "运营商",
+    "asn": "ASN"
+  },
+  "status": {
+    "eyebrow": "服务状态",
+    "heading": "实时运行状态",
+    "sub": "API、数据库、ETL 流水线最近一次的健康检查。",
+    "health": "健康检查",
+    "api": "API 服务",
+    "database": "数据库",
+    "etl": "ETL 流水线",
+    "operational": "运行正常",
+    "never": "暂无运行记录",
+    "lastRun": "最近一次 ETL",
+    "noRuns": "暂无 ETL 运行记录。",
+    "uptimeTitle": "可用性",
+    "uptimeBody": "API 与数据库实例健康由本页面实时查询;ETL 每天自动跑一次,失败会有日志记录。",
+    "col": {
+      "started": "开始时间",
+      "finished": "结束时间",
+      "status": "状态",
+      "merged": "合并记录数"
+    }
+  },
   "docs": {
     "title": "API 文档",
+    "eyebrow": "开发者文档",
+    "heading": "简洁的 HTTP API",
     "subtitle": "公开 HTTP API,无需鉴权;注册后可获取 API Key 提升速率限制。",
     "endpointsTitle": "接口列表",
     "colMethod": "方法",
     "colPath": "路径",
     "colDescription": "说明",
+    "colStatus": "状态码",
+    "colCode": "错误码",
     "endpoints": {
       "lookup": "查询 IP 的国家 / 地区 / 城市 / ISP / ASN",
       "lookupPath": "同上,IP 作为路径参数",
@@ -371,7 +509,19 @@
     },
     "examplesTitle": "调用示例",
     "authTitle": "API Key 认证",
-    "authBody": "登录后在控制台创建 API Key,然后用 key= 或 Authorization: Bearer 传递。"
+    "authBody": "登录后在控制台创建 API Key,然后用 key= 或 Authorization: Bearer 传递。",
+    "responseTitle": "响应示例",
+    "responseBody": "成功响应是 JSON 对象,字段缺失时该字段为 null。每个数据字段都附带 source,标明来自哪个上游。",
+    "errorsTitle": "错误码",
+    "errors": {
+      "200": "成功",
+      "400": "IP 格式无效(invalid_ip)",
+      "404": "未找到记录(not_found)",
+      "429": "速率限制(rate_limited)"
+    },
+    "cta": {
+      "try": "在线试查"
+    }
   },
   "footer": {
     "copyright": "© {year} IPQuery",
@@ -441,12 +591,42 @@
     },
     "seed": {
       "title": "种子 IP 数据",
-      "intro": "加载 50 条精选 IP 段(公共 DNS、云服务商、RFC 保留段),让首次部署就有数据展示,无需等待 ETL 首次运行。",
+      "intro": "选择如何初始化 IP 段数据。可以立即拉取一份真实数据(约 5-15 分钟),也可以先用 50 条示例数据跑通整个流程。",
       "yes": "是,加载 50 条种子 IP",
       "no": "否,跳过种子数据",
       "submit": "下一步",
       "success": "种子数据已加载",
-      "skipped": "已跳过种子数据"
+      "skipped": "已跳过种子数据",
+      "invalidMode": "无效的选项",
+      "demo": {
+        "label": "示例数据 (50 条)",
+        "hint": "立即生效。仅包含公共 DNS / 知名云厂商 / RFC 保留段等手工精选条目,适合先看效果。"
+      },
+      "etl": {
+        "label": "真实数据 (DB-IP,推荐)",
+        "hint": "后台下载并导入 DB-IP 免费库(city-lite / country-lite / asn-lite,约 8.3M 段)。本页面会自动刷新进度,你也可以关掉去做别的事。",
+        "retryHint": "上次运行失败。可重试,或改用其他选项。"
+      },
+      "skip": {
+        "label": "跳过",
+        "hint": "保持空数据库。定时任务稍后会拉取数据。"
+      },
+      "retry": "重试",
+      "progress": {
+        "title": "正在导入真实数据",
+        "running": "后台任务运行中…",
+        "starting": "正在启动 ETL…",
+        "success": "导入完成,共 {rows} 条 IP 段",
+        "failed": "导入失败",
+        "runId": "运行 ID",
+        "started": "开始",
+        "finished": "结束",
+        "merged": "合并记录数",
+        "error": "错误信息",
+        "autoRefresh": "本页面每 3 秒自动刷新。导入过程中可随时关闭。",
+        "continue": "继续",
+        "successHint": "导入已完成,点击继续完成初始化。"
+      }
     },
     "complete": {
       "title": "准备完成",

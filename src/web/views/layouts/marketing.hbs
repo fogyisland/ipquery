@@ -1,0 +1,51 @@
+{{!-- SPDX-License-Identifier: MIT --}}
+{{!-- Marketing layout: top nav + content + footer.
+     Replaces layouts/public.hbs for the redesigned public pages.
+     Light commercial SaaS chrome (no sidebar — public marketing pages
+     don't need account chrome on every screen). --}}
+<!doctype html>
+<html lang="{{req.locale}}">
+<head>
+  <meta charset="utf-8">
+  <title>{{title}} · IPQuery</title>
+  <link rel="stylesheet" href="/assets/style.css">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="{{#if metaDescription}}{{metaDescription}}{{else}}IPQuery — IP geolocation API aggregating MaxMind, ip2region, and DB-IP. One query, three sources, sub-100ms latency.{{/if}}">
+</head>
+<body class="m-page">
+  {{> marketing/_topnav}}
+  <main>
+    {{{body}}}
+  </main>
+  {{> marketing/_footer}}
+  <script src="/assets/htmx.min.js" defer></script>
+  {{#if showCodeTabs}}
+  <script>
+    // Tab switcher for the code quickstart block. Inline so we don't need
+    // a separate JS file for ~10 lines. Uses event delegation; works with
+    // htmx-style partial swaps.
+    document.addEventListener('click', function (e) {
+      var tab = e.target.closest('.m-codeblock-tab');
+      if (!tab) return;
+      var block = tab.closest('.m-codeblock');
+      var id = tab.dataset.tab;
+      block.querySelectorAll('.m-codeblock-tab').forEach(function (t) {
+        t.classList.toggle('active', t === tab);
+      });
+      block.querySelectorAll('[data-pane]').forEach(function (p) {
+        p.style.display = p.dataset.pane === id ? '' : 'none';
+      });
+    });
+    document.addEventListener('click', function (e) {
+      var chip = e.target.closest('.m-try-chip');
+      if (!chip) return;
+      var input = document.querySelector('input[name="ip"]');
+      if (input) {
+        input.value = chip.dataset.ip || chip.textContent.trim();
+        input.focus();
+      }
+    });
+  </script>
+  {{/if}}
+</body>
+</html>

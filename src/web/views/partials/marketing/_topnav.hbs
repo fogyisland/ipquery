@@ -1,0 +1,23 @@
+{{!-- SPDX-License-Identifier: MIT --}}
+<nav class="m-topnav">
+  <div class="m-topnav-inner">
+    <a href="/" class="m-topnav-brand">
+      <span class="m-topnav-brand-mark">ip</span>
+      IPQuery
+    </a>
+    <div class="m-topnav-links">
+      <a href="/docs" class="{{#if isDocs}}active{{/if}}">{{req.t 'nav.docs'}}</a>
+      <a href="/try" class="{{#if isTry}}active{{/if}}">{{req.t 'nav.try'}}</a>
+      <a href="/status" class="{{#if isStatus}}active{{/if}}">{{req.t 'nav.status'}}</a>
+      <a href="/about" class="{{#if isAbout}}active{{/if}}">{{req.t 'nav.about'}}</a>
+    </div>
+    <div class="m-topnav-cta">
+      {{#if req.user}}
+        <a href="/dashboard" class="m-text-link">{{req.t 'nav.dashboard'}}</a>
+      {{else}}
+        <a href="/login" class="m-text-link">{{req.t 'nav.login'}}</a>
+        <a href="/signup" class="button button-small">{{req.t 'common.signup'}}</a>
+      {{/if}}
+    </div>
+  </div>
+</nav>

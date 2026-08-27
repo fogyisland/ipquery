@@ -1,0 +1,45 @@
+{{!-- SPDX-License-Identifier: MIT --}}
+<section class="m-section">
+  <div class="m-section-inner">
+    <div class="m-section-head">
+      <span class="m-eyebrow">{{req.t 'home.features.eyebrow'}}</span>
+      <h2 class="m-section-title">{{req.t 'home.features.title'}}</h2>
+      <p class="m-section-sub">{{req.t 'home.features.sub'}}</p>
+    </div>
+
+    <div class="m-features">
+      <div class="m-feature">
+        <div class="m-feature-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+          </svg>
+        </div>
+        <h3 class="m-feature-title">{{req.t 'home.features.sources.title'}}</h3>
+        <p class="m-feature-sub">{{req.t 'home.features.sources.sub'}}</p>
+        <div class="m-feature-stat"><span>3</span><small>{{req.t 'home.features.sources.stat'}}</small></div>
+      </div>
+
+      <div class="m-feature">
+        <div class="m-feature-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>
+          </svg>
+        </div>
+        <h3 class="m-feature-title">{{req.t 'home.features.coverage.title'}}</h3>
+        <p class="m-feature-sub">{{req.t 'home.features.coverage.sub'}}</p>
+        <div class="m-feature-stat"><span>{{ipCount}}</span><small>{{req.t 'home.features.coverage.stat'}}</small></div>
+      </div>
+
+      <div class="m-feature">
+        <div class="m-feature-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+          </svg>
+        </div>
+        <h3 class="m-feature-title">{{req.t 'home.features.speed.title'}}</h3>
+        <p class="m-feature-sub">{{req.t 'home.features.speed.sub'}}</p>
+        <div class="m-feature-stat"><span>&lt;100<small>ms</small></span><small>{{req.t 'home.features.speed.stat'}}</small></div>
+      </div>
+    </div>
+  </div>
+</section>

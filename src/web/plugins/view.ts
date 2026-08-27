@@ -41,6 +41,13 @@ export async function registerView(app: FastifyInstance, cfg: { baseUrl: string 
   Handlebars.registerHelper('not', (v: unknown) => !v);
   Handlebars.registerHelper('and', (a: unknown, b: unknown) => Boolean(a) && Boolean(b));
   Handlebars.registerHelper('or', (a: unknown, b: unknown) => Boolean(a) || Boolean(b));
+  Handlebars.registerHelper('range', function (this: unknown, start: unknown, end: unknown) {
+    const s = Number(start);
+    const e = Number(end);
+    const out: number[] = [];
+    for (let i = s; i < e; i++) out.push(i);
+    return out;
+  });
   Handlebars.registerHelper('gt', (a: unknown, b: unknown) => Number(a) > Number(b));
   Handlebars.registerHelper('lt', (a: unknown, b: unknown) => Number(a) < Number(b));
   Handlebars.registerHelper('add', (a: unknown, b: unknown) => Number(a) + Number(b));
@@ -101,12 +108,25 @@ export async function registerView(app: FastifyInstance, cfg: { baseUrl: string 
 
   const partialsDir = path.join(viewsDir, 'partials');
   if (fs.existsSync(partialsDir)) {
-    for (const name of fs.readdirSync(partialsDir)) {
-      if (!name.endsWith('.hbs')) continue;
-      const partialName = name.slice(0, -'.hbs'.length);
-      const partialPath = path.join(partialsDir, name);
-      Handlebars.registerPartial(partialName, fs.readFileSync(partialPath, 'utf-8'));
-    }
+    // Recursive walk so marketing/admin/dashboard partials can be namespaced
+    // in subfolders and referenced as `{{> marketing/_topnav}}`. Partial
+    // name mirrors the relative path with `.hbs` stripped (subdir prefix
+    // joined with `/`).
+    const walk = (dir: string, prefix: string): void => {
+      for (const name of fs.readdirSync(dir)) {
+        const full = path.join(dir, name);
+        const stat = fs.statSync(full);
+        if (stat.isDirectory()) {
+          walk(full, prefix ? `${prefix}/${name}` : name);
+        } else if (name.endsWith('.hbs')) {
+          const partialName = prefix
+            ? `${prefix}/${name.slice(0, -'.hbs'.length)}`
+            : name.slice(0, -'.hbs'.length);
+          Handlebars.registerPartial(partialName, fs.readFileSync(full, 'utf-8'));
+        }
+      }
+    };
+    walk(partialsDir, '');
   }
 
   // We deliberately do NOT pass `opts.layout` here. @fastify/view's handlebars

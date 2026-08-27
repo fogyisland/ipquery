@@ -1,0 +1,17 @@
+{{!-- SPDX-License-Identifier: MIT --}}
+<section class="m-section">
+  <div class="m-section-inner">
+    <div class="m-cta">
+      <h2 class="m-cta-title">{{req.t 'home.cta.title'}}</h2>
+      <p class="m-cta-sub">{{req.t 'home.cta.sub'}}</p>
+      <div class="m-cta-actions">
+        {{#if req.user}}
+          <a href="/dashboard" class="button">{{req.t 'home.cta.primaryAuthed'}}</a>
+        {{else}}
+          <a href="/signup" class="button">{{req.t 'home.cta.primary'}}</a>
+          <a href="/docs" class="button-ghost">{{req.t 'home.cta.secondary'}}</a>
+        {{/if}}
+      </div>
+    </div>
+  </div>
+</section>

@@ -28,10 +28,13 @@ describe('/try', () => {
   it('GET renders form', async () => {
     const r = await request(app.server).get('/try');
     expect(r.status).toBe(200);
-    expect(r.text).toContain('hx-post="/try"');
+    // Marketing redesign: plain POST form (no htmx). Assert on
+    // action attribute and the input that the page must contain.
+    expect(r.text).toContain('action="/try"');
+    expect(r.text).toContain('name="ip"');
   });
 
-  it('POST invalid IP returns invalid fragment', async () => {
+  it('POST invalid IP returns invalid fragment on the same page', async () => {
     const { cookie, token } = await getCsrf();
     const r = await request(app.server).post('/try').set('Cookie', cookie)
       .type('form').send({ ip: 'not-an-ip', csrf: token });
@@ -39,7 +42,7 @@ describe('/try', () => {
     expect(r.text).toContain('IP 格式无效');
   });
 
-  it('POST valid IP with no record returns notfound', async () => {
+  it('POST valid IP with no record returns notfound on the same page', async () => {
     const { cookie, token } = await getCsrf();
     const r = await request(app.server).post('/try').set('Cookie', cookie)
       .type('form').send({ ip: '8.8.8.8', csrf: token });

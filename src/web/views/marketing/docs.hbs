@@ -1,0 +1,114 @@
+{{!-- SPDX-License-Identifier: MIT --}}
+<section class="m-section m-section--first">
+  <div class="m-section-inner">
+    <div class="m-section-head">
+      <span class="m-eyebrow">{{req.t 'docs.eyebrow'}}</span>
+      <h1 class="m-section-title">{{req.t 'docs.heading'}}</h1>
+      <p class="m-section-sub">{{req.t 'docs.subtitle'}}</p>
+    </div>
+
+    <div class="m-card m-card--soft">
+      <h3 class="m-card-title">{{req.t 'docs.endpointsTitle'}}</h3>
+      <table class="m-table">
+        <thead>
+          <tr>
+            <th>{{req.t 'docs.colMethod'}}</th>
+            <th>{{req.t 'docs.colPath'}}</th>
+            <th>{{req.t 'docs.colDescription'}}</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><span class="m-method">GET</span></td>
+            <td><code>/lookup?ip=8.8.8.8</code></td>
+            <td>{{req.t 'docs.endpoints.lookup'}}</td>
+          </tr>
+          <tr>
+            <td><span class="m-method">GET</span></td>
+            <td><code>/lookup/8.8.8.8</code></td>
+            <td>{{req.t 'docs.endpoints.lookupPath'}}</td>
+          </tr>
+          <tr>
+            <td><span class="m-method">GET</span></td>
+            <td><code>/stats</code></td>
+            <td>{{req.t 'docs.endpoints.stats'}}</td>
+          </tr>
+          <tr>
+            <td><span class="m-method">GET</span></td>
+            <td><code>/healthz</code></td>
+            <td>{{req.t 'docs.endpoints.healthz'}}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="m-card m-card--soft">
+      <h3 class="m-card-title">{{req.t 'docs.examplesTitle'}}</h3>
+      <div class="m-codeblock">
+        <div class="m-codeblock-tabs">
+          <button type="button" class="m-codeblock-tab active" data-tab="curl">curl</button>
+          <button type="button" class="m-codeblock-tab" data-tab="js">JavaScript</button>
+          <button type="button" class="m-codeblock-tab" data-tab="py">Python</button>
+          <button type="button" class="m-codeblock-tab" data-tab="node">Node</button>
+        </div>
+        <pre data-pane="curl"><code><span class="tok-com"># GET request, no auth needed for basic lookups</span>
+<span class="tok-key">curl</span> <span class="tok-str">"{{viewBaseUrl}}/lookup?ip=8.8.8.8"</span>
+
+<span class="tok-com"># Stats endpoint</span>
+<span class="tok-key">curl</span> <span class="tok-str">"{{viewBaseUrl}}/stats"</span></code></pre>
+        <pre data-pane="js" style="display:none"><code><span class="tok-key">const</span> res = <span class="tok-key">await</span> <span class="tok-key">fetch</span>(<span class="tok-str">"{{viewBaseUrl}}/lookup?ip=8.8.8.8"</span>);
+<span class="tok-key">const</span> data = <span class="tok-key">await</span> res.<span class="tok-key">json</span>();
+<span class="tok-key">console</span>.log(data.country.code, data.asn.org);</code></pre>
+        <pre data-pane="py" style="display:none"><code><span class="tok-key">import</span> requests
+
+r = requests.<span class="tok-key">get</span>(<span class="tok-str">"{{viewBaseUrl}}/lookup"</span>, params={<span class="tok-str">"ip"</span>: <span class="tok-str">"8.8.8.8"</span>})
+data = r.<span class="tok-key">json</span>()
+<span class="tok-key">print</span>(data[<span class="tok-str">"country"</span>][<span class="tok-str">"code"</span>])</code></pre>
+        <pre data-pane="node" style="display:none"><code><span class="tok-key">const</span> res = <span class="tok-key">await</span> <span class="tok-key">fetch</span>(<span class="tok-str">`{{viewBaseUrl}}/lookup?ip=${ip}`</span>);
+<span class="tok-key">const</span> data = <span class="tok-key">await</span> res.<span class="tok-key">json</span>();
+<span class="tok-com">// data.country.code, data.asn.number, data.city?.name</span></code></pre>
+      </div>
+    </div>
+
+    <div class="m-card m-card--soft">
+      <h3 class="m-card-title">{{req.t 'docs.authTitle'}}</h3>
+      <p>{{req.t 'docs.authBody'}}</p>
+      <pre class="m-pre"><code>curl "{{viewBaseUrl}}/lookup?ip=8.8.8.8&amp;key=ipq_xxxxxxxxxxxx"</code></pre>
+    </div>
+
+    <div class="m-card m-card--soft">
+      <h3 class="m-card-title">{{req.t 'docs.responseTitle'}}</h3>
+      <p>{{req.t 'docs.responseBody'}}</p>
+      <pre class="m-pre"><code><span class="tok-brace">{</span>
+  <span class="tok-key">"ip"</span>: <span class="tok-str">"8.8.8.8"</span>,
+  <span class="tok-key">"country"</span>: <span class="tok-brace">{</span> <span class="tok-key">"code"</span>: <span class="tok-str">"US"</span>, <span class="tok-key">"name"</span>: <span class="tok-str">"United States"</span>, <span class="tok-key">"source"</span>: <span class="tok-str">"maxmind"</span> <span class="tok-brace">}</span>,
+  <span class="tok-key">"region"</span>: <span class="tok-str">"California"</span>,
+  <span class="tok-key">"city"</span>: <span class="tok-brace">{</span> <span class="tok-key">"name"</span>: <span class="tok-str">"Mountain View"</span>, <span class="tok-key">"source"</span>: <span class="tok-str">"maxmind"</span> <span class="tok-brace">}</span>,
+  <span class="tok-key">"isp"</span>: <span class="tok-brace">{</span> <span class="tok-key">"name"</span>: <span class="tok-str">"Google LLC"</span>, <span class="tok-key">"source"</span>: <span class="tok-str">"maxmind"</span> <span class="tok-brace">}</span>,
+  <span class="tok-key">"asn"</span>: <span class="tok-brace">{</span> <span class="tok-key">"number"</span>: <span class="tok-num">15169</span>, <span class="tok-key">"org"</span>: <span class="tok-str">"Google LLC"</span>, <span class="tok-key">"source"</span>: <span class="tok-str">"maxmind"</span> <span class="tok-brace">}</span>
+<span class="tok-brace">}</span></code></pre>
+    </div>
+
+    <div class="m-card m-card--soft">
+      <h3 class="m-card-title">{{req.t 'docs.errorsTitle'}}</h3>
+      <table class="m-table">
+        <thead><tr><th>{{req.t 'docs.colStatus'}}</th><th>{{req.t 'docs.colCode'}}</th><th>{{req.t 'docs.colDescription'}}</th></tr></thead>
+        <tbody>
+          <tr><td><span class="m-method m-method--get">200</span></td><td>—</td><td>{{req.t 'docs.errors.200'}}</td></tr>
+          <tr><td><span class="m-method m-method--get">400</span></td><td>invalid_ip</td><td>{{req.t 'docs.errors.400'}}</td></tr>
+          <tr><td><span class="m-method m-method--get">404</span></td><td>not_found</td><td>{{req.t 'docs.errors.404'}}</td></tr>
+          <tr><td><span class="m-method m-method--get">429</span></td><td>rate_limited</td><td>{{req.t 'docs.errors.429'}}</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="m-section-foot">
+      {{#if req.user}}
+        <a href="/dashboard" class="button">{{req.t 'home.cta.primaryAuthed'}}</a>
+      {{else}}
+        <a href="/signup" class="button">{{req.t 'home.cta.primary'}}</a>
+        <a href="/try" class="button-ghost">{{req.t 'docs.cta.try'}}</a>
+      {{/if}}
+    </div>
+  </div>
+</section>

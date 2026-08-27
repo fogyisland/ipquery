@@ -343,25 +343,163 @@
   },
   "home": {
     "title": "IPQuery · IP Geolocation",
+    "heroEyebrow": "IP Geolocation API",
+    "heroTitleAccent": "Look up any <em>IP address</em>,<br>get <strong>trustworthy country, city, and ASN</strong>",
+    "heroSubLong": "Aggregates MaxMind GeoLite2, ip2region, and DB-IP using a field-complementary strategy. 100% self-hosted. Sub-100ms median latency.",
+    "ipRanges": "IP ranges",
+    "metaSources": "data sources",
+    "metaLatency": "median latency",
+    "ipgrid": {
+      "demoLabel": "Sample query",
+      "country": "Country",
+      "region": "Region",
+      "city": "City",
+      "asn": "ASN"
+    },
+    "features": {
+      "eyebrow": "Why IPQuery",
+      "title": "One query, three sources",
+      "sub": "Primary source first, backups fill the gaps. Each field is tagged with its source so you can decide.",
+      "sources": {
+        "title": "Multi-source merge",
+        "sub": "MaxMind / ip2region / DB-IP back each other up. Field coverage is far higher than single-source solutions.",
+        "stat": "data sources"
+      },
+      "coverage": {
+        "title": "IPv4 + IPv6 coverage",
+        "sub": "Stored by range, not by IP. 8.3M+ ranges cover almost the entire routable internet.",
+        "stat": "indexed ranges"
+      },
+      "speed": {
+        "title": "Sub-100ms",
+        "sub": "Spatial index ordered by range_size: smallest first. Median latency well below industry average.",
+        "stat": "median response"
+      }
+    },
+    "steps": {
+      "eyebrow": "How it works",
+      "title": "Three steps",
+      "sub": "No network downloads, no in-memory database. Just a single MySQL query.",
+      "s1": {
+        "title": "Send an IP",
+        "sub": "Form or HTTP call. Any IPv4/IPv6 address works."
+      },
+      "s2": {
+        "title": "Match the range",
+        "sub": "Composite index sorted by range_size. The smallest matching CIDR wins in milliseconds."
+      },
+      "s3": {
+        "title": "Get JSON back",
+        "sub": "Country, region, city, ISP, ASN. Each field carries its source."
+      }
+    },
+    "code": {
+      "eyebrow": "Quickstart",
+      "title": "Three lines of code",
+      "sub": "Public endpoints need no auth. Signed-up users get API keys raising the rate limit to 60/min."
+    },
+    "cta": {
+      "title": "Start using IPQuery",
+      "sub": "No credit card. Sign up for an API key and switch to production whenever you're ready.",
+      "primary": "Sign up free",
+      "primaryAuthed": "Open dashboard",
+      "secondary": "Read API docs"
+    },
+    "footer": {
+      "product": "Product",
+      "account": "Account",
+      "company": "Company"
+    },
     "heroTitle": "IP Geolocation Lookup",
     "heroSubtitle": "Aggregating MaxMind / ip2region / DB-IP with daily ETL refresh",
     "quickQuery": "Quick lookup",
     "status": "API status",
     "online": "Online",
-    "ipRanges": "IP ranges",
     "queries24h": "Queries (24h)",
     "queries24hSub": "Past 24 hours",
     "apiExample": "API example",
     "apiDocs": "Read full docs",
     "fullDocs": "Read full API documentation"
   },
+  "about": {
+    "eyebrow": "About IPQuery",
+    "heading": "A lightweight, self-hosted IP geolocation service",
+    "intro": "Built for developers. Does one thing well: aggregate scattered free IP data sources behind one stable, auditable API.",
+    "storyTitle": "Why we built it",
+    "storyP1": "Existing IP lookup services are either expensive (per-QPS billing), stale (free sources rarely updated), or opaque (no field provenance means you can't judge trust).",
+    "storyP2": "IPQuery flips that: free, self-hosted, transparent field sources. Daily ETL pipelines keep a single MySQL table fresh. A lookup is just a regular SQL query.",
+    "principles": {
+      "sources": {
+        "title": "Multi-source merge",
+        "sub": "Each field carries its source ( maxmind / ip2region / dbip ) for audit and traceability."
+      },
+      "speed": {
+        "title": "Index-first",
+        "sub": "Composite index sorted by range_size — smallest first, avoiding full table scans over large ranges."
+      },
+      "opensource": {
+        "title": "Open source",
+        "sub": "MIT licensed. Audit the ETL, the query path, the scheduler — nothing hidden."
+      },
+      "selfhosted": {
+        "title": "Fully self-hosted",
+        "sub": "Data lives in your own database. API runs on your own server. User queries never leave your infrastructure."
+      }
+    },
+    "stackTitle": "Tech stack",
+    "stack": {
+      "node": "Node.js 20 + TypeScript 5",
+      "fastify": "Fastify + Handlebars SSR",
+      "mysql": "MySQL 8 (8.3M+ IP ranges)",
+      "handlebars": "Server-side templates. Zero client dependencies. Lean to the bone."
+    },
+    "licenseTitle": "License & data",
+    "licenseBody": "Source code is MIT licensed. Data files are downloaded and consumed under each upstream's own license terms (MaxMind / ip2region / DB-IP)."
+  },
+  "try": {
+    "eyebrow": "Try it",
+    "heading": "Type any IP",
+    "sub": "No signup. No key. Click a sample chip below to start.",
+    "chipsLabel": "Try these:",
+    "hint": "Tip: paste straight into the input. The result appears below.",
+    "country": "Country",
+    "region": "Region",
+    "city": "City",
+    "isp": "ISP",
+    "asn": "ASN"
+  },
+  "status": {
+    "eyebrow": "Status",
+    "heading": "Live service status",
+    "sub": "Latest health check for the API, database, and ETL pipeline.",
+    "health": "Health checks",
+    "api": "API service",
+    "database": "Database",
+    "etl": "ETL pipeline",
+    "operational": "Operational",
+    "never": "No runs yet",
+    "lastRun": "Last ETL run",
+    "noRuns": "No ETL runs yet.",
+    "uptimeTitle": "Uptime",
+    "uptimeBody": "API and database health are probed live by this page. ETL runs daily on a schedule; failures are logged.",
+    "col": {
+      "started": "Started",
+      "finished": "Finished",
+      "status": "Status",
+      "merged": "Merged records"
+    }
+  },
   "docs": {
     "title": "API Documentation",
+    "eyebrow": "Developer docs",
+    "heading": "A simple HTTP API",
     "subtitle": "Public HTTP API, no auth required; sign up for an API key for higher rate limits.",
     "endpointsTitle": "Endpoints",
     "colMethod": "Method",
     "colPath": "Path",
     "colDescription": "Description",
+    "colStatus": "Status",
+    "colCode": "Code",
     "endpoints": {
       "lookup": "Lookup IP country / region / city / ISP / ASN",
       "lookupPath": "Same, with IP as a path parameter",
@@ -370,7 +508,19 @@
     },
     "examplesTitle": "Examples",
     "authTitle": "API key authentication",
-    "authBody": "Create an API key in the dashboard, then pass it via key= or Authorization: Bearer."
+    "authBody": "Create an API key in the dashboard, then pass it via key= or Authorization: Bearer.",
+    "responseTitle": "Response example",
+    "responseBody": "Successful responses are JSON. Missing fields are null. Each data field carries its source, naming the upstream it came from.",
+    "errorsTitle": "Errors",
+    "errors": {
+      "200": "Success",
+      "400": "Invalid IP format (invalid_ip)",
+      "404": "Not found",
+      "429": "Rate limited"
+    },
+    "cta": {
+      "try": "Try online"
+    }
   },
   "footer": {
     "copyright": "© {year} IPQuery",
@@ -440,12 +590,42 @@
     },
     "seed": {
       "title": "Seed IP ranges",
-      "intro": "Load 50 hand-picked IP ranges (public DNS, cloud providers, RFC reserved ranges) so the dashboard has data on day one, even before the first ETL run.",
+      "intro": "Pick how to initialise your IP-range data. You can pull real data right now (5-15 min), or load 50 demo rows to walk the wizard through first.",
       "yes": "Yes, load 50 seed IPs",
       "no": "No, skip seed data",
       "submit": "Next",
       "success": "Seed data loaded",
-      "skipped": "Seed data skipped"
+      "skipped": "Seed data skipped",
+      "invalidMode": "Invalid option",
+      "demo": {
+        "label": "Demo data (50 rows)",
+        "hint": "Instant. Hand-picked public DNS / cloud / RFC reserved ranges. Good for trying things out."
+      },
+      "etl": {
+        "label": "Real data (DB-IP, recommended)",
+        "hint": "Background download + ingest of the free DB-IP library (city-lite / country-lite / asn-lite, ~8.3M ranges). This page auto-refreshes; you can leave it open and come back.",
+        "retryHint": "Last run failed. Try again, or pick another option."
+      },
+      "skip": {
+        "label": "Skip",
+        "hint": "Leave the database empty. The cron job will pick it up later."
+      },
+      "retry": "Retry",
+      "progress": {
+        "title": "Importing real data",
+        "running": "Background task running…",
+        "starting": "Starting ETL…",
+        "success": "Done. Imported {rows} IP ranges.",
+        "failed": "Import failed",
+        "runId": "Run ID",
+        "started": "Started",
+        "finished": "Finished",
+        "merged": "Merged records",
+        "error": "Error",
+        "autoRefresh": "This page auto-refreshes every 3 seconds. You can close it during the import.",
+        "continue": "Continue",
+        "successHint": "Import complete. Click continue to finish setup."
+      }
     },
     "complete": {
       "title": "Ready to finish",

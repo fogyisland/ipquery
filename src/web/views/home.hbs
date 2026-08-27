@@ -1,39 +1,10 @@
 {{!-- SPDX-License-Identifier: MIT --}}
-{{!-- Task 14: tool-style landing. Renders inside layouts/app (Task 4 shell
-     that includes the redesigned sidebar). Quick query is a plain POST
-     form (no JS — CSP compliance). Status cards come from /: ip_ranges
-     count + 24h query_log count. --}}
-<section class="home-hero">
-  <h2>{{req.t 'home.heroTitle'}}</h2>
-  <p class="home-subtitle">{{req.t 'home.heroSubtitle'}}</p>
-
-  <form method="POST" action="/try" class="home-query-form">
-    <input type="hidden" name="csrf" value="{{req.csrfToken}}">
-    <input type="text" name="ip" class="home-query-input" placeholder="{{req.t 'lookup.input.placeholder'}}" required autofocus>
-    <button type="submit" class="button">{{req.t 'lookup.submit'}}</button>
-  </form>
-
-  <p class="home-hero-links">
-    <a href="/docs">{{req.t 'home.apiDocs'}}</a>
-  </p>
-</section>
-
-<section class="dashboard-grid">
-  <div class="card">
-    <p class="card-title">{{req.t 'home.status'}}</p>
-    <p class="card-value">{{req.t 'home.online'}}</p>
-    <p class="card-sub">{{ipCount}} {{req.t 'home.ipRanges'}}</p>
-  </div>
-
-  <div class="card">
-    <p class="card-title">{{req.t 'home.queries24h'}}</p>
-    <p class="card-value">{{q24}}</p>
-    <p class="card-sub">{{req.t 'home.queries24hSub'}}</p>
-  </div>
-</section>
-
-<section class="card">
-  <h3 class="card-title">{{req.t 'home.apiExample'}}</h3>
-  <pre><code>curl "{{viewBaseUrl}}/lookup?ip=8.8.8.8"</code></pre>
-  <p><a href="/docs">{{req.t 'home.fullDocs'}}</a></p>
-</section>
+{{!-- Marketing home. Renders inside layouts/marketing (light commercial
+     chrome, not the app dashboard shell). Composes 5 partials:
+     hero, features, steps, code quickstart, CTA. showCodeTabs enables
+     the inline tab-switcher JS in the layout. --}}
+{{> marketing/_hero}}
+{{> marketing/_features}}
+{{> marketing/_steps}}
+{{> marketing/_code-quickstart}}
+{{> marketing/_cta}}
