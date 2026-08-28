@@ -168,7 +168,16 @@
     "section.queries7d": "Query volume (7d)",
     "account.title": "Account",
     "joined": "Joined",
-    "shortcuts.title": "Shortcuts"
+    "shortcuts.title": "Shortcuts",
+    "lastQuery.title": "Last lookup",
+    "lastQuery.empty": "No lookups yet — try /try",
+    "lastQuery.unknown": "No range matched",
+    "lastQuery.asn": "ASN",
+    "lastQuery.country": "Country",
+    "lastQuery.at": "at",
+    "lastQuery.cta": "Open the live lookup",
+    "lastQuery.miss": "no match",
+    "lastQuery.invalid": "invalid input"
   },
   "admin": {
     "title": "Admin",
