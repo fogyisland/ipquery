@@ -169,7 +169,16 @@
     "section.queries7d": "查询统计 (7 天)",
     "account.title": "账户信息",
     "joined": "注册时间",
-    "shortcuts.title": "快捷入口"
+    "shortcuts.title": "快捷入口",
+    "lastQuery.title": "最近一次查询",
+    "lastQuery.empty": "还没有查询记录 — 去 /try 试试",
+    "lastQuery.unknown": "无匹配段",
+    "lastQuery.asn": "ASN",
+    "lastQuery.country": "国家",
+    "lastQuery.at": "于",
+    "lastQuery.cta": "前往在线试查",
+    "lastQuery.miss": "未命中",
+    "lastQuery.invalid": "无效输入"
   },
   "admin": {
     "title": "管理后台",

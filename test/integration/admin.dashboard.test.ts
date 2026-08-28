@@ -43,11 +43,12 @@ beforeAll(async () => {
 afterAll(async () => { await app.close(); await dropTestDb(td); });
 
 describe('admin dashboard', () => {
-  it('returns 200 with cards, sparklines, recent activity', async () => {
+  it('returns 200 with cards, chart, recent activity', async () => {
     const r = await request(app.server).get('/admin').set('Cookie', 'sid=' + adminSid);
     expect(r.status).toBe(200);
     expect(r.text).toMatch(/class="card-value"/);
-    expect(r.text).toMatch(/<svg class="sparkline"/);
+    // Empty-state chart emits .chart-empty inside .chart-bars
+    expect(r.text).toMatch(/class="chart-bars"/);
     expect(r.text).toMatch(/class="activity-feed"/);
   });
 

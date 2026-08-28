@@ -106,9 +106,10 @@ export async function registerView(app: FastifyInstance, cfg: { baseUrl: string 
   });
   Handlebars.registerHelper('hash', (obj: unknown) => obj);
 
-  // Render an inline stacked-bar chart for a DailyBucket[]. Stacks
-  // hit (accent) / miss (warning) / invalid (danger). x-axis: dates, oldest
-  // left. y-axis: query count. Renders zero-state when all buckets are empty.
+  // Render a stacked-bar chart for a DailyBucket[]. CSS-grid based — matches
+  // the NOC console layout (chart-bars / chart-y / chart-bars-track /
+  // chart-bar-col / chart-bar--*). Stacks hit (green) / miss (amber) /
+  // invalid (red). x-axis: dates, oldest left. y-axis: query count.
   Handlebars.registerHelper('daily-chart', (data: unknown) => {
     const buckets = Array.isArray(data)
       ? data.map((b) => ({
@@ -119,59 +120,51 @@ export async function registerView(app: FastifyInstance, cfg: { baseUrl: string 
           total: Number((b as Record<string, unknown>).total ?? 0),
         }))
       : [];
-    const W = 640;
-    const H = 200;
-    const padL = 36, padR = 12, padT = 16, padB = 28;
-    const innerW = W - padL - padR;
-    const innerH = H - padT - padB;
+
     const maxY = Math.max(1, ...buckets.map((b) => b.total));
     const niceMax = maxY <= 5 ? 5 : Math.ceil(maxY / 5) * 5;
-    const n = buckets.length || 1;
-    const groupW = innerW / n;
-    const barW = Math.min(36, Math.max(10, groupW * 0.55));
-    const yFor = (v: number): number => padT + innerH - (v / niceMax) * innerH;
 
-    // Empty-state: a single faint horizontal line where y=0 sits.
     if (buckets.length === 0 || buckets.every((b) => b.total === 0)) {
-      return `<svg class="chart-bars" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="7-day query volume">
-        <line x1="${padL}" y1="${padT + innerH}" x2="${W - padR}" y2="${padT + innerH}" stroke="currentColor" stroke-opacity="0.2" />
-        <text x="${W / 2}" y="${H / 2}" text-anchor="middle" fill="currentColor" fill-opacity="0.4" font-size="13">暂无数据</text>
-      </svg>`;
+      return `<div class="chart-bars">
+        <div class="chart-y"><span>0</span></div>
+        <div><div class="chart-empty">暂无数据 — run a lookup to populate</div></div>
+      </div>`;
     }
 
-    // Y-axis grid (4 horizontal lines + numeric labels).
-    let grid = '';
-    for (let i = 0; i <= 4; i++) {
-      const v = Math.round((niceMax * i) / 4);
-      const y = padT + innerH - (v / niceMax) * innerH;
-      grid += `<line x1="${padL}" y1="${y.toFixed(1)}" x2="${W - padR}" y2="${y.toFixed(1)}" stroke="currentColor" stroke-opacity="0.08" />`;
-      grid += `<text x="${padL - 6}" y="${(y + 4).toFixed(1)}" text-anchor="end" font-size="10" fill="currentColor" fill-opacity="0.5">${v}</text>`;
-    }
+    // Y-axis ticks: 0 / 25% / 50% / 75% / 100% of niceMax
+    const ticks = [niceMax, Math.round(niceMax * 0.75), Math.round(niceMax * 0.5), Math.round(niceMax * 0.25), 0];
+    const yLabels = ticks.map((v) => `<span>${v}</span>`).join('');
 
-    // Bars + x-axis date labels.
-    let bars = '';
-    buckets.forEach((b, i) => {
-      const gx = padL + i * groupW + (groupW - barW) / 2;
-      const yHit = yFor(b.hit);
-      const yMiss = yFor(b.hit + b.miss);
-      const yInv = yFor(b.hit + b.miss + b.invalid);
-      const baseY = padT + innerH;
-      const hHit = Math.max(0, baseY - yHit);
-      const hMiss = Math.max(0, yHit - yMiss);
-      const hInv = Math.max(0, yMiss - yInv);
-      if (hHit > 0) bars += `<rect class="chart-bar chart-bar--hit" x="${gx.toFixed(1)}" y="${yHit.toFixed(1)}" width="${barW.toFixed(1)}" height="${hHit.toFixed(1)}" />`;
-      if (hMiss > 0) bars += `<rect class="chart-bar chart-bar--miss" x="${gx.toFixed(1)}" y="${yMiss.toFixed(1)}" width="${barW.toFixed(1)}" height="${hMiss.toFixed(1)}" />`;
-      if (hInv > 0) bars += `<rect class="chart-bar chart-bar--invalid" x="${gx.toFixed(1)}" y="${yInv.toFixed(1)}" width="${barW.toFixed(1)}" height="${hInv.toFixed(1)}" />`;
-      // X label: short date MM-DD, or weekday for the most recent 3 days.
-      const d = new Date(b.date);
-      const label = `${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-      bars += `<text class="chart-tick" x="${(gx + barW / 2).toFixed(1)}" y="${(padT + innerH + 16).toFixed(1)}" text-anchor="middle" font-size="10" fill="currentColor" fill-opacity="0.6">${label}</text>`;
-    });
+    // Each column: stacked divs sized by percentage of niceMax. Empty bars get
+    // a 1px min-height so the column outline is visible.
+    const cols = buckets.map((b) => {
+      const pctHit = (b.hit / niceMax) * 100;
+      const pctMiss = (b.miss / niceMax) * 100;
+      const pctInv = (b.invalid / niceMax) * 100;
+      const dt = new Date(b.date);
+      const label = `${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
+      const safe = (n: number): number => (n > 0 ? n : 0);
+      return `<div class="chart-bar-col" title="${b.date}: hit ${b.hit} / miss ${b.miss} / invalid ${b.invalid}">
+        <div class="chart-bar chart-bar--invalid" style="height: ${safe(pctInv).toFixed(2)}%; min-height: ${b.invalid > 0 ? '2px' : '0'};"></div>
+        <div class="chart-bar chart-bar--miss" style="height: ${safe(pctMiss).toFixed(2)}%; min-height: ${b.miss > 0 ? '2px' : '0'};"></div>
+        <div class="chart-bar chart-bar--hit" style="height: ${safe(pctHit).toFixed(2)}%; min-height: ${b.hit > 0 ? '2px' : '0'};"></div>
+        <div class="chart-bar-total">${b.total || ''}</div>
+      </div>
+      <span></span>`; // spacer for axis below
+    }).join('');
 
-    return `<svg class="chart-bars" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="7-day query volume">
-      ${grid}
-      ${bars}
-    </svg>`;
+    const axisLabels = buckets.map((b) => {
+      const dt = new Date(b.date);
+      return `${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
+    }).map((l) => `<span>${l}</span>`).join('');
+
+    return `<div class="chart-bars" role="img" aria-label="7-day query volume">
+      <div class="chart-y">${yLabels}</div>
+      <div>
+        <div class="chart-bars-track">${cols}</div>
+        <div class="chart-bar-axis">${axisLabels}</div>
+      </div>
+    </div>`;
   });
 
   const partialsDir = path.join(viewsDir, 'partials');

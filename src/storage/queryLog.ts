@@ -133,6 +133,45 @@ export interface DailyBucket {
   invalid: number;
   total: number;
 }
+
+// Most-recent query for a user + the resolved country/ASN when status=hit.
+export interface LastQuery {
+  ipText: string;
+  status: 'hit' | 'miss' | 'invalid';
+  ts: Date;
+  countryCode: string | null;
+  countryName: string | null;
+  asnOrg: string | null;
+}
+// Fetch the user's most recent query_log row, joined to ip_ranges so the
+// hero element on /dashboard can show the IP + its resolved country / ASN
+// without a second lookup.
+export async function getLastUserQuery(pool: Pool, userId: number): Promise<LastQuery | null> {
+  // LIMIT 1 + subquery join so MySQL picks the index-friendly path
+  const [rows] = await pool.query(
+    `SELECT q.ip_text AS ipText, q.status AS status, q.ts AS ts,
+            r.country_code AS countryCode, r.country_name AS countryName, r.asn_org AS asnOrg
+       FROM query_log q
+       LEFT JOIN ip_ranges r
+         ON r.start_ip <= q.ip AND r.end_ip >= q.ip
+        AND r.country_code IS NOT NULL
+      WHERE q.user_id = ?
+      ORDER BY q.ts DESC, q.id DESC
+      LIMIT 1`,
+    [userId],
+  );
+  const arr = rows as Record<string, unknown>[];
+  if (arr.length === 0) return null;
+  const r = arr[0]!;
+  return {
+    ipText: String(r.ipText ?? ''),
+    status: r.status as 'hit' | 'miss' | 'invalid',
+    ts: r.ts as Date,
+    countryCode: (r.countryCode as string | null) ?? null,
+    countryName: (r.countryName as string | null) ?? null,
+    asnOrg: (r.asnOrg as string | null) ?? null,
+  };
+}
 export async function countQueriesByDay(pool: Pool, days: number): Promise<DailyBucket[]> {
   const since = new Date(Date.now() - (days - 1) * 86_400_000);
   since.setHours(0, 0, 0, 0);

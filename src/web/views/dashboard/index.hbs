@@ -1,6 +1,9 @@
 {{!-- SPDX-License-Identifier: MIT --}}
 {{!-- User dashboard. Per-account view: only this user's queries count, so
-     hit rate and the per-status counts never leak across users. --}}
+     hit rate and the per-status counts never leak across users. The
+     signature element is the ip-hero — the user's last queried IP rendered
+     as oversized mono glyphs with its resolved country / ASN as secondary
+     mono text. This is the visual identity of the product. --}}
 
 <header class="dash-welcome">
   <div>
@@ -12,6 +15,36 @@
     <a class="btn-primary" href="/dashboard/keys">{{req.t 'dashboard.keys.title'}}</a>
   </div>
 </header>
+
+{{!-- IP hero — the signature element. Shows the user's most recent lookup
+     with oversized mono typography; empty state nudges toward /try. --}}
+<section class="card ip-hero-card">
+  <header class="chart-card-head">
+    <h3 class="card-title">{{req.t 'dashboard.lastQuery.title'}}</h3>
+    {{#if lastQuery}}<a class="dash-link" href="/dashboard/history">{{req.t 'admin.dashboard.viewAll'}}</a>{{/if}}
+  </header>
+  {{#if lastQuery}}
+    <p class="ip-hero">{{lastQuery.ipText}}</p>
+    <p class="ip-hero-meta">
+      {{#if (eq lastQuery.status 'hit')}}
+        <span class="ip-status ip-status--hit">● {{req.t 'admin.dashboard.hit'}}</span>
+        {{#if lastQuery.countryCode}}<span>{{req.t 'dashboard.lastQuery.country'}}: {{lastQuery.countryCode}}{{#if lastQuery.countryName}} — {{lastQuery.countryName}}{{/if}}</span>{{/if}}
+        {{#if lastQuery.asnOrg}}<span>{{req.t 'dashboard.lastQuery.asn'}}: {{lastQuery.asnOrg}}</span>{{/if}}
+      {{else if (eq lastQuery.status 'miss')}}
+        <span class="ip-status ip-status--miss">● {{req.t 'dashboard.lastQuery.miss'}}</span>
+      {{else}}
+        <span class="ip-status ip-status--invalid">● {{req.t 'dashboard.lastQuery.invalid'}}</span>
+      {{/if}}
+      <span>{{req.t 'dashboard.lastQuery.at'}}: {{formatRelative lastQuery.ts}}</span>
+    </p>
+  {{else}}
+    <p class="ip-hero ip-hero--empty">— — — —</p>
+    <p class="ip-hero-meta">
+      <span>{{req.t 'dashboard.lastQuery.empty'}}</span>
+    </p>
+    <p style="margin-top: 16px;"><a class="btn-primary" href="/try">{{req.t 'dashboard.lastQuery.cta'}}</a></p>
+  {{/if}}
+</section>
 
 <h3 class="dash-section-title">{{req.t 'dashboard.section.queries7d'}}</h3>
 <div class="dashboard-grid dashboard-grid--three">
