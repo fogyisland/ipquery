@@ -680,6 +680,49 @@
       "db_unreachable": "无法连接数据库",
       "site_name_required": "站点名称必填",
       "displayName_invalid": "昵称长度应为 1-64 字符"
+    },
+    "unknownIps": {
+      "title": "未收录 IP 队列",
+      "stats": {
+        "pending": "待回灌",
+        "processed": "已入库",
+        "totalQueries": "累计查询"
+      },
+      "section": {
+        "pending": "待回灌 IP(按热度排序)",
+        "recentlyProcessed": "最近入库记录"
+      },
+      "col": {
+        "ip": "IP",
+        "queryCount": "查询次数",
+        "firstSeen": "首次出现",
+        "lastSeen": "最近出现",
+        "source": "来源",
+        "lastAttempt": "上次尝试",
+        "processedAt": "入库时间",
+        "runId": "ETL Run"
+      },
+      "empty": {
+        "pending": "当前没有待回灌的 IP。/lookup miss 后会自动写入。"
+      },
+      "runId": {
+        "manual": "手动回灌"
+      },
+      "backfill": {
+        "button": "立即回灌",
+        "summary": "本次回灌完成",
+        "considered": "候选 IP",
+        "merged": "已入库",
+        "noConsensus": "多数票不一致",
+        "noCountry": "无国家代码",
+        "allAbstained": "全部失败",
+        "batchLimit": "每批 IP 数",
+        "run": "开始回灌",
+        "confirm": {
+          "title": "确认触发回灌",
+          "body": "将对队列里每个待回灌 IP 并行查询 3 个外部 API,按多数票合并到主表。已收录 IP 会自动跳过。"
+        }
+      }
     }
   }
 }

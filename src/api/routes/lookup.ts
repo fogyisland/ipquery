@@ -4,6 +4,7 @@ import { parseIp, isValidIp } from '../../ip';
 import { findRange, lastSuccessfulEtl } from '../../storage/mysql';
 import { findActiveApiKeyByHash, touchApiKey } from '../../storage/apiKeys';
 import { hashToken } from '../../web/auth/tokens';
+import { insertOrIncrement } from '../../storage/unknownIpQueue';
 import type { LookupResult } from '../../types';
 
 declare module 'fastify' {
@@ -22,6 +23,15 @@ async function doLookup(app: FastifyInstance, ip: string): Promise<LookupResult>
   }
   const row = await findRange(app.pool, buf);
   if (!row) {
+    // Queue this miss for the backfill job. The DB write is fire-and-forget
+    // at the *response* level: any failure here must NOT mask the 404 the
+    // caller asked for. If insertOrIncrement throws (e.g. pool exhausted),
+    // we log and still throw the not_found err below.
+    try {
+      await insertOrIncrement(app.pool, buf, ip);
+    } catch (e) {
+      app.log.warn({ err: e, ip }, 'unknown_ip_queue insert failed; responding 404 anyway');
+    }
     const err = new Error(`not found: ${ip}`);
     (err as any).statusCode = 404;
     (err as any).code = 'not_found';

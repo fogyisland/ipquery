@@ -1,0 +1,111 @@
+{{!-- SPDX-License-Identifier: MIT --}}
+{{!-- /admin/unknown-ips — list IPs the local DB couldn't resolve, sorted by
+     how often users ask for them (queue pressure). The "立即回灌" button
+     kicks off the backfill job: each IP fans out to 3 external providers,
+     majority-vote decides the result, and a /32 or /128 range gets
+     upserted into ip_ranges tagged 'multi-provider'.
+
+     Data flow: /lookup miss → unknown_ip_queue (auto) → here (manual) →
+     POST /admin/unknown-ips/backfill → ip_ranges.
+
+     After the POST the route sets a short-lived `backfill_summary` cookie
+     that this view reads once and renders as a banner. --}}
+
+<section class="admin-card">
+  <div class="admin-card-head">
+    <h1>{{req.t 'admin.unknownIps.title'}}</h1>
+    <div class="admin-card-actions">
+      <form method="GET" action="/admin/unknown-ips/backfill/confirm" style="display:inline">
+        <button type="submit" class="btn-primary">{{req.t 'admin.unknownIps.backfill.button'}}</button>
+      </form>
+    </div>
+  </div>
+
+  {{#if flash.backfillSummary}}
+  <div class="admin-alert admin-alert--success">
+    <strong>{{req.t 'admin.unknownIps.backfill.summary'}}</strong>
+    <ul class="admin-summary-list">
+      <li>{{req.t 'admin.unknownIps.backfill.considered'}}: {{flash.backfillSummary.considered}}</li>
+      <li>{{req.t 'admin.unknownIps.backfill.merged'}}: {{flash.backfillSummary.merged}}</li>
+      <li>{{req.t 'admin.unknownIps.backfill.noConsensus'}}: {{flash.backfillSummary.noConsensus}}</li>
+      <li>{{req.t 'admin.unknownIps.backfill.noCountry'}}: {{flash.backfillSummary.noCountry}}</li>
+      <li>{{req.t 'admin.unknownIps.backfill.allAbstained'}}: {{flash.backfillSummary.allAbstained}}</li>
+    </ul>
+  </div>
+  {{/if}}
+
+  <div class="admin-stats">
+    <div class="admin-stat">
+      <span class="admin-stat-value">{{stats.pending}}</span>
+      <span class="admin-stat-label">{{req.t 'admin.unknownIps.stats.pending'}}</span>
+    </div>
+    <div class="admin-stat">
+      <span class="admin-stat-value">{{stats.processed}}</span>
+      <span class="admin-stat-label">{{req.t 'admin.unknownIps.stats.processed'}}</span>
+    </div>
+    <div class="admin-stat">
+      <span class="admin-stat-value">{{stats.totalQueries}}</span>
+      <span class="admin-stat-label">{{req.t 'admin.unknownIps.stats.totalQueries'}}</span>
+    </div>
+  </div>
+
+  <h2>{{req.t 'admin.unknownIps.section.pending'}}</h2>
+  {{#if pending.length}}
+  <table class="admin-table">
+    <thead>
+      <tr>
+        <th>{{req.t 'admin.unknownIps.col.ip'}}</th>
+        <th>{{req.t 'admin.unknownIps.col.queryCount'}}</th>
+        <th>{{req.t 'admin.unknownIps.col.firstSeen'}}</th>
+        <th>{{req.t 'admin.unknownIps.col.lastSeen'}}</th>
+        <th>{{req.t 'admin.unknownIps.col.source'}}</th>
+        <th>{{req.t 'admin.unknownIps.col.lastAttempt'}}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {{#each pending}}
+      <tr>
+        <td><code>{{this.ipText}}</code></td>
+        <td>{{this.queryCount}}</td>
+        <td>{{formatDate this.firstSeenAt}}</td>
+        <td>{{formatDate this.lastSeenAt}}</td>
+        <td><span class="admin-tag admin-tag--{{this.source}}">{{this.source}}</span></td>
+        <td>
+          {{#if this.lastAttemptReason}}
+            <span class="admin-tag admin-tag--warn">{{this.lastAttemptReason}}</span>
+          {{else}}
+            —
+          {{/if}}
+        </td>
+      </tr>
+      {{/each}}
+    </tbody>
+  </table>
+  {{else}}
+  <p class="admin-empty">{{req.t 'admin.unknownIps.empty.pending'}}</p>
+  {{/if}}
+
+  {{#if recentlyProcessed.length}}
+  <h2>{{req.t 'admin.unknownIps.section.recentlyProcessed'}}</h2>
+  <table class="admin-table">
+    <thead>
+      <tr>
+        <th>{{req.t 'admin.unknownIps.col.ip'}}</th>
+        <th>{{req.t 'admin.unknownIps.col.queryCount'}}</th>
+        <th>{{req.t 'admin.unknownIps.col.processedAt'}}</th>
+        <th>{{req.t 'admin.unknownIps.col.runId'}}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {{#each recentlyProcessed}}
+      <tr>
+        <td><code>{{this.ipText}}</code></td>
+        <td>{{this.queryCount}}</td>
+        <td>{{formatDate this.processedAt}}</td>
+        <td>{{#if this.mergedRunId}}{{this.mergedRunId}}{{else}}<span class="admin-tag admin-tag--muted">{{req.t 'admin.unknownIps.runId.manual'}}</span>{{/if}}</td>
+      </tr>
+      {{/each}}
+    </tbody>
+  </table>
+  {{/if}}
+</section>

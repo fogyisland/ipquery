@@ -679,6 +679,49 @@
       "db_unreachable": "Database is unreachable",
       "site_name_required": "Site name is required",
       "displayName_invalid": "Display name must be 1-64 characters"
+    },
+    "unknownIps": {
+      "title": "Unknown IP Queue",
+      "stats": {
+        "pending": "Pending",
+        "processed": "Merged",
+        "totalQueries": "Total queries"
+      },
+      "section": {
+        "pending": "Pending backfill (by pressure)",
+        "recentlyProcessed": "Recently merged"
+      },
+      "col": {
+        "ip": "IP",
+        "queryCount": "Hits",
+        "firstSeen": "First seen",
+        "lastSeen": "Last seen",
+        "source": "Source",
+        "lastAttempt": "Last attempt",
+        "processedAt": "Merged at",
+        "runId": "ETL Run"
+      },
+      "empty": {
+        "pending": "No pending IPs. New ones auto-enqueue on /lookup miss."
+      },
+      "runId": {
+        "manual": "manual backfill"
+      },
+      "backfill": {
+        "button": "Backfill now",
+        "summary": "Backfill complete",
+        "considered": "considered",
+        "merged": "merged",
+        "noConsensus": "no consensus",
+        "noCountry": "no country",
+        "allAbstained": "all abstained",
+        "batchLimit": "IPs per batch",
+        "run": "Run backfill",
+        "confirm": {
+          "title": "Confirm backfill",
+          "body": "Each pending IP will be queried against 3 external APIs in parallel and merged via majority vote. IPs already in ip_ranges are auto-skipped."
+        }
+      }
     }
   }
 }

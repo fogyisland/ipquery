@@ -5,6 +5,8 @@ import { findUserById, setDisabled, markEmailVerified, deleteUser, updatePasswor
 import { hashPassword } from '../auth/password';
 import { verifyCsrfRequest } from '../plugins/csrf';
 import { runPipeline } from '../../etl/pipeline';
+import { topByQueryCount, queueStats } from '../../storage/unknownIpQueue';
+import { runBackfill, buildDefaultProviders } from '../../etl/unknownIpBackfill';
 import { listAllApiKeys, revokeApiKey } from '../../storage/apiKeys';
 import { listQueryLogs, streamQueryLogsCsv } from '../../storage/queryLog';
 import { listAuditLog } from '../../storage/auditLog';
@@ -528,5 +530,60 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
     req.auditAction = { action: 'etl.restart', targetType: 'etl_run' };
     void runPipeline({ cfg: app.cfg }).catch((err) => app.log.error({ err }, 'manual ETL restart failed'));
     return reply.redirect('/admin/settings');
+  });
+
+  // ─── Unknown IP backfill ────────────────────────────────────────────────
+  // /admin/unknown-ips shows the queue (pending + recently-processed). The
+  // POST handler drains a batch via external IP geo providers + majority
+  // vote, then redirects back with a summary flash. Provider keys are read
+  // from env at request time so admin can rotate them without a restart.
+  app.get('/admin/unknown-ips', async (req, reply) => {
+    const limit = Math.min(Number((req.query as { limit?: string }).limit ?? 50) || 50, 200);
+    const [data, stats] = await Promise.all([
+      topByQueryCount(app.pool, limit),
+      queueStats(app.pool),
+    ]);
+    return reply.view('admin/unknown-ips.hbs', {
+      layout: 'layouts/admin',
+      title: req.t('admin.unknownIps.title'),
+      pending: data.pending,
+      recentlyProcessed: data.recentlyProcessed,
+      stats,
+      limit,
+      csrfToken: req.csrfToken,
+      req,
+    });
+  });
+
+  app.get('/admin/unknown-ips/backfill/confirm', async (req, reply) => {
+    return reply.view('admin/unknown-ips-backfill-confirm.hbs', {
+      layout: 'layouts/admin',
+      title: req.t('admin.unknownIps.backfill.confirm.title'),
+      req,
+    });
+  });
+
+  app.post('/admin/unknown-ips/backfill', async (req, reply) => {
+    if (!verifyCsrfRequest(req)) return reply.code(403).view('errors/csrf.hbs', { layout: 'layouts/public', req });
+    req.auditAction = { action: 'unknown_ips.backfill', targetType: 'unknown_ip_queue' };
+
+    // Build providers at request time so admin can flip env vars and
+    // re-trigger without a server restart. Each provider silently
+    // abstains when its key is absent — the backfill still runs but
+    // majority vote may not pass for any IP.
+    const providers = buildDefaultProviders();
+    const summary = await runBackfill(app.pool, providers, {
+      batchLimit: Number((req.body as { batchLimit?: number }).batchLimit ?? 100) || 100,
+      logger: { log: () => {}, warn: (msg) => app.log.warn({ msg }, 'backfill'), error: (msg) => app.log.error({ msg }, 'backfill') },
+    });
+    // Redirect back with summary in flash cookie. Cookie is HTTP-only and
+    // max-age=30s — admin refreshes the page and sees the banner once.
+    reply.setCookie('backfill_summary', JSON.stringify(summary), {
+      path: '/admin/unknown-ips',
+      maxAge: 30,
+      httpOnly: true,
+      sameSite: 'lax',
+    });
+    return reply.redirect('/admin/unknown-ips');
   });
 }
