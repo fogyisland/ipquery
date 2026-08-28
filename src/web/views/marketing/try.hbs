@@ -21,6 +21,6 @@
       <button type="button" class="m-try-chip" data-ip="9.9.9.9">9.9.9.9</button>
     </div>
 
-    <div id="try-result">{{#if result}}{{> marketing/_try-result}}{{else if notFound}}<div class="m-alert m-alert--warn">{{req.t 'lookup.notfound' ip=ip}}</div>{{else if invalid}}<div class="m-alert m-alert--error">{{req.t 'lookup.invalid'}}</div>{{else}}<div class="m-alert m-alert--hint">{{req.t 'try.hint'}}</div>{{/if}}</div>
+    <div id="try-result">{{#if result}}{{> marketing/_try-result}}{{else if notFound}}<div class="m-alert m-alert--warn">{{notFoundMsg}}</div>{{else if invalid}}<div class="m-alert m-alert--error">{{invalidMsg}}</div>{{else}}<div class="m-alert m-alert--hint">{{req.t 'try.hint'}}</div>{{/if}}</div>
   </div>
 </section>

@@ -103,21 +103,43 @@ export default async function marketingRoutes(app: FastifyInstance): Promise<voi
     if (!verifyCsrfRequest(req)) return reply.code(403).view('errors/csrf.hbs', { layout: 'layouts/marketing', req });
     const ip = ((req.body as { ip?: string }).ip ?? '').trim();
     if (!isValidIp(ip)) {
-      return reply.view('marketing/try.hbs', { layout: false, invalid: true, ip, req });
+      return reply.view('marketing/try.hbs', {
+        layout: false,
+        invalid: true,
+        ip,
+        invalidMsg: req.t('lookup.invalid'),
+        req,
+      });
     }
     const buf = parseIp(ip);
     const row = buf ? await findRange(app.pool, buf) : null;
     if (!row) {
-      return reply.view('marketing/try.hbs', { layout: false, notFound: true, ip, req });
+      return reply.view('marketing/try.hbs', {
+        layout: false,
+        notFound: true,
+        ip,
+        notFoundMsg: req.t('lookup.notfound', { ip }),
+        req,
+      });
     }
     const ipLookupUrl = `${app.viewBaseUrl}/lookup?ip=${encodeURIComponent(ip)}`;
+    const countryName = row.countryName || row.countryCode || '';
     return reply.view('marketing/try.hbs', {
       layout: false,
       isTry: true,
       result: {
         ip,
         ipLookupUrl,
-        country: { code: row.countryCode, name: row.countryName, source: row.countrySource ?? 'maxmind' },
+        // Pre-format heading on the server — Handlebars {{req.t key ip=...}}
+        // doesn't pass hash args through (req.t is a method call, not a
+        // registered helper), so the placeholder substitution has to happen
+        // here.
+        heading: req.t('lookup.found', { ip, country: countryName }),
+        country: {
+          code: row.countryCode,
+          name: countryName,
+          source: row.countrySource ?? 'maxmind',
+        },
         region: row.region,
         city: row.city ? { name: row.city, source: row.citySource ?? 'maxmind' } : undefined,
         isp: row.isp ? { name: row.isp, source: row.ispSource ?? 'maxmind' } : undefined,
