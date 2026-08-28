@@ -18,6 +18,22 @@
     {{{body}}}
   </main>
   {{> marketing/_footer}}
+  {{!-- Always inline the chip-fill handler on /try so sample-IP chips work.
+       Tab switcher for the code quickstart block only ships on pages that
+       actually render a codeblock (home + docs). --}}
+  <script>
+    // /try: clicking a sample chip fills the IP input and focuses it.
+    // Event delegation so it works with later DOM swaps.
+    document.addEventListener('click', function (e) {
+      var chip = e.target.closest('.m-try-chip');
+      if (!chip) return;
+      var input = document.querySelector('input[name="ip"]');
+      if (input) {
+        input.value = chip.dataset.ip || chip.textContent.trim();
+        input.focus();
+      }
+    });
+  </script>
   {{#if showCodeTabs}}
   <script>
     // Tab switcher for the code quickstart block. Inline so we don't need
@@ -34,15 +50,6 @@
       block.querySelectorAll('[data-pane]').forEach(function (p) {
         p.style.display = p.dataset.pane === id ? '' : 'none';
       });
-    });
-    document.addEventListener('click', function (e) {
-      var chip = e.target.closest('.m-try-chip');
-      if (!chip) return;
-      var input = document.querySelector('input[name="ip"]');
-      if (input) {
-        input.value = chip.dataset.ip || chip.textContent.trim();
-        input.focus();
-      }
     });
   </script>
   {{/if}}
