@@ -104,10 +104,13 @@ export default async function marketingRoutes(app: FastifyInstance): Promise<voi
     const ip = ((req.body as { ip?: string }).ip ?? '').trim();
     if (!isValidIp(ip)) {
       return reply.view('marketing/try.hbs', {
-        layout: false,
+        layout: 'layouts/marketing',
+        title: req.t('nav.try'),
+        isTry: true,
         invalid: true,
         ip,
         invalidMsg: req.t('lookup.invalid'),
+        viewBaseUrl: app.viewBaseUrl,
         req,
       });
     }
@@ -115,18 +118,23 @@ export default async function marketingRoutes(app: FastifyInstance): Promise<voi
     const row = buf ? await findRange(app.pool, buf) : null;
     if (!row) {
       return reply.view('marketing/try.hbs', {
-        layout: false,
+        layout: 'layouts/marketing',
+        title: req.t('nav.try'),
+        isTry: true,
         notFound: true,
         ip,
         notFoundMsg: req.t('lookup.notfound', { ip }),
+        viewBaseUrl: app.viewBaseUrl,
         req,
       });
     }
     const ipLookupUrl = `${app.viewBaseUrl}/lookup?ip=${encodeURIComponent(ip)}`;
     const countryName = row.countryName || row.countryCode || '';
     return reply.view('marketing/try.hbs', {
-      layout: false,
+      layout: 'layouts/marketing',
+      title: req.t('nav.try'),
       isTry: true,
+      viewBaseUrl: app.viewBaseUrl,
       result: {
         ip,
         ipLookupUrl,
