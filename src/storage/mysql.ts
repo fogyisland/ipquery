@@ -242,6 +242,18 @@ export async function lastEtlRun(pool: mysql.Pool): Promise<EtlRun | null> {
   );
   if (rows.length === 0) return null;
   const r = rows[0]!;
+  return etlRunFromRow(r);
+}
+
+export async function recentEtlRuns(pool: mysql.Pool, limit: number): Promise<EtlRun[]> {
+  const [rows] = await pool.query<mysql.RowDataPacket[]>(
+    `SELECT * FROM etl_runs ORDER BY id DESC LIMIT ?`,
+    [limit],
+  );
+  return rows.map((r) => etlRunFromRow(r));
+}
+
+function etlRunFromRow(r: mysql.RowDataPacket): EtlRun {
   return {
     id: Number(r.id), startedAt: r.started_at, finishedAt: r.finished_at,
     status: r.status,

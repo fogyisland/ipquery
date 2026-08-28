@@ -1,49 +1,81 @@
 {{!-- SPDX-License-Identifier: MIT --}}
 <section class="m-section m-section--first">
-  <div class="m-section-inner">
+  <div class="m-section-inner m-status-page">
     <div class="m-section-head">
       <span class="m-eyebrow">{{req.t 'status.eyebrow'}}</span>
       <h1 class="m-section-title">{{req.t 'status.heading'}}</h1>
       <p class="m-section-sub">{{req.t 'status.sub'}}</p>
     </div>
 
-    <div class="m-card m-card--soft">
-      <h3 class="m-card-title">{{req.t 'status.health'}}</h3>
-      <div class="m-status-row">
-        <span class="m-status-dot m-status-dot--ok"></span>
-        <span><b>{{req.t 'status.api'}}</b> — {{req.t 'status.operational'}}</span>
-      </div>
-      <div class="m-status-row">
-        <span class="m-status-dot m-status-dot--ok"></span>
-        <span><b>{{req.t 'status.database'}}</b> — {{req.t 'status.operational'}}</span>
-      </div>
-      <div class="m-status-row">
-        <span class="m-status-dot m-status-dot--ok"></span>
-        <span><b>{{req.t 'status.etl'}}</b> —
-          {{#if lastRun}}{{formatDate lastRun.startedAt}} — {{lastRun.status}}{{else}}{{req.t 'status.never'}}{{/if}}
-        </span>
+    <div class="m-status-banner {{#if dbOk}}m-status-banner--ok{{else}}m-status-banner--bad{{/if}}">
+      <span class="m-status-banner-dot"></span>
+      <div class="m-status-banner-text">
+        {{#if dbOk}}
+          <strong>{{req.t 'status.banner.okTitle'}}</strong>
+          <span>{{req.t 'status.banner.okSub'}}</span>
+        {{else}}
+          <strong>{{req.t 'status.banner.badTitle'}}</strong>
+          <span>{{req.t 'status.banner.badSub'}}</span>
+        {{/if}}
       </div>
     </div>
 
-    {{#if lastRun}}
-    <div class="m-card m-card--soft">
-      <h3 class="m-card-title">{{req.t 'status.lastRun'}}</h3>
-      <table class="m-table">
-        <tbody>
-          <tr><th>{{req.t 'status.col.started'}}</th><td>{{formatDate lastRun.startedAt}}</td></tr>
-          <tr><th>{{req.t 'status.col.finished'}}</th><td>{{formatDate lastRun.finishedAt}}</td></tr>
-          <tr><th>{{req.t 'status.col.status'}}</th><td><strong>{{lastRun.status}}</strong></td></tr>
-          <tr><th>{{req.t 'status.col.merged'}}</th><td>{{lastRun.mergedRecords}}</td></tr>
-        </tbody>
-      </table>
+    <div class="m-status-services">
+      <div class="m-status-service">
+        <span class="m-status-service-dot {{#unless apiOk}}m-status-service-dot--bad{{/unless}}"></span>
+        <div class="m-status-service-text">
+          <span class="m-status-service-name">{{req.t 'status.api'}}</span>
+          <span class="m-status-service-status">{{#if apiOk}}{{req.t 'status.operational'}}{{else}}{{req.t 'status.degraded'}}{{/if}}</span>
+        </div>
+      </div>
+      <div class="m-status-service">
+        <span class="m-status-service-dot {{#unless dbOk}}m-status-service-dot--bad{{/unless}}"></span>
+        <div class="m-status-service-text">
+          <span class="m-status-service-name">{{req.t 'status.database'}}</span>
+          <span class="m-status-service-status">{{#if dbOk}}{{req.t 'status.operational'}}{{else}}{{req.t 'status.degraded'}}{{/if}}</span>
+        </div>
+      </div>
+      <div class="m-status-service">
+        <span class="m-status-service-dot {{#if lastRun}}{{#if (eq lastRun.status 'success')}}{{else}}m-status-service-dot--bad{{/if}}{{else}}m-status-service-dot--idle{{/if}}"></span>
+        <div class="m-status-service-text">
+          <span class="m-status-service-name">{{req.t 'status.etl'}}</span>
+          <span class="m-status-service-status">
+            {{#if lastRun}}{{lastRun.status}}{{else}}{{req.t 'status.never'}}{{/if}}
+          </span>
+        </div>
+      </div>
     </div>
+
+    {{#if recentRuns}}
+      <div class="m-status-card">
+        <h2>{{req.t 'status.timelineTitle'}}</h2>
+        <div class="m-run-timeline">
+          {{#each recentRuns}}
+            <div class="m-run-bar {{#if (eq this.status 'failed')}}m-run-bar--failed{{/if}}{{#if (eq this.status 'running')}}m-run-bar--running{{/if}}"
+                 tabindex="0"
+                 style="height: {{this.barHeight}}%">
+              <span class="m-run-bar-tip">
+                {{formatDate this.startedAt}} · {{this.status}} · {{this.mergedRecords}} rows
+              </span>
+            </div>
+          {{/each}}
+        </div>
+        <ul class="m-run-list">
+          {{#each recentRuns}}
+            <li>
+              <span><code>{{formatRelative this.startedAt}}</code> · {{this.mergedRecords}} rows</span>
+              <span class="m-run-pill m-run-pill--{{#if (eq this.status 'success')}}ok{{else if (eq this.status 'failed')}}bad{{else}}running{{/if}}">{{this.status}}</span>
+            </li>
+          {{/each}}
+        </ul>
+      </div>
     {{else}}
-    <div class="m-alert m-alert--hint">{{req.t 'status.noRuns'}}</div>
+      <div class="m-alert m-alert--hint">{{req.t 'status.noRuns'}}</div>
     {{/if}}
 
-    <div class="m-card m-card--soft">
-      <h3 class="m-card-title">{{req.t 'status.uptimeTitle'}}</h3>
-      <p>{{req.t 'status.uptimeBody'}}</p>
+    <div class="m-status-card">
+      <h2>{{req.t 'status.uptimeTitle'}}</h2>
+      <p style="margin: 0; color: var(--m-ink-2); line-height: 1.6;">{{req.t 'status.uptimeBody'}}</p>
     </div>
   </div>
 </section>

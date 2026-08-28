@@ -1,12 +1,23 @@
 {{!-- SPDX-License-Identifier: MIT --}}
-<div class="m-card m-card--result">
-  <h3 class="m-card-title">{{req.t 'lookup.found' ip=result.ip country=result.country.name}}</h3>
-  <dl class="m-result-grid">
-    <dt>{{req.t 'try.country'}}</dt>
-    <dd>{{result.country.name}} (<code>{{result.country.code}}</code>) <span class="m-source">{{result.country.source}}</span></dd>
-    {{#if result.region}}<dt>{{req.t 'try.region'}}</dt><dd>{{result.region}}</dd>{{/if}}
-    {{#if result.city}}<dt>{{req.t 'try.city'}}</dt><dd>{{result.city.name}} <span class="m-source">{{result.city.source}}</span></dd>{{/if}}
-    {{#if result.isp}}<dt>{{req.t 'try.isp'}}</dt><dd>{{result.isp.name}} <span class="m-source">{{result.isp.source}}</span></dd>{{/if}}
-    {{#if result.asn}}<dt>{{req.t 'try.asn'}}</dt><dd>{{result.asn.number}} {{result.asn.org}} <span class="m-source">{{result.asn.source}}</span></dd>{{/if}}
-  </dl>
+{{!-- Result panel for /try: 2-column (data + curl repro).
+     Used in marketing/try.hbs only. --}}
+<div class="m-result-panel">
+  <div class="m-result-data">
+    <div class="m-result-data-head">
+      <h3>{{req.t 'lookup.found' ip=result.ip country=result.country.name}}</h3>
+      <span class="m-result-ip">{{result.ip}}</span>
+    </div>
+    <dl class="m-result-fields">
+      <dt>{{req.t 'try.country'}}</dt>
+      <dd>{{result.country.name}} (<code>{{result.country.code}}</code>)<span class="m-source-tag">{{result.country.source}}</span></dd>
+      {{#if result.region}}<dt>{{req.t 'try.region'}}</dt><dd>{{result.region}}</dd>{{/if}}
+      {{#if result.city}}<dt>{{req.t 'try.city'}}</dt><dd>{{result.city.name}}<span class="m-source-tag">{{result.city.source}}</span></dd>{{/if}}
+      {{#if result.isp}}<dt>{{req.t 'try.isp'}}</dt><dd>{{result.isp.name}}<span class="m-source-tag">{{result.isp.source}}</span></dd>{{/if}}
+      {{#if result.asn}}<dt>{{req.t 'try.asn'}}</dt><dd><code>AS{{result.asn.number}}</code> {{result.asn.org}}<span class="m-source-tag">{{result.asn.source}}</span></dd>{{/if}}
+    </dl>
+  </div>
+  <aside class="m-result-curl">
+    <span class="m-result-curl-label">{{req.t 'try.reproCurl'}}</span>
+    <code><span class="tok-key">curl</span> <span class="tok-str">"{{result.ipLookupUrl}}"</span></code>
+  </aside>
 </div>
