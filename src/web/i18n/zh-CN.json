@@ -362,16 +362,19 @@
       "title": "一个查询,三个数据源",
       "sub": "主源优先,备源补字段。每个字段都标注来源,你来判断取舍。",
       "sources": {
+        "mark": "01 / 多源",
         "title": "多源聚合",
         "sub": "MaxMind / ip2region / DB-IP 互相补位,字段缺失率远低于单源方案。",
         "stat": "数据源"
       },
       "coverage": {
+        "mark": "02 / 覆盖",
         "title": "IPv4 + IPv6 全覆盖",
         "sub": "按段而非按 IP 存储,8.3M+ 段覆盖了绝大多数公共网络。",
         "stat": "已索引段"
       },
       "speed": {
+        "mark": "03 / 延迟",
         "title": "亚 100ms",
         "sub": "空间索引 + range_size 排序,实测中位延迟远低于行业平均水平。",
         "stat": "中位响应"
@@ -455,7 +458,22 @@
       "handlebars": "服务端模板,零客户端依赖,轻量到极致"
     },
     "licenseTitle": "许可与数据",
-    "licenseBody": "代码以 MIT 协议开源;数据文件由使用者自行下载并遵守各源(MaxMind / ip2region / DB-IP)各自的授权约束。"
+    "licenseBody": "代码以 MIT 协议开源;数据文件由使用者自行下载并遵守各源(MaxMind / ip2region / DB-IP)各自的授权约束。",
+    "timelineTitle": "一路走来",
+    "timeline": {
+      "2024": {
+        "title": "首个提交",
+        "desc": "初始 schema、MaxMind 单源加载器、Fastify 服务。单表设计、单一数据源。"
+      },
+      "2025": {
+        "title": "接入 ip2region + DB-IP",
+        "desc": "三源聚合策略 + 字段级来源标注。range_size 索引实现亚 100ms 查询。"
+      },
+      "2026": {
+        "title": "生产级发布",
+        "desc": "鉴权、速率限制、ETL 调度、控制台、多语言支持。MIT 协议开源。"
+      }
+    }
   },
   "try": {
     "eyebrow": "在线试查",
@@ -467,7 +485,8 @@
     "region": "地区",
     "city": "城市",
     "isp": "运营商",
-    "asn": "ASN"
+    "asn": "ASN",
+    "reproCurl": "用 curl 复现"
   },
   "status": {
     "eyebrow": "服务状态",
@@ -478,9 +497,17 @@
     "database": "数据库",
     "etl": "ETL 流水线",
     "operational": "运行正常",
+    "degraded": "不可用",
     "never": "暂无运行记录",
     "lastRun": "最近一次 ETL",
     "noRuns": "暂无 ETL 运行记录。",
+    "banner": {
+      "okTitle": "所有系统运行正常",
+      "okSub": "API、数据库和 ETL 均报告健康状态。",
+      "badTitle": "服务异常",
+      "badSub": "一个或多个组件报告异常,详见下方。"
+    },
+    "timelineTitle": "近期 ETL 运行",
     "uptimeTitle": "可用性",
     "uptimeBody": "API 与数据库实例健康由本页面实时查询;ETL 每天自动跑一次,失败会有日志记录。",
     "col": {
@@ -496,6 +523,12 @@
     "heading": "简洁的 HTTP API",
     "subtitle": "公开 HTTP API,无需鉴权;注册后可获取 API Key 提升速率限制。",
     "endpointsTitle": "接口列表",
+    "tocHeading": "本页目录",
+    "tocEndpoints": "接口列表",
+    "tocExamples": "调用示例",
+    "tocAuth": "鉴权",
+    "tocResponse": "响应",
+    "tocErrors": "错误码",
     "colMethod": "方法",
     "colPath": "路径",
     "colDescription": "说明",

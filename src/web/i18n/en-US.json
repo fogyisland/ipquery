@@ -361,16 +361,19 @@
       "title": "One query, three sources",
       "sub": "Primary source first, backups fill the gaps. Each field is tagged with its source so you can decide.",
       "sources": {
+        "mark": "01 / aggregation",
         "title": "Multi-source merge",
         "sub": "MaxMind / ip2region / DB-IP back each other up. Field coverage is far higher than single-source solutions.",
         "stat": "data sources"
       },
       "coverage": {
+        "mark": "02 / coverage",
         "title": "IPv4 + IPv6 coverage",
         "sub": "Stored by range, not by IP. 8.3M+ ranges cover almost the entire routable internet.",
         "stat": "indexed ranges"
       },
       "speed": {
+        "mark": "03 / latency",
         "title": "Sub-100ms",
         "sub": "Spatial index ordered by range_size: smallest first. Median latency well below industry average.",
         "stat": "median response"
@@ -454,7 +457,22 @@
       "handlebars": "Server-side templates. Zero client dependencies. Lean to the bone."
     },
     "licenseTitle": "License & data",
-    "licenseBody": "Source code is MIT licensed. Data files are downloaded and consumed under each upstream's own license terms (MaxMind / ip2region / DB-IP)."
+    "licenseBody": "Source code is MIT licensed. Data files are downloaded and consumed under each upstream's own license terms (MaxMind / ip2region / DB-IP).",
+    "timelineTitle": "How we got here",
+    "timeline": {
+      "2024": {
+        "title": "First commit",
+        "desc": "Initial schema, MaxMind-only loader, and a Fastify server. Single-table design, one source."
+      },
+      "2025": {
+        "title": "ip2region + DB-IP integration",
+        "desc": "Three-source merge strategy with field-level source tracking. Range-size index for sub-100ms lookups."
+      },
+      "2026": {
+        "title": "Production-ready release",
+        "desc": "Auth, rate limiting, ETL scheduling, dashboard, multi-locale. Open-sourced under MIT."
+      }
+    }
   },
   "try": {
     "eyebrow": "Try it",
@@ -466,7 +484,8 @@
     "region": "Region",
     "city": "City",
     "isp": "ISP",
-    "asn": "ASN"
+    "asn": "ASN",
+    "reproCurl": "Reproduce with curl"
   },
   "status": {
     "eyebrow": "Status",
@@ -477,9 +496,17 @@
     "database": "Database",
     "etl": "ETL pipeline",
     "operational": "Operational",
+    "degraded": "Degraded",
     "never": "No runs yet",
     "lastRun": "Last ETL run",
     "noRuns": "No ETL runs yet.",
+    "banner": {
+      "okTitle": "All systems operational",
+      "okSub": "API, database and ETL are all reporting healthy.",
+      "badTitle": "Service disruption",
+      "badSub": "One or more components are reporting failures. See details below."
+    },
+    "timelineTitle": "Recent ETL runs",
     "uptimeTitle": "Uptime",
     "uptimeBody": "API and database health are probed live by this page. ETL runs daily on a schedule; failures are logged.",
     "col": {
@@ -495,6 +522,12 @@
     "heading": "A simple HTTP API",
     "subtitle": "Public HTTP API, no auth required; sign up for an API key for higher rate limits.",
     "endpointsTitle": "Endpoints",
+    "tocHeading": "On this page",
+    "tocEndpoints": "Endpoints",
+    "tocExamples": "Examples",
+    "tocAuth": "Authentication",
+    "tocResponse": "Response",
+    "tocErrors": "Errors",
     "colMethod": "Method",
     "colPath": "Path",
     "colDescription": "Description",
