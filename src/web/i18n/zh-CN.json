@@ -286,7 +286,20 @@
       "lastSuccess": "上次成功",
       "never": "从未",
       "recentActivity": "近期活动",
-      "noActivity": "暂无活动"
+      "noActivity": "暂无活动",
+      "welcome": "欢迎,{email}",
+      "viewAll": "查看全部",
+      "hit": "命中",
+      "miss": "未命中",
+      "invalid": "无效",
+      "last24h": "近 24 小时",
+      "section.queries24h": "查询统计 (24h)",
+      "section.system": "系统指标",
+      "chart7d.title": "近 7 天查询量",
+      "chart7d.total": "总计 {total} 次",
+      "action.queries": "查询日志",
+      "action.audit": "查询审计",
+      "action.triggerEtl": "触发 ETL"
     },
     "queries": {
       "title": "查询统计",

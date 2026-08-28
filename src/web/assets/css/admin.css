@@ -680,3 +680,109 @@ code.secret {
 @media (prefers-reduced-motion: reduce) {
   .card, .button, .filter-select, .sidebar-link { transition: none; }
 }
+
+/* ─── Dashboard v2: welcome header + status cards + 7-day chart ────────── */
+.dash-welcome {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 28px;
+}
+.dash-welcome h2 { margin: 0 0 4px; }
+.dash-welcome-sub {
+  margin: 0;
+  color: var(--text-2);
+  font-size: 14px;
+}
+.dash-welcome-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.dash-section-title {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-2);
+  margin: 24px 0 12px;
+}
+.dash-section-title:first-of-type { margin-top: 8px; }
+
+.dashboard-grid--three { grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
+
+/* Accent strip on each status card (top border) — same hue as the bar
+   segment in the chart so the eye pairs them up at a glance. */
+.stat-card {
+  padding-top: 22px;
+  border-top: 3px solid var(--border-2);
+}
+.stat-card--hit     { border-top-color: var(--success); }
+.stat-card--miss    { border-top-color: var(--warning); }
+.stat-card--invalid { border-top-color: var(--danger); }
+.stat-card .card-value { color: var(--text); }
+
+.card-value--small {
+  font-size: 16px;
+  font-weight: 500;
+}
+
+/* Chart card -------------------------------------------------- */
+.chart-card { padding: 20px 24px 16px; }
+.chart-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+.chart-card-head .card-title { margin: 0; }
+.dash-link {
+  color: var(--accent);
+  text-decoration: none;
+  font-size: 12px;
+  font-weight: 500;
+}
+.dash-link:hover { text-decoration: underline; }
+
+.chart-host { width: 100%; }
+.chart-bars {
+  display: block;
+  width: 100%;
+  height: auto;
+  color: var(--text-2); /* default stroke for grid */
+}
+.chart-bar { rx: 2; }
+.chart-bar--hit     { fill: var(--success); }
+.chart-bar--miss    { fill: var(--warning); }
+.chart-bar--invalid { fill: var(--danger); }
+.chart-tick { font-variant-numeric: tabular-nums; }
+
+.chart-legend {
+  display: flex;
+  gap: 16px;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-2);
+}
+.chart-legend li { display: inline-flex; align-items: center; gap: 6px; }
+.chart-swatch {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+}
+.chart-swatch--hit     { background: var(--success); }
+.chart-swatch--miss    { background: var(--warning); }
+.chart-swatch--invalid { background: var(--danger); }
+
+/* Hover: highlight the matching legend entry's color via fill-opacity bump. */
+.chart-bars .chart-bar { transition: fill-opacity 100ms ease; fill-opacity: 0.92; }
+.chart-bars:hover .chart-bar { fill-opacity: 0.78; }
+.chart-bars:hover .chart-bar:hover { fill-opacity: 1; }

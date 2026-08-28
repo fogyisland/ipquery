@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 import type { Pool, RowDataPacket } from 'mysql2/promise';
 import { listAuditLog, type AuditLogEntry } from '../../storage/auditLog';
+import { countQueriesByStatusSince, countQueriesByDay, type DailyBucket } from '../../storage/queryLog';
 
 export interface Overview {
   generatedAt: Date;
@@ -15,7 +16,16 @@ export interface Overview {
     users: { total: number; verified: number; disabled: number };
     apiKeys: { total: number; active: number };
   };
-  queries24h: { total: number; hitRate: number; trend: number[] };
+  // 24h hit/miss/invalid split + hit-rate. Drives the three status cards.
+  queries24h: {
+    hit: number;
+    miss: number;
+    invalid: number;
+    total: number;
+    hitRate: number;
+  };
+  // 7-day bucketed series for the dashboard bar chart. Oldest-first.
+  last7Days: DailyBucket[];
   recentActivity: AuditLogEntry[];
 }
 
@@ -30,7 +40,7 @@ interface OverviewCounts {
 }
 
 export async function getOverview(pool: Pool): Promise<Overview> {
-  const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
 
   const [etlRows] = await pool.query<RowDataPacket[]>(
     `SELECT id, started_at, finished_at, status, merged_records FROM etl_runs ORDER BY id DESC LIMIT 1`,
@@ -66,26 +76,14 @@ export async function getOverview(pool: Pool): Promise<Overview> {
   `);
   const c = counts[0] as unknown as OverviewCounts;
 
-  // query_log column is `ts`, not `created_at` (see migration 008).
-  const [q24] = await pool.query<RowDataPacket[]>(
-    `SELECT COUNT(*) AS total,
-            SUM(status='hit') AS hits
-     FROM query_log WHERE ts >= ?`,
-    [since],
-  );
-  const q24Row = q24[0] as { total: number; hits: number | null };
-  const total = Number(q24Row.total);
-  const hits = Number(q24Row.hits ?? 0);
-  const hitRate = total > 0 ? hits / total : 0;
-
-  const [trendRows] = await pool.query<RowDataPacket[]>(
-    `SELECT HOUR(ts) AS h, COUNT(*) AS n
-     FROM query_log WHERE ts >= ?
-     GROUP BY HOUR(ts) ORDER BY h`,
-    [since],
-  );
-  const trend = new Array(24).fill(0);
-  for (const r of trendRows) trend[Number(r.h)] = Number(r.n);
+  // Fan out the 24h split and the 7-day buckets in parallel — they hit
+  // different aggregations on the same table, no shared intermediate.
+  const [split, last7Days] = await Promise.all([
+    countQueriesByStatusSince(pool, since24h),
+    countQueriesByDay(pool, 7),
+  ]);
+  const total = split.hit + split.miss + split.invalid;
+  const hitRate = total > 0 ? split.hit / total : 0;
 
   const { rows: recentActivity } = await listAuditLog(pool, { offset: 0, limit: 20 });
 
@@ -98,7 +96,8 @@ export async function getOverview(pool: Pool): Promise<Overview> {
       users: { total: Number(c.users_total), verified: Number(c.users_verified), disabled: Number(c.users_disabled) },
       apiKeys: { total: Number(c.keys_total), active: Number(c.keys_active) },
     },
-    queries24h: { total, hitRate, trend },
+    queries24h: { ...split, total, hitRate },
+    last7Days,
     recentActivity,
   };
 }

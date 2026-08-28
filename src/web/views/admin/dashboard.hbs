@@ -1,63 +1,113 @@
 {{!-- SPDX-License-Identifier: MIT --}}
+{{!-- Admin dashboard. HTMX auto-refreshes the whole <section> every 30s so
+     ETL counters / query tallies stay fresh without a manual reload. The
+     sparkline is gone — replaced by a 7-day stacked bar chart for a better
+     read on hit / miss / invalid mix over time. --}}
 <section hx-get="/admin" hx-trigger="every 30s" hx-swap="outerHTML" hx-select="section">
-<h2>{{req.t 'admin.dashboard.title'}}</h2>
 
-<div class="dashboard-grid">
-  <div class="card">
-    <p class="card-title">{{req.t 'admin.dashboard.etlStatus'}}</p>
-    <p class="card-value">
-      {{#if overview.etl.lastRun}}
-        {{> pill kind=(ternary (eq overview.etl.lastRun.status 'success') 'success' (ternary (eq overview.etl.lastRun.status 'failed') 'danger' 'muted')) text=overview.etl.lastRun.status}}
-      {{else}}
-        {{> pill kind='muted' text=(req.t 'admin.dashboard.never')}}
-      {{/if}}
-    </p>
-    <p class="card-sub">{{overview.etl.runsToday}} {{req.t 'admin.dashboard.runsToday'}}</p>
-  </div>
-
-  <div class="card">
-    <p class="card-title">{{req.t 'admin.dashboard.ipRanges'}}</p>
-    <p class="card-value">{{overview.db.ipRanges}}</p>
-  </div>
-
-  <div class="card">
-    <p class="card-title">{{req.t 'admin.dashboard.users'}}</p>
-    <p class="card-value">{{overview.db.users.total}}</p>
-    <p class="card-sub">{{overview.db.users.verified}} {{req.t 'admin.dashboard.verified'}}</p>
-  </div>
-
-  <div class="card">
-    <p class="card-title">{{req.t 'admin.dashboard.apiKeys'}}</p>
-    <p class="card-value">{{overview.db.apiKeys.active}}</p>
-    <p class="card-sub">/ {{overview.db.apiKeys.total}}</p>
-  </div>
-
-  <div class="card">
-    <p class="card-title">{{req.t 'admin.dashboard.queries24h'}}</p>
-    <p class="card-value">{{overview.queries24h.total}}</p>
-    <p class="card-sub">{{req.t 'admin.dashboard.hitRate'}} {{percent overview.queries24h.hitRate 0}}</p>
-    {{> sparkline data=overview.queries24h.trend max=(max overview.queries24h.trend 1)}}
-  </div>
-
-  <div class="card">
-    <p class="card-title">{{req.t 'admin.dashboard.lastSuccess'}}</p>
-    <p class="card-value" style="font-size:16px">{{#if overview.etl.lastSuccessAt}}{{formatRelative overview.etl.lastSuccessAt}}{{else}}{{req.t 'admin.dashboard.never'}}{{/if}}</p>
-  </div>
-</div>
-
-<div class="card">
-  <h3 class="card-title">{{req.t 'admin.dashboard.recentActivity'}}</h3>
-  <div class="activity-feed">
-    {{#each overview.recentActivity}}
-    <div class="activity-row">
-      <span class="activity-time">{{formatRelative this.created_at}}</span>
-      <span class="pill pill-info">{{this.action}}</span>
-      <span>{{this.actor_email}}</span>
-      {{#if this.target_type}}<span>&rarr; {{this.target_type}}#{{this.target_id}}</span>{{/if}}
+  <header class="dash-welcome">
+    <div>
+      <h2>{{req.t 'admin.dashboard.title'}}</h2>
+      <p class="dash-welcome-sub">{{req.t 'admin.dashboard.welcome' email=req.session.email}}</p>
     </div>
-    {{else}}
-    <p class="card-sub">{{req.t 'admin.dashboard.noActivity'}}</p>
-    {{/each}}
+    <div class="dash-welcome-actions">
+      <a class="button" href="/admin/queries">{{req.t 'admin.dashboard.action.queries'}}</a>
+      <a class="button" href="/admin/audit">{{req.t 'admin.dashboard.action.audit'}}</a>
+      <a class="btn-primary" href="/admin/etl/trigger/confirm">{{req.t 'admin.dashboard.action.triggerEtl'}}</a>
+    </div>
+  </header>
+
+  <h3 class="dash-section-title">{{req.t 'admin.dashboard.section.queries24h'}}</h3>
+  <div class="dashboard-grid dashboard-grid--three">
+    <div class="card stat-card stat-card--hit">
+      <p class="card-title">{{req.t 'admin.dashboard.hit'}}</p>
+      <p class="card-value">{{overview.queries24h.hit}}</p>
+      <p class="card-sub">{{req.t 'admin.dashboard.last24h'}}</p>
+    </div>
+    <div class="card stat-card stat-card--miss">
+      <p class="card-title">{{req.t 'admin.dashboard.miss'}}</p>
+      <p class="card-value">{{overview.queries24h.miss}}</p>
+      <p class="card-sub">{{req.t 'admin.dashboard.last24h'}}</p>
+    </div>
+    <div class="card stat-card stat-card--invalid">
+      <p class="card-title">{{req.t 'admin.dashboard.invalid'}}</p>
+      <p class="card-value">{{overview.queries24h.invalid}}</p>
+      <p class="card-sub">{{req.t 'admin.dashboard.last24h'}}</p>
+    </div>
   </div>
-</div>
+
+  <div class="card chart-card">
+    <header class="chart-card-head">
+      <div>
+        <h3 class="card-title">{{req.t 'admin.dashboard.chart7d.title'}}</h3>
+        <p class="card-sub">
+          {{req.t 'admin.dashboard.chart7d.total' total=(add overview.queries24h.hit overview.queries24h.miss overview.queries24h.invalid)}}
+          &middot;
+          {{req.t 'admin.dashboard.hitRate'}} {{percent overview.queries24h.hitRate 1}}
+        </p>
+      </div>
+      <ul class="chart-legend" aria-label="legend">
+        <li><span class="chart-swatch chart-swatch--hit"></span>{{req.t 'admin.dashboard.hit'}}</li>
+        <li><span class="chart-swatch chart-swatch--miss"></span>{{req.t 'admin.dashboard.miss'}}</li>
+        <li><span class="chart-swatch chart-swatch--invalid"></span>{{req.t 'admin.dashboard.invalid'}}</li>
+      </ul>
+    </header>
+    <div class="chart-host">{{{daily-chart overview.last7Days}}}</div>
+  </div>
+
+  <h3 class="dash-section-title">{{req.t 'admin.dashboard.section.system'}}</h3>
+  <div class="dashboard-grid">
+    <div class="card">
+      <p class="card-title">{{req.t 'admin.dashboard.etlStatus'}}</p>
+      <p class="card-value">
+        {{#if overview.etl.lastRun}}
+          {{> pill kind=(ternary (eq overview.etl.lastRun.status 'success') 'success' (ternary (eq overview.etl.lastRun.status 'failed') 'danger' 'muted')) text=overview.etl.lastRun.status}}
+        {{else}}
+          {{> pill kind='muted' text=(req.t 'admin.dashboard.never')}}
+        {{/if}}
+      </p>
+      <p class="card-sub">{{overview.etl.runsToday}} {{req.t 'admin.dashboard.runsToday'}}</p>
+    </div>
+
+    <div class="card">
+      <p class="card-title">{{req.t 'admin.dashboard.ipRanges'}}</p>
+      <p class="card-value">{{overview.db.ipRanges}}</p>
+    </div>
+
+    <div class="card">
+      <p class="card-title">{{req.t 'admin.dashboard.users'}}</p>
+      <p class="card-value">{{overview.db.users.total}}</p>
+      <p class="card-sub">{{overview.db.users.verified}} {{req.t 'admin.dashboard.verified'}}</p>
+    </div>
+
+    <div class="card">
+      <p class="card-title">{{req.t 'admin.dashboard.apiKeys'}}</p>
+      <p class="card-value">{{overview.db.apiKeys.active}}</p>
+      <p class="card-sub">/ {{overview.db.apiKeys.total}}</p>
+    </div>
+
+    <div class="card">
+      <p class="card-title">{{req.t 'admin.dashboard.lastSuccess'}}</p>
+      <p class="card-value card-value--small">{{#if overview.etl.lastSuccessAt}}{{formatRelative overview.etl.lastSuccessAt}}{{else}}{{req.t 'admin.dashboard.never'}}{{/if}}</p>
+    </div>
+  </div>
+
+  <div class="card">
+    <header class="chart-card-head">
+      <h3 class="card-title">{{req.t 'admin.dashboard.recentActivity'}}</h3>
+      <a class="card-sub dash-link" href="/admin/audit-log">{{req.t 'admin.dashboard.viewAll'}} &rarr;</a>
+    </header>
+    <div class="activity-feed">
+      {{#each overview.recentActivity}}
+      <div class="activity-row">
+        <span class="activity-time">{{formatRelative this.created_at}}</span>
+        <span class="pill pill-info">{{this.action}}</span>
+        <span>{{this.actor_email}}</span>
+        {{#if this.target_type}}<span>&rarr; {{this.target_type}}#{{this.target_id}}</span>{{/if}}
+      </div>
+      {{else}}
+      <p class="card-sub">{{req.t 'admin.dashboard.noActivity'}}</p>
+      {{/each}}
+    </div>
+  </div>
 </section>

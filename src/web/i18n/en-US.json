@@ -285,7 +285,20 @@
       "lastSuccess": "Last success",
       "never": "never",
       "recentActivity": "Recent activity",
-      "noActivity": "No recent activity"
+      "noActivity": "No recent activity",
+      "welcome": "Welcome, {email}",
+      "viewAll": "View all",
+      "hit": "Hit",
+      "miss": "Miss",
+      "invalid": "Invalid",
+      "last24h": "Last 24h",
+      "section.queries24h": "Query volume (24h)",
+      "section.system": "System metrics",
+      "chart7d.title": "Last 7 days",
+      "chart7d.total": "{total} total",
+      "action.queries": "Query log",
+      "action.audit": "Query audit",
+      "action.triggerEtl": "Run ETL"
     },
     "queries": {
       "title": "Query volume",

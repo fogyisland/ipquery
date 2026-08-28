@@ -123,6 +123,45 @@ export async function countQueriesByStatusSince(
   return out;
 }
 
+// Per-day buckets for the dashboard 7-day chart. Returns oldest-first.
+// Days with no rows still appear in the result (zeros) so the chart x-axis
+// is always 7 ticks wide.
+export interface DailyBucket {
+  date: string;       // YYYY-MM-DD in server local time
+  hit: number;
+  miss: number;
+  invalid: number;
+  total: number;
+}
+export async function countQueriesByDay(pool: Pool, days: number): Promise<DailyBucket[]> {
+  const since = new Date(Date.now() - (days - 1) * 86_400_000);
+  since.setHours(0, 0, 0, 0);
+  const [rows] = await pool.query(
+    `SELECT DATE(ts) AS d, status, COUNT(*) AS c
+       FROM query_log
+       WHERE ts >= ?
+       GROUP BY DATE(ts), status
+       ORDER BY d ASC`,
+    [since],
+  );
+  const byDate = new Map<string, { hit: number; miss: number; invalid: number }>();
+  for (const r of rows as Record<string, unknown>[]) {
+    const d = r.d instanceof Date ? (r.d as Date).toISOString().slice(0, 10) : String(r.d);
+    const cur = byDate.get(d) ?? { hit: 0, miss: 0, invalid: 0 };
+    const k = r.status as 'hit' | 'miss' | 'invalid';
+    cur[k] = Number(r.c);
+    byDate.set(d, cur);
+  }
+  const out: DailyBucket[] = [];
+  for (let i = 0; i < days; i++) {
+    const d = new Date(since.getTime() + i * 86_400_000);
+    const key = d.toISOString().slice(0, 10);
+    const c = byDate.get(key) ?? { hit: 0, miss: 0, invalid: 0 };
+    out.push({ date: key, ...c, total: c.hit + c.miss + c.invalid });
+  }
+  return out;
+}
+
 export async function streamQueryLogsCsv(pool: Pool, q: QueryLogQuery, write: (chunk: string) => void): Promise<void> {
   const where: string[] = [];
   const params: unknown[] = [];
