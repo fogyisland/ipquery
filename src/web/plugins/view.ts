@@ -26,6 +26,22 @@ function promoteLayout(
   return raw(page, cleanData, mergedOpts);
 }
 
+/** Inject `path` (request URL pathname, no query string) into template
+ *  context. The sidebar partial uses this to know whether it's rendering
+ *  inside an admin page or a personal page, so it can collapse the other
+ *  section to a CTA. */
+function injectPath(reply: FastifyReply, data: Record<string, unknown> | undefined): void {
+  const url = reply.request.url;
+  const qIdx = url.indexOf('?');
+  const path = qIdx >= 0 ? url.slice(0, qIdx) : url;
+  if (data) {
+    data.path = path;
+    if (data.req && typeof data.req === 'object') {
+      (data.req as Record<string, unknown>).path = path;
+    }
+  }
+}
+
 export async function registerView(app: FastifyInstance, cfg: { baseUrl: string }): Promise<void> {
   const viewsDir = path.join(__dirname, '..', 'views');
 
@@ -38,6 +54,9 @@ export async function registerView(app: FastifyInstance, cfg: { baseUrl: string 
 
   Handlebars.registerHelper('eq', (a: unknown, b: unknown) => a === b);
   Handlebars.registerHelper('ne', (a: unknown, b: unknown) => a !== b);
+  Handlebars.registerHelper('startsWith', (str: unknown, prefix: unknown) =>
+    typeof str === 'string' && typeof prefix === 'string' && str.startsWith(prefix),
+  );
   Handlebars.registerHelper('not', (v: unknown) => !v);
   Handlebars.registerHelper('and', (a: unknown, b: unknown) => Boolean(a) && Boolean(b));
   Handlebars.registerHelper('or', (a: unknown, b: unknown) => Boolean(a) || Boolean(b));
@@ -223,10 +242,16 @@ export async function registerView(app: FastifyInstance, cfg: { baseUrl: string 
     // wrapper must NOT call send again — doing so causes FST_ERR_REP_ALREADY_SENT.
     const r = reply as unknown as { view: ReplyView; viewAsync: ReplyView };
     const rawAsync = r.viewAsync.bind(reply);
-    r.viewAsync = (page, data, opts) => promoteLayout(page, data, opts, rawAsync);
+    r.viewAsync = (page, data, opts) => {
+      injectPath(reply, data);
+      return promoteLayout(page, data, opts, rawAsync);
+    };
 
     const rawView = r.view.bind(reply);
-    r.view = (page, data, opts) => promoteLayout(page, data, opts, rawView);
+    r.view = (page, data, opts) => {
+      injectPath(reply, data);
+      return promoteLayout(page, data, opts, rawView);
+    };
   });
 
   app.decorate('viewBaseUrl', cfg.baseUrl);

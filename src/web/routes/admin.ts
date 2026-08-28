@@ -7,6 +7,8 @@ import { verifyCsrfRequest } from '../plugins/csrf';
 import { runPipeline } from '../../etl/pipeline';
 import { topByQueryCount, queueStats } from '../../storage/unknownIpQueue';
 import { runBackfill, buildDefaultProviders } from '../../etl/unknownIpBackfill';
+import { runRandomGeneration } from '../../etl/randomIpGenerator';
+import { listProviderConfigs, updateProviderConfig, buildProvidersFromConfig } from '../../storage/ingestProviders';
 import { listAllApiKeys, revokeApiKey } from '../../storage/apiKeys';
 import { listQueryLogs, streamQueryLogsCsv } from '../../storage/queryLog';
 import { listAuditLog } from '../../storage/auditLog';
@@ -539,9 +541,10 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
   // from env at request time so admin can rotate them without a restart.
   app.get('/admin/unknown-ips', async (req, reply) => {
     const limit = Math.min(Number((req.query as { limit?: string }).limit ?? 50) || 50, 200);
-    const [data, stats] = await Promise.all([
+    const [data, stats, providers] = await Promise.all([
       topByQueryCount(app.pool, limit),
       queueStats(app.pool),
+      listProviderConfigs(app.pool),
     ]);
     return reply.view('admin/unknown-ips.hbs', {
       layout: 'layouts/admin',
@@ -549,10 +552,32 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
       pending: data.pending,
       recentlyProcessed: data.recentlyProcessed,
       stats,
+      providers,
       limit,
       csrfToken: req.csrfToken,
       req,
     });
+  });
+
+  // Toggle provider on/off and rotate api_key from the admin UI. POST
+  // accepts `name`, optional `enabled` ("on"/"off"), optional `apiKey`.
+  // Only enabled / api_key are editable from here; the catalog (display
+  // name + free quota) is code-managed.
+  app.post<{ Params: { name: string } }>('/admin/unknown-ips/providers/:name', async (req, reply) => {
+    if (!verifyCsrfRequest(req)) return reply.code(403).view('errors/csrf.hbs', { layout: 'layouts/public', req });
+    const name = req.params.name;
+    const body = req.body as { enabled?: string; apiKey?: string };
+    req.auditAction = {
+      action: 'unknown_ips.provider.update',
+      targetType: 'ingest_provider',
+      targetId: name,
+      metadata: { enabled: body.enabled, hasKey: Boolean(body.apiKey && body.apiKey.length > 0) },
+    };
+    await updateProviderConfig(app.pool, name, {
+      enabled: body.enabled === 'on',
+      apiKey: body.apiKey === undefined ? undefined : (body.apiKey.trim() === '' ? null : body.apiKey.trim()),
+    });
+    return reply.redirect('/admin/unknown-ips');
   });
 
   app.get('/admin/unknown-ips/backfill/confirm', async (req, reply) => {
@@ -567,11 +592,12 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
     if (!verifyCsrfRequest(req)) return reply.code(403).view('errors/csrf.hbs', { layout: 'layouts/public', req });
     req.auditAction = { action: 'unknown_ips.backfill', targetType: 'unknown_ip_queue' };
 
-    // Build providers at request time so admin can flip env vars and
-    // re-trigger without a server restart. Each provider silently
-    // abstains when its key is absent — the backfill still runs but
-    // majority vote may not pass for any IP.
-    const providers = buildDefaultProviders();
+    // Build providers from the admin-managed DB config so toggling a
+    // provider or rotating its key takes effect on the very next run.
+    // buildDefaultProviders() is still available as the env-driven
+    // fallback for non-admin callers (CLI / cron).
+    const configs = await listProviderConfigs(app.pool);
+    const providers = buildProvidersFromConfig(configs);
     const summary = await runBackfill(app.pool, providers, {
       batchLimit: Number((req.body as { batchLimit?: number }).batchLimit ?? 100) || 100,
       logger: { log: () => {}, warn: (msg) => app.log.warn({ msg }, 'backfill'), error: (msg) => app.log.error({ msg }, 'backfill') },
@@ -581,6 +607,32 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
     reply.setCookie('backfill_summary', JSON.stringify(summary), {
       path: '/admin/unknown-ips',
       maxAge: 30,
+      httpOnly: true,
+      sameSite: 'lax',
+    });
+    return reply.redirect('/admin/unknown-ips');
+  });
+
+  // "Generate 10 random IPs and ingest them". Used to validate the
+  // ingest pipeline end-to-end without waiting for real /lookup misses
+  // to trickle in. Auto-disables providers that return HTTP 429 during
+  // the run so we don't keep hammering a throttled provider. Target:
+  // 10 IPs in 10 minutes (per-IP fan-out ~8s serial = ~80s for 10).
+  app.post('/admin/unknown-ips/generate', async (req, reply) => {
+    if (!verifyCsrfRequest(req)) return reply.code(403).view('errors/csrf.hbs', { layout: 'layouts/public', req });
+    req.auditAction = { action: 'unknown_ips.generate', targetType: 'unknown_ip_queue' };
+
+    const body = req.body as { count?: number };
+    const count = Math.min(Math.max(Number(body.count) || 10, 1), 50);
+    const configs = await listProviderConfigs(app.pool);
+    const providers = buildProvidersFromConfig(configs);
+    const summary = await runRandomGeneration(app.pool, providers, {
+      count,
+      logger: { log: () => {}, warn: (msg) => app.log.warn({ msg }, 'random-gen'), error: (msg) => app.log.error({ msg }, 'random-gen') },
+    });
+    reply.setCookie('generate_summary', JSON.stringify(summary), {
+      path: '/admin/unknown-ips',
+      maxAge: 60,
       httpOnly: true,
       sameSite: 'lax',
     });

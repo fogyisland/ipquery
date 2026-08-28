@@ -8,22 +8,23 @@
 //     postal: "94035", timezone: "America/Los_Angeles" }
 //
 // ipinfo doesn't split ASN number and org — they're combined in `org`.
-// 401 (no/bad token) -> null forever, don't retry. 429 -> null, the
-// bucket throttles the next call.
+// 401 (no/bad token) -> record=null, NOT rateLimited (won't recover).
+// 429 -> record=null, rateLimited=true (backfill disables us).
 
-import type { IpGeoProvider, IpGeoRecord } from './types';
+import type { IpGeoProvider, IpGeoLookupResult } from './types';
 
 export class IpinfoProvider implements IpGeoProvider {
   readonly name = 'ipinfo';
 
   constructor(private readonly opts: { token?: string; endpoint?: string } = {}) {}
 
-  async lookup(ip: string): Promise<IpGeoRecord | null> {
-    if (!this.opts.token) return null; // token missing -> abstain
+  async lookup(ip: string): Promise<IpGeoLookupResult> {
+    if (!this.opts.token) return { record: null, rateLimited: false }; // token missing -> abstain
     const url = `${this.opts.endpoint ?? 'https://ipinfo.io'}/${encodeURIComponent(ip)}/json?token=${encodeURIComponent(this.opts.token)}`;
     try {
       const res = await fetch(url, { signal: AbortSignal.timeout(5_000) });
-      if (!res.ok) return null;
+      if (res.status === 429) return { record: null, rateLimited: true };
+      if (!res.ok) return { record: null, rateLimited: false };
       const data = await res.json() as {
         city?: string;
         region?: string;
@@ -35,19 +36,22 @@ export class IpinfoProvider implements IpGeoProvider {
       const [lat, lon] = parseLoc(data.loc ?? null);
       const asn = parseAsn(data.org ?? null);
       return {
-        countryCode: data.country ?? null,
-        countryName: null, // ipinfo only sends the code
-        region: data.region ?? null,
-        city: data.city ?? null,
-        latitude: lat,
-        longitude: lon,
-        timezone: data.timezone ?? null,
-        isp: null,          // ipinfo collapses ISP into `org`
-        asn,
-        asnOrg: extractOrgFromOrg(data.org ?? null),
+        record: {
+          countryCode: data.country ?? null,
+          countryName: null, // ipinfo only sends the code
+          region: data.region ?? null,
+          city: data.city ?? null,
+          latitude: lat,
+          longitude: lon,
+          timezone: data.timezone ?? null,
+          isp: null,          // ipinfo collapses ISP into `org`
+          asn,
+          asnOrg: extractOrgFromOrg(data.org ?? null),
+        },
+        rateLimited: false,
       };
     } catch {
-      return null;
+      return { record: null, rateLimited: false };
     }
   }
 }

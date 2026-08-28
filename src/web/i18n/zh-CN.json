@@ -25,7 +25,9 @@
       "public": "公开",
       "user": "个人",
       "admin": "管理"
-    }
+    },
+    "enterAdmin": "进入管理员控制台",
+    "backToDashboard": "返回个人控制台"
   },
   "nav": {
     "home": "首页",
@@ -43,7 +45,8 @@
       "keys": "API Keys",
       "audit": "查询审计",
       "auditLog": "操作审计",
-      "settings": "设置"
+      "settings": "设置",
+      "ingest": "API 入库"
     },
     "logout": "登出",
     "history": "查询历史",
@@ -149,6 +152,11 @@
       "revoke": "吊销",
       "revoke.confirm": "确定吊销此 Key?吊销后无法恢复。",
       "created_once": "请保存以下 Key,关闭后将无法再次查看:",
+      "endpoint": {
+        "title": "API 接入点",
+        "help": "用任意 API Key 替换 YOUR_KEY,IP 替换为目标地址即可发起查询。",
+        "copy": "复制"
+      },
       "copy": "复制"
     },
     "profile": {
@@ -370,6 +378,79 @@
       },
       "etlRestart": "立即运行 ETL",
       "etlRestart.confirm": "手动触发 ETL 流水线(异步)"
+    },
+    "unknownIps": {
+      "title": "未收录 IP 队列",
+      "stats": {
+        "pending": "待回灌",
+        "processed": "已入库",
+        "totalQueries": "累计查询"
+      },
+      "section": {
+        "pending": "待回灌 IP(按热度排序)",
+        "recentlyProcessed": "最近入库记录"
+      },
+      "col": {
+        "ip": "IP",
+        "queryCount": "查询次数",
+        "firstSeen": "首次出现",
+        "lastSeen": "最近出现",
+        "source": "来源",
+        "lastAttempt": "上次尝试",
+        "processedAt": "入库时间",
+        "runId": "ETL Run"
+      },
+      "empty": {
+        "pending": "当前没有待回灌的 IP。/lookup miss 后会自动写入。"
+      },
+      "runId": {
+        "manual": "手动回灌"
+      },
+      "backfill": {
+        "button": "立即回灌",
+        "summary": "本次回灌完成",
+        "considered": "候选 IP",
+        "merged": "已入库",
+        "noConsensus": "多数票不一致",
+        "noCountry": "无国家代码",
+        "allAbstained": "全部失败",
+        "batchLimit": "每批 IP 数",
+        "run": "开始回灌",
+        "confirm": {
+          "title": "确认触发回灌",
+          "body": "将对队列里每个待回灌 IP 并行查询 3 个外部 API,按多数票合并到主表。已收录 IP 会自动跳过。"
+        }
+      },
+      "generate": {
+        "button": "随机生成 10 个 IP 并入库",
+        "confirm": "将随机生成 10 个 IP,对每个未收录的 IP 并行查询已启用的数据源,按多数票合并入库。预计耗时 1–2 分钟。是否继续?",
+        "summary": "随机 IP 入库完成",
+        "considered": "已查询 IP",
+        "merged": "新入库",
+        "noConsensus": "多数票不一致",
+        "noCountry": "无国家代码",
+        "allAbstained": "全部失败",
+        "exhaustedRetries": "未找到未收录 IP",
+        "providersDisabled": "已自动停用数据源(429)",
+        "ipList": "本次随机生成的 IP"
+      },
+      "providers": {
+        "title": "回灌数据源",
+        "help": "回灌任务会向以下外部 API 并行查询每个待处理 IP,并按多数票合并。可在此切换每个数据源是否启用,以及更新需要 API Key 的数据源凭证。修改后下一次回灌即生效,无需重启。",
+        "col": {
+          "name": "数据源",
+          "quota": "免费额度",
+          "enabled": "启用",
+          "apiKey": "API Key",
+          "lastUsed": "最近调用"
+        },
+        "enabled": {
+          "on": "已启用",
+          "off": "已停用"
+        },
+        "save": "保存",
+        "apiKeyPlaceholder": "未填写"
+      }
     }
   },
   "home": {
@@ -710,49 +791,6 @@
       "db_unreachable": "无法连接数据库",
       "site_name_required": "站点名称必填",
       "displayName_invalid": "昵称长度应为 1-64 字符"
-    },
-    "unknownIps": {
-      "title": "未收录 IP 队列",
-      "stats": {
-        "pending": "待回灌",
-        "processed": "已入库",
-        "totalQueries": "累计查询"
-      },
-      "section": {
-        "pending": "待回灌 IP(按热度排序)",
-        "recentlyProcessed": "最近入库记录"
-      },
-      "col": {
-        "ip": "IP",
-        "queryCount": "查询次数",
-        "firstSeen": "首次出现",
-        "lastSeen": "最近出现",
-        "source": "来源",
-        "lastAttempt": "上次尝试",
-        "processedAt": "入库时间",
-        "runId": "ETL Run"
-      },
-      "empty": {
-        "pending": "当前没有待回灌的 IP。/lookup miss 后会自动写入。"
-      },
-      "runId": {
-        "manual": "手动回灌"
-      },
-      "backfill": {
-        "button": "立即回灌",
-        "summary": "本次回灌完成",
-        "considered": "候选 IP",
-        "merged": "已入库",
-        "noConsensus": "多数票不一致",
-        "noCountry": "无国家代码",
-        "allAbstained": "全部失败",
-        "batchLimit": "每批 IP 数",
-        "run": "开始回灌",
-        "confirm": {
-          "title": "确认触发回灌",
-          "body": "将对队列里每个待回灌 IP 并行查询 3 个外部 API,按多数票合并到主表。已收录 IP 会自动跳过。"
-        }
-      }
     }
   }
 }

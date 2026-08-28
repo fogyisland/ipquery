@@ -1,10 +1,8 @@
 // SPDX-License-Identifier: MIT
 //
 // Provider adapters for the unknown-IP backfill job. All adapters conform
-// to IpGeoProvider and return null on hard failure (network error, 4xx/5xx
-// response, or unparseable JSON) — never throw. The backfill job treats
-// null as "this provider abstained" and the majority-vote logic falls back
-// on the others.
+// to IpGeoProvider and return a rich result so the backfill job can
+// distinguish "no data" from "we asked too fast and got rate-limited".
 //
 // Country / region / city / ASN are best-effort strings. Providers don't
 // agree on spelling ("United States" vs "USA", "CA" vs "California") —
@@ -24,9 +22,17 @@ export interface IpGeoRecord {
   asnOrg: string | null;        // "Google LLC"
 }
 
+/** Per-call provider outcome. `rateLimited` is true iff the provider
+ *  responded with HTTP 429 — the backfill job uses this to disable
+ *  the provider on the spot instead of hammering it again next minute. */
+export interface IpGeoLookupResult {
+  record: IpGeoRecord | null;
+  rateLimited: boolean;
+}
+
 export interface IpGeoProvider {
   /** Stable identifier — also the bucket name and the source tag in
    *  ip_ranges when this provider wins the vote. */
   readonly name: string;
-  lookup(ip: string): Promise<IpGeoRecord | null>;
+  lookup(ip: string): Promise<IpGeoLookupResult>;
 }

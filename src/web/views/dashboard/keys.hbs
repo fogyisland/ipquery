@@ -17,6 +17,16 @@
   <button type="submit" class="btn-primary">{{req.t 'dashboard.keys.create'}}</button>
 </form>
 
+{{!-- API endpoint — the URL a user sends requests to with their key.
+     Built from WEB_BASE_URL so it follows whatever site name/url the
+     admin configures in site settings. --}}
+<section class="endpoint-card">
+  <h3 class="endpoint-card-title">{{req.t 'dashboard.keys.endpoint.title'}}</h3>
+  <p class="endpoint-card-sub">{{req.t 'dashboard.keys.endpoint.help'}}</p>
+  <code class="endpoint-url" id="endpoint-url">{{endpoint}}</code>
+  <button type="button" class="button endpoint-copy" data-target="endpoint-url">{{req.t 'dashboard.keys.endpoint.copy'}}</button>
+</section>
+
 {{#if keys.length}}
 <table class="table">
   <thead><tr><th>{{req.t 'dashboard.keys.label'}}</th><th>{{req.t 'dashboard.keys.prefix'}}</th><th>{{req.t 'dashboard.keys.lastUsed'}}</th><th>{{req.t 'dashboard.keys.created'}}</th><th></th></tr></thead>
@@ -39,3 +49,20 @@
 {{else}}
 <p>{{req.t 'dashboard.keys.empty'}}</p>
 {{/if}}
+
+<script>
+// Copy endpoint URL to clipboard. Event delegation — works even after
+// htmx-style partial swaps.
+document.addEventListener('click', function (e) {
+  const btn = e.target.closest('.endpoint-copy');
+  if (!btn) return;
+  const target = document.getElementById(btn.dataset.target);
+  if (!target) return;
+  navigator.clipboard.writeText(target.textContent || '').then(
+    () => { btn.textContent = btn.dataset.copiedLabel || '✓'; setTimeout(() => { btn.textContent = btn.dataset.origLabel || btn.textContent; }, 1500); },
+    () => { /* clipboard blocked — fallback: select the text */ target.select?.(); },
+  );
+});
+// Stash original label so the success state can revert cleanly.
+document.querySelectorAll('.endpoint-copy').forEach(b => { b.dataset.origLabel = b.textContent || ''; });
+</script>

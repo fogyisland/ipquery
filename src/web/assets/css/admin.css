@@ -230,6 +230,69 @@
   box-shadow: 0 0 8px var(--accent-glow);
 }
 
+/* CTA variant — used as a single "switch context" link, not a full menu.
+   Visually different: no dot indicator, accent color, mono arrow prefix. */
+.sidebar-link--cta {
+  color: var(--accent);
+  font-family: var(--font-mono);
+  font-weight: 500;
+}
+.sidebar-link--cta::before {
+  background: transparent !important;
+  box-shadow: none !important;
+}
+.sidebar-link-arrow {
+  display: inline-block;
+  width: 14px;
+  font-family: var(--font-mono);
+  color: var(--accent);
+}
+
+/* Override: links INSIDE the sidebar are navigation, not primary CTAs —
+   they should be muted gray until active/hover. The base rule below
+   colors every <a> cyan; this gives sidebar navigation a voice. */
+.layout-admin .sidebar-link:not(.active),
+.layout-dashboard .sidebar-link:not(.active),
+.layout-app .sidebar-link:not(.active) {
+  color: var(--text-2);
+}
+
+/* Override: forms.css's button[type="submit"] rule paints submit buttons
+   solid cyan with white text and no border-radius/font-family — which
+   turns <button class="sidebar-link sidebar-logout"> into a full-width
+   cyan banner. Re-skin it as a sidebar link here. */
+.layout-admin button.sidebar-link,
+.layout-dashboard button.sidebar-link,
+.layout-app button.sidebar-link {
+  background: transparent;
+  color: var(--text-2);
+  border: 0;
+  border-radius: 0;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0;
+  padding: 7px var(--sp-5);
+}
+.layout-admin button.sidebar-link:hover,
+.layout-dashboard button.sidebar-link:hover,
+.layout-app button.sidebar-link:hover {
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+/* Override: .btn-primary is text-on-cyan by design. The base rule that
+   colors every <a> cyan would otherwise paint the dark text the same
+   color as the cyan background, hiding the label. */
+.layout-admin a.btn-primary,
+.layout-dashboard a.btn-primary,
+.layout-app a.btn-primary,
+.layout-admin button.btn-primary,
+.layout-dashboard button.btn-primary,
+.layout-app button.btn-primary {
+  color: #062028;
+}
+
 .sidebar-footer {
   border-top: var(--hairline);
   padding-top: var(--sp-3);
@@ -904,6 +967,109 @@ dl.settings-dl dd {
 .ip-status--invalid { color: var(--danger); }
 
 /* ─── Recent activity table variant ─────────────────────────────────────── */
+.recent-table {
+  background: var(--surface);
+}
+.recent-table td {
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+.recent-table td.time { color: var(--text-3); white-space: nowrap; }
+.recent-table td.ip   { color: var(--text); }
+
+/* ─── API endpoint card (shown on /dashboard/keys) ──────────────────────── */
+/* The endpoint URL is the answer to "where do I send my requests?" — make
+   it the most readable thing on the page: monospace, full-width, one
+   line. The Copy button sits inline so a user can grab it without thinking. */
+.endpoint-card {
+  margin: var(--sp-4) 0 var(--sp-5);
+  padding: var(--sp-4) var(--sp-5);
+  background: var(--surface);
+  border: var(--hairline);
+  border-left: 3px solid var(--accent);
+}
+.endpoint-card-title {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-2);
+  margin: 0 0 var(--sp-2);
+}
+.endpoint-card-sub {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-3);
+  margin: 0 0 var(--sp-3);
+}
+.endpoint-url {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--accent);
+  background: var(--bg);
+  border: var(--hairline);
+  padding: 8px 10px;
+  word-break: break-all;
+  margin: 0 0 var(--sp-3);
+}
+.endpoint-copy { margin-left: 0; }
+
+/* ─── Provider config table (on /admin/unknown-ips) ────────────────────── */
+/* Each row pairs a provider name + free-tier quota with two inline forms:
+   a one-click toggle for the enabled flag and a separate api-key form
+   so the key field doesn't have to be retyped to flip the toggle. The
+   forms render compact and stack on narrow widths via flex-wrap. */
+.provider-table { table-layout: fixed; }
+.provider-table td { vertical-align: top; }
+.provider-table-meta {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-3);
+  margin-top: 2px;
+}
+.provider-table-quota {
+  display: inline-block;
+  font-size: 11px;
+  color: var(--text-2);
+  background: var(--bg);
+  padding: 2px 6px;
+  border-radius: var(--radius);
+  white-space: normal;
+}
+.provider-table-err {
+  margin-top: 4px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--warning);
+  word-break: break-all;
+}
+.provider-toggle-form,
+.provider-key-form {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  flex-wrap: wrap;
+}
+.provider-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-2);
+}
+.provider-key-form input[type="password"] {
+  width: 200px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  background: var(--bg);
+  border: var(--hairline);
+  border-radius: var(--radius);
+  padding: 5px 8px;
+  color: var(--text);
+}
 .recent-table {
   background: var(--surface);
 }
