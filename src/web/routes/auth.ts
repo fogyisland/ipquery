@@ -195,7 +195,12 @@ export default async function authRoutes(app: FastifyInstance): Promise<void> {
     await setLastLogin(app.pool, user.id);
     await setSessionCookie(reply, sid, app.cfg.web.sessionTtlHours * 3600, app.cfg.web.cookieSecure, app.cfg.web.cookieDomain);
 
-    const next = (body.next && body.next.startsWith('/')) ? body.next : '/dashboard';
+    // Admins get dropped at /admin (their primary surface), regular users
+    // at /dashboard. The /admin auth guard (src/web/plugins/auth.ts) will
+    // 403 any non-admin who tries to follow, so this is safe — but skipping
+    // /dashboard for admins saves them a click + a round-trip.
+    const fallback = user.role === 'admin' ? '/admin' : '/dashboard';
+    const next = (body.next && body.next.startsWith('/')) ? body.next : fallback;
     return reply.code(302).redirect(next);
   });
 

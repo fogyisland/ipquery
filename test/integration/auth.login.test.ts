@@ -67,6 +67,36 @@ describe('login', () => {
     expect((r.headers['set-cookie'] as string[]).some((c) => c.startsWith('sid='))).toBe(true);
   });
 
+  it('admin login → /admin (not /dashboard)', async () => {
+    // seedUser above uses role='user'; create an admin explicitly.
+    const hash = await hashPassword('AdminPass1234');
+    await createUser(app.pool, {
+      email: 'admin@x.com', passwordHash: hash, displayName: 'Admin', role: 'admin',
+    });
+    await app.pool.query('UPDATE users SET email_verified = 1 WHERE email = ?', ['admin@x.com']);
+    const { cookie, token } = await getCsrfCookieAndToken(app);
+    const r = await request(app.server).post('/login').set('Cookie', cookie)
+      .type('form').send({ email: 'admin@x.com', password: 'AdminPass1234', csrf: token });
+    expect(r.status).toBe(302);
+    expect(r.headers.location).toBe('/admin');
+  });
+
+  it('admin login honors ?next= override (e.g. ?next=/admin/unknown-ips)', async () => {
+    const hash = await hashPassword('AdminPass1234');
+    await createUser(app.pool, {
+      email: 'admin2@x.com', passwordHash: hash, displayName: 'Admin', role: 'admin',
+    });
+    await app.pool.query('UPDATE users SET email_verified = 1 WHERE email = ?', ['admin2@x.com']);
+    const { cookie, token } = await getCsrfCookieAndToken(app);
+    const r = await request(app.server).post('/login').set('Cookie', cookie)
+      .type('form').send({
+        email: 'admin2@x.com', password: 'AdminPass1234', csrf: token,
+        next: '/admin/unknown-ips',
+      });
+    expect(r.status).toBe(302);
+    expect(r.headers.location).toBe('/admin/unknown-ips');
+  });
+
   it('wrong password → 401', async () => {
     const { cookie, token } = await getCsrfCookieAndToken(app);
     const r = await request(app.server).post('/login').set('Cookie', cookie)
