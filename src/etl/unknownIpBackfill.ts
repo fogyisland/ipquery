@@ -12,17 +12,27 @@
 //        markProcessed the queue rows.
 //      - no consensus / no providers → markAttempted() with a reason
 //        and leave processed_at NULL so we try again next time.
-//   4. Returns a summary so the admin route can show "X processed, Y
+//   4. If any provider returns HTTP 429, it gets disabled in
+//      ingest_providers (rateLimited=true -> touchProviderError +
+//      updateProviderConfig({enabled:false})) so the rest of this run and
+//      future runs skip it until the admin re-enables it.
+//   5. Returns a summary so the admin route can show "X processed, Y
 //      merged, Z skipped".
 //
 // Run this from:
 //   - POST /admin/unknown-ips/backfill (manual, sync)
 //   - cron / future scheduler
+//
+// processIp() (exported) is the reusable per-IP fan-out + vote + write
+// core. The random-IP generator imports it to drive its synthetic IPs
+// without needing unknown_ip_queue rows.
 
 import type { Pool } from 'mysql2/promise';
 import type { ResultSetHeader } from 'mysql2/promise';
 import { nextBatch, markProcessed, markAttempted, type UnknownIpRow } from '../storage/unknownIpQueue';
-import type { IpGeoProvider, IpGeoRecord } from './providers/types';
+import type { IpGeoProvider, IpGeoLookupResult, IpGeoRecord } from './providers/types';
+import type { ProviderConfigRow } from '../storage/ingestProviders';
+import { touchProviderError, updateProviderConfig } from '../storage/ingestProviders';
 import { majorityVote } from './majority';
 import { parseIp } from '../ip';
 
@@ -47,18 +57,21 @@ export interface BackfillSummary {
   /** When the run finished (ms epoch). */
   finishedAt: number;
   /** Provider call stats (for the dashboard). */
-  providers: Record<string, { ok: number; failed: number; abstained: number }>;
+  providers: Record<string, { ok: number; failed: number; abstained: number; rateLimited: number }>;
+  /** Provider names that we auto-disabled during this run due to 429. */
+  providersDisabled: string[];
 }
 
 const DEFAULT_BATCH = 100;
 const DEFAULT_TIMEOUT = 8_000;
 
-/** Result of running the backfill on one IP. */
-type PerIpResult =
-  | { kind: 'merged'; row: UnknownIpRow; record: IpGeoRecord }
-  | { kind: 'no_consensus'; row: UnknownIpRow }
-  | { kind: 'no_country'; row: UnknownIpRow }
-  | { kind: 'all_abstained'; row: UnknownIpRow };
+/** Per-IP outcome returned by processIp. queueRow is set only when the
+ *  caller passed one (backfill flow); random-gen leaves it undefined. */
+export type IpOutcome =
+  | { kind: 'merged'; record: IpGeoRecord }
+  | { kind: 'no_consensus' }
+  | { kind: 'no_country' }
+  | { kind: 'all_abstained' };
 
 export async function runBackfill(
   pool: Pool,
@@ -79,7 +92,10 @@ export async function runBackfill(
     alreadyCovered: 0,
     startedAt,
     finishedAt: 0,
-    providers: Object.fromEntries(providers.map((p) => [p.name, { ok: 0, failed: 0, abstained: 0 }])),
+    providers: Object.fromEntries(providers.map((p) => [
+      p.name, { ok: 0, failed: 0, abstained: 0, rateLimited: 0 },
+    ])),
+    providersDisabled: [],
   };
 
   const queueRows = await nextBatch(pool, batchLimit);
@@ -89,17 +105,29 @@ export async function runBackfill(
     return summary;
   }
 
-  const results: PerIpResult[] = [];
+  const outcomes: Array<{ row: UnknownIpRow; outcome: IpOutcome }> = [];
 
   // Fan out all IPs concurrently, but cap concurrency at 16 to avoid
   // hammering the providers (and our own DB connection pool) in one go.
   const CONCURRENCY = 16;
   for (let i = 0; i < queueRows.length; i += CONCURRENCY) {
     const slice = queueRows.slice(i, i + CONCURRENCY);
-    const sliceResults = await Promise.all(
-      slice.map((row) => backfillOne(pool, providers, row, perIpTimeout, summary)),
+    const sliceOutcomes = await Promise.all(
+      slice.map(async (row) => ({ row, outcome: await processIp(pool, providers, row.ipText, row.ip, perIpTimeout, summary) })),
     );
-    results.push(...sliceResults);
+    outcomes.push(...sliceOutcomes);
+  }
+
+  // Auto-disable any provider that hit 429 during this run. We do this
+  // AFTER all IPs are processed (rather than mid-run) so we don't keep
+  // the old in-memory provider instance alive while it's no longer in
+  // the DB config. This is the safety the user asked for: "如果显示大大
+  // 限制则立即禁用".
+  await disableRateLimitedProviders(pool, providers, summary);
+  // Drop disabled providers from the per-provider stats so the UI
+  // doesn't show ongoing failures for something we just turned off.
+  for (const name of summary.providersDisabled) {
+    delete summary.providers[name];
   }
 
   // Bulk-update the queue: mark merged rows as processed, mark attempted
@@ -108,14 +136,14 @@ export async function runBackfill(
   const attempted: { no_consensus: number[]; no_country: number[]; all_abstained: number[] } = {
     no_consensus: [], no_country: [], all_abstained: [],
   };
-  for (const r of results) {
-    if (r.kind === 'merged') {
-      mergedIds.push(r.row.id);
+  for (const { row, outcome } of outcomes) {
+    if (outcome.kind === 'merged') {
+      mergedIds.push(row.id);
       summary.merged += 1;
     } else {
-      attempted[r.kind].push(r.row.id);
-      if (r.kind === 'no_consensus') summary.noConsensus += 1;
-      else if (r.kind === 'no_country') summary.noCountry += 1;
+      attempted[outcome.kind].push(row.id);
+      if (outcome.kind === 'no_consensus') summary.noConsensus += 1;
+      else if (outcome.kind === 'no_country') summary.noCountry += 1;
       else summary.allAbstained += 1;
     }
   }
@@ -134,55 +162,75 @@ export async function runBackfill(
   if (attempted.all_abstained.length > 0) await markAttempted(pool, attempted.all_abstained, 'all_abstained');
 
   summary.finishedAt = Date.now();
-  log.log?.(`[backfill] ${summary.merged}/${summary.considered} merged in ${summary.finishedAt - startedAt}ms`);
+  log.log?.(`[backfill] ${summary.merged}/${summary.considered} merged in ${summary.finishedAt - startedAt}ms; disabled=${summary.providersDisabled.join(',') || 'none'}`);
   return summary;
 }
 
-async function backfillOne(
+/** Per-IP fan-out + vote + write. Used by both the queue-driven backfill
+ *  and the random-IP generator. Updates `summary.providers[name]` stats
+ *  in place. Returns the outcome so the caller can track it. */
+export async function processIp(
   pool: Pool,
   providers: IpGeoProvider[],
-  row: UnknownIpRow,
-  perIpTimeoutMs: number,
+  ipText: string,
+  ipBuffer: Buffer,
+  _perIpTimeoutMs: number,
   summary: BackfillSummary,
-): Promise<PerIpResult> {
-  const ipText = row.ipText;
+): Promise<IpOutcome> {
   const responses = await Promise.all(
     providers.map(async (p) => {
       const start = Date.now();
+      let result: IpGeoLookupResult;
       try {
-        const rec = await p.lookup(ipText);
-        const elapsed = Date.now() - start;
-        const stats = summary.providers[p.name];
-        if (!stats) {
-          // New provider added after summary was built — should never
-          // happen because runBackfill pre-seeds, but guard for it.
-          return { provider: p.name, record: rec };
-        }
-        if (rec) {
-          stats.ok += 1;
-        } else {
-          stats.abstained += 1;
-        }
-        if (elapsed > 2_000) {
-          // Slow provider — log once for visibility but don't fail.
-          console.warn?.(`[backfill] provider ${p.name} took ${elapsed}ms for ${ipText}`);
-        }
-        return { provider: p.name, record: rec };
-      } catch (err) {
+        result = await p.lookup(ipText);
+      } catch {
         const stats = summary.providers[p.name];
         if (stats) stats.failed += 1;
-        return { provider: p.name, record: null as IpGeoRecord | null };
+        return { provider: p.name, record: null as IpGeoRecord | null, rateLimited: false };
       }
+      const elapsed = Date.now() - start;
+      const stats = summary.providers[p.name];
+      if (stats) {
+        if (result.rateLimited) stats.rateLimited += 1;
+        else if (result.record) stats.ok += 1;
+        else stats.abstained += 1;
+      }
+      if (elapsed > 2_000) {
+        console.warn?.(`[backfill] provider ${p.name} took ${elapsed}ms for ${ipText}`);
+      }
+      return { provider: p.name, record: result.record, rateLimited: result.rateLimited };
     }),
   );
 
   const vote = majorityVote(responses);
   if (!vote.ok) {
-    return { kind: vote.reason, row };
+    return { kind: vote.reason };
   }
 
-  await writeConsensusRange(pool, row.ip, vote.record);
-  return { kind: 'merged', row, record: vote.record };
+  await writeConsensusRange(pool, ipBuffer, vote.record);
+  return { kind: 'merged', record: vote.record };
+}
+
+/** Disable any provider whose rateLimited counter > 0. Idempotent. */
+async function disableRateLimitedProviders(
+  pool: Pool,
+  providers: IpGeoProvider[],
+  summary: BackfillSummary,
+): Promise<void> {
+  const liveProviders = new Set(providers.map((p) => p.name));
+  for (const [name, stats] of Object.entries(summary.providers)) {
+    if (stats.rateLimited <= 0) continue;
+    if (!liveProviders.has(name)) continue;
+    if (summary.providersDisabled.includes(name)) continue;
+    try {
+      await updateProviderConfig(pool, name, { enabled: false });
+      await touchProviderError(pool, name, `429 rate limited (${stats.rateLimited}x in this run)`);
+      summary.providersDisabled.push(name);
+      console.warn?.(`[backfill] auto-disabled provider ${name} after ${stats.rateLimited} x 429`);
+    } catch (err) {
+      console.error?.(`[backfill] failed to disable ${name}:`, err);
+    }
+  }
 }
 
 /** Insert a /32 (IPv4) or /128 (IPv6) range covering exactly `ip`. Tagged
@@ -223,11 +271,13 @@ export function buildDefaultProviders(env: NodeJS.ProcessEnv = process.env): IpG
   // Lazy import so the providers' deps (which only fire when lookup() is
   // called) aren't loaded for callers that don't need backfill.
   // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { IpApiProvider, IpinfoProvider, IplocateProvider } = require('./providers') as typeof import('./providers');
+  const { IpApiProvider, IpinfoProvider, IplocateProvider, FreeIpApiProvider, IpapiCoProvider } = require('./providers') as typeof import('./providers');
   return [
-    new IpApiProvider(), // no key required
-    new IpinfoProvider({ token: env.IPINFO_TOKEN }),
-    new IplocateProvider({ apiKey: env.IPLOCATE_API_KEY }),
+    new IpApiProvider(), // no key required, 45/min HTTP
+    new IpinfoProvider({ token: env.IPINFO_TOKEN }),     // key optional, 50k/month HTTPS
+    new IplocateProvider({ apiKey: env.IPLOCATE_API_KEY }), // key optional, 1k/day HTTPS
+    new FreeIpApiProvider(),  // no key, 60/min HTTPS
+    new IpapiCoProvider(),    // no key, 30k/month HTTPS
   ];
 }
 
@@ -237,3 +287,6 @@ export function buildDefaultProviders(env: NodeJS.ProcessEnv = process.env): IpG
 export function bufferFromIpText(text: string): Buffer | null {
   return parseIp(text);
 }
+
+/** Re-export the storage type for callers that build providers from DB. */
+export type { ProviderConfigRow };

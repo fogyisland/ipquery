@@ -5,7 +5,13 @@
 @media (prefers-color-scheme: dark) { .form-field input, .form-field select, .form-field textarea { background: #2a2a2a; color: #e5e5e5; border-color: #444; } }
 .form-help { color: #666; font-size: 0.875rem; margin: 0.25rem 0 0; }
 .form-error { color: #c00; font-size: 0.875rem; margin: 0.25rem 0 0; }
-button[type="submit"], .btn-primary { background: #0066cc; color: white; padding: 0.5rem 1rem; border: 0; border-radius: 4px; }
+button[type="submit"], .btn-primary {
+  background: #22d3ee; color: #062028;
+  padding: 7px 14px; border: 0; border-radius: 2px;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 12px; font-weight: 600; letter-spacing: 0.02em;
+  cursor: pointer;
+}
 button.link { background: none; border: 0; color: inherit; text-decoration: underline; padding: 0; cursor: pointer; }
 .flash { padding: 0.75rem 1rem; margin-bottom: 1rem; border-radius: 4px; }
 .flash-success { background: #d4edda; color: #155724; }

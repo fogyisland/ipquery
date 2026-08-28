@@ -18,6 +18,12 @@
       <form method="GET" action="/admin/unknown-ips/backfill/confirm" style="display:inline">
         <button type="submit" class="btn-primary">{{req.t 'admin.unknownIps.backfill.button'}}</button>
       </form>
+      <form method="POST" action="/admin/unknown-ips/generate" style="display:inline"
+            onsubmit="return confirm('{{req.t 'admin.unknownIps.generate.confirm'}}')">
+        <input type="hidden" name="csrf" value="{{csrfToken}}">
+        <input type="hidden" name="count" value="10">
+        <button type="submit" class="btn-secondary">{{req.t 'admin.unknownIps.generate.button'}}</button>
+      </form>
     </div>
   </div>
 
@@ -30,6 +36,33 @@
       <li>{{req.t 'admin.unknownIps.backfill.noConsensus'}}: {{flash.backfillSummary.noConsensus}}</li>
       <li>{{req.t 'admin.unknownIps.backfill.noCountry'}}: {{flash.backfillSummary.noCountry}}</li>
       <li>{{req.t 'admin.unknownIps.backfill.allAbstained'}}: {{flash.backfillSummary.allAbstained}}</li>
+    </ul>
+  </div>
+  {{/if}}
+
+  {{#if flash.generateSummary}}
+  <div class="admin-alert admin-alert--info">
+    <strong>{{req.t 'admin.unknownIps.generate.summary'}}</strong>
+    <ul class="admin-summary-list">
+      <li>{{req.t 'admin.unknownIps.generate.considered'}}: {{flash.generateSummary.considered}}</li>
+      <li>{{req.t 'admin.unknownIps.generate.merged'}}: {{flash.generateSummary.merged}}</li>
+      <li>{{req.t 'admin.unknownIps.generate.noConsensus'}}: {{flash.generateSummary.noConsensus}}</li>
+      <li>{{req.t 'admin.unknownIps.generate.noCountry'}}: {{flash.generateSummary.noCountry}}</li>
+      <li>{{req.t 'admin.unknownIps.generate.allAbstained'}}: {{flash.generateSummary.allAbstained}}</li>
+      <li>{{req.t 'admin.unknownIps.generate.exhaustedRetries'}}: {{flash.generateSummary.exhaustedRetries}}</li>
+      {{#if flash.generateSummary.providersDisabled.length}}
+      <li class="admin-summary-disabled">
+        {{req.t 'admin.unknownIps.generate.providersDisabled'}}: {{flash.generateSummary.providersDisabled}}
+      </li>
+      {{/if}}
+      {{#if flash.generateSummary.generatedIps.length}}
+      <li class="admin-summary-ips">
+        <details>
+          <summary>{{req.t 'admin.unknownIps.generate.ipList'}}</summary>
+          <code class="admin-ips">{{flash.generateSummary.generatedIps}}</code>
+        </details>
+      </li>
+      {{/if}}
     </ul>
   </div>
   {{/if}}
@@ -108,4 +141,67 @@
     </tbody>
   </table>
   {{/if}}
+</section>
+
+{{!-- Provider config. Each row shows the free-tier quota and lets the
+     admin flip the enabled toggle + set/clear the api_key. The catalog
+     (which providers exist + their display name) is code-managed; only
+     enabled / api_key are persisted from this form. --}}
+<section class="admin-card">
+  <div class="admin-card-head">
+    <h2>{{req.t 'admin.unknownIps.providers.title'}}</h2>
+    <p class="admin-card-sub">{{req.t 'admin.unknownIps.providers.help'}}</p>
+  </div>
+
+  <table class="admin-table provider-table">
+    <thead>
+      <tr>
+        <th>{{req.t 'admin.unknownIps.providers.col.name'}}</th>
+        <th>{{req.t 'admin.unknownIps.providers.col.quota'}}</th>
+        <th>{{req.t 'admin.unknownIps.providers.col.enabled'}}</th>
+        <th>{{req.t 'admin.unknownIps.providers.col.apiKey'}}</th>
+        <th>{{req.t 'admin.unknownIps.providers.col.lastUsed'}}</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {{#each providers}}
+      <tr>
+        <td>
+          <strong>{{this.displayName}}</strong>
+          <div class="provider-table-meta">{{this.name}}</div>
+        </td>
+        <td><code class="provider-table-quota">{{this.freeQuota}}</code></td>
+        <td>
+          <form method="POST" action="/admin/unknown-ips/providers/{{this.name}}" class="provider-toggle-form">
+            <input type="hidden" name="csrf" value="{{../csrfToken}}">
+            <input type="hidden" name="apiKey" value="{{this.apiKey}}">
+            <label class="provider-toggle">
+              <input type="checkbox" name="enabled" value="on" {{#if this.enabled}}checked{{/if}}>
+              <span>{{#if this.enabled}}{{../req.t 'admin.unknownIps.providers.enabled.on'}}{{else}}{{../req.t 'admin.unknownIps.providers.enabled.off'}}{{/if}}</span>
+            </label>
+            <button type="submit" class="button">{{../req.t 'admin.unknownIps.providers.save'}}</button>
+          </form>
+        </td>
+        <td>
+          <form method="POST" action="/admin/unknown-ips/providers/{{this.name}}" class="provider-key-form">
+            <input type="hidden" name="csrf" value="{{../csrfToken}}">
+            <input type="hidden" name="enabled" value="{{#if this.enabled}}on{{else}}off{{/if}}">
+            <input type="password" name="apiKey" placeholder="{{../req.t 'admin.unknownIps.providers.apiKeyPlaceholder'}}" value="{{this.apiKey}}" autocomplete="off">
+            <button type="submit" class="button">{{../req.t 'admin.unknownIps.providers.save'}}</button>
+          </form>
+        </td>
+        <td>
+          {{#if this.lastUsedAt}}<span title="{{formatDate this.lastUsedAt}}">{{formatRelative this.lastUsedAt}}</span>{{else}}<span class="admin-tag admin-tag--muted">—</span>{{/if}}
+          {{#if this.lastErrorReason}}
+            <div class="provider-table-err">{{this.lastErrorReason}}</div>
+          {{/if}}
+        </td>
+        <td>
+          {{#if this.enabled}}<span class="admin-tag admin-tag--ok">{{../req.t 'admin.unknownIps.providers.enabled.on'}}</span>{{else}}<span class="admin-tag admin-tag--muted">{{../req.t 'admin.unknownIps.providers.enabled.off'}}</span>{{/if}}
+        </td>
+      </tr>
+      {{/each}}
+    </tbody>
+  </table>
 </section>

@@ -45,8 +45,18 @@ export function t(locale: Locale, key: string, vars?: Record<string, string | nu
     ?? key;
   if (typeof raw !== 'string') return key;
   if (!vars) return raw;
+  // When Handlebars invokes a context-method like `{{req.t "k" name=x}}`, the
+  // parser leaks the helper path name into vars (`vars.name = 'req.t'`) AND
+  // still puts the real hash args under vars.hash (`vars.hash.name = x`). The
+  // hash is the user-intended value; ignore vars.hash and skip the bogus
+  // parser-leaked top-level keys (they are either the helper name or the
+  // reserved HBS option keys `hash`, `data`, `loc`).
+  const userVars = (vars as Record<string, unknown>).hash && typeof (vars as Record<string, unknown>).hash === 'object'
+    ? ((vars as Record<string, unknown>).hash as Record<string, string | number>)
+    : vars;
   let s = raw;
-  for (const [k, v] of Object.entries(vars)) {
+  for (const [k, v] of Object.entries(userVars)) {
+    if (typeof v !== 'string' && typeof v !== 'number') continue;
     s = s.split(`{${k}}`).join(String(v));
   }
   return s;

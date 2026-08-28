@@ -48,8 +48,14 @@ export default async function dashboardRoutes(app: FastifyInstance): Promise<voi
 
   app.get('/dashboard/keys', async (req, reply) => {
     const keys = await listApiKeysForUser(app.pool, req.user!.id);
+    // Endpoint template — shown next to each key so users know where to
+    // send requests. Driven by WEB_BASE_URL so the value updates if the
+    // site is re-deployed under a different domain.
+    const baseUrl = (app.cfg.web.baseUrl ?? '').replace(/\/+$/, '');
+    const endpoint = `${baseUrl}/api/v1/lookup?ip=8.8.8.8&key=YOUR_KEY`;
     return reply.view('dashboard/keys.hbs', {
-      layout: 'layouts/dashboard', title: req.t('dashboard.keys.title'), keys, req,
+      layout: 'layouts/dashboard', title: req.t('dashboard.keys.title'),
+      keys, endpoint, baseUrl, req,
     });
   });
 

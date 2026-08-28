@@ -1,38 +1,66 @@
 {{!-- SPDX-License-Identifier: MIT --}}
-{{!-- Task 4: redesigned navigation sidebar. Rendered by layouts/app.hbs and
-     (transitively) by every existing layout that still uses {{> nav}}. --}}
+{{!-- Sidebar navigation. Context-aware: on /dashboard the personal section
+     expands and the admin section (if user is admin) collapses to a single
+     "enter admin console" CTA. On /admin the inverse — admin section
+     expands and personal section is the CTA. This matches the rule that
+     the user only sees menus relevant to where they are. --}}
 <aside class="sidebar">
   <a class="sidebar-brand" href="/">IPQuery</a>
   <nav class="sidebar-nav">
-    <div class="sidebar-group">
-      <div class="sidebar-group-label">{{req.t 'sidebar.group.public'}}</div>
-      <a href="/" class="sidebar-link">{{req.t 'nav.home'}}</a>
-      <a href="/try" class="sidebar-link">{{req.t 'nav.try'}}</a>
-      <a href="/docs" class="sidebar-link">{{req.t 'nav.docs'}}</a>
-      <a href="/status" class="sidebar-link">{{req.t 'nav.status'}}</a>
-      <a href="/about" class="sidebar-link">{{req.t 'nav.about'}}</a>
-    </div>
+    {{!-- Public links removed from in-app sidebar — the topnav on marketing
+         pages already exposes home/try/docs/status/about. Inside the app
+         shell we only show the user/admin section that's actually relevant. --}}
+
     {{#if req.session.userId}}
-    <div class="sidebar-group">
-      <div class="sidebar-group-label">{{req.t 'sidebar.group.user'}}</div>
-      <a href="/dashboard" class="sidebar-link">{{req.t 'nav.dashboard'}}</a>
-      <a href="/dashboard/history" class="sidebar-link">{{req.t 'nav.history'}}</a>
-      <a href="/dashboard/keys" class="sidebar-link">{{req.t 'nav.apiKeys'}}</a>
-      <a href="/dashboard/profile" class="sidebar-link">{{req.t 'nav.profile'}}</a>
-    </div>
-    {{/if}}
-    {{#if (eq req.session.role 'admin')}}
-    <div class="sidebar-group">
-      <div class="sidebar-group-label">{{req.t 'sidebar.group.admin'}}</div>
-      <a href="/admin" class="sidebar-link">{{req.t 'nav.admin.dashboard'}}</a>
-      <a href="/admin/users" class="sidebar-link">{{req.t 'nav.admin.users'}}</a>
-      <a href="/admin/etl/runs" class="sidebar-link">{{req.t 'nav.admin.etl'}}</a>
-      <a href="/admin/queries" class="sidebar-link">{{req.t 'nav.admin.queries'}}</a>
-      <a href="/admin/keys" class="sidebar-link">{{req.t 'nav.admin.keys'}}</a>
-      <a href="/admin/audit" class="sidebar-link">{{req.t 'nav.admin.audit'}}</a>
-      <a href="/admin/audit-log" class="sidebar-link">{{req.t 'nav.admin.auditLog'}}</a>
-      <a href="/admin/settings" class="sidebar-link">{{req.t 'nav.admin.settings'}}</a>
-    </div>
+      {{#if (startsWith req.path '/admin')}}
+        {{!-- On an admin page: show admin section expanded, personal as CTA --}}
+        <div class="sidebar-group">
+          <div class="sidebar-group-label">{{req.t 'sidebar.group.user'}}</div>
+          <a href="/dashboard" class="sidebar-link sidebar-link--cta">
+            <span class="sidebar-link-arrow">&larr;</span>
+            {{req.t 'sidebar.backToDashboard'}}
+          </a>
+        </div>
+        {{#if (eq req.session.role 'admin')}}
+          <div class="sidebar-group">
+            <div class="sidebar-group-label">{{req.t 'sidebar.group.admin'}}</div>
+            <a href="/admin" class="sidebar-link {{#if (eq req.path '/admin')}}active{{/if}}">{{req.t 'nav.admin.dashboard'}}</a>
+            <a href="/admin/users" class="sidebar-link {{#if (eq req.path '/admin/users')}}active{{/if}}">{{req.t 'nav.admin.users'}}</a>
+            <a href="/admin/etl/runs" class="sidebar-link {{#if (eq req.path '/admin/etl/runs')}}active{{/if}}">{{req.t 'nav.admin.etl'}}</a>
+            <a href="/admin/queries" class="sidebar-link {{#if (eq req.path '/admin/queries')}}active{{/if}}">{{req.t 'nav.admin.queries'}}</a>
+            <a href="/admin/keys" class="sidebar-link {{#if (eq req.path '/admin/keys')}}active{{/if}}">{{req.t 'nav.admin.keys'}}</a>
+            <a href="/admin/audit" class="sidebar-link {{#if (eq req.path '/admin/audit')}}active{{/if}}">{{req.t 'nav.admin.audit'}}</a>
+            <a href="/admin/unknown-ips" class="sidebar-link {{#if (eq req.path '/admin/unknown-ips')}}active{{/if}}">{{req.t 'nav.admin.ingest'}}</a>
+            <a href="/admin/audit-log" class="sidebar-link {{#if (eq req.path '/admin/audit-log')}}active{{/if}}">{{req.t 'nav.admin.auditLog'}}</a>
+            <a href="/admin/settings" class="sidebar-link {{#if (eq req.path '/admin/settings')}}active{{/if}}">{{req.t 'nav.admin.settings'}}</a>
+          </div>
+        {{/if}}
+      {{else}}
+        {{!-- On a personal page: show personal section expanded, admin as CTA --}}
+        <div class="sidebar-group">
+          <div class="sidebar-group-label">{{req.t 'sidebar.group.user'}}</div>
+          <a href="/dashboard" class="sidebar-link {{#if (eq req.path '/dashboard')}}active{{/if}}">{{req.t 'nav.dashboard'}}</a>
+          <a href="/dashboard/history" class="sidebar-link {{#if (eq req.path '/dashboard/history')}}active{{/if}}">{{req.t 'nav.history'}}</a>
+          <a href="/dashboard/keys" class="sidebar-link {{#if (eq req.path '/dashboard/keys')}}active{{/if}}">{{req.t 'nav.apiKeys'}}</a>
+          <a href="/dashboard/profile" class="sidebar-link {{#if (eq req.path '/dashboard/profile')}}active{{/if}}">{{req.t 'nav.profile'}}</a>
+        </div>
+        {{#if (eq req.session.role 'admin')}}
+          <div class="sidebar-group">
+            <div class="sidebar-group-label">{{req.t 'sidebar.group.admin'}}</div>
+            <a href="/admin" class="sidebar-link sidebar-link--cta">
+              <span class="sidebar-link-arrow">&rarr;</span>
+              {{req.t 'sidebar.enterAdmin'}}
+            </a>
+          </div>
+        {{/if}}
+      {{/if}}
+    {{else}}
+      {{!-- Logged-out: only auth links in the personal slot --}}
+      <div class="sidebar-group">
+        <div class="sidebar-group-label">{{req.t 'sidebar.group.user'}}</div>
+        <a href="/login" class="sidebar-link {{#if (eq req.path '/login')}}active{{/if}}">{{req.t 'nav.login'}}</a>
+        <a href="/signup" class="sidebar-link {{#if (eq req.path '/signup')}}active{{/if}}">{{req.t 'nav.signup'}}</a>
+      </div>
     {{/if}}
   </nav>
   <div class="sidebar-footer">
@@ -42,9 +70,6 @@
         <input type="hidden" name="csrf" value="{{req.csrfToken}}">
         <button type="submit" class="sidebar-link sidebar-logout">{{req.t 'nav.logout'}}</button>
       </form>
-    {{else}}
-      <a href="/login" class="sidebar-link">{{req.t 'nav.login'}}</a>
-      <a href="/signup" class="sidebar-link">{{req.t 'nav.signup'}}</a>
     {{/if}}
   </div>
 </aside>

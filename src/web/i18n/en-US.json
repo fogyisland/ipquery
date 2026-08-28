@@ -25,7 +25,9 @@
       "public": "Public",
       "user": "Account",
       "admin": "Admin"
-    }
+    },
+    "enterAdmin": "Enter admin console",
+    "backToDashboard": "Back to account"
   },
   "nav": {
     "home": "Home",
@@ -43,7 +45,8 @@
       "keys": "API Keys",
       "audit": "Query Audit",
       "auditLog": "Audit Log",
-      "settings": "Settings"
+      "settings": "Settings",
+      "ingest": "API Ingest"
     },
     "logout": "Log out",
     "history": "History",
@@ -148,7 +151,12 @@
       "created": "Created",
       "revoke": "Revoke",
       "revoke.confirm": "Revoke this key? It cannot be undone.",
-      "created_once": "Save this key now, you will not see it again:"
+      "created_once": "Save this key now, you will not see it again:",
+      "endpoint": {
+        "title": "API endpoint",
+        "help": "Replace YOUR_KEY with any active key, and IP with the address you want to look up.",
+        "copy": "Copy"
+      }
     },
     "profile": {
       "title": "Profile",
@@ -369,6 +377,79 @@
       },
       "etlRestart": "Run ETL now",
       "etlRestart.confirm": "Trigger ETL pipeline manually (fire-and-forget)"
+    },
+    "unknownIps": {
+      "title": "Unknown IP Queue",
+      "stats": {
+        "pending": "Pending",
+        "processed": "Merged",
+        "totalQueries": "Total queries"
+      },
+      "section": {
+        "pending": "Pending backfill (by pressure)",
+        "recentlyProcessed": "Recently merged"
+      },
+      "col": {
+        "ip": "IP",
+        "queryCount": "Hits",
+        "firstSeen": "First seen",
+        "lastSeen": "Last seen",
+        "source": "Source",
+        "lastAttempt": "Last attempt",
+        "processedAt": "Merged at",
+        "runId": "ETL Run"
+      },
+      "empty": {
+        "pending": "No pending IPs. New ones auto-enqueue on /lookup miss."
+      },
+      "runId": {
+        "manual": "manual backfill"
+      },
+      "backfill": {
+        "button": "Backfill now",
+        "summary": "Backfill complete",
+        "considered": "considered",
+        "merged": "merged",
+        "noConsensus": "no consensus",
+        "noCountry": "no country",
+        "allAbstained": "all abstained",
+        "batchLimit": "IPs per batch",
+        "run": "Run backfill",
+        "confirm": {
+          "title": "Confirm backfill",
+          "body": "Each pending IP will be queried against 3 external APIs in parallel and merged via majority vote. IPs already in ip_ranges are auto-skipped."
+        }
+      },
+      "generate": {
+        "button": "Generate 10 random IPs",
+        "confirm": "Generate 10 random IPs, fan out to every enabled provider, and merge via majority vote. Takes about 1–2 minutes. Continue?",
+        "summary": "Random IP generation complete",
+        "considered": "queried",
+        "merged": "merged",
+        "noConsensus": "no consensus",
+        "noCountry": "no country",
+        "allAbstained": "all abstained",
+        "exhaustedRetries": "exhausted retries",
+        "providersDisabled": "auto-disabled providers (429)",
+        "ipList": "generated IPs"
+      },
+      "providers": {
+        "title": "Backfill providers",
+        "help": "Backfill fans out each pending IP to the external APIs below in parallel and merges via majority vote. Toggle each provider on/off and rotate API keys here. Changes take effect on the next backfill — no restart required.",
+        "col": {
+          "name": "Provider",
+          "quota": "Free tier",
+          "enabled": "Enabled",
+          "apiKey": "API key",
+          "lastUsed": "Last used"
+        },
+        "enabled": {
+          "on": "Enabled",
+          "off": "Disabled"
+        },
+        "save": "Save",
+        "apiKeyPlaceholder": "not set"
+      }
     }
   },
   "home": {
@@ -709,49 +790,6 @@
       "db_unreachable": "Database is unreachable",
       "site_name_required": "Site name is required",
       "displayName_invalid": "Display name must be 1-64 characters"
-    },
-    "unknownIps": {
-      "title": "Unknown IP Queue",
-      "stats": {
-        "pending": "Pending",
-        "processed": "Merged",
-        "totalQueries": "Total queries"
-      },
-      "section": {
-        "pending": "Pending backfill (by pressure)",
-        "recentlyProcessed": "Recently merged"
-      },
-      "col": {
-        "ip": "IP",
-        "queryCount": "Hits",
-        "firstSeen": "First seen",
-        "lastSeen": "Last seen",
-        "source": "Source",
-        "lastAttempt": "Last attempt",
-        "processedAt": "Merged at",
-        "runId": "ETL Run"
-      },
-      "empty": {
-        "pending": "No pending IPs. New ones auto-enqueue on /lookup miss."
-      },
-      "runId": {
-        "manual": "manual backfill"
-      },
-      "backfill": {
-        "button": "Backfill now",
-        "summary": "Backfill complete",
-        "considered": "considered",
-        "merged": "merged",
-        "noConsensus": "no consensus",
-        "noCountry": "no country",
-        "allAbstained": "all abstained",
-        "batchLimit": "IPs per batch",
-        "run": "Run backfill",
-        "confirm": {
-          "title": "Confirm backfill",
-          "body": "Each pending IP will be queried against 3 external APIs in parallel and merged via majority vote. IPs already in ip_ranges are auto-skipped."
-        }
-      }
     }
   }
 }
