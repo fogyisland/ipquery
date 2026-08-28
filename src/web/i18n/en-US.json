@@ -160,7 +160,15 @@
       "save": "Save changes",
       "saved": "Profile saved",
       "savedWithEviction": "Profile saved. {{count}} other session(s) signed out."
-    }
+    },
+    "hit": "Hit",
+    "miss": "Miss",
+    "invalid": "Invalid",
+    "last7d": "Last 7d",
+    "section.queries7d": "Query volume (7d)",
+    "account.title": "Account",
+    "joined": "Joined",
+    "shortcuts.title": "Shortcuts"
   },
   "admin": {
     "title": "Admin",

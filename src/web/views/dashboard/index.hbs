@@ -1,12 +1,57 @@
 {{!-- SPDX-License-Identifier: MIT --}}
-<h1>{{req.t 'dashboard.title'}}</h1>
-<p>{{req.t 'dashboard.welcome' name=req.user.displayName}}</p>
-<section>
-  <h2>最近 7 天查询统计</h2>
-  <ul>
-    <li>命中:{{counts.hit}}</li>
-    <li>未命中:{{counts.miss}}</li>
-    <li>无效:{{counts.invalid}}</li>
-  </ul>
-</section>
-<p><a href="/dashboard/history">{{req.t 'dashboard.history.title'}}</a></p>
+{{!-- User dashboard. Per-account view: only this user's queries count, so
+     hit rate and the per-status counts never leak across users. --}}
+
+<header class="dash-welcome">
+  <div>
+    <h2>{{req.t 'dashboard.title'}}</h2>
+    <p class="dash-welcome-sub">{{req.t 'dashboard.welcome' name=req.user.displayName}}</p>
+  </div>
+  <div class="dash-welcome-actions">
+    <a class="button" href="/dashboard/history">{{req.t 'dashboard.history.title'}}</a>
+    <a class="btn-primary" href="/dashboard/keys">{{req.t 'dashboard.keys.title'}}</a>
+  </div>
+</header>
+
+<h3 class="dash-section-title">{{req.t 'dashboard.section.queries7d'}}</h3>
+<div class="dashboard-grid dashboard-grid--three">
+  <div class="card stat-card stat-card--hit">
+    <p class="card-title">{{req.t 'dashboard.hit'}}</p>
+    <p class="card-value">{{counts.hit}}</p>
+    <p class="card-sub">{{req.t 'dashboard.last7d'}}</p>
+  </div>
+  <div class="card stat-card stat-card--miss">
+    <p class="card-title">{{req.t 'dashboard.miss'}}</p>
+    <p class="card-value">{{counts.miss}}</p>
+    <p class="card-sub">{{req.t 'dashboard.last7d'}}</p>
+  </div>
+  <div class="card stat-card stat-card--invalid">
+    <p class="card-title">{{req.t 'dashboard.invalid'}}</p>
+    <p class="card-value">{{counts.invalid}}</p>
+    <p class="card-sub">{{req.t 'dashboard.last7d'}}</p>
+  </div>
+</div>
+
+<div class="card">
+  <header class="chart-card-head">
+    <h3 class="card-title">{{req.t 'dashboard.account.title'}}</h3>
+    <a class="dash-link" href="/dashboard/profile">{{req.t 'dashboard.profile.title' }} &rarr;</a>
+  </header>
+  <dl class="settings-dl">
+    <dt>{{req.t 'dashboard.profile.email'}}</dt><dd>{{req.user.email}}</dd>
+    <dt>{{req.t 'dashboard.profile.displayName'}}</dt><dd>{{req.user.displayName}}</dd>
+    <dt>{{req.t 'dashboard.joined'}}</dt><dd>{{formatDate req.user.createdAt}}</dd>
+  </dl>
+</div>
+
+<div class="card">
+  <header class="chart-card-head">
+    <h3 class="card-title">{{req.t 'dashboard.shortcuts.title'}}</h3>
+  </header>
+  <div class="dash-quick">
+    <a class="button" href="/dashboard/history">{{req.t 'dashboard.history.title'}}</a>
+    <a class="button" href="/dashboard/keys">{{req.t 'dashboard.keys.title'}}</a>
+    <a class="button" href="/dashboard/profile">{{req.t 'dashboard.profile.title'}}</a>
+    <a class="button" href="/try">{{req.t 'nav.try'}}</a>
+  </div>
+</div>

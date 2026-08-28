@@ -10,7 +10,7 @@
   <button type="submit">{{req.t 'common.search'}}</button>
 </form>
 {{#if rows.length}}
-<table>
+<table class="table">
   <thead><tr><th>{{req.t 'dashboard.history.col.time'}}</th><th>IP</th><th>{{req.t 'dashboard.history.col.status'}}</th><th>{{req.t 'dashboard.history.col.source'}}</th></tr></thead>
   <tbody>
     {{#each rows}}<tr><td>{{formatDate this.ts}}</td><td>{{this.ipText}}</td><td>{{this.status}}</td><td>{{#if this.apiKeyPrefix}}{{this.apiKeyPrefix}}{{else}}session{{/if}}</td></tr>{{/each}}

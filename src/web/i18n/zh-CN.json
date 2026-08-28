@@ -161,7 +161,15 @@
       "save": "保存修改",
       "saved": "资料已保存",
       "savedWithEviction": "资料已保存。已退出 {{count}} 个其他会话。"
-    }
+    },
+    "hit": "命中",
+    "miss": "未命中",
+    "invalid": "无效",
+    "last7d": "近 7 天",
+    "section.queries7d": "查询统计 (7 天)",
+    "account.title": "账户信息",
+    "joined": "注册时间",
+    "shortcuts.title": "快捷入口"
   },
   "admin": {
     "title": "管理后台",

@@ -82,7 +82,7 @@
 }
 
 /* ─── Shell ─────────────────────────────────────────────────────────────── */
-.layout-admin {
+.layout-admin, .layout-dashboard, .layout-app {
   margin: 0;
   background: var(--bg);
   color: var(--text);
@@ -202,15 +202,17 @@
 }
 
 /* ─── Headings ──────────────────────────────────────────────────────────── */
-.layout-admin h1, .layout-admin h2, .layout-admin h3 {
+.layout-admin h1, .layout-dashboard h1, .layout-app h1,
+.layout-admin h2, .layout-dashboard h2, .layout-app h2,
+.layout-admin h3, .layout-dashboard h3, .layout-app h3 {
   color: var(--text);
   letter-spacing: -0.01em;
   margin: 0 0 16px;
   font-weight: 600;
 }
-.layout-admin h1 { font-size: 24px; margin-bottom: 24px; }
-.layout-admin h2 { font-size: 18px; margin-bottom: 12px; }
-.layout-admin h3 { font-size: 14px; margin-bottom: 8px; color: var(--text-2); font-weight: 600; }
+.layout-admin h1, .layout-dashboard h1, .layout-app h1 { font-size: 24px; margin-bottom: 24px; }
+.layout-admin h2, .layout-dashboard h2, .layout-app h2 { font-size: 18px; margin-bottom: 12px; }
+.layout-admin h3, .layout-dashboard h3, .layout-app h3 { font-size: 14px; margin-bottom: 8px; color: var(--text-2); font-weight: 600; }
 
 /* ─── Dashboard grid + stat cards ───────────────────────────────────────── */
 .dashboard-grid {
@@ -548,7 +550,9 @@ dl.settings-dl { display: grid; grid-template-columns: minmax(140px, max-content
 dl.settings-dl dt { font-size: 13px; font-weight: 500; color: var(--text-2); }
 dl.settings-dl dd { margin: 0; font-size: 14px; color: var(--text); font-variant-numeric: tabular-nums; word-break: break-all; }
 
-.layout-admin dl:not(.settings-dl) {
+.layout-admin dl:not(.settings-dl),
+.layout-dashboard dl:not(.settings-dl),
+.layout-app dl:not(.settings-dl) {
   display: grid;
   grid-template-columns: max-content 1fr;
   gap: 8px 24px;
@@ -557,9 +561,15 @@ dl.settings-dl dd { margin: 0; font-size: 14px; color: var(--text); font-variant
   border-radius: var(--radius);
   padding: 20px;
 }
-.layout-admin dl:not(.settings-dl) dt { font-size: 13px; color: var(--text-2); font-weight: 500; }
-.layout-admin dl:not(.settings-dl) dd { margin: 0; font-size: 14px; }
-.layout-admin dl:not(.settings-dl) pre {
+.layout-admin dl:not(.settings-dl) dt,
+.layout-dashboard dl:not(.settings-dl) dt,
+.layout-app dl:not(.settings-dl) dt { font-size: 13px; color: var(--text-2); font-weight: 500; }
+.layout-admin dl:not(.settings-dl) dd,
+.layout-dashboard dl:not(.settings-dl) dd,
+.layout-app dl:not(.settings-dl) dd { margin: 0; font-size: 14px; }
+.layout-admin dl:not(.settings-dl) pre,
+.layout-dashboard dl:not(.settings-dl) pre,
+.layout-app dl:not(.settings-dl) pre {
   margin: 0;
   font-family: var(--mono);
   font-size: 12px;
@@ -711,6 +721,18 @@ code.secret {
   margin: 24px 0 12px;
 }
 .dash-section-title:first-of-type { margin-top: 8px; }
+
+.dash-quick {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.form-section {
+  margin-top: 2rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--border);
+}
 
 .dashboard-grid--three { grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
 
