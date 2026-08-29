@@ -34,11 +34,16 @@ export interface ProviderConfigRow {
   lastUsedAt: Date | null;
   lastErrorAt: Date | null;
   lastErrorReason: string | null;
+  autoReenableAt: Date | null;
+  autoDisabledReason: string | null;
 }
 
 /** Static catalog. Mirrors the seeded rows in migration 016 — adding a
- *  new provider requires a row AND a catalog entry, never one alone. */
-const PROVIDER_CATALOG: Record<string, { displayName: string; freeQuota: string }> = {
+ *  new provider requires a row AND a catalog entry, never one alone.
+ *  Exported (not just a module-private const) so peers like
+ *  providerErrorLog can iterate the provider names without re-typing
+ *  them. */
+export const PROVIDER_CATALOG: Record<string, { displayName: string; freeQuota: string }> = {
   'ip-api':    { displayName: 'IP-API',       freeQuota: '45 req/min, no key (HTTP only)' },
   'iplocate':  { displayName: 'IPLocate.io',  freeQuota: '1,000 req/day, key required (HTTPS)' },
   'ipinfo':    { displayName: 'IPinfo.io',    freeQuota: '50,000 req/month, key required (HTTPS)' },
@@ -57,12 +62,15 @@ export const PROVIDER_CATALOG_LIST: ProviderConfigRow[] = Object.entries(PROVIDE
     lastUsedAt: null,
     lastErrorAt: null,
     lastErrorReason: null,
+    autoReenableAt: null,
+    autoDisabledReason: null,
   }));
 
 export async function listProviderConfigs(pool: Pool): Promise<ProviderConfigRow[]> {
   const [rows] = await pool.query<RowDataPacket[]>(
     `SELECT name, display_name, free_quota, enabled, api_key,
-            rate_limit_per_min, last_used_at, last_error_at, last_error_reason
+            rate_limit_per_min, last_used_at, last_error_at, last_error_reason,
+            auto_reenable_at, auto_disabled_reason
        FROM ingest_providers
        ORDER BY name`,
   );
@@ -80,13 +88,16 @@ function rowToConfig(r: RowDataPacket): ProviderConfigRow {
     lastUsedAt: r.last_used_at ? new Date(r.last_used_at) : null,
     lastErrorAt: r.last_error_at ? new Date(r.last_error_at) : null,
     lastErrorReason: r.last_error_reason == null ? null : String(r.last_error_reason),
+    autoReenableAt: r.auto_reenable_at ? new Date(r.auto_reenable_at) : null,
+    autoDisabledReason: r.auto_disabled_reason == null ? null : String(r.auto_disabled_reason),
   };
 }
 
 export async function getProviderConfig(pool: Pool, name: string): Promise<ProviderConfigRow | null> {
   const [rows] = await pool.query<RowDataPacket[]>(
     `SELECT name, display_name, free_quota, enabled, api_key,
-            rate_limit_per_min, last_used_at, last_error_at, last_error_reason
+            rate_limit_per_min, last_used_at, last_error_at, last_error_reason,
+            auto_reenable_at, auto_disabled_reason
        FROM ingest_providers WHERE name = ? LIMIT 1`,
     [name],
   );
@@ -96,11 +107,14 @@ export async function getProviderConfig(pool: Pool, name: string): Promise<Provi
   return rowToConfig(r);
 }
 
-/** Persist admin changes. Whitelist of updatable fields: enabled, api_key.
- *  Display name + free quota are code-managed (catalog). */
+/** Persist admin changes. Whitelist of updatable fields: enabled, api_key,
+ *  auto_reenable_at, auto_disabled_reason. Display name + free quota are
+ *  code-managed (catalog). */
 export interface ProviderConfigUpdate {
   enabled?: boolean;
   apiKey?: string | null;
+  autoReenableAt?: Date | null;
+  autoDisabledReason?: string | null;
 }
 
 export async function updateProviderConfig(
@@ -117,6 +131,16 @@ export async function updateProviderConfig(
   if (patch.apiKey !== undefined) {
     sets.push('api_key = ?');
     args.push(patch.apiKey && patch.apiKey.length > 0 ? patch.apiKey : null);
+  }
+  if (patch.autoReenableAt !== undefined) {
+    sets.push('auto_reenable_at = ?');
+    args.push(patch.autoReenableAt);
+  }
+  if (patch.autoDisabledReason !== undefined) {
+    sets.push('auto_disabled_reason = ?');
+    args.push(patch.autoDisabledReason && patch.autoDisabledReason.length > 0
+      ? patch.autoDisabledReason.slice(0, 255)
+      : null);
   }
   if (sets.length === 0) return;
   args.push(name);
@@ -139,6 +163,58 @@ export async function touchProviderError(pool: Pool, name: string, reason: strin
     `UPDATE ingest_providers SET last_error_at = CURRENT_TIMESTAMP(3), last_error_reason = ?
      WHERE name = ?`,
     [reason.slice(0, 255), name],
+  );
+}
+
+/** Per-call outcome tag from the ingest flows (backfill / random-gen). */
+export interface ProviderCallOutcome {
+  rateLimited?: boolean;
+  errorCode?: string;
+}
+
+/** Per-provider, per-UTC-day call counter. UPSERTs into provider_call_counter
+ *  so calls within the same UTC day accumulate into one row. Called from
+ *  processIp() in unknownIpBackfill AFTER every provider.lookup() —
+ *  successful, rate-limited, errored, or thrown. Powers the "1h/24h/7d
+ *  window stats" widget on the Providers tab and the "daily quota usage"
+ *  pill.
+ *
+ *  All bucketing happens in JS — we bind only 0/1 increments so MySQL
+ *  never has to coerce a string errorCode against numeric/equality
+ *  literals in WHERE-style comparison contexts (which would error with
+ *  "Truncated incorrect DOUBLE value: 'timeout'"). 9 placeholders
+ *  total: 1 (name) + 4 (buckets for VALUES) + 4 (buckets for UPDATE). */
+export async function touchProviderCalled(
+  pool: Pool,
+  name: string,
+  outcome: ProviderCallOutcome,
+): Promise<void> {
+  const rateLimited = outcome.rateLimited === true;
+  const errorCode = outcome.errorCode ?? null;
+  const is429 = rateLimited ? 1 : 0;
+  const isTimeout = errorCode === 'timeout' ? 1 : 0;
+  const isNetwork = errorCode === 'network' ? 1 : 0;
+  // "other" = had an errorCode but it wasn't 429/timeout/network — e.g.
+  // 'http_500', 'no_country', 'unauthorized'.
+  const isOther = !rateLimited && errorCode != null && errorCode !== 'timeout' && errorCode !== 'network' ? 1 : 0;
+  await pool.query(
+    `INSERT INTO provider_call_counter
+       (provider_name, day_utc, calls_total, calls_429, calls_timeout,
+        calls_network_err, calls_other_err, last_called_at)
+     VALUES (?, UTC_DATE(), 1, ?, ?, ?, ?, NOW(3))
+     ON DUPLICATE KEY UPDATE
+       calls_total        = calls_total + 1,
+       calls_429          = calls_429 + ?,
+       calls_timeout      = calls_timeout + ?,
+       calls_network_err  = calls_network_err + ?,
+       calls_other_err    = calls_other_err + ?,
+       last_called_at     = NOW(3)`,
+    [
+      // INSERT VALUES (5 placeholders):
+      name, is429, isTimeout, isNetwork, isOther,
+      // ON DUPLICATE KEY UPDATE (4 placeholders, in order):
+      is429, isTimeout, isNetwork, isOther,
+    ],
   );
 }
 
