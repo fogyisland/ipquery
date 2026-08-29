@@ -652,41 +652,5 @@
   {{/if}}
 </div>
 
-{{!-- ─── Tab JS (hash-routed + ?tab= query fallback for SSR/POST) ──── --}}
-<script>
-(function() {
-  // Resolve the active tab in priority order:
-  //   1. URL hash (clicking a tab link updates location.hash)
-  //   2. ?tab= query param (POST redirects use ?tab=, plus direct links)
-  //   3. default 'overview'
-  // We need the query fallback because direct hits like
-  // /admin/unknown-ips?tab=providers have an empty hash on load, and
-  // the SSR-rendered is-active would otherwise be wiped on the first
-  // applyHash() call.
-  function resolveTab() {
-    const hashTab = (location.hash || '').replace(/^#/, '');
-    if (hashTab === 'overview' || hashTab === 'providers' || hashTab === 'failure-logs') return hashTab;
-    try {
-      const params = new URLSearchParams(location.search);
-      const qTab = params.get('tab');
-      if (qTab === 'overview' || qTab === 'providers' || qTab === 'failure-logs') return qTab;
-    } catch (_e) { /* no-op for legacy browsers */ }
-    return 'overview';
-  }
-  function activate(tabId) {
-    if (!tabId) tabId = 'overview';
-    document.querySelectorAll('.settings-tab-link').forEach(function(el) {
-      el.classList.toggle('is-active', el.dataset.tab === tabId);
-    });
-    document.querySelectorAll('.settings-tab-pane').forEach(function(el) {
-      el.classList.toggle('is-active', el.dataset.tab === tabId);
-    });
-  }
-  function applyHash() { activate(resolveTab()); }
-  document.querySelectorAll('.settings-tab-link').forEach(function(el) {
-    el.addEventListener('click', function() { setTimeout(applyHash, 0); });
-  });
-  window.addEventListener('hashchange', applyHash);
-  applyHash();
-})();
-</script>
+{{!-- ─── Tab JS — external file (CSP blocks inline scripts) ──── --}}
+<script src="/assets/tab-nav.js" defer></script>

@@ -299,47 +299,7 @@
   </div>
 </div>
 
-{{!-- ─── Tab + secret-reveal JS ──────────────────────────────────────────
-     ~25 lines, no framework, CSP-safe (no eval, no remote). Runs once on
-     DOMContentLoaded. After that the hashchange handler keeps the active
-     tab in sync with the URL. The secret-toggle handler swaps the
-     .secret-mask innerText between "••••••••••" and the raw value held
-     in data-secret. --}}
-<script>
-(function() {
-  function activate(tabId) {
-    if (!tabId) tabId = 'general';
-    document.querySelectorAll('.settings-tab-link').forEach(function(el) {
-      el.classList.toggle('is-active', el.dataset.tab === tabId);
-    });
-    document.querySelectorAll('.settings-tab-pane').forEach(function(el) {
-      el.classList.toggle('is-active', el.dataset.tab === tabId);
-    });
-  }
-  function applyHash() {
-    activate((location.hash || '#general').slice(1));
-  }
-  document.querySelectorAll('.settings-tab-link').forEach(function(el) {
-    el.addEventListener('click', function() {
-      // Let the hash update happen naturally; the hashchange handler
-      // picks it up. applyHash is also called inline as a fallback for
-      // browsers that don't fire hashchange on plain anchor navigation.
-      setTimeout(applyHash, 0);
-    });
-  });
-  window.addEventListener('hashchange', applyHash);
-  applyHash();
-
-  document.querySelectorAll('.secret-toggle').forEach(function(btn) {
-    btn.addEventListener('click', function() {
-      var wrap = btn.closest('.input-trailing');
-      if (!wrap) return;
-      var mask = wrap.querySelector('.secret-mask');
-      if (!mask) return;
-      var shown = mask.classList.toggle('is-shown');
-      mask.textContent = shown ? mask.dataset.secret : '••••••••••';
-      btn.setAttribute('aria-label', shown ? btn.dataset.hideLabel : btn.dataset.showLabel);
-    });
-  });
-})();
+{{!-- ─── Tab + secret-reveal JS — external files (CSP blocks inline) ──── --}}
+<script src="/assets/tab-nav.js" defer></script>
+<script src="/assets/secret-reveal.js" defer></script>
 </script>
