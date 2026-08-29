@@ -1760,3 +1760,18 @@ dl.settings-dl dd {
 .provider-last-error pre { font: 11px var(--font-mono); color: var(--text-2); background: var(--surface); padding: var(--sp-2); white-space: pre-wrap; max-height: 120px; overflow: auto; }
 .provider-last-error summary { cursor: pointer; font: 11px var(--font-mono); color: var(--text-3); }
 .provider-last-error small { font: 11px var(--font-mono); color: var(--text-3); }
+
+/* Custom providers page — same visual language as the built-in cards. */
+.custom-provider-form { background: var(--surface); border: var(--hairline); padding: var(--sp-4); margin-bottom: var(--sp-4); }
+.custom-provider-form-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: var(--sp-3); }
+.custom-provider-form-grid-full { grid-column: 1 / -1; }
+.custom-provider-form-grid label { display: flex; flex-direction: column; gap: 4px; font: 12px var(--font-mono); color: var(--text-2); }
+.custom-provider-form-grid input[type="text"], .custom-provider-form-grid input[type="number"], .custom-provider-form-grid input[type="password"], .custom-provider-form-grid select, .custom-provider-form-grid textarea { background: var(--bg); border: var(--hairline); color: var(--text); padding: 6px 8px; font: 12px var(--font-mono); }
+.custom-provider-form-grid textarea { min-height: 60px; resize: vertical; }
+.custom-provider-form-grid .form-hint { font: 10px var(--font-mono); color: var(--text-3); }
+.custom-provider-form-actions { margin-top: var(--sp-3); padding-top: var(--sp-3); border-top: var(--hairline); display: flex; gap: var(--sp-2); }
+.custom-providers-list { display: flex; flex-direction: column; gap: var(--sp-3); }
+.custom-provider-actions { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin-top: var(--sp-3); padding-top: var(--sp-3); border-top: var(--hairline); align-items: center; }
+.custom-provider-actions form { margin: 0; display: inline-flex; gap: var(--sp-2); }
+.custom-provider-actions input[type="text"] { background: var(--bg); border: var(--hairline); color: var(--text); padding: 6px 8px; font: 12px var(--font-mono); width: 160px; }
+.custom-provider-test-result { font: 11px var(--font-mono); color: var(--text-2); padding: 4px 6px; background: var(--surface-2); border: var(--hairline); min-width: 80px; }

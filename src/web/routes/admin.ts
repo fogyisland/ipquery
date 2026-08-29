@@ -8,7 +8,7 @@ import { runPipeline } from '../../etl/pipeline';
 import { topByQueryCount, queueStats } from '../../storage/unknownIpQueue';
 import { runBackfill, buildDefaultProviders } from '../../etl/unknownIpBackfill';
 import { runRandomGeneration } from '../../etl/randomIpGenerator';
-import { listProviderConfigs, updateProviderConfig, buildProvidersFromConfig, saveLastBackfillProviderStats, loadLastBackfillProviderStats, PROVIDER_CATALOG } from '../../storage/ingestProviders';
+import { listProviderConfigs, updateProviderConfig, buildProvidersFromConfig, saveLastBackfillProviderStats, loadLastBackfillProviderStats, PROVIDER_CATALOG, upsertCustomProvider, deleteCustomProvider, getProviderConfig } from '../../storage/ingestProviders';
 import { loadRandomGenConfig, saveRandomGenConfig, recentProbes, probeSummaryStats } from '../../storage/randomProbeLog';
 import { clearPending, exportPendingCsv } from '../../storage/unknownIpQueue';
 import {
@@ -31,6 +31,9 @@ import {
   getEtlRunSwap,
 } from '../../storage/mysql';
 import type { EtlRun } from '../../types';
+import { assertSafeHttpUrl } from '../../storage/ssrf';
+import { GenericHttpProvider } from '../../etl/genericHttpProvider';
+import { bufferToString } from '../../ip';
 
 // /admin/* is already gated by the auth guard in src/web/plugins/auth.ts:
 // non-admins are 403-redirected before this handler runs, so req.user is
@@ -1212,5 +1215,210 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
     });
     await app.randomGenRunner.syncFromSettings();
     return reply.redirect('/admin/unknown-ips#overview');
+  });
+
+  // ─── Custom HTTP providers ─────────────────────────────────────────────
+  // GET page: list existing custom providers + render add-form. POST: create
+  // or update. POST /:name/delete: removes a custom row (built-ins refused
+  // by the SQL WHERE-clause guard). POST /:name/test: runs one live lookup
+  // and returns JSON so the admin can validate the URL/field mapping
+  // before saving.
+
+  const renderCustomProvidersPage = async (
+    reply: { view: (tpl: string, ctx: Record<string, unknown>) => unknown },
+    req: { t: (k: string, v?: Record<string, string|number>) => string; csrfToken: string },
+    flash?: Record<string, unknown>,
+  ) => {
+    const configs = await listProviderConfigs(app.pool);
+    const customProviders = configs.filter((c) => c.isCustom);
+    // Built-in aggregate helper only iterates the static catalog (5
+    // names). For custom providers we read the same provider_call_counter
+    // table directly per row — there's at most a handful of custom
+    // providers so the cost is bounded.
+    const aggregateFor = async (name: string, windowMs: number) => {
+      const { aggregateProviderHealth } = await import('../../storage/providerErrorLog');
+      return aggregateProviderHealth(app.pool, name, windowMs);
+    };
+    const view = await Promise.all(customProviders.map(async (c) => {
+      const [h1h, h24h, h7d] = await Promise.all([
+        aggregateFor(c.name, 1 * 3600 * 1000),
+        aggregateFor(c.name, 24 * 3600 * 1000),
+        aggregateFor(c.name, 7 * 24 * 3600 * 1000),
+      ]);
+      return {
+        name: c.name,
+        displayName: c.displayName,
+        enabled: c.enabled,
+        urlTemplate: c.customUrlTemplate ?? '',
+        method: c.customMethod,
+        requestBody: c.customRequestBody ?? '',
+        responseFormat: c.customResponseFormat,
+        countryPath: c.customCountryPath ?? '',
+        cityPath: c.customCityPath ?? '',
+        asnPath: c.customAsnPath ?? '',
+        timeoutMs: c.customTimeoutMs ?? 5000,
+        health1h: { calls: h1h.calls, errors429: h1h.errors429, failurePct: h1h.failureRatePct },
+        health24h: { calls: h24h.calls, errors429: h24h.errors429, failurePct: h24h.failureRatePct },
+        health7d: { calls: h7d.calls, errors429: h7d.errors429, failurePct: h7d.failureRatePct },
+        lastErrorAt: c.lastErrorAt,
+        lastErrorReason: c.lastErrorReason,
+      };
+    }));
+    return reply.view('admin/custom-providers.hbs', {
+      layout: 'layouts/admin',
+      title: req.t('admin.unknownIps.customProviders.title'),
+      customProviders: view,
+      flash: flash ?? {},
+      csrfToken: req.csrfToken,
+      req,
+    });
+  };
+
+  app.get('/admin/unknown-ips/providers/custom', async (req, reply) => {
+    // Consume flash cookie if present; mirrors the queue_flash pattern.
+    let flash: Record<string, unknown> = {};
+    const cookie = req.cookies['custom_providers_flash'];
+    if (cookie) {
+      try { flash = JSON.parse(cookie); } catch { /* ignore */ }
+      reply.clearCookie('custom_providers_flash', { path: '/admin/unknown-ips/providers/custom' });
+    }
+    return renderCustomProvidersPage(
+      reply as unknown as { view: (tpl: string, ctx: Record<string, unknown>) => unknown },
+      req as unknown as { t: (k: string, v?: Record<string, string|number>) => string; csrfToken: string },
+      flash,
+    );
+  });
+
+  app.post('/admin/unknown-ips/providers/custom', async (req, reply) => {
+    if (!verifyCsrfRequest(req)) return reply.code(403).view('errors/csrf.hbs', { layout: 'layouts/public', req });
+    const body = req.body as Record<string, string>;
+    const name = String(body.name ?? '').trim().toLowerCase();
+    const errors: string[] = [];
+    if (!/^[a-z][a-z0-9_-]{0,31}$/.test(name)) {
+      errors.push('invalidUrl'); // reuse generic error key — name format catches here
+    }
+    const urlTemplate = String(body.urlTemplate ?? '').trim();
+    if (!urlTemplate) errors.push('invalidUrl');
+    // SSRF check at form-time so we reject before saving.
+    if (urlTemplate && !(await assertSafeHttpUrl(urlTemplate)).ok) {
+      errors.push('invalidUrl');
+    }
+    const method = body.method === 'POST' ? 'POST' : 'GET';
+    const responseFormat = body.responseFormat === 'text' ? 'text' : 'json';
+    const countryPath = String(body.countryPath ?? '').trim();
+    if (!countryPath) errors.push('invalidFieldPath');
+    // Built-in names are not allowed — even though is_custom=1 would let
+    // us override, the admin UI lists built-ins separately and avoiding
+    // the collision is far less confusing than allowing shadow-override.
+    if (name in PROVIDER_CATALOG) {
+      errors.push('nameConflict');
+    }
+    if (errors.length > 0) {
+      req.auditAction = {
+        action: 'unknown_ips.custom_providers.create.error',
+        targetType: 'ingest_provider',
+        targetId: name,
+        metadata: { errors },
+      };
+      const flash = { kind: 'error', message: req.t(`admin.unknownIps.customProviders.errors.${errors[0]}`) };
+      return renderCustomProvidersPage(
+        reply as unknown as { view: (tpl: string, ctx: Record<string, unknown>) => unknown },
+        req as unknown as { t: (k: string, v?: Record<string, string|number>) => string; csrfToken: string },
+        flash,
+      );
+    }
+    req.auditAction = {
+      action: 'unknown_ips.custom_providers.create',
+      targetType: 'ingest_provider',
+      targetId: name,
+    };
+    await upsertCustomProvider(app.pool, name, {
+      displayName: String(body.displayName ?? name).trim() || name,
+      urlTemplate,
+      method,
+      requestBody: body.requestBody ? String(body.requestBody) : null,
+      responseFormat,
+      countryPath,
+      cityPath: body.cityPath ? String(body.cityPath).trim() : null,
+      asnPath: body.asnPath ? String(body.asnPath).trim() : null,
+      timeoutMs: body.timeoutMs ? Number(body.timeoutMs) || 5000 : null,
+      apiKey: body.apiKey ? String(body.apiKey) : null,
+      enabled: body.enabled === 'on',
+    });
+    reply.setCookie('custom_providers_flash', JSON.stringify({ kind: 'saved', name }), {
+      path: '/admin/unknown-ips/providers/custom',
+      maxAge: 30, httpOnly: true, sameSite: 'lax',
+    });
+    return reply.redirect('/admin/unknown-ips/providers/custom');
+  });
+
+  app.post<{ Params: { name: string } }>('/admin/unknown-ips/providers/custom/:name/delete', async (req, reply) => {
+    if (!verifyCsrfRequest(req)) return reply.code(403).view('errors/csrf.hbs', { layout: 'layouts/public', req });
+    const name = req.params.name;
+    req.auditAction = {
+      action: 'unknown_ips.custom_providers.delete',
+      targetType: 'ingest_provider',
+      targetId: name,
+    };
+    const removed = await deleteCustomProvider(app.pool, name);
+    reply.setCookie('custom_providers_flash', JSON.stringify({ kind: 'deleted', name, removed }), {
+      path: '/admin/unknown-ips/providers/custom',
+      maxAge: 30, httpOnly: true, sameSite: 'lax',
+    });
+    return reply.redirect('/admin/unknown-ips/providers/custom');
+  });
+
+  app.post<{ Params: { name: string } }>('/admin/unknown-ips/providers/custom/:name/test', async (req, reply) => {
+    if (!verifyCsrfRequest(req)) return reply.code(403).view('errors/csrf.hbs', { layout: 'layouts/public', req });
+    const name = req.params.name;
+    const body = req.body as { ip?: string };
+    const ipText = String(body.ip ?? '').trim();
+    if (!ipText) return reply.code(400).send({ ok: false, error: 'ip_required' });
+    const cfg = await getProviderConfig(app.pool, name);
+    if (!cfg || !cfg.isCustom) {
+      return reply.code(404).send({ ok: false, error: 'not_found' });
+    }
+    req.auditAction = {
+      action: 'unknown_ips.custom_providers.test',
+      targetType: 'ingest_provider',
+      targetId: name,
+      metadata: { ip: ipText },
+    };
+    const provider = new GenericHttpProvider({
+      name: cfg.name,
+      urlTemplate: cfg.customUrlTemplate ?? '',
+      method: cfg.customMethod,
+      requestBody: cfg.customRequestBody,
+      responseFormat: cfg.customResponseFormat,
+      countryPath: cfg.customCountryPath,
+      cityPath: cfg.customCityPath,
+      asnPath: cfg.customAsnPath,
+      timeoutMs: cfg.customTimeoutMs,
+      apiKey: cfg.apiKey,
+    });
+    try {
+      const { parseIp } = await import('../../ip');
+      const buf = parseIp(ipText);
+      if (!buf) return reply.code(400).send({ ok: false, error: 'invalid_ip' });
+      const result = await provider.lookup(buf);
+      if (result.record) {
+        return reply.send({
+          ok: true,
+          record: {
+            countryCode: result.record.countryCode,
+            city: result.record.city,
+            asn: result.record.asn,
+          },
+        });
+      }
+      return reply.send({
+        ok: false,
+        error: result.errorCode ?? 'no_record',
+        raw: result.rawResponse ?? null,
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      return reply.code(500).send({ ok: false, error: 'lookup_threw', raw: msg });
+    }
   });
 }

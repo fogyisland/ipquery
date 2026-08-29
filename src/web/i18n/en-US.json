@@ -46,7 +46,8 @@
       "audit": "Query Audit",
       "auditLog": "Audit Log",
       "settings": "Settings",
-      "ingest": "API Ingest"
+      "ingest": "API Ingest",
+      "customProviders": "Custom Providers"
     },
     "logout": "Log out",
     "history": "History",
@@ -709,6 +710,41 @@
       "queueFlash": {
         "cleared": "Cleared {removed} pending IPs.",
         "invalidIp": "IP \"{ip}\" is malformed."
+      },
+      "customProviders": {
+        "title": "Custom Providers",
+        "addTitle": "Add Custom Provider",
+        "listTitle": "Registered Custom Providers",
+        "empty": "No custom providers registered yet.",
+        "name": "Name",
+        "nameHint": "lowercase alphanumeric, unique",
+        "displayName": "Display Name",
+        "urlTemplate": "URL Template",
+        "urlTemplateHint": "supports {ip} and {apiKey} placeholders",
+        "method": "Method",
+        "methodGet": "GET",
+        "methodPost": "POST",
+        "requestBody": "Request Body (POST)",
+        "responseFormat": "Response Format",
+        "countryPath": "Country Field Path",
+        "cityPath": "City Field Path",
+        "asnPath": "ASN Field Path",
+        "timeoutMs": "Timeout (ms)",
+        "rateLimit": "Rate Limit / Min",
+        "enabled": "Enabled",
+        "save": "Save",
+        "delete": "Delete",
+        "test": "Test Lookup",
+        "testIp": "Test IP",
+        "testResult": "Result",
+        "deleteConfirm": "Delete {name}?",
+        "saved": "Saved {name}",
+        "deleted": "Deleted {name}",
+        "errors": {
+          "invalidUrl": "URL is invalid or blocked by SSRF guard",
+          "nameConflict": "Name already exists or conflicts with a built-in provider",
+          "invalidFieldPath": "Field path format invalid"
+        }
       }
     }
   },

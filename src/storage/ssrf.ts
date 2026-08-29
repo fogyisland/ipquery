@@ -50,13 +50,15 @@ function isBlockedIpLiteral(ip: string): boolean {
   // IPv4
   if (/^\d{1,3}(\.\d{1,3}){3}$/.test(ip)) {
     const parts = ip.split('.').map(Number);
-    if (parts[0] === 127) return true;                       // 127.0.0.0/8 loopback
-    if (parts[0] === 10) return true;                        // 10.0.0.0/8 private
-    if (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) return true; // 172.16/12
-    if (parts[0] === 192 && parts[1] === 168) return true;   // 192.168/16
-    if (parts[0] === 169 && parts[1] === 254) return true;   // 169.254/16 link-local
-    if (parts[0] === 0) return true;                         // 0.0.0.0/8
-    if (parts[0] >= 224) return true;                        // multicast + reserved
+    const a = parts[0] ?? 0;
+    const b = parts[1] ?? 0;
+    if (a === 127) return true;                       // 127.0.0.0/8 loopback
+    if (a === 10) return true;                        // 10.0.0.0/8 private
+    if (a === 172 && b >= 16 && b <= 31) return true; // 172.16/12
+    if (a === 192 && b === 168) return true;          // 192.168/16
+    if (a === 169 && b === 254) return true;          // 169.254/16 link-local
+    if (a === 0) return true;                         // 0.0.0.0/8
+    if (a >= 224) return true;                        // multicast + reserved
     return false;
   }
   // IPv6

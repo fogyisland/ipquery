@@ -46,7 +46,8 @@
       "audit": "查询审计",
       "auditLog": "操作审计",
       "settings": "设置",
-      "ingest": "API 入库"
+      "ingest": "API 入库",
+      "customProviders": "自定义 Provider"
     },
     "logout": "登出",
     "history": "查询历史",
@@ -710,6 +711,41 @@
       "queueFlash": {
         "cleared": "已清空 {removed} 条待回灌 IP。",
         "invalidIp": "IP \"{ip}\" 格式不合法。"
+      },
+      "customProviders": {
+        "title": "自定义 Provider",
+        "addTitle": "添加自定义 Provider",
+        "listTitle": "已注册自定义 Provider",
+        "empty": "尚未注册任何自定义 Provider。",
+        "name": "名称",
+        "nameHint": "小写、字母数字，唯一",
+        "displayName": "显示名称",
+        "urlTemplate": "URL 模板",
+        "urlTemplateHint": "支持 {ip} 和 {apiKey} 占位符",
+        "method": "方法",
+        "methodGet": "GET",
+        "methodPost": "POST",
+        "requestBody": "请求体 (POST)",
+        "responseFormat": "响应格式",
+        "countryPath": "国家字段路径",
+        "cityPath": "城市字段路径",
+        "asnPath": "ASN 字段路径",
+        "timeoutMs": "超时 (毫秒)",
+        "rateLimit": "每分钟限速",
+        "enabled": "启用",
+        "save": "保存",
+        "delete": "删除",
+        "test": "测试查询",
+        "testIp": "测试 IP",
+        "testResult": "查询结果",
+        "deleteConfirm": "确认删除 {name}?",
+        "saved": "已保存 {name}",
+        "deleted": "已删除 {name}",
+        "errors": {
+          "invalidUrl": "URL 无效或被 SSRF 防御拦截",
+          "nameConflict": "名称已存在或与内置 Provider 冲突",
+          "invalidFieldPath": "字段路径格式错误"
+        }
       }
     }
   },
