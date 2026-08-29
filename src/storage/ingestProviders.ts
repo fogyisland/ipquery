@@ -23,6 +23,7 @@ import { IpinfoProvider } from '../etl/providers/ipinfo';
 import { IplocateProvider } from '../etl/providers/iplocate';
 import { FreeIpApiProvider } from '../etl/providers/freeipapi';
 import { IpapiCoProvider } from '../etl/providers/ipapiCo';
+import { GenericHttpProvider, type GenericProviderRow } from '../etl/genericHttpProvider';
 
 export interface ProviderConfigRow {
   name: string;
@@ -36,6 +37,17 @@ export interface ProviderConfigRow {
   lastErrorReason: string | null;
   autoReenableAt: Date | null;
   autoDisabledReason: string | null;
+  // Custom-provider fields (is_custom=1). NULL for built-ins; populated for
+  // runtime-registered providers via /admin/unknown-ips/providers/custom.
+  isCustom: boolean;
+  customUrlTemplate: string | null;
+  customMethod: 'GET' | 'POST';
+  customRequestBody: string | null;
+  customResponseFormat: 'json' | 'text';
+  customCountryPath: string | null;
+  customCityPath: string | null;
+  customAsnPath: string | null;
+  customTimeoutMs: number | null;
 }
 
 /** Static catalog. Mirrors the seeded rows in migration 016 — adding a
@@ -64,13 +76,25 @@ export const PROVIDER_CATALOG_LIST: ProviderConfigRow[] = Object.entries(PROVIDE
     lastErrorReason: null,
     autoReenableAt: null,
     autoDisabledReason: null,
+    isCustom: false,
+    customUrlTemplate: null,
+    customMethod: 'GET' as const,
+    customRequestBody: null,
+    customResponseFormat: 'json' as const,
+    customCountryPath: null,
+    customCityPath: null,
+    customAsnPath: null,
+    customTimeoutMs: null,
   }));
 
 export async function listProviderConfigs(pool: Pool): Promise<ProviderConfigRow[]> {
   const [rows] = await pool.query<RowDataPacket[]>(
     `SELECT name, display_name, free_quota, enabled, api_key,
             rate_limit_per_min, last_used_at, last_error_at, last_error_reason,
-            auto_reenable_at, auto_disabled_reason
+            auto_reenable_at, auto_disabled_reason,
+            is_custom, custom_url_template, custom_method, custom_request_body,
+            custom_response_format, custom_country_path, custom_city_path,
+            custom_asn_path, custom_timeout_ms
        FROM ingest_providers
        ORDER BY name`,
   );
@@ -90,6 +114,15 @@ function rowToConfig(r: RowDataPacket): ProviderConfigRow {
     lastErrorReason: r.last_error_reason == null ? null : String(r.last_error_reason),
     autoReenableAt: r.auto_reenable_at ? new Date(r.auto_reenable_at) : null,
     autoDisabledReason: r.auto_disabled_reason == null ? null : String(r.auto_disabled_reason),
+    isCustom: Boolean(r.is_custom),
+    customUrlTemplate: r.custom_url_template == null ? null : String(r.custom_url_template),
+    customMethod: r.custom_method === 'POST' ? 'POST' : 'GET',
+    customRequestBody: r.custom_request_body == null ? null : String(r.custom_request_body),
+    customResponseFormat: r.custom_response_format === 'text' ? 'text' : 'json',
+    customCountryPath: r.custom_country_path == null ? null : String(r.custom_country_path),
+    customCityPath: r.custom_city_path == null ? null : String(r.custom_city_path),
+    customAsnPath: r.custom_asn_path == null ? null : String(r.custom_asn_path),
+    customTimeoutMs: r.custom_timeout_ms == null ? null : Number(r.custom_timeout_ms),
   };
 }
 
@@ -97,7 +130,10 @@ export async function getProviderConfig(pool: Pool, name: string): Promise<Provi
   const [rows] = await pool.query<RowDataPacket[]>(
     `SELECT name, display_name, free_quota, enabled, api_key,
             rate_limit_per_min, last_used_at, last_error_at, last_error_reason,
-            auto_reenable_at, auto_disabled_reason
+            auto_reenable_at, auto_disabled_reason,
+            is_custom, custom_url_template, custom_method, custom_request_body,
+            custom_response_format, custom_country_path, custom_city_path,
+            custom_asn_path, custom_timeout_ms
        FROM ingest_providers WHERE name = ? LIMIT 1`,
     [name],
   );
@@ -115,6 +151,86 @@ export interface ProviderConfigUpdate {
   apiKey?: string | null;
   autoReenableAt?: Date | null;
   autoDisabledReason?: string | null;
+}
+
+// ─── Custom providers (admin-registered at runtime) ──────────────────
+//
+// All custom_* fields are co-managed via upsertCustomProvider — the same
+// INSERT … ON DUPLICATE KEY UPDATE form. The whitelist below is the
+// ONLY place that maps admin form input to SQL columns; the route
+// handler calls upsertCustomProvider with a typed object so a stray
+// field can't slip through to MySQL.
+
+export interface CustomProviderFields {
+  displayName: string;
+  urlTemplate: string;
+  method: 'GET' | 'POST';
+  requestBody: string | null;
+  responseFormat: 'json' | 'text';
+  countryPath: string;
+  cityPath: string | null;
+  asnPath: string | null;
+  timeoutMs: number | null;
+  apiKey: string | null;
+  enabled?: boolean;
+}
+
+/** Upsert a custom provider. INSERT … ON DUPLICATE KEY UPDATE keeps the
+ *  path simple: first create writes a new row (is_custom=1), subsequent
+ *  updates refresh the custom_* columns in place. The api_key column is
+ *  NOT touched here — it's rotated through updateProviderConfig like
+ *  the built-in providers. */
+export async function upsertCustomProvider(
+  pool: Pool,
+  name: string,
+  f: CustomProviderFields,
+): Promise<void> {
+  await pool.query(
+    `INSERT INTO ingest_providers
+       (name, display_name, free_quota, enabled, api_key,
+        is_custom, custom_url_template, custom_method, custom_request_body,
+        custom_response_format, custom_country_path, custom_city_path,
+        custom_asn_path, custom_timeout_ms)
+     VALUES (?, ?, '', ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?)
+     ON DUPLICATE KEY UPDATE
+       display_name          = VALUES(display_name),
+       enabled               = VALUES(enabled),
+       api_key               = VALUES(api_key),
+       custom_url_template   = VALUES(custom_url_template),
+       custom_method         = VALUES(custom_method),
+       custom_request_body   = VALUES(custom_request_body),
+       custom_response_format= VALUES(custom_response_format),
+       custom_country_path   = VALUES(custom_country_path),
+       custom_city_path      = VALUES(custom_city_path),
+       custom_asn_path       = VALUES(custom_asn_path),
+       custom_timeout_ms     = VALUES(custom_timeout_ms)`,
+    [
+      name,
+      f.displayName,
+      f.enabled === false ? 0 : 1,
+      f.apiKey && f.apiKey.length > 0 ? f.apiKey : null,
+      f.urlTemplate,
+      f.method,
+      f.requestBody,
+      f.responseFormat,
+      f.countryPath,
+      f.cityPath,
+      f.asnPath,
+      f.timeoutMs,
+    ],
+  );
+}
+
+/** Delete a custom provider. The is_custom=1 guard means a typo in the
+ *  URL path can never accidentally drop a built-in row. Returns the
+ *  number of rows actually deleted (0 when name didn't exist or was a
+ *  built-in). */
+export async function deleteCustomProvider(pool: Pool, name: string): Promise<number> {
+  const [res] = await pool.query<import('mysql2/promise').ResultSetHeader>(
+    `DELETE FROM ingest_providers WHERE name = ? AND is_custom = 1`,
+    [name],
+  );
+  return res.affectedRows;
 }
 
 export async function updateProviderConfig(
@@ -219,11 +335,39 @@ export async function touchProviderCalled(
 }
 
 /** Build provider instances for the backfill job, reading enabled
- *  + api_key from the DB. Disabled providers are skipped entirely. */
+ *  + api_key from the DB. Disabled providers are skipped entirely.
+ *  Custom providers (is_custom=1) are dispatched to GenericHttpProvider
+ *  with their DB-stored template + field paths. */
 export function buildProvidersFromConfig(configs: ProviderConfigRow[]): IpGeoProvider[] {
   const out: IpGeoProvider[] = [];
   for (const c of configs) {
     if (!c.enabled) continue;
+    // Custom providers always dispatch to GenericHttpProvider regardless
+    // of `name` — the catalog switch below only matches the 5 hard-coded
+    // providers, so anything else (including a custom row with a name
+    // that happens to collide with a built-in) goes through the generic
+    // path. URL + field mapping must be present; otherwise we skip.
+    if (c.isCustom) {
+      if (!c.customUrlTemplate || !c.customCountryPath) {
+        // eslint-disable-next-line no-console
+        console.warn?.(`[ingestProviders] custom provider ${c.name} missing url_template or country_path; skipping`);
+        continue;
+      }
+      const row: GenericProviderRow = {
+        name: c.name,
+        urlTemplate: c.customUrlTemplate,
+        method: c.customMethod,
+        requestBody: c.customRequestBody,
+        responseFormat: c.customResponseFormat,
+        countryPath: c.customCountryPath,
+        cityPath: c.customCityPath,
+        asnPath: c.customAsnPath,
+        timeoutMs: c.customTimeoutMs,
+        apiKey: c.apiKey,
+      };
+      out.push(new GenericHttpProvider(row));
+      continue;
+    }
     switch (c.name) {
       case 'ip-api':
         out.push(new IpApiProvider());
