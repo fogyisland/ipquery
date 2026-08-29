@@ -78,13 +78,29 @@ export async function insertIntoNew(pool: mysql.Pool, rows: IpRangeRow[]): Promi
 // `country_source`; for asn-lite `asn`, `asn_org`, `asn_source`. Any other
 // columns on the row are ignored at INSERT time so a later, higher-priority
 // file can backfill them via `COALESCE`.
+//
+// Returns an UpsertCount so the pipeline can persist per-file counters to
+// etl_run_inserts. Counting relies on mysql2's ResultSetHeader.affectedRows
+// semantics: with the pool's default flag (CLIENT_FOUND_ROWS off),
+// affectedRows === 1 for a successful INSERT and === 2 for an UPDATE kicked
+// off by ON DUPLICATE KEY UPDATE. So inserted = affectedRows and
+// duplicates = slice.length - affectedRows.
+export interface UpsertCount {
+  attempted: number;
+  inserted: number;
+  duplicates: number;
+  batchCount: number;
+}
+
 export async function insertIntoNewUpsert(
   pool: mysql.Pool,
   rows: IpRangeRow[],
   fillCols: ReadonlySet<keyof IpRangeRow>,
-): Promise<void> {
-  if (rows.length === 0) return;
+): Promise<UpsertCount> {
+  const totals: UpsertCount = { attempted: 0, inserted: 0, duplicates: 0, batchCount: 0 };
+  if (rows.length === 0) return totals;
   const CHUNK = 1000;
+  totals.attempted = rows.length;
   const allCols: Array<keyof IpRangeRow> = [
     'startIp', 'endIp',
     'countryCode', 'countryName', 'region', 'city', 'postalCode',
@@ -134,23 +150,37 @@ export async function insertIntoNewUpsert(
       }
       return `(${insertCols.map(() => '?').join(',')})`;
     }).join(',');
-    await pool.query(
+    const [res] = await pool.query<mysql.ResultSetHeader>(
       `INSERT INTO ip_ranges_new (${insertCols.map(colSql).join(',')}) VALUES ${placeholders}` +
       ` ON DUPLICATE KEY UPDATE ${updateClauses}`,
       values,
     );
+    const affected = Number(res.affectedRows);
+    totals.inserted += affected;
+    totals.duplicates += slice.length - affected;
+    totals.batchCount += 1;
   }
+  return totals;
 }
 
-export async function atomicSwapRanges(pool: mysql.Pool): Promise<void> {
+export interface SwapResult {
+  status: 'success' | 'failed';
+  durationMs: number;
+  errorMessage?: string;
+}
+
+export async function atomicSwapRanges(pool: mysql.Pool): Promise<SwapResult> {
   const conn = await pool.getConnection();
+  const t0 = Date.now();
   try {
     await conn.beginTransaction();
     await conn.query('RENAME TABLE ip_ranges TO ip_ranges_old, ip_ranges_new TO ip_ranges, ip_ranges_old TO ip_ranges_new');
     await conn.commit();
+    return { status: 'success', durationMs: Date.now() - t0 };
   } catch (err) {
     await conn.rollback();
-    throw err;
+    const msg = (err as Error).message;
+    return { status: 'failed', durationMs: Date.now() - t0, errorMessage: msg };
   } finally {
     conn.release();
   }
@@ -271,6 +301,278 @@ export async function lastSuccessfulEtl(pool: mysql.Pool): Promise<Date | null> 
   );
   if (rows.length === 0 || !rows[0]?.finished_at) return null;
   return rows[0].finished_at as Date;
+}
+
+// ─── etl_run_* stage-row helpers ──────────────────────────────────────
+// Persisted by the pipeline rewrite in Task 1.5. Read by the run-detail
+// page in PR 2. Snake-case column mapping is consistent with the rest
+// of this file; RowDataPacket coercion uses explicit String/Number/Date.
+
+export type EtlRunDownloadSource = 'dbip-city' | 'dbip-country' | 'dbip-asn';
+export type EtlRunDownloadStatus = 'success' | 'failed' | 'missing' | 'skipped';
+
+export interface EtlRunDownloadRow {
+  runId: number;
+  source: EtlRunDownloadSource;
+  destName: string;
+  sourceUrl: string | null;
+  month: string | null;
+  status: EtlRunDownloadStatus;
+  bytes: number | null;
+  durationMs: number | null;
+  retryCount: number;
+  errorMessage: string | null;
+  startedAt: Date;
+  finishedAt: Date | null;
+}
+
+function etlRunDownloadFromRow(r: mysql.RowDataPacket): EtlRunDownloadRow {
+  return {
+    runId: Number(r.run_id),
+    source: String(r.source) as EtlRunDownloadSource,
+    destName: String(r.dest_name),
+    sourceUrl: r.source_url == null ? null : String(r.source_url),
+    month: r.month == null ? null : String(r.month),
+    status: String(r.status) as EtlRunDownloadStatus,
+    bytes: r.bytes == null ? null : Number(r.bytes),
+    durationMs: r.duration_ms == null ? null : Number(r.duration_ms),
+    retryCount: Number(r.retry_count),
+    errorMessage: r.error_message == null ? null : String(r.error_message),
+    startedAt: new Date(r.started_at),
+    finishedAt: r.finished_at == null ? null : new Date(r.finished_at),
+  };
+}
+
+export async function insertEtlRunDownload(
+  pool: mysql.Pool,
+  row: EtlRunDownloadRow,
+): Promise<void> {
+  await pool.query(
+    `INSERT INTO etl_run_downloads
+       (run_id, source, dest_name, source_url, month, status, bytes,
+        duration_ms, retry_count, error_message, started_at, finished_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      row.runId,
+      row.source,
+      row.destName,
+      row.sourceUrl,
+      row.month,
+      row.status,
+      row.bytes,
+      row.durationMs,
+      row.retryCount,
+      row.errorMessage ? row.errorMessage.slice(0, 512) : null,
+      row.startedAt,
+      row.finishedAt,
+    ],
+  );
+}
+
+export async function listEtlRunDownloads(
+  pool: mysql.Pool,
+  runId: number,
+): Promise<EtlRunDownloadRow[]> {
+  const [rows] = await pool.query<mysql.RowDataPacket[]>(
+    `SELECT run_id, source, dest_name, source_url, month, status, bytes,
+            duration_ms, retry_count, error_message, started_at, finished_at
+       FROM etl_run_downloads
+      WHERE run_id = ?
+      ORDER BY id ASC`,
+    [runId],
+  );
+  return rows.map(etlRunDownloadFromRow);
+}
+
+export interface EtlRunParseRow {
+  runId: number;
+  source: EtlRunDownloadSource;
+  destName: string;
+  rowsEmitted: number;
+  rowsSkippedShort: number;
+  rowsSkippedHeader: number;
+  rowsSkippedUnparseableIp: number;
+  rowsSkippedMissingCol: number;
+  rowsSkippedNanAsn: number;
+  rowsSkippedOther: number;
+  gunzipErrors: number;
+  startedAt: Date;
+  finishedAt: Date | null;
+  durationMs: number | null;
+}
+
+function etlRunParseFromRow(r: mysql.RowDataPacket): EtlRunParseRow {
+  return {
+    runId: Number(r.run_id),
+    source: String(r.source) as EtlRunDownloadSource,
+    destName: String(r.dest_name),
+    rowsEmitted: Number(r.rows_emitted),
+    rowsSkippedShort: Number(r.rows_skipped_short),
+    rowsSkippedHeader: Number(r.rows_skipped_header),
+    rowsSkippedUnparseableIp: Number(r.rows_skipped_unparseable_ip),
+    rowsSkippedMissingCol: Number(r.rows_skipped_missing_col),
+    rowsSkippedNanAsn: Number(r.rows_skipped_nan_asn),
+    rowsSkippedOther: Number(r.rows_skipped_other),
+    gunzipErrors: Number(r.gunzip_errors),
+    startedAt: new Date(r.started_at),
+    finishedAt: r.finished_at == null ? null : new Date(r.finished_at),
+    durationMs: r.duration_ms == null ? null : Number(r.duration_ms),
+  };
+}
+
+export async function insertEtlRunParse(
+  pool: mysql.Pool,
+  row: EtlRunParseRow,
+): Promise<void> {
+  await pool.query(
+    `INSERT INTO etl_run_parses
+       (run_id, source, dest_name, rows_emitted,
+        rows_skipped_short, rows_skipped_header, rows_skipped_unparseable_ip,
+        rows_skipped_missing_col, rows_skipped_nan_asn, rows_skipped_other,
+        gunzip_errors, started_at, finished_at, duration_ms)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      row.runId, row.source, row.destName, row.rowsEmitted,
+      row.rowsSkippedShort, row.rowsSkippedHeader, row.rowsSkippedUnparseableIp,
+      row.rowsSkippedMissingCol, row.rowsSkippedNanAsn, row.rowsSkippedOther,
+      row.gunzipErrors, row.startedAt, row.finishedAt, row.durationMs,
+    ],
+  );
+}
+
+export async function listEtlRunParses(
+  pool: mysql.Pool,
+  runId: number,
+): Promise<EtlRunParseRow[]> {
+  const [rows] = await pool.query<mysql.RowDataPacket[]>(
+    `SELECT run_id, source, dest_name, rows_emitted,
+            rows_skipped_short, rows_skipped_header, rows_skipped_unparseable_ip,
+            rows_skipped_missing_col, rows_skipped_nan_asn, rows_skipped_other,
+            gunzip_errors, started_at, finished_at, duration_ms
+       FROM etl_run_parses
+      WHERE run_id = ?
+      ORDER BY id ASC`,
+    [runId],
+  );
+  return rows.map(etlRunParseFromRow);
+}
+
+export interface EtlRunInsertRow {
+  runId: number;
+  source: EtlRunDownloadSource;
+  destName: string;
+  rowsAttempted: number;
+  rowsInserted: number;
+  rowsDuplicates: number;
+  batchCount: number;
+  durationMs: number | null;
+  startedAt: Date;
+  finishedAt: Date | null;
+}
+
+function etlRunInsertFromRow(r: mysql.RowDataPacket): EtlRunInsertRow {
+  return {
+    runId: Number(r.run_id),
+    source: String(r.source) as EtlRunDownloadSource,
+    destName: String(r.dest_name),
+    rowsAttempted: Number(r.rows_attempted),
+    rowsInserted: Number(r.rows_inserted),
+    rowsDuplicates: Number(r.rows_duplicates),
+    batchCount: Number(r.batch_count),
+    durationMs: r.duration_ms == null ? null : Number(r.duration_ms),
+    startedAt: new Date(r.started_at),
+    finishedAt: r.finished_at == null ? null : new Date(r.finished_at),
+  };
+}
+
+export async function insertEtlRunInsert(
+  pool: mysql.Pool,
+  row: EtlRunInsertRow,
+): Promise<void> {
+  await pool.query(
+    `INSERT INTO etl_run_inserts
+       (run_id, source, dest_name, rows_attempted, rows_inserted,
+        rows_duplicates, batch_count, duration_ms, started_at, finished_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      row.runId, row.source, row.destName,
+      row.rowsAttempted, row.rowsInserted, row.rowsDuplicates,
+      row.batchCount, row.durationMs, row.startedAt, row.finishedAt,
+    ],
+  );
+}
+
+export async function listEtlRunInserts(
+  pool: mysql.Pool,
+  runId: number,
+): Promise<EtlRunInsertRow[]> {
+  const [rows] = await pool.query<mysql.RowDataPacket[]>(
+    `SELECT run_id, source, dest_name, rows_attempted, rows_inserted,
+            rows_duplicates, batch_count, duration_ms, started_at, finished_at
+       FROM etl_run_inserts
+      WHERE run_id = ?
+      ORDER BY id ASC`,
+    [runId],
+  );
+  return rows.map(etlRunInsertFromRow);
+}
+
+export type EtlRunSwapStatus = 'success' | 'failed';
+
+export interface EtlRunSwapRow {
+  runId: number;
+  status: EtlRunSwapStatus;
+  durationMs: number | null;
+  errorMessage: string | null;
+  startedAt: Date;
+  finishedAt: Date | null;
+}
+
+function etlRunSwapFromRow(r: mysql.RowDataPacket): EtlRunSwapRow {
+  return {
+    runId: Number(r.run_id),
+    status: String(r.status) as EtlRunSwapStatus,
+    durationMs: r.duration_ms == null ? null : Number(r.duration_ms),
+    errorMessage: r.error_message == null ? null : String(r.error_message),
+    startedAt: new Date(r.started_at),
+    finishedAt: r.finished_at == null ? null : new Date(r.finished_at),
+  };
+}
+
+export async function upsertEtlRunSwap(
+  pool: mysql.Pool,
+  row: EtlRunSwapRow,
+): Promise<void> {
+  await pool.query(
+    `INSERT INTO etl_run_swaps
+       (run_id, status, duration_ms, error_message, started_at, finished_at)
+     VALUES (?, ?, ?, ?, ?, ?)
+     ON DUPLICATE KEY UPDATE
+       status = VALUES(status),
+       duration_ms = VALUES(duration_ms),
+       error_message = VALUES(error_message),
+       started_at = VALUES(started_at),
+       finished_at = VALUES(finished_at)`,
+    [
+      row.runId, row.status, row.durationMs,
+      row.errorMessage ? row.errorMessage.slice(0, 512) : null,
+      row.startedAt, row.finishedAt,
+    ],
+  );
+}
+
+export async function getEtlRunSwap(
+  pool: mysql.Pool,
+  runId: number,
+): Promise<EtlRunSwapRow | null> {
+  const [rows] = await pool.query<mysql.RowDataPacket[]>(
+    `SELECT run_id, status, duration_ms, error_message, started_at, finished_at
+       FROM etl_run_swaps
+      WHERE run_id = ?`,
+    [runId],
+  );
+  if (rows.length === 0) return null;
+  return etlRunSwapFromRow(rows[0]!);
 }
 
 export { runMigrations, getAppliedVersions, migrationStatus } from './migrations/runner';
