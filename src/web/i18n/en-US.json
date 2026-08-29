@@ -236,11 +236,62 @@
       "trigger.confirm": "Trigger ETL manually?",
       "trigger.confirm.title": "Trigger ETL pipeline?",
       "trigger.confirm.body": "This will start an out-of-schedule ETL run. Existing data will be replaced with the freshly downloaded source files.",
+      "stages": {
+        "download": "Download",
+        "parse": "Parse",
+        "insert": "Insert",
+        "swap": "Atomic Swap",
+        "duration": "took {ms}ms",
+        "totalBytes": "bytes total",
+        "rowsSkipped": "{count} skipped",
+        "rowsInserted": "{count} inserted",
+        "rowsDuplicates": "{count} duplicates",
+        "rowsAttempted": "{count} attempted",
+        "batchCount": "{count} batches",
+        "swapOk": "Swap OK",
+        "swapFailed": "Swap Failed",
+        "liveRunning": "Running…",
+        "skipReason": {
+          "shortLine": "too few columns",
+          "headerRow": "header row",
+          "unparseableIp": "unparseable IP",
+          "missingCol": "missing column",
+          "nonNumericAsn": "non-numeric ASN",
+          "other": "other"
+        }
+      },
+      "runDetail": {
+        "title": "ETL run #{id}",
+        "status": {
+          "running": "Running",
+          "success": "Success",
+          "failed": "Failed"
+        },
+        "duration": "took {ms}ms",
+        "started": "Started",
+        "downloads": "Downloads",
+        "parses": "Parses",
+        "inserts": "Inserts",
+        "runError": "Run error",
+        "swapError": "Atomic swap error"
+      },
       "col": {
         "started": "Started",
         "finished": "Finished",
         "status": "Status",
-        "merged": "Merged records"
+        "merged": "Merged records",
+        "source": "Source",
+        "month": "Month",
+        "bytes": "Bytes",
+        "duration": "Duration",
+        "error": "Error",
+        "rowsEmitted": "Rows emitted",
+        "rowsSkipped": "Rows skipped",
+        "gunzipErrors": "Gunzip errors",
+        "rowsAttempted": "Attempted",
+        "rowsInserted": "Inserted",
+        "rowsDuplicates": "Duplicates",
+        "batchCount": "Batches"
       },
       "status": {
         "running": "Running",
@@ -593,7 +644,16 @@
         "successCount": "ok",
         "failedCount": "failed",
         "rateLimitedCount": "throttled",
-        "abstainedCount": "abstained"
+        "abstainedCount": "abstained",
+        "reenablesIn": "auto-re-enables in {minutes}m",
+        "quotaToday": "today's quota {pct}%",
+        "window1h": "1 hour",
+        "window24h": "24 hours",
+        "window7d": "7 days",
+        "calls": "calls",
+        "err429": "429s",
+        "failurePct": "failure",
+        "last429": "last 429"
       },
       "runner": {
         "title": "Runner",

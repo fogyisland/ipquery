@@ -26,9 +26,9 @@
 // pin Node alive on its own.
 
 import type { FastifyInstance } from 'fastify';
-import type { Pool } from 'mysql2/promise';
+import type { Pool, RowDataPacket } from 'mysql2/promise';
 import { runRandomGeneration } from '../../etl/randomIpGenerator';
-import { listProviderConfigs, buildProvidersFromConfig } from '../../storage/ingestProviders';
+import { listProviderConfigs, buildProvidersFromConfig, updateProviderConfig } from '../../storage/ingestProviders';
 import { getSetting, setSetting } from '../../storage/settings';
 import { loadRandomGenConfig, type RandomGenConfig } from '../../storage/randomProbeLog';
 
@@ -47,6 +47,9 @@ export interface RandomGenRunnerHandle {
   /** Read current settings and start/stop the timer to match. Called on
    *  init AND after the admin toggles any of the random_gen_* keys. */
   syncFromSettings: () => Promise<boolean>;
+  /** Force the provider reaper to run now (admin button / tests).
+   *  Returns the number of providers re-enabled. */
+  reapNow: () => Promise<number>;
 }
 
 const ENABLED_KEY = 'random_gen_enabled';
@@ -55,6 +58,43 @@ const LAST_SUMMARY_KEY = 'random_gen_last_summary';
 const LAST_SKIPPED_AT_KEY = 'random_gen_last_skipped_at';
 const LAST_SKIP_REASON_KEY = 'random_gen_last_skip_reason';
 
+/** Auto-re-enable providers whose `auto_reenable_at` has elapsed. The
+ *  circuit breaker (see unknownIpBackfill.disableRateLimitedProviders)
+ *  flips a provider to enabled=0 + auto_reenable_at = NOW()+N minutes
+ *  when it gets 429'd or when the failure rate trips. Without this
+ *  reaper the cooldown would be dead — the provider would just stay
+ *  disabled until the admin manually re-enables it.
+ *
+ *  Idempotent — only matches enabled=0 AND auto_reenable_at IS NOT NULL
+ *  AND auto_reenable_at <= NOW(3), so calling more than once per minute
+ *  is harmless. Returns the count re-enabled for the caller's logs. */
+export async function reapProviders(pool: Pool): Promise<number> {
+  const [rows] = await pool.query<RowDataPacket[]>(
+    `SELECT name FROM ingest_providers
+       WHERE enabled = 0
+         AND auto_reenable_at IS NOT NULL
+         AND auto_reenable_at <= UTC_TIMESTAMP(3)`,
+  );
+  let count = 0;
+  for (const r of rows) {
+    const name = String(r.name);
+    try {
+      await updateProviderConfig(pool, name, {
+        enabled: true,
+        autoReenableAt: null,
+      });
+      count += 1;
+    } catch (err) {
+      // Swallow per-provider failures so one stuck row doesn't block
+      // the rest of the reap. The 5-minute timer will retry on the
+      // next tick.
+      // eslint-disable-next-line no-console
+      console.error?.(`[random-gen-runner] reapProviders failed for ${name}:`, err);
+    }
+  }
+  return count;
+}
+
 export function registerRandomGenRunner(
   app: FastifyInstance,
   pool: Pool,
@@ -62,6 +102,7 @@ export function registerRandomGenRunner(
 ): RandomGenRunnerHandle {
   let intervalMs = opts.intervalMs ?? 60_000;
   let timer: NodeJS.Timeout | null = null;
+  let reapTimer: NodeJS.Timeout | null = null;
   let running = false; // re-entrancy guard
   let lastRunAtMs = 0; // epoch ms of last completed or attempted tick
   let lastSkippedProvider: string | null = null; // provider name from the last skip
@@ -79,6 +120,18 @@ export function registerRandomGenRunner(
     if (running) return; // skip overlapping ticks if the previous one is still in flight
     running = true;
     try {
+      // Refresh the provider whitelist FIRST so a provider whose
+      // cooldown just expired participates in this tick. Without this
+      // the runner would keep skipping until the 5-minute reap timer
+      // happened to fire — a UX papercut.
+      try {
+        const reaped = await reapProviders(pool);
+        if (reaped > 0) {
+          app.log.info({ reaped }, 'random-gen-runner tick: re-enabled providers past cooldown');
+        }
+      } catch (err) {
+        app.log.warn({ err }, 'random-gen-runner tick: reapProviders failed (continuing)');
+      }
       const config = await loadRandomGenConfig(pool);
       const configs = await listProviderConfigs(pool);
       const providers = buildProvidersFromConfig(configs);
@@ -154,6 +207,38 @@ export function registerRandomGenRunner(
     app.log.info('random-gen-runner stopped');
   };
 
+  /** Independent 5-minute timer that runs reapProviders() outside the
+   *  random-gen tick path. belt-and-braces: even if the user has the
+   *  continuous runner DISABLED (`random_gen_enabled=0`), a provider
+   *  whose cooldown just elapsed still gets re-enabled so manual
+   *  clicks on the admin page see the full provider list. */
+  const reapTick = async (): Promise<void> => {
+    try {
+      const n = await reapProviders(pool);
+      if (n > 0) app.log.info({ reaped: n }, 'random-gen-runner reap timer');
+    } catch (err) {
+      app.log.warn({ err }, 'random-gen-runner reap timer failed');
+    }
+  };
+
+  const startReapTimer = (): void => {
+    if (reapTimer) return;
+    reapTimer = setInterval(() => { void reapTick(); }, 5 * 60_000);
+    reapTimer.unref();
+  };
+
+  const stopReapTimer = (): void => {
+    if (!reapTimer) return;
+    clearInterval(reapTimer);
+    reapTimer = null;
+  };
+
+  const reapNow = async (): Promise<number> => {
+    const n = await reapProviders(pool);
+    if (n > 0) app.log.info({ reaped: n }, 'random-gen-runner reapNow');
+    return n;
+  };
+
   /** Read the latest settings (enabled + interval/batch/cooldown/cbLinkage)
    *  and restart the timer to match. If the interval changed we clear the
    *  old setInterval and start a new one; otherwise we leave the existing
@@ -183,10 +268,13 @@ export function registerRandomGenRunner(
   // tear it down on server close. If multiple workers run this, each
   // would tick independently — out of scope for the single-process dev
   // deployment, but noted for future multi-instance scaling.
-  app.addHook('onClose', () => { stop(); });
+  app.addHook('onClose', () => { stop(); stopReapTimer(); });
+  // Reap timer runs unconditionally — it's cheap (one SELECT per 5 min)
+  // and lets providers auto-recover even when continuous gen is OFF.
+  startReapTimer();
   // Initial sync runs after DB is up. Caller is expected to invoke
   // syncFromSettings() once during boot after pool is ready.
-  return { tickNow: tick, syncFromSettings };
+  return { tickNow: tick, syncFromSettings, reapNow };
 }
 
 /** Read the persisted state for the admin dashboard. Returns nulls

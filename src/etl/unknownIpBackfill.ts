@@ -32,7 +32,7 @@ import type { ResultSetHeader } from 'mysql2/promise';
 import { nextBatch, markProcessed, markAttempted, type UnknownIpRow } from '../storage/unknownIpQueue';
 import type { IpGeoProvider, IpGeoLookupResult, IpGeoRecord } from './providers/types';
 import type { ProviderConfigRow } from '../storage/ingestProviders';
-import { touchProviderError, updateProviderConfig } from '../storage/ingestProviders';
+import { touchProviderError, touchProviderCalled, updateProviderConfig } from '../storage/ingestProviders';
 import { recordProviderError, getCircuitBreakerConfig } from '../storage/providerErrorLog';
 import { majorityVote } from './majority';
 import { parseIp } from '../ip';
@@ -251,6 +251,11 @@ export async function processIp(
             reason: `lookup() threw: ${msg.slice(0, 200)}`,
             rawResponse: null,
           }).catch(() => { /* swallow */ });
+          // Fire-and-forget the per-provider, per-UTC-day counter. Same
+          // defensive .catch — a DB write failure must never poison the
+          // fan-out loop.
+          touchProviderCalled(pool, p.name, { rateLimited: false, errorCode: code })
+            .catch(() => { /* swallow */ });
           const elapsed = Date.now() - start;
           perProvider.push({
             provider: p.name,
@@ -274,6 +279,14 @@ export async function processIp(
         if (elapsed > 2_000) {
           console.warn?.(`[backfill] provider ${p.name} took ${elapsed}ms for ${ipText}`);
         }
+        // Fire-and-forget the per-provider, per-UTC-day counter. Same
+        // defensive .catch — covers rateLimited, errored, AND successful
+        // responses (so the "calls_total" widget reflects real traffic,
+        // not just failures).
+        touchProviderCalled(pool, p.name, {
+          rateLimited: result.rateLimited,
+          errorCode: result.errorCode,
+        }).catch(() => { /* swallow */ });
         // Record every non-OK, non-abstain call (i.e. providers that returned
         // an explicit errorCode) into the failure log. We skip abstains
         // (provider returned no record, no errorCode) because they reflect
@@ -359,10 +372,23 @@ export async function disableRateLimitedProviders(
     }
     if (!shouldDisable) continue;
     try {
-      await updateProviderConfig(pool, name, { enabled: false });
+      const autoReenableAt = new Date(Date.now() + cb.cooldownMinutes * 60_000);
+      // Single UPDATE write: enabled=0, auto_reenable_at=now+cooldown,
+      // auto_disabled_reason=reason. The reaper (see
+      // randomIpGeneratorRunner.reapProviders) flips back to enabled=1
+      // once auto_reenable_at <= NOW(3).
+      await updateProviderConfig(pool, name, {
+        enabled: false,
+        autoReenableAt,
+        autoDisabledReason: reason,
+      });
+      // Keep touchProviderError around — UI cells ("Last error" /
+      // "Last error reason") read from last_error_at + last_error_reason
+      // and don't auto-clear like auto_disabled_reason would. Keeping
+      // both stores lets the UI choose which surface to render.
       await touchProviderError(pool, name, reason);
       summary.providersDisabled.push(name);
-      console.warn?.(`[backfill] auto-disabled provider ${name}: ${reason}`);
+      console.warn?.(`[backfill] auto-disabled provider ${name}: ${reason} (re-enable in ${cb.cooldownMinutes}m)`);
     } catch (err) {
       console.error?.(`[backfill] failed to disable ${name}:`, err);
     }

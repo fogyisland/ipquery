@@ -44,6 +44,27 @@ export interface DownloadFailure {
   message: string;
 }
 
+// Per-file attempt record returned by the new downloadAll signature.
+// The pipeline persists one row per attempt to etl_run_downloads so the
+// run-detail page can show "tried N months before hitting a working
+// file" without grepping the server log. `status` mirrors the
+// etl_run_downloads ENUM: 'success' | 'failed' | 'missing' (every
+// candidate 404'd) | 'skipped' (downstream caller decided not to
+// download).
+export interface DownloadAttempt {
+  spec: DownloadSpec;
+  destName: string;
+  url: string;
+  status: 'success' | 'failed' | 'missing';
+  bytes: number | null;
+  month: string | null;
+  durationMs: number | null;
+  retryCount: number;
+  errorMessage: string | null;
+  startedAt: Date;
+  finishedAt: Date | null;
+}
+
 /** Build the candidate month list: newest first, walking back N months. */
 export function candidateMonths(now: Date, lookback: number): string[] {
   const out: string[] = [];
@@ -133,6 +154,76 @@ export async function fetchOne(
 }
 
 /**
+ * Variant that records every attempt (404s, successes, hard failures) as
+ * a DownloadAttempt entry. Used by the pipeline so the run-detail page
+ * can show "3 candidates tried, 2 were 404s, 1 succeeded with N bytes
+ * in M ms". This is additive on top of fetchOne — the existing export is
+ * kept for backwards compatibility with the CLI command.
+ */
+// Module-scoped accumulator used by fetchOneWithAttempts. One fetchOneWithAttempts
+// call → many 404 attempts + one success attempt (or all-failed if every
+// candidate 404s). The pipeline (Task 1.5) only ever calls this once per
+// run, so a module-scoped array is safe.
+const downloadAttempts: DownloadAttempt[] = [];
+
+export async function fetchOneWithAttempts(
+  spec: DownloadSpec,
+  outDir: string,
+  now: Date,
+  lookback = 6,
+): Promise<DownloadResult> {
+  await fsp.mkdir(outDir, { recursive: true });
+  const destPath = path.join(outDir, spec.destName);
+  const months = candidateMonths(now, lookback);
+  const errors: string[] = [];
+  for (const month of months) {
+    const url = `https://download.db-ip.com/free/${spec.urlStem}-${month}.csv.gz`;
+    const startedAt = new Date();
+    const t0 = Date.now();
+    try {
+      const bytes = await downloadToFile(url, destPath);
+      // Inline attempt recording keeps the original 'fetchOne' return
+      // shape unchanged while emitting one success attempt. The
+      // DownloadAttempt consumer (the pipeline) reads from the
+      // accumulated attempts array below.
+      downloadAttempts.push({
+        spec, destName: spec.destName, url,
+        status: 'success', bytes, month,
+        durationMs: Date.now() - t0, retryCount: 0,
+        errorMessage: null,
+        startedAt, finishedAt: new Date(),
+      });
+      return { kind: spec.kind, destName: spec.destName, url, bytes, month };
+    } catch (err) {
+      const msg = (err as Error).message;
+      const is404 = /HTTP 404/.test(msg);
+      downloadAttempts.push({
+        spec, destName: spec.destName, url,
+        status: 'failed',
+        bytes: null, month,
+        durationMs: Date.now() - t0,
+        retryCount: 0,
+        errorMessage: msg,
+        startedAt, finishedAt: new Date(),
+      });
+      if (!is404) throw err; // network drop / 5xx — hard fail
+      errors.push(`${month}: ${msg}`);
+    }
+  }
+  throw new Error(
+    `no ${spec.kind} file found in last ${lookback} months (tried ${months.join(', ')}; ${errors.join('; ')})`,
+  );
+}
+
+/** Drain the accumulated attempts from the most recent fetchOneWithAttempts call.
+ *  Returns a copy so callers can't mutate the internal buffer. */
+export function takeDownloadAttempts(): DownloadAttempt[] {
+  const out = downloadAttempts.slice();
+  downloadAttempts.length = 0;
+  return out;
+}
+
+/**
  * Top-level entry: fetch every requested spec, print one line per file,
  * and return a structured summary. Never throws on per-file failure —
  * the CLI command decides whether to fail the whole run.
@@ -141,12 +232,16 @@ export async function downloadAll(
   specs: ReadonlyArray<DownloadSpec>,
   outDir: string,
   now: Date = new Date(),
-): Promise<{ results: DownloadResult[]; failures: DownloadFailure[] }> {
+): Promise<{
+  results: DownloadResult[];
+  failures: DownloadFailure[];
+  attempts: DownloadAttempt[];
+}> {
   const results: DownloadResult[] = [];
   const failures: DownloadFailure[] = [];
   for (const spec of specs) {
     try {
-      const r = await fetchOne(spec, outDir, now);
+      const r = await fetchOneWithAttempts(spec, outDir, now);
       results.push(r);
       const mb = (r.bytes / 1024 / 1024).toFixed(1);
       console.log(`[download] ${spec.kind.padEnd(7)} ${r.month}  ${mb.padStart(7)} MB  → ${path.join(outDir, r.destName)}`);
@@ -156,5 +251,45 @@ export async function downloadAll(
       console.error(`[download] ${spec.kind.padEnd(7)} FAILED: ${msg}`);
     }
   }
-  return { results, failures };
+  // Walk the attempt buffer back to attribute the "all candidates 404'd"
+  // case to status='missing'. If fetchOneWithAttempts threw at the end
+  // (no candidate returned 2xx), the loop pushed at least one
+  // status='failed' attempt per month — we collapse those into one
+  // status='missing' row for the run-detail page.
+  const rawAttempts = takeDownloadAttempts();
+  const bySpec = new Map<string, DownloadAttempt[]>();
+  for (const a of rawAttempts) {
+    const key = a.spec.destName;
+    const list = bySpec.get(key) ?? [];
+    list.push(a);
+    bySpec.set(key, list);
+  }
+  const attemptOut: DownloadAttempt[] = [];
+  for (const spec of specs) {
+    const list = bySpec.get(spec.destName) ?? [];
+    if (list.length === 0) continue;
+    const anySuccess = list.some((a) => a.status === 'success');
+    if (anySuccess) {
+      attemptOut.push(...list);
+    } else {
+      // All-failed → roll up into one 'missing' row that summarises the
+      // candidate walk. retry_count = number of distinct months tried.
+      const first = list[0]!;
+      const last = list[list.length - 1]!;
+      attemptOut.push({
+        spec: first.spec,
+        destName: first.destName,
+        url: '(none)',
+        status: 'missing',
+        bytes: null,
+        month: null,
+        durationMs: list.reduce((s, a) => s + (a.durationMs ?? 0), 0),
+        retryCount: list.length,
+        errorMessage: list.map((a) => a.month + ':' + (a.errorMessage ?? '')).join('; '),
+        startedAt: first.startedAt,
+        finishedAt: last.finishedAt,
+      });
+    }
+  }
+  return { results, failures, attempts: attemptOut };
 }

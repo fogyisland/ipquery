@@ -237,11 +237,62 @@
       "trigger.confirm": "确定手动触发 ETL?",
       "trigger.confirm.title": "确认触发 ETL",
       "trigger.confirm.body": "此操作将立即开始一次计划外的 ETL 运行,已下载的源数据将覆盖现有数据。",
+      "stages": {
+        "download": "下载",
+        "parse": "解析",
+        "insert": "入库",
+        "swap": "原子切换",
+        "duration": "耗时 {ms}ms",
+        "totalBytes": "总字节",
+        "rowsSkipped": "已跳过 {count} 行",
+        "rowsInserted": "新插入 {count}",
+        "rowsDuplicates": "重复键 {count}",
+        "rowsAttempted": "尝试插入 {count}",
+        "batchCount": "{count} 批次",
+        "swapOk": "切换成功",
+        "swapFailed": "切换失败",
+        "liveRunning": "运行中…",
+        "skipReason": {
+          "shortLine": "列数不足",
+          "headerRow": "表头行",
+          "unparseableIp": "无法解析的 IP",
+          "missingCol": "列缺失",
+          "nonNumericAsn": "非数字 ASN",
+          "other": "其他"
+        }
+      },
+      "runDetail": {
+        "title": "ETL 运行 #{id}",
+        "status": {
+          "running": "运行中",
+          "success": "成功",
+          "failed": "失败"
+        },
+        "duration": "耗时 {ms}ms",
+        "started": "开始于",
+        "downloads": "下载阶段",
+        "parses": "解析阶段",
+        "inserts": "入库阶段",
+        "runError": "运行错误",
+        "swapError": "原子切换错误"
+      },
       "col": {
         "started": "开始时间",
         "finished": "结束时间",
         "status": "状态",
-        "merged": "合并记录数"
+        "merged": "合并记录数",
+        "source": "源",
+        "month": "月份",
+        "bytes": "字节",
+        "duration": "耗时",
+        "error": "错误",
+        "rowsEmitted": "解析行",
+        "rowsSkipped": "跳过行",
+        "gunzipErrors": "解压错误",
+        "rowsAttempted": "尝试",
+        "rowsInserted": "插入",
+        "rowsDuplicates": "重复",
+        "batchCount": "批次"
       },
       "status": {
         "running": "运行中",
@@ -594,7 +645,16 @@
         "successCount": "成功",
         "failedCount": "失败",
         "rateLimitedCount": "限流",
-        "abstainedCount": "弃权"
+        "abstainedCount": "弃权",
+        "reenablesIn": "{minutes} 分钟后自动恢复",
+        "quotaToday": "今日配额 {pct}%",
+        "window1h": "1 小时",
+        "window24h": "24 小时",
+        "window7d": "7 天",
+        "calls": "调用",
+        "err429": "429 限流",
+        "failurePct": "失败率",
+        "last429": "最近一次 429"
       },
       "runner": {
         "title": "运行控制",
