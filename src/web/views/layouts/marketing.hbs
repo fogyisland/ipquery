@@ -18,40 +18,9 @@
     {{{body}}}
   </main>
   {{> marketing/_footer}}
-  {{!-- Always inline the chip-fill handler on /try so sample-IP chips work.
-       Tab switcher for the code quickstart block only ships on pages that
-       actually render a codeblock (home + docs). --}}
-  <script>
-    // /try: clicking a sample chip fills the IP input and focuses it.
-    // Event delegation so it works with later DOM swaps.
-    document.addEventListener('click', function (e) {
-      var chip = e.target.closest('.m-try-chip');
-      if (!chip) return;
-      var input = document.querySelector('input[name="ip"]');
-      if (input) {
-        input.value = chip.dataset.ip || chip.textContent.trim();
-        input.focus();
-      }
-    });
-  </script>
-  {{#if showCodeTabs}}
-  <script>
-    // Tab switcher for the code quickstart block. Inline so we don't need
-    // a separate JS file for ~10 lines. Uses event delegation; works with
-    // htmx-style partial swaps.
-    document.addEventListener('click', function (e) {
-      var tab = e.target.closest('.m-codeblock-tab');
-      if (!tab) return;
-      var block = tab.closest('.m-codeblock');
-      var id = tab.dataset.tab;
-      block.querySelectorAll('.m-codeblock-tab').forEach(function (t) {
-        t.classList.toggle('active', t === tab);
-      });
-      block.querySelectorAll('[data-pane]').forEach(function (p) {
-        p.style.display = p.dataset.pane === id ? '' : 'none';
-      });
-    });
-  </script>
-  {{/if}}
+  {{!-- External handlers — CSP `script-src 'self'` blocks inline. Loads
+       once for all marketing pages; showCodeTabs branch moved out since
+       the unified handler now covers both behaviors. --}}
+  <script src="/assets/marketing-tabs.js" defer></script>
 </body>
 </html>

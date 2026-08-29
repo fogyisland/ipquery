@@ -50,19 +50,4 @@
 <p>{{req.t 'dashboard.keys.empty'}}</p>
 {{/if}}
 
-<script>
-// Copy endpoint URL to clipboard. Event delegation — works even after
-// htmx-style partial swaps.
-document.addEventListener('click', function (e) {
-  const btn = e.target.closest('.endpoint-copy');
-  if (!btn) return;
-  const target = document.getElementById(btn.dataset.target);
-  if (!target) return;
-  navigator.clipboard.writeText(target.textContent || '').then(
-    () => { btn.textContent = btn.dataset.copiedLabel || '✓'; setTimeout(() => { btn.textContent = btn.dataset.origLabel || btn.textContent; }, 1500); },
-    () => { /* clipboard blocked — fallback: select the text */ target.select?.(); },
-  );
-});
-// Stash original label so the success state can revert cleanly.
-document.querySelectorAll('.endpoint-copy').forEach(b => { b.dataset.origLabel = b.textContent || ''; });
-</script>
+<script src="/assets/endpoint-copy.js" defer></script>
