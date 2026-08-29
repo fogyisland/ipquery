@@ -337,6 +337,30 @@
     },
     "settings": {
       "title": "系统设置",
+      "tab": {
+        "general": "基础设置",
+        "security": "安全与认证",
+        "integrations": "服务集成",
+        "system": "数据库与运维"
+      },
+      "metricStrip": {
+        "apiPort": "API 端口",
+        "threadsConnected": "当前连接",
+        "maxUsedConnections": "峰值连接",
+        "etlLastRun": "ETL 上次运行"
+      },
+      "secret": {
+        "show": "显示",
+        "hide": "隐藏",
+        "unset": "(未设置)"
+      },
+      "etl": {
+        "scheduleHint": "定时任务表达式",
+        "lastRunNever": "尚未运行",
+        "lastRunOk": "成功 · 合并 {merged} 条",
+        "lastRunFailed": "失败",
+        "lastRunRunning": "运行中…"
+      },
       "section": {
         "db": "数据库",
         "api": "API",
