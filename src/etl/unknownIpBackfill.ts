@@ -36,6 +36,8 @@ import { touchProviderError, updateProviderConfig } from '../storage/ingestProvi
 import { recordProviderError, getCircuitBreakerConfig } from '../storage/providerErrorLog';
 import { majorityVote } from './majority';
 import { parseIp } from '../ip';
+import { recordRandomProbe, type PerProviderDetail } from '../storage/randomProbeLog';
+import { randomUUID } from 'node:crypto';
 
 export interface BackfillOptions {
   /** How many IPs to pull per run. Each IP fans out to all providers so
@@ -80,6 +82,15 @@ export type IpOutcome =
   | { kind: 'no_country' }
   | { kind: 'all_abstained' };
 
+/** Returned by processIp alongside the outcome. Carries the per-provider
+ *  detail so the caller (random-gen flow, manual-generate, backfill) can
+ *  record a self-contained row into random_probe_log without re-running
+ *  any provider call. */
+export interface ProcessIpResult {
+  outcome: IpOutcome;
+  perProvider: PerProviderDetail[];
+}
+
 export async function runBackfill(
   pool: Pool,
   providers: IpGeoProvider[],
@@ -116,6 +127,8 @@ export async function runBackfill(
   }
 
   const outcomes: Array<{ row: UnknownIpRow; outcome: IpOutcome }> = [];
+  // One batchId per run groups every probe from this tick for the admin UI.
+  const batchId = randomUUID();
 
   // Fan out all IPs concurrently, but cap concurrency at 16 to avoid
   // hammering the providers (and our own DB connection pool) in one go.
@@ -123,7 +136,27 @@ export async function runBackfill(
   for (let i = 0; i < queueRows.length; i += CONCURRENCY) {
     const slice = queueRows.slice(i, i + CONCURRENCY);
     const sliceOutcomes = await Promise.all(
-      slice.map(async (row) => ({ row, outcome: await processIp(pool, providers, row.ipText, row.ip, perIpTimeout, summary, runMode) })),
+      slice.map(async (row) => {
+        const result = await processIp(pool, providers, row.ipText, row.ip, perIpTimeout, summary, runMode);
+        const outcome = result.outcome;
+        const consensus = outcome.kind === 'merged' ? outcome.record : null;
+        // Fire-and-forget probe audit. Same defensive pattern as
+        // recordProviderError above — a write failure must never poison
+        // the backfill loop.
+        recordRandomProbe(pool, {
+          ipText: row.ipText,
+          ipBinary: row.ip,
+          mode: runMode,
+          outcome: outcome.kind,
+          consensusCountry: consensus?.countryCode ?? null,
+          consensusCity: consensus?.city ?? null,
+          consensusAsn: consensus?.asn ?? null,
+          mergedRunId: outcome.kind === 'merged' ? null : null, // no etl_runs row for backfill
+          providers: result.perProvider,
+          batchId,
+        }).catch(() => { /* swallow */ });
+        return { row, outcome };
+      }),
     );
     outcomes.push(...sliceOutcomes);
   }
@@ -192,67 +225,93 @@ export async function processIp(
   _perIpTimeoutMs: number,
   summary: BackfillSummary,
   mode: 'auto' | 'manual' | 'random' = 'auto',
-): Promise<IpOutcome> {
-  const responses = await Promise.all(
-    providers.map(async (p) => {
-      const start = Date.now();
-      let result: IpGeoLookupResult;
-      try {
-        result = await p.lookup(ipText);
-      } catch (err) {
+): Promise<ProcessIpResult> {
+  // Collect per-provider detail for the probe log alongside the
+  // vote-shape we feed into majorityVote. The two arrays share the same
+  // providers in the same order, so zip by index.
+  const perProvider: PerProviderDetail[] = [];
+  const responses: Array<{ provider: string; record: IpGeoRecord | null; rateLimited: boolean }> =
+    await Promise.all(
+      providers.map(async (p) => {
+        const start = Date.now();
+        let result: IpGeoLookupResult;
+        try {
+          result = await p.lookup(ipText);
+        } catch (err) {
+          const stats = summary.providers[p.name];
+          if (stats) stats.failed += 1;
+          const msg = err instanceof Error ? err.message : String(err);
+          const code = msg.includes('timeout') || msg.includes('aborted') ? 'timeout' : 'network';
+          // Fire-and-forget; logging failures shouldn't break the backfill.
+          recordProviderError(pool, {
+            providerName: p.name,
+            ipText,
+            mode,
+            errorCode: code,
+            reason: `lookup() threw: ${msg.slice(0, 200)}`,
+            rawResponse: null,
+          }).catch(() => { /* swallow */ });
+          const elapsed = Date.now() - start;
+          perProvider.push({
+            provider: p.name,
+            countryCode: null,
+            city: null,
+            asn: null,
+            rateLimited: false,
+            errorCode: code,
+            durationMs: elapsed,
+            rawResponse: null,
+          });
+          return { provider: p.name, record: null as IpGeoRecord | null, rateLimited: false };
+        }
+        const elapsed = Date.now() - start;
         const stats = summary.providers[p.name];
-        if (stats) stats.failed += 1;
-        const msg = err instanceof Error ? err.message : String(err);
-        const code = msg.includes('timeout') || msg.includes('aborted') ? 'timeout' : 'network';
-        // Fire-and-forget; logging failures shouldn't break the backfill.
-        recordProviderError(pool, {
-          providerName: p.name,
-          ipText,
-          mode,
-          errorCode: code,
-          reason: `lookup() threw: ${msg.slice(0, 200)}`,
-          rawResponse: null,
-        }).catch(() => { /* swallow */ });
-        return { provider: p.name, record: null as IpGeoRecord | null, rateLimited: false };
-      }
-      const elapsed = Date.now() - start;
-      const stats = summary.providers[p.name];
-      if (stats) {
-        if (result.rateLimited) stats.rateLimited += 1;
-        else if (result.record) stats.ok += 1;
-        else stats.abstained += 1;
-      }
-      if (elapsed > 2_000) {
-        console.warn?.(`[backfill] provider ${p.name} took ${elapsed}ms for ${ipText}`);
-      }
-      // Record every non-OK, non-abstain call (i.e. providers that returned
-      // an explicit errorCode) into the failure log. We skip abstains
-      // (provider returned no record, no errorCode) because they reflect
-      // "this IP has no data" — not a provider fault.
-      if (!result.rateLimited && !result.record && result.errorCode) {
-        const reason = result.errorCode === 'no_country'
-          ? `provider returned no country code for ${ipText}`
-          : `${result.errorCode}: ${(result.rawResponse ?? '').slice(0, 180) || '(no body)'}`;
-        recordProviderError(pool, {
-          providerName: p.name,
-          ipText,
-          mode,
-          errorCode: result.errorCode,
-          reason: reason.slice(0, 255),
+        if (stats) {
+          if (result.rateLimited) stats.rateLimited += 1;
+          else if (result.record) stats.ok += 1;
+          else stats.abstained += 1;
+        }
+        if (elapsed > 2_000) {
+          console.warn?.(`[backfill] provider ${p.name} took ${elapsed}ms for ${ipText}`);
+        }
+        // Record every non-OK, non-abstain call (i.e. providers that returned
+        // an explicit errorCode) into the failure log. We skip abstains
+        // (provider returned no record, no errorCode) because they reflect
+        // "this IP has no data" — not a provider fault.
+        if (!result.rateLimited && !result.record && result.errorCode) {
+          const reason = result.errorCode === 'no_country'
+            ? `provider returned no country code for ${ipText}`
+            : `${result.errorCode}: ${(result.rawResponse ?? '').slice(0, 180) || '(no body)'}`;
+          recordProviderError(pool, {
+            providerName: p.name,
+            ipText,
+            mode,
+            errorCode: result.errorCode,
+            reason: reason.slice(0, 255),
+            rawResponse: result.rawResponse ?? null,
+          }).catch(() => { /* swallow */ });
+        }
+        perProvider.push({
+          provider: p.name,
+          countryCode: result.record?.countryCode ?? null,
+          city: result.record?.city ?? null,
+          asn: result.record?.asn ?? null,
+          rateLimited: result.rateLimited,
+          errorCode: result.errorCode ?? null,
+          durationMs: elapsed,
           rawResponse: result.rawResponse ?? null,
-        }).catch(() => { /* swallow */ });
-      }
-      return { provider: p.name, record: result.record, rateLimited: result.rateLimited };
-    }),
-  );
+        });
+        return { provider: p.name, record: result.record, rateLimited: result.rateLimited };
+      }),
+    );
 
   const vote = majorityVote(responses);
   if (!vote.ok) {
-    return { kind: vote.reason };
+    return { outcome: { kind: vote.reason }, perProvider };
   }
 
   const newlyInserted = await writeConsensusRange(pool, ipBuffer, vote.record);
-  return { kind: 'merged', record: vote.record, newlyInserted };
+  return { outcome: { kind: 'merged', record: vote.record, newlyInserted }, perProvider };
 }
 
 /** Disable any provider whose rateLimited counter > 0. Idempotent. Also

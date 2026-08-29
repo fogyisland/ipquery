@@ -44,6 +44,20 @@ export async function revokeApiKey(pool: Pool, id: number): Promise<void> {
   await pool.query(`UPDATE api_keys SET revoked_at = NOW(3) WHERE id = ? AND revoked_at IS NULL`, [id]);
 }
 
+/** Bulk-revoke up to 100 keys in one UPDATE. Returns the number of rows
+ *  actually revoked (already-revoked keys are no-ops and don't count).
+ *  The caller caps the input length; we re-cap defensively in case the
+ *  caller forgets. */
+export async function revokeApiKeysBulk(pool: Pool, ids: number[]): Promise<number> {
+  if (ids.length === 0) return 0;
+  const capped = ids.slice(0, 100);
+  const [res] = await pool.query<ResultSetHeader>(
+    `UPDATE api_keys SET revoked_at = NOW(3) WHERE id IN (?) AND revoked_at IS NULL`,
+    [capped],
+  );
+  return res.affectedRows;
+}
+
 export async function listApiKeysForUser(pool: Pool, userId: number): Promise<ApiKey[]> {
   const [rows] = await pool.query<RowDataPacket[]>(
     `SELECT * FROM api_keys WHERE user_id = ? ORDER BY id DESC`, [userId],

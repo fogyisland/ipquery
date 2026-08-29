@@ -120,53 +120,233 @@
     </div>
   </div>
 
-  {{!-- Continuous random-IP ingest toggle (existing) --}}
+  {{!-- Continuous random-IP ingest — scheduler card. Combines status,
+       configurable schedule, cooldown banner, and metrics into one card. --}}
   {{#if randomGenState}}
-  <div class="admin-continuous-card">
-    <div class="admin-continuous-head">
-      <h3>{{@root.req.t 'admin.unknownIps.continuous.title'}}</h3>
-      <span class="admin-continuous-status admin-continuous-status--{{#if randomGenState.enabled}}on{{else}}off{{/if}}">
-        {{#if randomGenState.enabled}}
-          {{@root.req.t 'admin.unknownIps.continuous.enabled'}}
+  {{#if randomGenConfig}}
+  <div class="scheduler-card">
+    <div class="scheduler-card-head">
+      <div>
+        <h3>{{@root.req.t 'admin.unknownIps.scheduler.title'}}</h3>
+        <p class="scheduler-card-sub">{{@root.req.t 'admin.unknownIps.scheduler.subtitle' interval=randomGenConfig.intervalSec batch=randomGenConfig.batchSize}}</p>
+      </div>
+      <span class="scheduler-status-pill scheduler-status-pill--{{#if randomGenState.cooldownRemainingMin}}cooldown{{else if randomGenState.enabled}}running{{else}}stopped{{/if}}">
+        {{#if randomGenState.cooldownRemainingMin}}
+          {{@root.req.t 'admin.unknownIps.scheduler.status.cooldown'}}
+        {{else if randomGenState.enabled}}
+          {{@root.req.t 'admin.unknownIps.scheduler.status.running'}}
         {{else}}
-          {{@root.req.t 'admin.unknownIps.continuous.disabled'}}
+          {{@root.req.t 'admin.unknownIps.scheduler.status.stopped'}}
         {{/if}}
       </span>
     </div>
-    <p class="admin-continuous-help">{{@root.req.t 'admin.unknownIps.continuous.help'}}</p>
-    <div class="admin-continuous-meta">
-      <div class="admin-continuous-meta-row">
-        <span class="admin-continuous-meta-label">{{@root.req.t 'admin.unknownIps.continuous.lastRunAt'}}</span>
-        {{#if randomGenState.lastRunAt}}
-          <span class="admin-continuous-meta-value" title="{{randomGenState.lastRunAt}}">{{formatRelative randomGenState.lastRunAt}}</span>
-        {{else}}
-          <span class="admin-continuous-meta-value admin-tag admin-tag--muted">{{@root.req.t 'admin.unknownIps.continuous.lastRunNever'}}</span>
-        {{/if}}
-      </div>
-      {{#if randomGenState.lastSummary}}
-      <div class="admin-continuous-meta-row">
-        <span class="admin-continuous-meta-label">{{@root.req.t 'admin.unknownIps.continuous.status'}}</span>
-        <span class="admin-continuous-meta-value">
-          {{@root.req.t 'admin.unknownIps.continuous.lastSummaryMerged' merged=randomGenState.lastSummary.merged considered=randomGenState.lastSummary.considered}}
-        </span>
-      </div>
-      {{/if}}
+
+    {{!-- Cooldown banner — only when a previous tick disabled a provider
+         and the cooldown window is still active. Helps operators see why
+         the runner is silent without having to inspect the settings table. --}}
+    {{#if randomGenState.cooldownRemainingMin}}
+    <div class="scheduler-cooldown-banner">
+      <strong>⏸ {{@root.req.t 'admin.unknownIps.scheduler.cooldownNotice' provider=randomGenState.lastSkipReason remaining=randomGenState.cooldownRemainingMin}}</strong>
     </div>
-    <div class="admin-continuous-actions">
+    {{/if}}
+
+    {{!-- Config form — interval / batch / target range / CB linkage.
+         Saved via POST /admin/unknown-ips/scheduler which clamps to safe
+         ranges and calls syncFromSettings to restart the timer. --}}
+    <form method="POST" action="/admin/unknown-ips/scheduler" class="scheduler-card-form">
+      <input type="hidden" name="csrf" value="{{csrfToken}}">
+      <div class="scheduler-card-grid">
+        <label>
+          <span>{{@root.req.t 'admin.unknownIps.scheduler.config.interval'}}</span>
+          <select name="intervalSec">
+            <option value="30" {{#if (eq randomGenConfig.intervalSec 30)}}selected{{/if}}>{{@root.req.t 'admin.unknownIps.scheduler.intervalOptions.30s'}}</option>
+            <option value="60" {{#if (eq randomGenConfig.intervalSec 60)}}selected{{/if}}>{{@root.req.t 'admin.unknownIps.scheduler.intervalOptions.1m'}}</option>
+            <option value="300" {{#if (eq randomGenConfig.intervalSec 300)}}selected{{/if}}>{{@root.req.t 'admin.unknownIps.scheduler.intervalOptions.5m'}}</option>
+            <option value="900" {{#if (eq randomGenConfig.intervalSec 900)}}selected{{/if}}>{{@root.req.t 'admin.unknownIps.scheduler.intervalOptions.15m'}}</option>
+            <option value="1800" {{#if (eq randomGenConfig.intervalSec 1800)}}selected{{/if}}>{{@root.req.t 'admin.unknownIps.scheduler.intervalOptions.30m'}}</option>
+          </select>
+        </label>
+        <label>
+          <span>{{@root.req.t 'admin.unknownIps.scheduler.config.batchSize'}}</span>
+          <input type="number" name="batchSize" min="1" max="100" value="{{randomGenConfig.batchSize}}">
+        </label>
+        <label>
+          <span>{{@root.req.t 'admin.unknownIps.scheduler.config.targetRange'}}</span>
+          <select name="targetRange" disabled>
+            <option value="reserved" selected>{{@root.req.t 'admin.unknownIps.scheduler.targetRangeOptions.reserved'}}</option>
+          </select>
+        </label>
+        <label>
+          <span>{{@root.req.t 'admin.unknownIps.scheduler.config.cooldown'}}</span>
+          <input type="number" name="cooldownMinutes" min="0" max="1440" value="{{randomGenConfig.cooldownMinutes}}">
+        </label>
+        <label class="scheduler-toggle">
+          <input type="checkbox" name="cbLinkage" value="on" {{#if randomGenConfig.cbLinkage}}checked{{/if}}>
+          <span>{{@root.req.t 'admin.unknownIps.scheduler.config.cbLinkage'}}</span>
+        </label>
+      </div>
+      <div class="scheduler-card-actions">
+        <button type="submit" class="btn-primary">{{@root.req.t 'admin.unknownIps.scheduler.config.save'}}</button>
+        <button type="submit" form="scheduler-kick-form" class="btn-secondary" {{#unless randomGenState.enabled}}disabled{{/unless}}>{{@root.req.t 'admin.unknownIps.scheduler.runNow'}}</button>
+      </div>
+    </form>
+    {{!-- Kick form lives outside the config form so its submit doesn't
+         accidentally POST the scheduler form fields. The disabled
+         attribute mirrors the config form's button via the JS below. --}}
+    <form id="scheduler-kick-form" method="POST" action="/admin/unknown-ips/generate/continuous" style="display:inline"
+          onsubmit="return confirm('{{@root.req.t 'admin.unknownIps.scheduler.runNowConfirm'}}')">
+      <input type="hidden" name="csrf" value="{{csrfToken}}">
+      <input type="hidden" name="kick" value="1">
+    </form>
+
+    {{!-- Continuous toggle + metrics row --}}
+    <div class="scheduler-card-stats">
       <form method="POST" action="/admin/unknown-ips/generate/continuous" style="display:inline">
         <input type="hidden" name="csrf" value="{{csrfToken}}">
         <input type="hidden" name="enabled" value="{{#if randomGenState.enabled}}off{{else}}on{{/if}}">
         <button type="submit" class="btn-{{#if randomGenState.enabled}}secondary{{else}}primary{{/if}}">
-          {{#if randomGenState.enabled}}{{@root.req.t 'admin.unknownIps.continuous.disable'}}{{else}}{{@root.req.t 'admin.unknownIps.continuous.enable'}}{{/if}}
+          {{#if randomGenState.enabled}}{{@root.req.t 'admin.unknownIps.scheduler.wizard.disabled'}}{{else}}{{@root.req.t 'admin.unknownIps.scheduler.wizard.enabled'}}{{/if}}
         </button>
       </form>
-      <form method="POST" action="/admin/unknown-ips/generate/continuous" style="display:inline">
-        <input type="hidden" name="csrf" value="{{csrfToken}}">
-        <input type="hidden" name="kick" value="1">
-        <button type="submit" class="btn-secondary">{{@root.req.t 'admin.unknownIps.continuous.kickNow'}}</button>
-      </form>
+      <div class="scheduler-stat">
+        <span class="scheduler-stat-label">{{@root.req.t 'admin.unknownIps.scheduler.metrics.lastRun'}}</span>
+        <span class="scheduler-stat-value">
+          {{#if randomGenState.lastRunAt}}<span title="{{randomGenState.lastRunAt}}">{{formatRelative randomGenState.lastRunAt}}</span>
+          {{else}}<span class="admin-tag admin-tag--muted">{{@root.req.t 'admin.unknownIps.scheduler.metrics.noLastRun'}}</span>{{/if}}
+        </span>
+      </div>
+      <div class="scheduler-stat">
+        <span class="scheduler-stat-label">{{@root.req.t 'admin.unknownIps.scheduler.metrics.lastYield'}}</span>
+        <span class="scheduler-stat-value">
+          {{#if randomGenState.lastSummary}}{{randomGenState.lastSummary.merged}}/{{randomGenState.lastSummary.considered}}{{else}}—{{/if}}
+        </span>
+      </div>
+      <div class="scheduler-stat">
+        <span class="scheduler-stat-label">{{@root.req.t 'admin.unknownIps.scheduler.metrics.warmingRate'}}</span>
+        <span class="scheduler-stat-value">
+          {{#if probeSummaryStats}}{{probeSummaryStats.warmingRatePerDay}}{{else}}0{{/if}}
+          <span class="scheduler-stat-unit">/d</span>
+        </span>
+      </div>
+      <div class="scheduler-stat">
+        <span class="scheduler-stat-label">{{@root.req.t 'admin.unknownIps.scheduler.metrics.probeSuccessRate'}}</span>
+        <span class="scheduler-stat-value">
+          {{#if probeSummaryStats}}{{probeSummaryStats.successRatePct}}{{else}}0{{/if}}<span class="scheduler-stat-unit">%</span>
+        </span>
+      </div>
     </div>
   </div>
+  {{/if}}
+  {{/if}}
+
+  {{!-- Recent probes — per-IP audit trail across all 3 ingest flows.
+       Each row expands to show the per-provider fan-out detail so the
+       operator can see why consensus failed or succeeded. --}}
+  <h3 class="probe-log-heading">{{@root.req.t 'admin.unknownIps.recentProbes.title'}}</h3>
+  <p class="probe-log-help">{{@root.req.t 'admin.unknownIps.recentProbes.help'}}</p>
+
+  {{!-- Mode filter — narrows the recent table to a single ingest flow.
+       URL-driven so it survives reload + bookmark; default is "all". --}}
+  <form method="GET" action="/admin/unknown-ips" class="probe-log-filters">
+    <input type="hidden" name="tab" value="overview">
+    <label>
+      <span>{{@root.req.t 'admin.unknownIps.failureLogs.filterMode'}}</span>
+      <select name="mode">
+        <option value="">{{@root.req.t 'admin.unknownIps.failureLogs.allModes'}}</option>
+        <option value="auto" {{#if (eq errorFilters.mode 'auto')}}selected{{/if}}>{{@root.req.t 'admin.unknownIps.failureLogs.modeLabel.auto'}}</option>
+        <option value="manual" {{#if (eq errorFilters.mode 'manual')}}selected{{/if}}>{{@root.req.t 'admin.unknownIps.failureLogs.modeLabel.manual'}}</option>
+        <option value="random" {{#if (eq errorFilters.mode 'random')}}selected{{/if}}>{{@root.req.t 'admin.unknownIps.failureLogs.modeLabel.random'}}</option>
+      </select>
+    </label>
+    <button type="submit" class="btn-secondary">{{@root.req.t 'admin.unknownIps.failureLogs.applyFilters'}}</button>
+  </form>
+
+  {{#if recentProbes.length}}
+  <table class="probe-log-table">
+    <thead>
+      <tr>
+        <th>{{@root.req.t 'admin.unknownIps.recentProbes.cols.ts'}}</th>
+        <th>{{@root.req.t 'admin.unknownIps.recentProbes.cols.ip'}}</th>
+        <th>{{@root.req.t 'admin.unknownIps.recentProbes.cols.providers'}}</th>
+        <th>{{@root.req.t 'admin.unknownIps.recentProbes.cols.consensus'}}</th>
+        <th>{{@root.req.t 'admin.unknownIps.recentProbes.cols.outcome'}}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {{#each recentProbes}}
+      <tr class="probe-log-row">
+        <td title="{{formatDate this.ts}}">{{formatRelative this.ts}}</td>
+        <td><code>{{this.ipText}}</code></td>
+        <td>
+          <div class="probe-log-cells">
+            {{#each this.providers}}
+            {{!-- Classify each provider cell into one of 7 visual states.
+                 Priority: rateLimited > error > timeout > no_country >
+                 ok > empty. The ok state shows the country code so
+                 operators can spot disagreement at a glance. --}}
+            <span class="provider-cell
+              {{#if this.rateLimited}}provider-cell--throttled
+              {{else if this.errorCode}}provider-cell--error
+              {{else if this.countryCode}}provider-cell--ok
+              {{else}}provider-cell--no_country{{/if}}">
+              {{this.provider}}{{#if this.countryCode}} {{this.countryCode}}{{/if}}
+            </span>
+            {{/each}}
+          </div>
+          <details class="probe-log-detail">
+            <summary>{{@root.req.t 'admin.unknownIps.recentProbes.detailToggle'}}</summary>
+            <table class="probe-detail-table">
+              <thead>
+                <tr>
+                  <th>{{@root.req.t 'admin.unknownIps.recentProbes.detailCols.provider'}}</th>
+                  <th>{{@root.req.t 'admin.unknownIps.recentProbes.detailCols.status'}}</th>
+                  <th>{{@root.req.t 'admin.unknownIps.recentProbes.detailCols.country'}}</th>
+                  <th>{{@root.req.t 'admin.unknownIps.recentProbes.detailCols.city'}}</th>
+                  <th>{{@root.req.t 'admin.unknownIps.recentProbes.detailCols.asn'}}</th>
+                  <th>{{@root.req.t 'admin.unknownIps.recentProbes.detailCols.duration'}}</th>
+                  <th>{{@root.req.t 'admin.unknownIps.recentProbes.detailCols.errorCode'}}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {{#each this.providers}}
+                <tr>
+                  <td><code>{{this.provider}}</code></td>
+                  <td>
+                    {{#if this.rateLimited}}{{@root.req.t 'admin.unknownIps.recentProbes.providerCell.throttled'}}
+                    {{else if (eq this.errorCode 'timeout')}}{{@root.req.t 'admin.unknownIps.recentProbes.providerCell.timeout'}}
+                    {{else if (eq this.errorCode 'network')}}{{@root.req.t 'admin.unknownIps.recentProbes.providerCell.network'}}
+                    {{else if this.errorCode}}{{@root.req.t 'admin.unknownIps.recentProbes.providerCell.error'}} ({{this.errorCode}})
+                    {{else if this.countryCode}}{{@root.req.t 'admin.unknownIps.recentProbes.providerCell.ok'}}
+                    {{else}}{{@root.req.t 'admin.unknownIps.recentProbes.providerCell.no_country'}}{{/if}}
+                  </td>
+                  <td>{{#if this.countryCode}}{{this.countryCode}}{{else}}—{{/if}}</td>
+                  <td>{{#if this.city}}{{this.city}}{{else}}—{{/if}}</td>
+                  <td>{{#if this.asn}}{{this.asn}}{{else}}—{{/if}}</td>
+                  <td>{{this.durationMs}}ms</td>
+                  <td>{{#if this.errorCode}}<span class="admin-tag admin-tag--warn">{{this.errorCode}}</span>{{else}}—{{/if}}</td>
+                </tr>
+                {{/each}}
+              </tbody>
+            </table>
+            {{#if this.batchId}}<p class="probe-detail-batch">{{@root.req.t 'admin.unknownIps.recentProbes.batchIdLabel'}}: <code>{{this.batchId}}</code></p>{{/if}}
+          </details>
+        </td>
+        <td>
+          {{#if this.consensusCountry}}<span class="admin-tag admin-tag--ok">{{this.consensusCountry}}{{#if this.consensusCity}} · {{this.consensusCity}}{{/if}}</span>
+          {{else}}<span class="admin-tag admin-tag--muted">—</span>{{/if}}
+        </td>
+        <td>
+          {{#if (eq this.outcome 'merged')}}<span class="admin-tag admin-tag--ok">{{@root.req.t 'admin.unknownIps.recentProbes.outcomeLabel.merged'}}</span>
+          {{else if (eq this.outcome 'no_consensus')}}<span class="admin-tag admin-tag--warn">{{@root.req.t 'admin.unknownIps.recentProbes.outcomeLabel.no_consensus'}}</span>
+          {{else if (eq this.outcome 'no_country')}}<span class="admin-tag admin-tag--warn">{{@root.req.t 'admin.unknownIps.recentProbes.outcomeLabel.no_country'}}</span>
+          {{else}}<span class="admin-tag admin-tag--muted">{{@root.req.t 'admin.unknownIps.recentProbes.outcomeLabel.all_abstained'}}</span>{{/if}}
+        </td>
+      </tr>
+      {{/each}}
+    </tbody>
+  </table>
+  {{else}}
+  <p class="admin-empty">{{@root.req.t 'admin.unknownIps.recentProbes.noProbes'}}</p>
   {{/if}}
 
   {{!-- Queue preview tables --}}

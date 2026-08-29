@@ -9,12 +9,13 @@ import { topByQueryCount, queueStats } from '../../storage/unknownIpQueue';
 import { runBackfill, buildDefaultProviders } from '../../etl/unknownIpBackfill';
 import { runRandomGeneration } from '../../etl/randomIpGenerator';
 import { listProviderConfigs, updateProviderConfig, buildProvidersFromConfig, saveLastBackfillProviderStats, loadLastBackfillProviderStats } from '../../storage/ingestProviders';
+import { loadRandomGenConfig, saveRandomGenConfig, recentProbes, probeSummaryStats } from '../../storage/randomProbeLog';
 import { clearPending, exportPendingCsv } from '../../storage/unknownIpQueue';
 import {
   queryProviderErrors, distinctErrorCodes,
   getCircuitBreakerConfig, setCircuitBreakerConfig,
 } from '../../storage/providerErrorLog';
-import { listAllApiKeys, revokeApiKey } from '../../storage/apiKeys';
+import { listAllApiKeys, revokeApiKey, revokeApiKeysBulk } from '../../storage/apiKeys';
 import { listQueryLogs, streamQueryLogsCsv } from '../../storage/queryLog';
 import { listAuditLog } from '../../storage/auditLog';
 import { getOverview } from '../admin/overview';
@@ -302,6 +303,26 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
     if (!verifyCsrfRequest(req)) return reply.code(403).view('errors/csrf.hbs', { layout: 'layouts/public', req });
     req.auditAction = { action: 'key.revoke', targetType: 'api_key', targetId: Number(req.params.id) };
     await revokeApiKey(app.pool, Number(req.params.id));
+    return reply.redirect('/admin/keys');
+  });
+
+  // Bulk-revoke multiple API keys at once. Admin tickes the per-row
+  // checkboxes on /admin/keys and clicks "Revoke selected (N)". The
+  // form posts a comma-separated `ids` list. Capped at 100 by the
+  // storage helper; the route also filters non-numeric / non-positive
+  // values defensively. Already-revoked keys are silently skipped by
+  // the UPDATE's `revoked_at IS NULL` predicate — they're no-ops.
+  app.post('/admin/keys/revoke-bulk', async (req, reply) => {
+    if (!verifyCsrfRequest(req)) return reply.code(403).view('errors/csrf.hbs', { layout: 'layouts/public', req });
+    const body = req.body as { ids?: string };
+    const ids = (body.ids ?? '').split(',').map((s) => Number(s.trim())).filter((n) => Number.isFinite(n) && n > 0).slice(0, 100);
+    if (ids.length === 0) return reply.redirect('/admin/keys');
+    req.auditAction = {
+      action: 'key.bulk_revoke',
+      targetType: 'api_key',
+      metadata: { ids, count: ids.length },
+    };
+    await revokeApiKeysBulk(app.pool, ids);
     return reply.redirect('/admin/keys');
   });
 
@@ -605,7 +626,7 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
     if (sinceMs && !Number.isNaN(sinceMs)) errFilter.sinceMs = sinceMs;
     errFilter.limit = 200;
 
-    const [data, stats, providers, lastBackfill, errors, errorCodes, circuitBreaker] = await Promise.all([
+    const [data, stats, providers, lastBackfill, errors, errorCodes, circuitBreaker, randomGenConfig, recentProbeRows, probeSummary] = await Promise.all([
       topByQueryCount(app.pool, limit),
       queueStats(app.pool),
       listProviderConfigs(app.pool),
@@ -613,6 +634,13 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
       tab === 'failure-logs' ? queryProviderErrors(app.pool, errFilter) : Promise.resolve([]),
       tab === 'failure-logs' ? distinctErrorCodes(app.pool) : Promise.resolve([]),
       getCircuitBreakerConfig(app.pool),
+      loadRandomGenConfig(app.pool),
+      // Probe mode filter is read from the URL on the Overview tab so the
+      // table can be narrowed (e.g. only auto/backfill rows). Default to
+      // 'all' — the empty-state copy explains that the table shows the
+      // last 20 across every mode.
+      recentProbes(app.pool, { mode: q.mode === 'auto' || q.mode === 'manual' || q.mode === 'random' ? q.mode : undefined, limit: 20 }),
+      probeSummaryStats(app.pool, 60 * 60 * 1000),
     ]);
     const { readRandomGenState } = await import('../../web/plugins/randomIpGeneratorRunner');
     const randomGenState = await readRandomGenState(app.pool);
@@ -686,6 +714,9 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
       lastBackfillRunAt: lastBackfill.runAt,
       flash,
       randomGenState,
+      randomGenConfig,
+      recentProbes: recentProbeRows,
+      probeSummaryStats: probeSummary,
       errors,
       errorCodes,
       errorFilters: {
@@ -855,6 +886,9 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
       count,
       logger: { log: () => {}, warn: (msg) => app.log.warn({ msg }, 'random-gen'), error: (msg) => app.log.error({ msg }, 'random-gen') },
     });
+    // Note: runRandomGeneration currently records probes with mode='random'.
+    // Distinguishing continuous vs one-shot would require threading a mode
+    // parameter through runRandomGeneration; deferred to a follow-up.
     // Random-gen also produces per-provider counts — persist so the
     // dashboard reflects this run even after the flash cookie expires.
     await saveLastBackfillProviderStats(app.pool, summary.providers, new Date());
@@ -887,6 +921,32 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
       await setSetting(app.pool, 'random_gen_enabled', body.enabled === 'on' ? '1' : '0');
       await app.randomGenRunner.syncFromSettings();
     }
-    return reply.redirect('/admin/unknown-ips');
+    return reply.redirect('/admin/unknown-ips#overview');
+  });
+
+  // Scheduler config (interval / batch / cooldown / CB linkage). The
+  // values are persisted to the `random_gen_*` settings; saveRandomGenConfig
+  // clamps each one to a safe range. If `intervalSec` changed, the runner
+  // needs to restart its setInterval — syncFromSettings handles that.
+  app.post('/admin/unknown-ips/scheduler', async (req, reply) => {
+    if (!verifyCsrfRequest(req)) return reply.code(403).view('errors/csrf.hbs', { layout: 'layouts/public', req });
+    const body = req.body as { intervalSec?: string; batchSize?: string; cooldownMinutes?: string; cbLinkage?: string };
+    const intervalSec = Number(body.intervalSec);
+    const batchSize = Number(body.batchSize);
+    const cooldownMinutes = Number(body.cooldownMinutes);
+    const cbLinkage = body.cbLinkage === 'on';
+    req.auditAction = {
+      action: 'unknown_ips.scheduler.update',
+      targetType: 'settings',
+      metadata: { intervalSec, batchSize, cooldownMinutes, cbLinkage },
+    };
+    await saveRandomGenConfig(app.pool, {
+      intervalSec: Number.isFinite(intervalSec) ? intervalSec : undefined,
+      batchSize: Number.isFinite(batchSize) ? batchSize : undefined,
+      cooldownMinutes: Number.isFinite(cooldownMinutes) ? cooldownMinutes : undefined,
+      cbLinkage,
+    });
+    await app.randomGenRunner.syncFromSettings();
+    return reply.redirect('/admin/unknown-ips#overview');
   });
 }

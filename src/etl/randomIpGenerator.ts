@@ -27,6 +27,8 @@ import type { IpGeoProvider } from './providers/types';
 import type { ProviderConfigRow } from '../storage/ingestProviders';
 import { touchProviderError, updateProviderConfig } from '../storage/ingestProviders';
 import { processIp, disableRateLimitedProviders, type BackfillSummary } from './unknownIpBackfill';
+import { recordRandomProbe } from '../storage/randomProbeLog';
+import { randomUUID } from 'node:crypto';
 
 export interface RandomGenerationOptions {
   /** How many random IPs to pick. Default 10 — the user asked for 10. */
@@ -117,13 +119,33 @@ export async function runRandomGeneration(
   const exhaustedRetries = picked.exhausted;
 
   let duplicates = 0;
+  // One UUID per run groups every probe from this tick. The admin UI's
+  // "Recent Probes" table can use it to surface "10 IPs processed at
+  // 2026-08-29 12:34:56 UTC" as a logical batch.
+  const batchId = randomUUID();
 
   if (picked.ips.length === 0) {
     workSummary.finishedAt = Date.now();
   } else {
     // Step 2: serial fan-out per IP.
     for (const slot of picked.ips) {
-      const outcome = await processIp(pool, providers, slot.text, slot.buffer, perIpTimeout, workSummary);
+      const result = await processIp(pool, providers, slot.text, slot.buffer, perIpTimeout, workSummary, 'random');
+      const outcome = result.outcome;
+      const consensus = outcome.kind === 'merged' ? outcome.record : null;
+      // Fire-and-forget the per-IP probe audit. Must NEVER poison the
+      // run on a write failure — same defensive pattern as recordProviderError.
+      recordRandomProbe(pool, {
+        ipText: slot.text,
+        ipBinary: slot.buffer,
+        mode: 'random',
+        outcome: outcome.kind,
+        consensusCountry: consensus?.countryCode ?? null,
+        consensusCity: consensus?.city ?? null,
+        consensusAsn: consensus?.asn ?? null,
+        mergedRunId: null, // random-gen doesn't write to etl_runs
+        providers: result.perProvider,
+        batchId,
+      }).catch(() => { /* swallow */ });
       if (outcome.kind === 'merged') {
         if (outcome.newlyInserted) workSummary.merged += 1;
         else duplicates += 1;
