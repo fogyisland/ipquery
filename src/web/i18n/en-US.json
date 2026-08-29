@@ -336,6 +336,30 @@
     },
     "settings": {
       "title": "Settings",
+      "tab": {
+        "general": "General",
+        "security": "Security & Auth",
+        "integrations": "Integrations",
+        "system": "Database & Ops"
+      },
+      "metricStrip": {
+        "apiPort": "API port",
+        "threadsConnected": "Threads connected",
+        "maxUsedConnections": "Max used",
+        "etlLastRun": "Last ETL run"
+      },
+      "secret": {
+        "show": "Show",
+        "hide": "Hide",
+        "unset": "(unset)"
+      },
+      "etl": {
+        "scheduleHint": "Cron expression",
+        "lastRunNever": "Never run",
+        "lastRunOk": "success · merged {merged}",
+        "lastRunFailed": "failed",
+        "lastRunRunning": "running…"
+      },
       "section": {
         "db": "Database",
         "api": "API",

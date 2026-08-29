@@ -1079,3 +1079,162 @@ dl.settings-dl dd {
 }
 .recent-table td.time { color: var(--text-3); white-space: nowrap; }
 .recent-table td.ip   { color: var(--text); }
+
+/* ─── Settings page: metric strip + tabs + form fields ────────────────
+   Stripe/Cloudflare-style read-only settings console. Tabs are pure CSS
+   driven by URL hash; the admin/settings.hbs view boots a small inline
+   JS to swap .is-active on .settings-tab-link / .settings-tab-pane when
+   location.hash changes. No router, no query string, no full reload —
+   back/forward and bookmark-via-hash all work for free. */
+.metric-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: var(--sp-3);
+  margin-bottom: var(--sp-5);
+}
+.metric-strip-item {
+  background: var(--surface);
+  border: var(--hairline);
+  padding: var(--sp-3) var(--sp-4);
+  display: flex; flex-direction: column; gap: 4px;
+  min-height: 60px;
+}
+.metric-strip-label {
+  font-family: var(--font-mono); font-size: 10px;
+  letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-3);
+}
+.metric-strip-value {
+  font-family: var(--font-mono); font-size: 18px; font-weight: 600;
+  color: var(--text); font-variant-numeric: tabular-nums;
+}
+.metric-strip-value .pill { font-size: 9px; }
+
+/* Tabs */
+.settings-tabs-nav {
+  display: flex; flex-wrap: wrap; gap: var(--sp-1);
+  border-bottom: var(--hairline);
+  margin: var(--sp-5) 0 var(--sp-4);
+}
+.settings-tab-link {
+  display: inline-flex; align-items: center;
+  padding: 10px 16px;
+  font-family: var(--font-mono); font-size: 11px;
+  letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--text-3); text-decoration: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  transition: color 80ms ease, border-color 80ms ease;
+}
+.settings-tab-link:hover { color: var(--text-2); text-decoration: none; }
+.settings-tab-link.is-active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+.settings-tab-pane { display: none; }
+.settings-tab-pane.is-active { display: block; }
+
+/* Form fields (read-only settings) — the global .form-field rules at the
+   top of this file provide label/input/hint styling. The grid template
+   below is settings-specific because other forms (signup/login/setup)
+   use different column ratios. */
+.settings-tab-pane .form-field {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  gap: var(--sp-3) var(--sp-4);
+  align-items: center;
+  padding: var(--sp-3) 0;
+  border-bottom: var(--hairline);
+}
+.settings-tab-pane .form-field:last-child { border-bottom: none; }
+.settings-tab-pane .form-field-label {
+  font-family: var(--font-mono); font-size: 11px;
+  letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--text-2);
+}
+.settings-tab-pane .form-field-input {
+  display: flex; align-items: center; gap: var(--sp-3);
+  flex-wrap: wrap;
+}
+.settings-tab-pane .form-field-input input[readonly] {
+  flex: 1; min-width: 0; max-width: 480px;
+  background: var(--bg);
+  color: var(--text);
+  opacity: 0.85;
+  cursor: default;
+  font-family: var(--font-mono); font-size: 13px;
+  padding: 8px 10px;
+  border: var(--hairline);
+  border-radius: var(--radius);
+}
+.settings-tab-pane .form-field-input input[readonly]:focus {
+  outline: none;
+  box-shadow: none;
+  border-color: var(--border);
+}
+.settings-tab-pane .form-field-hint {
+  font-family: var(--font-mono); font-size: 11px; color: var(--text-3);
+}
+
+/* Input with trailing action (eye-icon reveal, copy button, etc.) */
+.input-trailing {
+  display: flex; align-items: stretch;
+  border: var(--hairline);
+  background: var(--bg);
+  max-width: 480px;
+  min-width: 0;
+  flex: 1;
+}
+.input-trailing > .secret-mask {
+  flex: 1; min-width: 0;
+  padding: 8px 10px;
+  font-family: var(--font-mono); font-size: 13px;
+  color: var(--text-3);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  user-select: all;
+}
+.input-trailing > .secret-mask.is-shown {
+  color: var(--accent);
+}
+.input-trailing.is-unset > .secret-mask { color: var(--text-3); font-style: italic; }
+.btn-icon {
+  background: var(--surface-2);
+  border: none; border-left: var(--hairline);
+  padding: 0 10px;
+  color: var(--text-3);
+  cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
+  transition: color 80ms ease, background 80ms ease;
+}
+.btn-icon:hover { color: var(--accent); background: var(--surface-3); }
+.btn-icon svg { width: 14px; height: 14px; display: block; }
+
+/* Read-only switch (booleans) — looks like a toggle but is non-interactive */
+.switch-readonly {
+  display: inline-block; width: 36px; height: 20px;
+  background: var(--surface-3);
+  border: var(--hairline); border-radius: 999px;
+  position: relative; vertical-align: middle;
+  cursor: default;
+  flex-shrink: 0;
+}
+.switch-readonly::after {
+  content: ""; position: absolute;
+  top: 2px; left: 2px;
+  width: 14px; height: 14px;
+  background: var(--text-3);
+  border-radius: 50%;
+  transition: transform 120ms ease, background 120ms ease;
+}
+.switch-readonly--on { background: var(--accent-glow); border-color: var(--accent); }
+.switch-readonly--on::after { transform: translateX(16px); background: var(--accent); }
+
+/* Inline action row (e.g. ETL "run now" button next to the cron field) */
+.form-field-action {
+  display: flex; align-items: center; gap: var(--sp-3);
+}
+.form-field-action .btn-primary { margin-left: auto; }
+
+/* Editions row — pills used as tags inside a form-field */
+.settings-tab-pane .pill-row {
+  display: flex; flex-wrap: wrap; gap: var(--sp-2);
+}

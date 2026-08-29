@@ -16,7 +16,8 @@ import { getOverview } from '../admin/overview';
 import { getQueryStats } from '../admin/queries';
 import { parseListQuery } from '../admin/queryString';
 import { csvForRows, withBom } from '../admin/csv';
-import { redactSecret } from '../../config';
+import { lastEtlRun } from '../../storage/mysql';
+import type { EtlRun } from '../../types';
 
 // /admin/* is already gated by the auth guard in src/web/plugins/auth.ts:
 // non-admins are 403-redirected before this handler runs, so req.user is
@@ -470,6 +471,20 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
 
   app.get('/admin/settings', async (req, reply) => {
     const cfg = app.cfg;
+    // Secrets (db.password, web.sessionSecret, web.csrfSecret, smtp.pass,
+    // maxmind.licenseKey) are passed RAW to the template so the eye-icon
+    // reveal can swap them client-side from the data-secret attribute.
+    // Security model: this page is gated by the admin auth guard; only an
+    // authenticated admin session reaches this handler, and the page is
+    // served over the same HTTPS-else-cookieSecure-locked connection that
+    // already protects the rest of the admin console. If you're worried
+    // about DOM-level exposure (e.g. a logged-in admin walks away from an
+    // unlocked machine) the data-secret attribute still masks the value
+    // until the admin explicitly clicks the eye — it's not plaintext
+    // innerText by default. The previous version of this code used
+    // redactSecret() which kept secrets out of the DOM entirely but
+    // didn't allow reveal at all; the trade-off was discussed and the
+    // reveal UX was preferred.
     const display = {
       db: {
         host: cfg.db.host,
@@ -477,7 +492,7 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
         database: cfg.db.database,
         user: cfg.db.user,
         poolSize: cfg.db.poolSize,
-        password: cfg.db.password ? redactSecret(cfg.db.password) : '(unset)',
+        password: cfg.db.password || '',
       },
       api: { port: cfg.api.port, rateLimit: cfg.api.rateLimit },
       etl: { schedule: cfg.etl.schedule, timezone: cfg.etl.timezone, dataDir: cfg.etl.dataDir },
@@ -486,24 +501,25 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
         cookieDomain: cfg.web.cookieDomain,
         cookieSecure: cfg.web.cookieSecure,
         sessionTtlHours: cfg.web.sessionTtlHours,
-        sessionSecret: cfg.web.sessionSecret ? redactSecret(cfg.web.sessionSecret) : '(unset)',
-        csrfSecret: cfg.web.csrfSecret ? redactSecret(cfg.web.csrfSecret) : '(unset)',
+        sessionSecret: cfg.web.sessionSecret || '',
+        csrfSecret: cfg.web.csrfSecret || '',
       },
       smtp: {
         host: cfg.smtp.host || '(console)',
         port: cfg.smtp.port,
         secure: cfg.smtp.secure,
         user: cfg.smtp.user,
-        pass: cfg.smtp.pass ? redactSecret(cfg.smtp.pass) : '(unset)',
+        pass: cfg.smtp.pass || '',
         from: cfg.smtp.from,
       },
       security: { ...cfg.security },
       maxmind: {
-        licenseKey: cfg.maxmind.licenseKey ? redactSecret(cfg.maxmind.licenseKey) : '(unset)',
+        licenseKey: cfg.maxmind.licenseKey || '',
         editions: cfg.maxmind.editions,
       },
     };
     let pool: Record<string, string> = {};
+    let etlLastRun: EtlRun | null = null;
     try {
       const [poolRows] = await app.pool.query<RowDataPacket[]>(
         'SHOW STATUS WHERE Variable_name IN (?, ?)',
@@ -517,11 +533,38 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
       // Pool status is informational; do not fail the page render.
       app.log.warn({ err }, 'failed to read DB pool status');
     }
+    try {
+      etlLastRun = await lastEtlRun(app.pool);
+    } catch (err) {
+      // ETL run history is informational; never fail the page on it.
+      app.log.warn({ err }, 'failed to read last ETL run');
+    }
+    // Pre-resolve the ETL status pill text + kind so the template doesn't
+    // need to call req.t with hash arguments. See project memory note
+    // about {{req.t key a=b}} never passing hash args through.
+    let etlStatusKind: 'success' | 'danger' | 'warning' | 'muted' = 'muted';
+    let etlStatusText = req.t('admin.settings.etl.lastRunNever');
+    if (etlLastRun) {
+      if (etlLastRun.status === 'success') {
+        etlStatusKind = 'success';
+        etlStatusText = req.t('admin.settings.etl.lastRunOk', { merged: etlLastRun.mergedRecords ?? 0 });
+      } else if (etlLastRun.status === 'failed') {
+        etlStatusKind = 'danger';
+        etlStatusText = req.t('admin.settings.etl.lastRunFailed');
+      } else {
+        // 'running' or any future state — pending is the closest analog.
+        etlStatusKind = 'warning';
+        etlStatusText = req.t('admin.settings.etl.lastRunRunning');
+      }
+    }
     return reply.view('admin/settings.hbs', {
       layout: 'layouts/admin',
       title: req.t('admin.settings.title'),
       config: display,
       pool,
+      etlLastRun,
+      etlStatusKind,
+      etlStatusText,
       req,
       csrfToken: req.csrfToken,
     });
@@ -531,7 +574,9 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
     if (!verifyCsrfRequest(req)) return reply.code(403).view('errors/csrf.hbs', { layout: 'layouts/public', req });
     req.auditAction = { action: 'etl.restart', targetType: 'etl_run' };
     void runPipeline({ cfg: app.cfg }).catch((err) => app.log.error({ err }, 'manual ETL restart failed'));
-    return reply.redirect('/admin/settings');
+    // Redirect back to the Integrations tab so the admin sees the
+    // refreshed "last run" pill after the redirect.
+    return reply.redirect('/admin/settings#integrations');
   });
 
   // ─── Unknown IP backfill ────────────────────────────────────────────────
