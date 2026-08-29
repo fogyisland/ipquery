@@ -23,8 +23,12 @@ export class IpinfoProvider implements IpGeoProvider {
     const url = `${this.opts.endpoint ?? 'https://ipinfo.io'}/${encodeURIComponent(ip)}/json?token=${encodeURIComponent(this.opts.token)}`;
     try {
       const res = await fetch(url, { signal: AbortSignal.timeout(5_000) });
-      if (res.status === 429) return { record: null, rateLimited: true };
-      if (!res.ok) return { record: null, rateLimited: false };
+      if (res.status === 429) {
+        return { record: null, rateLimited: true, errorCode: '429', rawResponse: await safeBody(res) };
+      }
+      if (!res.ok) {
+        return { record: null, rateLimited: false, errorCode: String(res.status), rawResponse: await safeBody(res) };
+      }
       const data = await res.json() as {
         city?: string;
         region?: string;
@@ -50,9 +54,20 @@ export class IpinfoProvider implements IpGeoProvider {
         },
         rateLimited: false,
       };
-    } catch {
-      return { record: null, rateLimited: false };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      const code = msg.includes('timeout') || msg.includes('aborted') ? 'timeout' : 'network';
+      return { record: null, rateLimited: false, errorCode: code, rawResponse: msg.slice(0, 240) };
     }
+  }
+}
+
+async function safeBody(res: Response): Promise<string | null> {
+  try {
+    const text = await res.text();
+    return text.length > 240 ? text.slice(0, 240) : text;
+  } catch {
+    return null;
   }
 }
 

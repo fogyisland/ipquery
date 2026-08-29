@@ -197,3 +197,45 @@ export async function queueStats(pool: Pool): Promise<{
     totalQueries: Number(r.total_queries ?? 0),
   };
 }
+
+/** Wipe all PENDING queue rows. Used by the admin "clear queue" bulk
+ *  action. Returns the count deleted so the route can flash a number
+ *  back. We deliberately do NOT delete processed rows — those are the
+ *  audit trail of past backfills. */
+export async function clearPending(pool: Pool): Promise<number> {
+  const [res] = await pool.query<ResultSetHeader>(
+    `DELETE FROM unknown_ip_queue WHERE processed_at IS NULL`,
+  );
+  return res.affectedRows;
+}
+
+/** Render the pending queue as a CSV string for the "export failed IPs"
+ *  button. Header row + one row per pending IP. IPs are in plain text
+ *  (the admin already has DB access). */
+export async function exportPendingCsv(pool: Pool): Promise<string> {
+  const [rows] = await pool.query<QueueRow[]>(
+    `SELECT ip_text, query_count, first_seen_at, last_seen_at,
+            source, last_attempt_reason
+       FROM unknown_ip_queue
+       WHERE processed_at IS NULL
+       ORDER BY query_count DESC, last_seen_at DESC`,
+  );
+  const lines: string[] = ['ip,query_count,first_seen_at,last_seen_at,source,last_attempt_reason'];
+  for (const r of rows) {
+    const esc = (s: string | number | null | Date) => {
+      if (s == null) return '';
+      const v = s instanceof Date ? s.toISOString() : String(s);
+      // Quote if it contains comma / quote / newline.
+      return /[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v;
+    };
+    lines.push([
+      esc(r.ip_text),
+      esc(r.query_count),
+      esc(r.first_seen_at),
+      esc(r.last_seen_at),
+      esc(r.source),
+      esc(r.last_attempt_reason),
+    ].join(','));
+  }
+  return lines.join('\n');
+}
