@@ -7,6 +7,7 @@
 
 import type { Pool, RowDataPacket } from 'mysql2/promise';
 import { getSetting, setSetting } from './settings';
+import { PROVIDER_CATALOG } from './ingestProviders';
 
 export interface ProviderErrorRow {
   id: number;
@@ -175,4 +176,129 @@ export async function setCircuitBreakerConfig(
     const clamped = Math.max(1, Math.round(patch.cooldownMinutes));
     await setSetting(pool, 'cb_cooldown_minutes', String(clamped));
   }
+}
+
+// ─── Provider health aggregates ───────────────────────────────────────
+//
+// Powers the "1h/24h/7d window stats" widget on the Providers tab.
+// Reads from provider_call_counter (per-provider, per-UTC-day UPSERTed by
+// touchProviderCalled in unknownIpBackfill). Returns one row per
+// provider from the catalog so the UI doesn't need to handle "unknown
+// provider" gaps.
+
+export interface ProviderHealthWindow {
+  providerName: string;
+  windowMs: number;
+  calls: number;
+  errors429: number;
+  errorsOther: number;
+  failureRatePct: number;
+  rateLimitedRatePct: number;
+  lastCallAt: Date | null;
+}
+
+/** Aggregate call counts for ONE provider over a time window.
+ *  - windowMs <= 24h: use last_called_at (precise to the second) so the
+ *    1h window rolls cleanly across UTC-day boundaries.
+ *  - windowMs > 24h: bucket by day_utc because daily UPSERTs are the
+ *    smallest resolution the table natively carries. */
+export async function aggregateProviderHealth(
+  pool: Pool,
+  name: string,
+  windowMs: number,
+): Promise<ProviderHealthWindow> {
+  const args: unknown[] = [name];
+  let callsCol: string;
+  if (windowMs <= 24 * 60 * 60 * 1000) {
+    // INTERVAL ? SECOND takes seconds, not milliseconds — the per-call
+    // windowMs parameter is in ms (matches the public API of the
+    // 1h/24h/7d widget).
+    const seconds = Math.max(1, Math.ceil(windowMs / 1000));
+    args.push(seconds);
+    callsCol = `last_called_at >= (NOW(3) - INTERVAL ? SECOND)`;
+  } else {
+    const days = Math.max(1, Math.ceil(windowMs / (24 * 60 * 60 * 1000)));
+    args.push(days);
+    callsCol = `day_utc >= (CURDATE() - INTERVAL ? DAY)`;
+  }
+  const [rows] = await pool.query<RowDataPacket[]>(
+    `SELECT
+       COALESCE(SUM(calls_total), 0)        AS calls,
+       COALESCE(SUM(calls_429), 0)          AS errors429,
+       COALESCE(SUM(calls_timeout
+                  + calls_network_err
+                  + calls_other_err), 0)   AS errorsOther,
+       MAX(last_called_at)                  AS lastCallAt
+     FROM provider_call_counter
+     WHERE provider_name = ? AND ${callsCol}`,
+    args,
+  );
+  type AggRow = {
+    calls: number | string | null;
+    errors429: number | string | null;
+    errorsOther: number | string | null;
+    lastCallAt: Date | string | null;
+  };
+  const r = (rows[0] ?? {}) as AggRow;
+  const calls = Number(r.calls ?? 0);
+  const errors429 = Number(r.errors429 ?? 0);
+  const errorsOther = Number(r.errorsOther ?? 0);
+  const lastRaw = r.lastCallAt;
+  return {
+    providerName: name,
+    windowMs,
+    calls,
+    errors429,
+    errorsOther,
+    failureRatePct: calls > 0 ? Math.round(((errors429 + errorsOther) / calls) * 1000) / 10 : 0,
+    rateLimitedRatePct: calls > 0 ? Math.round((errors429 / calls) * 1000) / 10 : 0,
+    lastCallAt: lastRaw ? new Date(lastRaw) : null,
+  };
+}
+
+/** One ProviderHealthWindow per provider in PROVIDER_CATALOG. Providers
+ *  with zero calls return 0s. */
+export async function aggregateProviderHealthAll(
+  pool: Pool,
+  windowMs: number,
+): Promise<ProviderHealthWindow[]> {
+  const names = Object.keys(PROVIDER_CATALOG);
+  // Run all providers concurrently — each query is ~10ms and there are
+  // only 5 providers today. Parallel keeps the admin GET snappy.
+  return Promise.all(names.map((n) => aggregateProviderHealth(pool, n, windowMs)));
+}
+
+// ─── 60s in-memory cache ──────────────────────────────────────────────
+//
+// aggregateProviderHealthAll hits MySQL every call. The Providers tab
+// polls every 30s and the admin Overview page renders the same data —
+// a 60s cache absorbs the burst without staleness risk for ops use.
+// Mirrors the lastBackfillRunAt pattern (settings table) but for an
+// expensive aggregate.
+
+interface CacheEntry {
+  at: number;
+  data: ProviderHealthWindow[];
+}
+
+const HEALTH_CACHE_TTL_MS = 60_000;
+const healthCache = new Map<number, CacheEntry>();
+
+/** For tests: clear all cached health aggregates. */
+export function _resetProviderHealthCache(): void {
+  healthCache.clear();
+}
+
+export async function getAggregateProviderHealthAllCached(
+  pool: Pool,
+  windowMs: number,
+): Promise<ProviderHealthWindow[]> {
+  const now = Date.now();
+  const cached = healthCache.get(windowMs);
+  if (cached && now - cached.at < HEALTH_CACHE_TTL_MS) {
+    return cached.data;
+  }
+  const data = await aggregateProviderHealthAll(pool, windowMs);
+  healthCache.set(windowMs, { at: now, data });
+  return data;
 }
