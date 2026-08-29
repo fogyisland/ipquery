@@ -65,10 +65,12 @@ export interface BackfillSummary {
 const DEFAULT_BATCH = 100;
 const DEFAULT_TIMEOUT = 8_000;
 
-/** Per-IP outcome returned by processIp. queueRow is set only when the
- *  caller passed one (backfill flow); random-gen leaves it undefined. */
+/** Per-IP outcome returned by processIp. `merged` carries `newlyInserted`
+ *  so the random-IP flow can tell genuinely-new rows apart from
+ *  duplicates-that-were-ignored. Backfill doesn't care about the
+ *  distinction (queue rows are unique by construction). */
 export type IpOutcome =
-  | { kind: 'merged'; record: IpGeoRecord }
+  | { kind: 'merged'; record: IpGeoRecord; newlyInserted: boolean }
   | { kind: 'no_consensus' }
   | { kind: 'no_country' }
   | { kind: 'all_abstained' };
@@ -207,8 +209,8 @@ export async function processIp(
     return { kind: vote.reason };
   }
 
-  await writeConsensusRange(pool, ipBuffer, vote.record);
-  return { kind: 'merged', record: vote.record };
+  const newlyInserted = await writeConsensusRange(pool, ipBuffer, vote.record);
+  return { kind: 'merged', record: vote.record, newlyInserted };
 }
 
 /** Disable any provider whose rateLimited counter > 0. Idempotent. */
@@ -236,19 +238,25 @@ async function disableRateLimitedProviders(
 /** Insert a /32 (IPv4) or /128 (IPv6) range covering exactly `ip`. Tagged
   // 'multi-provider' on every *_source column so the origin is greppable
   // and so the seed-DB-IP flow (which UNIQUE-indexes (start,end,source)
-  // won't collide on it). */
+  // won't collide on it). INSERT IGNORE because the random-IP generator
+  // may pick the same reserved-range IP twice across runs (the IPv6
+  // catchall makes findRange-based dedupe impossible), and a duplicate
+  // /32 from a previous run shouldn't abort this run. Returns true if
+  // a NEW row was inserted, false if the unique index turned it into a
+  // no-op (already existed). The random-gen flow tracks duplicates
+  // separately from genuinely-new rows. */
 async function writeConsensusRange(
   pool: Pool,
   ip: Buffer,
   rec: IpGeoRecord,
-): Promise<void> {
+): Promise<boolean> {
   const startBig = BigInt('0x' + ip.toString('hex'));
   const endBig = startBig + 1n;
   const endBuf = Buffer.from(endBig.toString(16).padStart(32, '0'), 'hex');
   const startBuf = Buffer.from(startBig.toString(16).padStart(32, '0'), 'hex');
 
-  await pool.query<ResultSetHeader>(
-    `INSERT INTO ip_ranges
+  const [res] = await pool.query<ResultSetHeader>(
+    `INSERT IGNORE INTO ip_ranges
        (start_ip, end_ip, range_size, country_code, country_name, region, city,
         latitude, longitude, timezone, isp, asn, asn_org,
         country_source, city_source, isp_source, asn_source, geo_source)
@@ -261,6 +269,7 @@ async function writeConsensusRange(
       rec.isp, rec.asn, rec.asnOrg,
     ],
   );
+  return res.affectedRows === 1;
 }
 
 /** Convenience constructor: pick providers based on which API keys are

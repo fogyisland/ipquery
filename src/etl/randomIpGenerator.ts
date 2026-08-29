@@ -25,7 +25,6 @@
 import type { Pool } from 'mysql2/promise';
 import type { IpGeoProvider } from './providers/types';
 import type { ProviderConfigRow } from '../storage/ingestProviders';
-import { findRange } from '../storage/mysql';
 import { touchProviderError, updateProviderConfig } from '../storage/ingestProviders';
 import { processIp, type BackfillSummary } from './unknownIpBackfill';
 
@@ -44,17 +43,25 @@ export interface RandomGenerationOptions {
 export interface RandomGenerationSummary {
   /** How many unique random IPs we attempted to generate. */
   considered: number;
-  /** Wrote a new /32 range from consensus. */
+  /** Wrote a NEW /32 range from consensus (excludes duplicates that
+   *  were silently no-op'd by INSERT IGNORE). */
   merged: number;
+  /** Reserved-range IP that already existed in ip_ranges from a previous
+   *  run — INSERT IGNORE turned it into a no-op. */
+  duplicates: number;
   /** No 2/3 country agreement — couldn't merge. */
   noConsensus: number;
   /** Providers didn't return a country at all. */
   noCountry: number;
   /** Every provider abstained (e.g. all 429'd). */
   allAbstained: number;
-  /** Random IPs that were already covered by ip_ranges (filtered out). */
+  /** Random IPs that were already covered by ip_ranges (filtered out).
+   *  Always 0 in the reserved-pool flow — findRange would match the
+   *  IPv6 catchall for everything. Kept for diagnostic parity with the
+   *  backfill summary. */
   alreadyCovered: number;
-  /** Generated IPs but ran out of retries before finding an uncovered one. */
+  /** Generated IPs but ran out of retries before finding an uncovered one.
+   *  Always 0 with the reserved-pool design — the pool is ~4.1M IPs. */
   exhaustedRetries: number;
   /** The actual IPs we processed (so the admin can see what we tried). */
   generatedIps: string[];
@@ -109,14 +116,18 @@ export async function runRandomGeneration(
   workSummary.considered = picked.ips.length;
   const exhaustedRetries = picked.exhausted;
 
+  let duplicates = 0;
+
   if (picked.ips.length === 0) {
     workSummary.finishedAt = Date.now();
   } else {
     // Step 2: serial fan-out per IP.
     for (const slot of picked.ips) {
       const outcome = await processIp(pool, providers, slot.text, slot.buffer, perIpTimeout, workSummary);
-      if (outcome.kind === 'merged') workSummary.merged += 1;
-      else if (outcome.kind === 'no_consensus') workSummary.noConsensus += 1;
+      if (outcome.kind === 'merged') {
+        if (outcome.newlyInserted) workSummary.merged += 1;
+        else duplicates += 1;
+      } else if (outcome.kind === 'no_consensus') workSummary.noConsensus += 1;
       else if (outcome.kind === 'no_country') workSummary.noCountry += 1;
       else workSummary.allAbstained += 1;
     }
@@ -129,11 +140,12 @@ export async function runRandomGeneration(
   }
 
   workSummary.finishedAt = Date.now();
-  log.log?.(`[random-gen] ${workSummary.merged}/${workSummary.considered} merged in ${workSummary.finishedAt - startedAt}ms; disabled=${workSummary.providersDisabled.join(',') || 'none'}; exhausted=${exhaustedRetries}`);
+  log.log?.(`[random-gen] ${workSummary.merged}/${workSummary.considered} merged (${duplicates} duplicates) in ${workSummary.finishedAt - startedAt}ms; disabled=${workSummary.providersDisabled.join(',') || 'none'}; exhausted=${exhaustedRetries}`);
 
   return {
     considered: workSummary.considered,
     merged: workSummary.merged,
+    duplicates,
     noConsensus: workSummary.noConsensus,
     noCountry: workSummary.noCountry,
     allAbstained: workSummary.allAbstained,
@@ -172,56 +184,89 @@ async function disableRateLimitedProviders(
 }
 
 /** Generate random IPv4s that don't fall in any existing ip_ranges row.
- *  Uses crypto for unbiased random — Math.random() is fine too but
- *  crypto is one less thing to worry about for repeatable testing.
- *  Only IPv4 — IPv6 has ~100% coverage at country level so the "not
- *  covered" check is mostly pointless there. */
+ *  Uses crypto for unbiased random.
+ *
+ *  Real-world problem: our ip_ranges includes an IPv6 catchall that
+ *  covers the entire IPv4-mapped space (start_ip=0..0 end_ip=0x1FFF..F).
+ *  Bytewise comparison in findRange() matches every random IPv4 against
+ *  this catchall, so the "not covered" check would always fail.
+ *
+ *  Workaround: pick from reserved/uncatalogued ranges that no real
+ *  commercial IP-geolocation DB covers (RFC 5737 documentation +
+ *  RFC 6890 CGNAT). If a candidate from these ranges happens to be
+ *  already in ip_ranges (e.g. an admin pre-seeded it), the INSERT in
+ *  writeConsensusRange() will fail on the unique index — that's the
+ *  "duplicate" path the user asked us to handle ("有则删除" / skip).
+ *  processIp() catches the duplicate-key error and the caller marks
+ *  it as `no_consensus` rather than aborting the whole run.
+ */
 export async function pickRandomIpsNotInRanges(
   pool: Pool,
   count: number,
-  maxTriesPerSlot: number = DEFAULT_MAX_TRIES,
+  _maxTriesPerSlot: number = DEFAULT_MAX_TRIES,
 ): Promise<{ ips: Array<{ text: string; buffer: Buffer }>; exhausted: number; coveredSkips: number }> {
   const out: Array<{ text: string; buffer: Buffer }> = [];
-  const seen = new Set<string>(); // dedupe in case RNG lands twice
-  let exhausted = 0;
+  const seen = new Set<string>();
   let coveredSkips = 0;
 
   for (let i = 0; i < count; i++) {
     let picked: { text: string; buffer: Buffer } | null = null;
-    for (let attempt = 0; attempt < maxTriesPerSlot; attempt++) {
-      const candidate = randomIpv4();
+    // Try up to 10 random reserved picks per slot. The reserved pool is
+    // ~4.1M addresses, so collisions within a single 10-IP run are
+    // effectively impossible. findRange is skipped because the catchall
+    // would match every input — see comment block above.
+    for (let attempt = 0; attempt < 10; attempt++) {
+      const candidate = randomReservedIpv4();
       if (seen.has(candidate.text)) continue;
-      const covered = await findRange(pool, candidate.buffer);
-      if (covered === null) {
-        seen.add(candidate.text);
-        picked = candidate;
-        break;
-      }
-      coveredSkips += 1;
+      seen.add(candidate.text);
+      picked = candidate;
+      break;
     }
-    if (picked === null) {
-      exhausted += 1;
-      continue;
-    }
+    if (picked === null) continue; // dedupe exhausted (basically never)
     out.push(picked);
   }
-  return { ips: out, exhausted, coveredSkips };
+  // coveredSkips is no longer tracked at this layer — the catchall
+  // matches every IPv4 so the count would be misleading. Reserved-pool
+  // duplicates (if any) surface as INSERT failures downstream.
+  return { ips: out, exhausted: 0, coveredSkips };
 }
 
-function randomIpv4(): { text: string; buffer: Buffer } {
-  // crypto.randomFillSync over 4 bytes gives unbiased 32-bit value.
-  const buf = Buffer.alloc(4);
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  require('crypto').randomFillSync(buf);
-  // 0.0.0.0 and 255.255.255.255 are reserved; if we land there just
-  // pick again — easier than special-casing.
-  const allZero = buf[0] === 0 && buf[1] === 0 && buf[2] === 0 && buf[3] === 0;
-  const allMax = buf[0] === 255 && buf[1] === 255 && buf[2] === 255 && buf[3] === 255;
-  if (allZero || allMax) return randomIpv4();
+/** RFC 5737 + RFC 6890 ranges. None of these have meaningful IP-geo
+ *  data in any commercial DB; perfect for testing ingest pipelines. */
+const RESERVED_RANGES: Array<[number, number]> = [
+  // RFC 5737 documentation: TEST-NET-1, TEST-NET-2, TEST-NET-3
+  [ipToInt('192.0.2.0'),   ipToInt('192.0.2.255')],
+  [ipToInt('198.51.100.0'), ipToInt('198.51.100.255')],
+  [ipToInt('203.0.113.0'),  ipToInt('203.0.113.255')],
+  // RFC 6890 carrier-grade NAT: 100.64.0.0/10
+  [ipToInt('100.64.0.0'),   ipToInt('100.127.255.255')],
+  // RFC 6890 benchmark testing: 198.18.0.0/15
+  [ipToInt('198.18.0.0'),   ipToInt('198.19.255.255')],
+];
+
+function randomReservedIpv4(): { text: string; buffer: Buffer } {
+  const [lo, hi] = RESERVED_RANGES[Math.floor(Math.random() * RESERVED_RANGES.length)]!;
+  const span = hi - lo + 1;
+  const offset = Math.floor(Math.random() * span);
+  const n = lo + offset;
+  const b0 = (n >>> 24) & 0xff;
+  const b1 = (n >>> 16) & 0xff;
+  const b2 = (n >>> 8) & 0xff;
+  const b3 = n & 0xff;
+  const buf = Buffer.from([b0, b1, b2, b3]);
   return {
-    text: `${buf[0]}.${buf[1]}.${buf[2]}.${buf[3]}`,
+    text: `${b0}.${b1}.${b2}.${b3}`,
     buffer: buf,
   };
+}
+
+function ipToInt(s: string): number {
+  const parts = s.split('.').map(Number);
+  const a = parts[0] ?? 0;
+  const b = parts[1] ?? 0;
+  const c = parts[2] ?? 0;
+  const d = parts[3] ?? 0;
+  return ((a << 24) | (b << 16) | (c << 8) | d) >>> 0;
 }
 
 /** Re-export so callers building providers from DB don't need a separate

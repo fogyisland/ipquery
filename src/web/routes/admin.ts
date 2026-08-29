@@ -546,6 +546,23 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
       queueStats(app.pool),
       listProviderConfigs(app.pool),
     ]);
+    // Consume short-lived flash cookies set by POST handlers. Both
+    // backfill and random-gen POST routes set JSON cookies on the
+    // redirect; we decode them once here and clear them so the banner
+    // doesn't reappear on subsequent refreshes. Invalid JSON is
+    // treated as no flash (cookie set by older builds before schema
+    // changes, or tampered).
+    const flash: Record<string, unknown> = {};
+    const backfillCookie = req.cookies['backfill_summary'];
+    if (backfillCookie) {
+      try { flash.backfillSummary = JSON.parse(backfillCookie); } catch { /* ignore */ }
+      reply.clearCookie('backfill_summary', { path: '/admin/unknown-ips' });
+    }
+    const generateCookie = req.cookies['generate_summary'];
+    if (generateCookie) {
+      try { flash.generateSummary = JSON.parse(generateCookie); } catch { /* ignore */ }
+      reply.clearCookie('generate_summary', { path: '/admin/unknown-ips' });
+    }
     return reply.view('admin/unknown-ips.hbs', {
       layout: 'layouts/admin',
       title: req.t('admin.unknownIps.title'),
@@ -553,6 +570,7 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
       recentlyProcessed: data.recentlyProcessed,
       stats,
       providers,
+      flash,
       limit,
       csrfToken: req.csrfToken,
       req,

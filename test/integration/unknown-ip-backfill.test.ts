@@ -3,7 +3,7 @@ import { describe, it, expect, beforeAll, beforeEach, afterAll } from 'vitest';
 import { createTestDb, dropTestDb, type TestDb } from '../helpers/db';
 import { insertOrIncrement, nextBatch } from '../../src/storage/unknownIpQueue';
 import { runBackfill } from '../../src/etl/unknownIpBackfill';
-import type { IpGeoProvider, IpGeoRecord } from '../../src/etl/providers/types';
+import type { IpGeoProvider, IpGeoRecord, IpGeoLookupResult } from '../../src/etl/providers/types';
 import { parseIp } from '../../src/ip';
 
 let td: TestDb;
@@ -30,14 +30,17 @@ class FakeProvider implements IpGeoProvider {
   readonly name: string;
   /** ip -> response (null = abstain, like a 4xx/timeout). */
   responses: Map<string, IpGeoRecord | null>;
+  /** When true, lookup returns rateLimited:true (simulates HTTP 429). */
+  rateLimit = false;
   callCount = 0;
   constructor(name: string, responses: Record<string, IpGeoRecord | null>) {
     this.name = name;
     this.responses = new Map(Object.entries(responses));
   }
-  async lookup(ip: string): Promise<IpGeoRecord | null> {
+  async lookup(ip: string): Promise<IpGeoLookupResult> {
     this.callCount += 1;
-    return this.responses.get(ip) ?? null;
+    if (this.rateLimit) return { record: null, rateLimited: true };
+    return { record: this.responses.get(ip) ?? null, rateLimited: false };
   }
 }
 
