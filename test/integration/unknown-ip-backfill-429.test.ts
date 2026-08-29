@@ -147,9 +147,37 @@ describe('runRandomGeneration', () => {
       const inTestNet = /^192\.0\.2\.\d+$/.test(ip)
         || /^198\.51\.100\.\d+$/.test(ip)
         || /^203\.0\.113\.\d+$/.test(ip)
-        || /^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.\d+\.\d+$/.test(ip)
         || /^198\.(18|19)\.\d+\.\d+$/.test(ip);
       expect(inTestNet).toBe(true);
+    }
+  });
+
+  it('never picks a private / loopback / CGNAT IP', async () => {
+    const providers = [
+      new FakeProvider('a', {}),
+      new FakeProvider('b', {}),
+      new FakeProvider('c', {}),
+    ];
+    // Run a large batch to maximize coverage of the pool.
+    const summary = await runRandomGeneration(td.pool, providers, { count: 50, logger: { log: () => {}, warn: () => {}, error: () => {} } });
+    const privateMatch = (ip: string): string | null => {
+      const octets = ip.split('.').map(Number);
+      const a = octets[0]!, b = octets[1]!, c = octets[2]!;
+      if (a === 10) return '10.0.0.0/8 (RFC 1918)';
+      if (a === 127) return '127.0.0.0/8 (loopback)';
+      if (a === 172 && b >= 16 && b <= 31) return '172.16.0.0/12 (RFC 1918)';
+      if (a === 192 && b === 168) return '192.168.0.0/16 (RFC 1918)';
+      if (a === 169 && b === 254) return '169.254.0.0/16 (link-local)';
+      if (a === 100 && b >= 64 && b <= 127) return '100.64.0.0/10 (CGNAT)';
+      if (a >= 224) return a === 255 ? '255.255.255.255 (broadcast)' : '224.0.0.0/4 (multicast/reserved)';
+      if (a === 0) return '0.0.0.0/8';
+      // Match 192.0.2/24 vs 192.168/16 ambiguity — we explicitly test the private cases.
+      void c;
+      return null;
+    };
+    for (const ip of summary.generatedIps) {
+      const reason = privateMatch(ip);
+      expect(reason, `generated IP ${ip} falls in private range ${reason}`).toBeNull();
     }
   });
 
