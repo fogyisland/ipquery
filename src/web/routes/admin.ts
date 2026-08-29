@@ -8,12 +8,13 @@ import { runPipeline } from '../../etl/pipeline';
 import { topByQueryCount, queueStats } from '../../storage/unknownIpQueue';
 import { runBackfill, buildDefaultProviders } from '../../etl/unknownIpBackfill';
 import { runRandomGeneration } from '../../etl/randomIpGenerator';
-import { listProviderConfigs, updateProviderConfig, buildProvidersFromConfig, saveLastBackfillProviderStats, loadLastBackfillProviderStats } from '../../storage/ingestProviders';
+import { listProviderConfigs, updateProviderConfig, buildProvidersFromConfig, saveLastBackfillProviderStats, loadLastBackfillProviderStats, PROVIDER_CATALOG } from '../../storage/ingestProviders';
 import { loadRandomGenConfig, saveRandomGenConfig, recentProbes, probeSummaryStats } from '../../storage/randomProbeLog';
 import { clearPending, exportPendingCsv } from '../../storage/unknownIpQueue';
 import {
   queryProviderErrors, distinctErrorCodes,
   getCircuitBreakerConfig, setCircuitBreakerConfig,
+  getAggregateProviderHealthAllCached,
 } from '../../storage/providerErrorLog';
 import { listAllApiKeys, revokeApiKey, revokeApiKeysBulk } from '../../storage/apiKeys';
 import { listQueryLogs, streamQueryLogsCsv } from '../../storage/queryLog';
@@ -22,12 +23,35 @@ import { getOverview } from '../admin/overview';
 import { getQueryStats } from '../admin/queries';
 import { parseListQuery } from '../admin/queryString';
 import { csvForRows, withBom } from '../admin/csv';
-import { lastEtlRun } from '../../storage/mysql';
+import {
+  lastEtlRun,
+  listEtlRunDownloads,
+  listEtlRunParses,
+  listEtlRunInserts,
+  getEtlRunSwap,
+} from '../../storage/mysql';
 import type { EtlRun } from '../../types';
 
 // /admin/* is already gated by the auth guard in src/web/plugins/auth.ts:
 // non-admins are 403-redirected before this handler runs, so req.user is
 // guaranteed to be an admin here.
+
+/** Scan a provider's freeQuota string for the first integer and treat it
+ *  as a per-minute request quota. Returns 0 when no number is found.
+ *  Handles "45 req/min", "60 req/min", "1000 req/day" (the day case
+ *  gets divided further down for the daily %), and skips strings like
+ *  "no key (HTTP only)" entirely. Used to render the
+ *  "today's quota X%" pill on the Providers tab. */
+function parseFreeQuotaPerMinute(providerName: string): number {
+  const quota = PROVIDER_CATALOG[providerName]?.freeQuota ?? '';
+  const m = quota.match(/([\d,]+)/);
+  if (!m) return 0;
+  const raw = m[1];
+  if (!raw) return 0;
+  const n = Number(raw.replace(/,/g, ''));
+  return Number.isFinite(n) ? n : 0;
+}
+
 export default async function adminRoutes(app: FastifyInstance): Promise<void> {
   app.get('/admin', async (req, reply) => {
     const overview = await getOverview(app.pool);
@@ -221,11 +245,147 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
     return csv;
   });
 
+  // ETL run-detail page. Both the full view and the live-polling endpoint
+  // share a context builder so the template renders the same shape — only
+  // the chrome (header pill row, polling trigger) is conditional on the
+  // `liveOnly` flag, which the template uses to swap between the wrapped
+  // admin page and a bare <section> that HTMX's hx-select="section" picks
+  // up for outerHTML replacement.
+  //
+  // Why pre-resolve so much i18n here: Handlebars' `{{req.t key a=b}}`
+  // does NOT pass hash args (see project memory note). The template reads
+  // already-resolved strings from the context instead.
+  type ReqWithT = { t: (k: string, v?: Record<string, string | number>) => string };
+  const buildRunDetailCtx = async (
+    run: RowDataPacket,
+    req: ReqWithT,
+    liveOnly: boolean,
+  ): Promise<Record<string, unknown>> => {
+    const id = Number(run.id);
+    const [downloads, parses, inserts, swap] = await Promise.all([
+      listEtlRunDownloads(app.pool, id),
+      listEtlRunParses(app.pool, id),
+      listEtlRunInserts(app.pool, id),
+      getEtlRunSwap(app.pool, id),
+    ]);
+    // Aggregate across the per-file rows so the template doesn't need to
+    // do any reductions. Counts and durations land as flat numeric fields;
+    // per-file tables render from the row arrays unchanged.
+    const bytesTotal = downloads.reduce((sum, d) => sum + (d.bytes ?? 0), 0);
+    const rowsEmittedTotal = parses.reduce((sum, p) => sum + p.rowsEmitted, 0);
+    const rowsSkippedTotal = parses.reduce((sum, p) =>
+      sum + p.rowsSkippedShort + p.rowsSkippedHeader + p.rowsSkippedUnparseableIp +
+      p.rowsSkippedMissingCol + p.rowsSkippedNanAsn + p.rowsSkippedOther, 0);
+    const rowsAttemptedTotal = inserts.reduce((sum, i) => sum + i.rowsAttempted, 0);
+    const rowsInsertedTotal = inserts.reduce((sum, i) => sum + i.rowsInserted, 0);
+    const rowsDuplicatesTotal = inserts.reduce((sum, i) => sum + i.rowsDuplicates, 0);
+    const durationDownload = downloads.reduce((sum, d) => sum + (d.durationMs ?? 0), 0);
+    const durationParse = parses.reduce((sum, p) => sum + (p.durationMs ?? 0), 0);
+    const durationInsert = inserts.reduce((sum, i) => sum + (i.durationMs ?? 0), 0);
+    const runDurationMs = run.finished_at && run.started_at
+      ? new Date(run.finished_at as Date).getTime() - new Date(run.started_at as Date).getTime()
+      : 0;
+    // Pre-resolve every parameterized i18n string. Status / skip-reason /
+    // count / duration phrases all take hash args that HBS drops on the floor.
+    const statusText = req.t(`admin.etl.runDetail.status.${run.status}`);
+    const runDurationText = req.t('admin.etl.runDetail.duration', { ms: runDurationMs });
+    const durationDownloadText = req.t('admin.etl.stages.duration', { ms: durationDownload });
+    const durationParseText = req.t('admin.etl.stages.duration', { ms: durationParse });
+    const durationInsertText = req.t('admin.etl.stages.duration', { ms: durationInsert });
+    const rowsSkippedText = req.t('admin.etl.stages.rowsSkipped', { count: rowsSkippedTotal });
+    const rowsInsertedText = req.t('admin.etl.stages.rowsInserted', { count: rowsInsertedTotal });
+    const rowsDuplicatesText = req.t('admin.etl.stages.rowsDuplicates', { count: rowsDuplicatesTotal });
+    const totalBytesText = req.t('admin.etl.stages.totalBytes');
+    const swapStatusText = swap
+      ? req.t(swap.status === 'success' ? 'admin.etl.stages.swapOk' : 'admin.etl.stages.swapFailed')
+      : '';
+    const swapDurationText = swap
+      ? req.t('admin.etl.stages.duration', { ms: swap.durationMs ?? 0 })
+      : '';
+    const skipLabels = {
+      shortLine: req.t('admin.etl.stages.skipReason.shortLine'),
+      headerRow: req.t('admin.etl.stages.skipReason.headerRow'),
+      unparseableIp: req.t('admin.etl.stages.skipReason.unparseableIp'),
+      missingCol: req.t('admin.etl.stages.skipReason.missingCol'),
+      nonNumericAsn: req.t('admin.etl.stages.skipReason.nonNumericAsn'),
+      other: req.t('admin.etl.stages.skipReason.other'),
+    };
+    const downloadsView = downloads.map((d) => ({
+      ...d,
+      statusKind: d.status === 'success' ? 'success'
+        : d.status === 'missing' || d.status === 'skipped' ? 'warning'
+        : 'danger',
+    }));
+    const parsesView = parses.map((p) => ({
+      ...p,
+      skippedTotal: p.rowsSkippedShort + p.rowsSkippedHeader + p.rowsSkippedUnparseableIp +
+        p.rowsSkippedMissingCol + p.rowsSkippedNanAsn + p.rowsSkippedOther,
+      skipLabels,
+    }));
+    const swapRow = swap
+      ? { ...swap, statusText: swapStatusText, durationText: swapDurationText }
+      : null;
+    return {
+      run,
+      runDurationMs,
+      runDurationText,
+      statusText,
+      downloads: downloadsView,
+      parses: parsesView,
+      inserts,
+      swap: swapRow,
+      bytesTotal,
+      rowsEmittedTotal,
+      rowsSkippedTotal,
+      rowsSkippedText,
+      rowsAttemptedTotal,
+      rowsInsertedTotal,
+      rowsInsertedText,
+      rowsDuplicatesTotal,
+      rowsDuplicatesText,
+      totalBytesText,
+      durationDownload,
+      durationDownloadText,
+      durationParse,
+      durationParseText,
+      durationInsert,
+      durationInsertText,
+      liveOnly,
+      req,
+    };
+  };
+
   app.get<{ Params: { id: string } }>('/admin/etl/runs/:id', async (req, reply) => {
-    const [rows] = await app.pool.query<RowDataPacket[]>('SELECT * FROM etl_runs WHERE id = ?', [Number(req.params.id)]);
+    const id = Number(req.params.id);
+    const [rows] = await app.pool.query<RowDataPacket[]>('SELECT * FROM etl_runs WHERE id = ?', [id]);
     const run = rows[0];
     if (!run) return reply.code(404).view('errors/404.hbs', { layout: 'layouts/public', title: req.t('error.404.title'), req });
-    return reply.view('admin/etl-run-detail.hbs', { layout: 'layouts/admin', title: req.t('admin.etl.detail.title', { id: run.id }), run, req });
+    const ctx = await buildRunDetailCtx(run, req as unknown as { t: (k: string, v?: Record<string, string | number>) => string }, false);
+    return reply.view('admin/etl-run-detail.hbs', {
+      ...ctx,
+      layout: 'layouts/admin',
+      title: req.t('admin.etl.detail.title', { id: run.id }),
+    });
+  });
+
+  // Live-polling endpoint. When the run is still in flight, render the
+  // same template with `liveOnly` set so the only thing in the response is
+  // the bare <section class="etl-stage-live"> wrapper (everything else is
+  // conditionally suppressed). HTMX's hx-select="section" then picks up
+  // just that wrapper for outerHTML swap; because the swapped-in section
+  // carries no hx-get/hx-trigger attribute of its own, polling terminates
+  // naturally. When the run has finished we return 204 as a no-op.
+  app.get<{ Params: { id: string } }>('/admin/etl/runs/:id/live', async (req, reply) => {
+    const id = Number(req.params.id);
+    const [rows] = await app.pool.query<RowDataPacket[]>('SELECT * FROM etl_runs WHERE id = ?', [id]);
+    const run = rows[0];
+    if (!run) return reply.code(204).send();
+    if (run.status !== 'running') return reply.code(204).send();
+    const ctx = await buildRunDetailCtx(run, req as unknown as { t: (k: string, v?: Record<string, string | number>) => string }, true);
+    return reply.view('admin/etl-run-detail.hbs', {
+      ...ctx,
+      title: req.t('admin.etl.detail.title', { id: run.id }),
+    });
   });
 
   app.post('/admin/etl/trigger', async (req, reply) => {
@@ -626,7 +786,7 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
     if (sinceMs && !Number.isNaN(sinceMs)) errFilter.sinceMs = sinceMs;
     errFilter.limit = 200;
 
-    const [data, stats, providers, lastBackfill, errors, errorCodes, circuitBreaker, randomGenConfig, recentProbeRows, probeSummary] = await Promise.all([
+    const [data, stats, providers, lastBackfill, errors, errorCodes, circuitBreaker, randomGenConfig, recentProbeRows, probeSummary, health1hAll, health24hAll, health7dAll, last429Rows] = await Promise.all([
       topByQueryCount(app.pool, limit),
       queueStats(app.pool),
       listProviderConfigs(app.pool),
@@ -641,6 +801,17 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
       // last 20 across every mode.
       recentProbes(app.pool, { mode: q.mode === 'auto' || q.mode === 'manual' || q.mode === 'random' ? q.mode : undefined, limit: 20 }),
       probeSummaryStats(app.pool, 60 * 60 * 1000),
+      // 1h / 24h / 7d windowed health — same cached helper, three windows.
+      // Each call returns 5 ProviderHealthWindow rows (one per catalog
+      // provider), zipped by name below.
+      getAggregateProviderHealthAllCached(app.pool, 1 * 3600 * 1000),
+      getAggregateProviderHealthAllCached(app.pool, 24 * 3600 * 1000),
+      getAggregateProviderHealthAllCached(app.pool, 7 * 24 * 3600 * 1000),
+      // Most recent 429 per provider — limit 50 is plenty (5 providers,
+      // each typically has 0-1 recent 429s; rare outage might have a
+      // few). Ordered ts DESC so the FIRST row per provider is the
+      // newest; we pick the first occurrence below.
+      queryProviderErrors(app.pool, { errorCode: '429', limit: 50 }),
     ]);
     const { readRandomGenState } = await import('../../web/plugins/randomIpGeneratorRunner');
     const randomGenState = await readRandomGenState(app.pool);
@@ -670,8 +841,26 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
     // recovering → healthy → idle (operator sees bad providers first).
     // Status computation uses lastErrorAt/lastUsedAt freshness and the
     // disabled flag; counts come from the last persisted backfill run.
+    //
+    // Each provider is enriched with three windowed health aggregates
+    // (1h / 24h / 7d), a today's-quota percentage + pill kind, an
+    // auto-re-enable countdown (only meaningful when disabled AND
+    // autoReenableAt is set), and the most-recent 429 detail row.
+    // Pre-resolve the quota kind string + the formatted reenable copy
+    // here so the template doesn't need to evaluate ternary nesting
+    // (Handlebars has no `gt` helper).
     const now = Date.now();
     const ONE_HOUR = 60 * 60 * 1000;
+    // Index the window aggregates by provider name for the .map() below.
+    const h1hByName = new Map(health1hAll.map((w) => [w.providerName, w]));
+    const h24hByName = new Map(health24hAll.map((w) => [w.providerName, w]));
+    const h7dByName = new Map(health7dAll.map((w) => [w.providerName, w]));
+    // last429Rows is ordered ts DESC — the FIRST occurrence of each
+    // providerName wins. Use Map to enforce that order.
+    const last429ByName = new Map<string, typeof last429Rows[number]>();
+    for (const row of last429Rows) {
+      if (!last429ByName.has(row.providerName)) last429ByName.set(row.providerName, row);
+    }
     const providerHealth = providers
       .map((p) => {
         const lastStats = lastBackfill.providers[p.name];
@@ -684,6 +873,35 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
         else if (p.lastErrorAt) status = 'recovering';
         else if (p.lastUsedAt) status = lastUseFresh ? 'healthy' : 'idle';
         else status = 'idle';
+        const health1h = h1hByName.get(p.name);
+        const health24h = h24hByName.get(p.name);
+        const health7d = h7dByName.get(p.name);
+        // Today's quota = 24h call count / (per-minute quota * 60 * 24),
+        // capped at 100% so over-quota providers don't render "1500%".
+        // Providers with no parseable per-minute quota (e.g. "no key"
+        // entries) fall back to 0%.
+        const perMin = parseFreeQuotaPerMinute(p.name);
+        const dailyCap = perMin > 0 ? perMin * 60 * 24 : 0;
+        const calls24h = health24h?.calls ?? 0;
+        const quotaTodayPct = dailyCap > 0
+          ? Math.min(100, Math.round((calls24h / dailyCap) * 100))
+          : 0;
+        const quotaKind: 'success' | 'warning' | 'danger' | 'muted' =
+          dailyCap === 0 ? 'muted'
+          : quotaTodayPct > 100 ? 'danger' // unreachable due to Math.min, kept for explicitness
+          : quotaTodayPct > 80 ? 'warning'
+          : 'success';
+        // Pre-resolve the localized "auto-re-enables in Nm" string so the
+        // template can render it via {{text}} on a pill without using
+        // {{req.t key minutes=...}} (which Handlebars drops).
+        const reenableMsLeft = p.autoReenableAt ? Date.parse(p.autoReenableAt.toString()) - now : 0;
+        const reenableMinutesLeft = p.autoReenableAt
+          ? Math.max(1, Math.ceil(reenableMsLeft / 60000))
+          : 0;
+        const reenableText = p.autoReenableAt
+          ? req.t('admin.unknownIps.healthCard.reenablesIn', { minutes: reenableMinutesLeft })
+          : '';
+        const reenableKind: 'warning' | 'muted' = p.autoReenableAt ? 'warning' : 'muted';
         return {
           name: p.name,
           displayName: p.displayName,
@@ -695,6 +913,43 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
           lastErrorAt: p.lastErrorAt,
           lastErrorReason: p.lastErrorReason,
           lastStats: lastStats ?? null,
+          // Windowed health aggregates — always present (one row per
+          // catalog provider, even with zero calls). failurePct is the
+          // human-friendly rounded percentage the template renders.
+          // Fall back to zero rows for any provider name not in the
+          // aggregate output (defensive — shouldn't happen since the
+          // catalog is the single source of truth).
+          health1h: {
+            calls: health1h?.calls ?? 0,
+            errors429: health1h?.errors429 ?? 0,
+            failurePct: health1h?.failureRatePct ?? 0,
+          },
+          health24h: {
+            calls: health24h?.calls ?? 0,
+            errors429: health24h?.errors429 ?? 0,
+            failurePct: health24h?.failureRatePct ?? 0,
+          },
+          health7d: {
+            calls: health7d?.calls ?? 0,
+            errors429: health7d?.errors429 ?? 0,
+            failurePct: health7d?.failureRatePct ?? 0,
+          },
+          // Today's quota pill.
+          quotaTodayPct,
+          quotaKind,
+          quotaTodayText: req.t('admin.unknownIps.healthCard.quotaToday', { pct: quotaTodayPct }),
+          // Auto-re-enable countdown pill — only meaningful when
+          // enabled=false && autoReenableAt. Template guards the
+          // rendering; we still ship the pre-resolved text + kind so
+          // the template doesn't need hash-arg i18n.
+          autoReenableAt: p.autoReenableAt,
+          autoDisabledReason: p.autoDisabledReason,
+          reenableText,
+          reenableKind,
+          // Last 429 detail — full ProviderErrorRow (rawResponse +
+          // ipText + ts) so the template can render the `<details>`
+          // block. Null when no 429 has been recorded yet.
+          lastError: last429ByName.get(p.name) ?? null,
         };
       })
       .sort((a, b) => {
@@ -737,10 +992,19 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
   // accepts `name`, optional `enabled` ("on"/"off"), optional `apiKey`.
   // Only enabled / api_key are editable from here; the catalog (display
   // name + free quota) is code-managed.
+  //
+  // reapProviders() runs FIRST so the admin's manual toggle wins over a
+  // concurrent reaper tick that might be about to re-enable the same
+  // provider (or auto-disable another). The reaper's WHERE-clause
+  // filters on auto_reenable_at <= NOW() so this is a no-op for
+  // providers whose cooldown hasn't elapsed yet — the cost is one
+  // indexed SELECT.
   app.post<{ Params: { name: string } }>('/admin/unknown-ips/providers/:name', async (req, reply) => {
     if (!verifyCsrfRequest(req)) return reply.code(403).view('errors/csrf.hbs', { layout: 'layouts/public', req });
     const name = req.params.name;
     const body = req.body as { enabled?: string; apiKey?: string };
+    const { reapProviders } = await import('../../web/plugins/randomIpGeneratorRunner');
+    await reapProviders(app.pool);
     req.auditAction = {
       action: 'unknown_ips.provider.update',
       targetType: 'ingest_provider',
