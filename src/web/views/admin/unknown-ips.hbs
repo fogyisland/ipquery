@@ -466,6 +466,54 @@
     <div class="provider-health-card-error" title="{{this.lastErrorReason}}">{{this.lastErrorReason}}</div>
     {{/if}}
 
+    {{!-- 1h / 24h / 7d windowed call / 429 / failure rates. Pulled from
+         the cached aggregateProviderHealthAll, zipped by provider name
+         in the route handler. --}}
+    <div class="provider-health-window">
+      <div class="provider-health-window-cell">
+        <div class="provider-health-window-label">{{@root.req.t 'admin.unknownIps.healthCard.window1h'}}</div>
+        <div class="provider-health-window-value">{{this.health1h.calls}} {{@root.req.t 'admin.unknownIps.healthCard.calls'}}</div>
+        <div class="provider-health-window-value">{{this.health1h.errors429}} {{@root.req.t 'admin.unknownIps.healthCard.err429'}}</div>
+        <div class="provider-health-window-value">{{this.health1h.failurePct}}% {{@root.req.t 'admin.unknownIps.healthCard.failurePct'}}</div>
+      </div>
+      <div class="provider-health-window-cell">
+        <div class="provider-health-window-label">{{@root.req.t 'admin.unknownIps.healthCard.window24h'}}</div>
+        <div class="provider-health-window-value">{{this.health24h.calls}} {{@root.req.t 'admin.unknownIps.healthCard.calls'}}</div>
+        <div class="provider-health-window-value">{{this.health24h.errors429}} {{@root.req.t 'admin.unknownIps.healthCard.err429'}}</div>
+        <div class="provider-health-window-value">{{this.health24h.failurePct}}% {{@root.req.t 'admin.unknownIps.healthCard.failurePct'}}</div>
+      </div>
+      <div class="provider-health-window-cell">
+        <div class="provider-health-window-label">{{@root.req.t 'admin.unknownIps.healthCard.window7d'}}</div>
+        <div class="provider-health-window-value">{{this.health7d.calls}} {{@root.req.t 'admin.unknownIps.healthCard.calls'}}</div>
+        <div class="provider-health-window-value">{{this.health7d.errors429}} {{@root.req.t 'admin.unknownIps.healthCard.err429'}}</div>
+        <div class="provider-health-window-value">{{this.health7d.failurePct}}% {{@root.req.t 'admin.unknownIps.healthCard.failurePct'}}</div>
+      </div>
+    </div>
+
+    {{!-- Today's quota pill — always rendered. Kind (success / warning
+         / danger / muted) is pre-resolved in the route so the template
+         doesn't need a `gt` helper. Text is pre-localized for the same
+         reason. --}}
+    {{> pill kind=this.quotaKind text=this.quotaTodayText}}
+
+    {{!-- Auto-re-enable countdown — only when the provider was
+         disabled by the CB AND has a future auto_reenable_at. Both
+         text + kind pre-resolved in route. --}}
+    {{#if this.autoReenableAt}}{{#unless this.enabled}}
+    {{> pill kind=this.reenableKind text=this.reenableText}}
+    {{/unless}}{{/if}}
+
+    {{!-- Most recent 429 detail — collapsible pre block. rawResponse
+         comes from provider_error_log; truncated to 512 chars at write
+         time. --}}
+    {{#if this.lastError}}
+    <details class="provider-last-error">
+      <summary>{{@root.req.t 'admin.unknownIps.healthCard.last429'}}</summary>
+      <pre>{{this.lastError.rawResponse}}</pre>
+      <small>{{formatDate this.lastError.ts}} — {{this.lastError.ipText}}</small>
+    </details>
+    {{/if}}
+
     <div class="provider-health-card-config">
       <form method="POST" action="/admin/unknown-ips/providers/{{this.name}}" class="provider-toggle-form">
         <input type="hidden" name="csrf" value="{{csrfToken}}">

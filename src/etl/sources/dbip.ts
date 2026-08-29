@@ -82,13 +82,46 @@ function isHeaderRow(cols: string[]): boolean {
   return cols[0] === 'ip_start' || cols[0] === 'start_ip';
 }
 
-async function* parseDbipCityLines(gzPath: string): AsyncIterable<NormalizedRecord> {
+// Skip-counter buckets returned by the *WithStats parsers below. Mirrors
+// the columns on etl_run_parses so the pipeline can persist the result
+// directly without remapping.
+export interface ParseSkipCounters {
+  shortLine: number;
+  headerRow: number;
+  unparseableIp: number;
+  missingCol: number;
+  nonNumericAsn: number;
+  other: number;
+}
+
+export interface ParseStats {
+  rowsEmitted: number;
+  skipped: ParseSkipCounters;
+  gunzipErrors: number;
+}
+
+export interface ParseStreamResult {
+  records: AsyncIterable<NormalizedRecord>;
+  stats: ParseStats;
+}
+
+function newStats(): ParseStats {
+  return {
+    rowsEmitted: 0,
+    skipped: { shortLine: 0, headerRow: 0, unparseableIp: 0, missingCol: 0, nonNumericAsn: 0, other: 0 },
+    gunzipErrors: 0,
+  };
+}
+
+async function* parseDbipCityLines(
+  gzPath: string, stats: ParseStats,
+): AsyncIterable<NormalizedRecord> {
   for await (const cols of streamGzippedCsv(gzPath, true)) {
-    if (cols.length < 5) continue;
-    if (isHeaderRow(cols)) continue;
+    if (cols.length < 5) { stats.skipped.shortLine++; continue; }
+    if (isHeaderRow(cols)) { stats.skipped.headerRow++; continue; }
     const start = parseIp(cols[0]!);
     const end = parseIp(cols[1]!);
-    if (!start || !end) continue;
+    if (!start || !end) { stats.skipped.unparseableIp++; continue; }
     const rec: NormalizedRecord = { startIp: start, endIp: end, source: 'dbip' };
     // cols[3] is the ISO country code; cols[2] is the continent code we ignore.
     if (cols[3]) rec.countryCode = cols[3];
@@ -98,34 +131,50 @@ async function* parseDbipCityLines(gzPath: string): AsyncIterable<NormalizedReco
     if (lat !== undefined) rec.latitude = lat;
     const lon = parseDec(cols[7]);
     if (lon !== undefined) rec.longitude = lon;
+    stats.rowsEmitted++;
     yield rec;
   }
 }
 
-async function* parseDbipCountryLines(gzPath: string): AsyncIterable<NormalizedRecord> {
+async function* parseDbipCountryLines(
+  gzPath: string, stats: ParseStats,
+): AsyncIterable<NormalizedRecord> {
   for await (const cols of streamGzippedCsv(gzPath, true)) {
-    if (cols.length < 3) continue;
-    if (isHeaderRow(cols)) continue;
+    if (cols.length < 3) { stats.skipped.shortLine++; continue; }
+    if (isHeaderRow(cols)) { stats.skipped.headerRow++; continue; }
     const start = parseIp(cols[0]!);
     const end = parseIp(cols[1]!);
-    if (!start || !end) continue;
+    if (!start || !end) { stats.skipped.unparseableIp++; continue; }
     const rec: NormalizedRecord = { startIp: start, endIp: end, source: 'dbip' };
     if (cols[2]) rec.countryCode = cols[2];
+    stats.rowsEmitted++;
     yield rec;
   }
 }
 
-async function* parseDbipAsnLines(gzPath: string): AsyncIterable<NormalizedRecord> {
+async function* parseDbipAsnLines(
+  gzPath: string, stats: ParseStats,
+): AsyncIterable<NormalizedRecord> {
   for await (const cols of streamGzippedCsv(gzPath, true)) {
-    if (cols.length < 4) continue;
-    if (isHeaderRow(cols)) continue;
+    if (cols.length < 4) { stats.skipped.shortLine++; continue; }
+    if (isHeaderRow(cols)) { stats.skipped.headerRow++; continue; }
     const start = parseIp(cols[0]!);
     const end = parseIp(cols[1]!);
-    if (!start || !end) continue;
+    if (!start || !end) { stats.skipped.unparseableIp++; continue; }
     const rec: NormalizedRecord = { startIp: start, endIp: end, source: 'dbip' };
     const asn = parseInt10(cols[2]);
-    if (asn !== undefined) rec.asn = asn;
+    if (asn !== undefined) {
+      rec.asn = asn;
+    } else {
+      // cols[2] present but not a clean integer — track it so the admin
+      // run-detail page can show "X rows had a non-numeric ASN" without
+      // the caller having to compare against the file separately. The
+      // row is still yielded (preserves the legacy behaviour where the
+      // record is emitted with asn undefined).
+      stats.skipped.nonNumericAsn++;
+    }
     if (cols[3]) rec.asnOrg = cols[3];
+    stats.rowsEmitted++;
     yield rec;
   }
 }
@@ -133,32 +182,47 @@ async function* parseDbipAsnLines(gzPath: string): AsyncIterable<NormalizedRecor
 // City-lite: country + region + city + (lat,lon ignored).
 // Streaming variants are the production path; array variants stay for tests.
 export async function* parseDbipCityCsvStream(gzPath: string): AsyncIterable<NormalizedRecord> {
-  yield* parseDbipCityLines(gzPath);
+  const { records } = parseDbipCityCsvStreamWithStats(gzPath);
+  yield* records;
 }
 export async function parseDbipCityCsv(gzPath: string): Promise<NormalizedRecord[]> {
   const out: NormalizedRecord[] = [];
-  for await (const r of parseDbipCityLines(gzPath)) out.push(r);
+  for await (const r of parseDbipCityLines(gzPath, newStats())) out.push(r);
   return out;
+}
+export function parseDbipCityCsvStreamWithStats(gzPath: string): ParseStreamResult {
+  const stats = newStats();
+  return { records: parseDbipCityLines(gzPath, stats), stats };
 }
 
 // Country-lite: country code only.
 export async function* parseDbipCountryCsvStream(gzPath: string): AsyncIterable<NormalizedRecord> {
-  yield* parseDbipCountryLines(gzPath);
+  const { records } = parseDbipCountryCsvStreamWithStats(gzPath);
+  yield* records;
 }
 export async function parseDbipCountryCsv(gzPath: string): Promise<NormalizedRecord[]> {
   const out: NormalizedRecord[] = [];
-  for await (const r of parseDbipCountryLines(gzPath)) out.push(r);
+  for await (const r of parseDbipCountryLines(gzPath, newStats())) out.push(r);
   return out;
+}
+export function parseDbipCountryCsvStreamWithStats(gzPath: string): ParseStreamResult {
+  const stats = newStats();
+  return { records: parseDbipCountryLines(gzPath, stats), stats };
 }
 
 // ASN-lite: ASN number + ASN organization.
 export async function* parseDbipAsnCsvStream(gzPath: string): AsyncIterable<NormalizedRecord> {
-  yield* parseDbipAsnLines(gzPath);
+  const { records } = parseDbipAsnCsvStreamWithStats(gzPath);
+  yield* records;
 }
 export async function parseDbipAsnCsv(gzPath: string): Promise<NormalizedRecord[]> {
   const out: NormalizedRecord[] = [];
-  for await (const r of parseDbipAsnLines(gzPath)) out.push(r);
+  for await (const r of parseDbipAsnLines(gzPath, newStats())) out.push(r);
   return out;
+}
+export function parseDbipAsnCsvStreamWithStats(gzPath: string): ParseStreamResult {
+  const stats = newStats();
+  return { records: parseDbipAsnLines(gzPath, stats), stats };
 }
 
 // Backwards-compatible aliases: the original parseDbipCsv referred to the
