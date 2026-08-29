@@ -231,33 +231,81 @@ export async function pickRandomIpsNotInRanges(
   return { ips: out, exhausted: 0, coveredSkips };
 }
 
-/** RFC 5737 + RFC 6890 ranges. None of these have meaningful IP-geo
- *  data in any commercial DB; perfect for testing ingest pipelines. */
+/** RFC 5737 + RFC 6890 (benchmark only) ranges. None of these have
+ *  meaningful IP-geo data in any commercial DB; perfect for testing
+ *  ingest pipelines.
+ *
+ *  IMPORTANT: do NOT add ranges that any provider would classify as
+ *  "private" — the backfill would record those into ip_ranges and
+ *  future /lookups against those IPs would return the geolocation
+ *  we voted on, polluting the public-space data with internal/CGNAT
+ *  answers. See EXCLUDED_RANGES below for the keep-out list. */
 const RESERVED_RANGES: Array<[number, number]> = [
   // RFC 5737 documentation: TEST-NET-1, TEST-NET-2, TEST-NET-3
   [ipToInt('192.0.2.0'),   ipToInt('192.0.2.255')],
   [ipToInt('198.51.100.0'), ipToInt('198.51.100.255')],
   [ipToInt('203.0.113.0'),  ipToInt('203.0.113.255')],
-  // RFC 6890 carrier-grade NAT: 100.64.0.0/10
-  [ipToInt('100.64.0.0'),   ipToInt('100.127.255.255')],
   // RFC 6890 benchmark testing: 198.18.0.0/15
   [ipToInt('198.18.0.0'),   ipToInt('198.19.255.255')],
 ];
 
+/** Ranges we MUST NOT generate, even if they look "reserved" by IANA.
+ *  Providers treat any IP in these ranges as private/non-routable and
+ *  return country=null or country=US (geo location for the operator's
+ *  country) — ingesting those would write misleading rows.
+ *
+ *  - 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16 — RFC 1918 private
+ *  - 127.0.0.0/8 — loopback
+ *  - 169.254.0.0/16 — link-local
+ *  - 100.64.0.0/10 — RFC 6598 shared address space (CGNAT)
+ *  - 224.0.0.0/4 — multicast
+ *  - 240.0.0.0/4 — reserved (includes 255.255.255.255 broadcast) */
+const EXCLUDED_RANGES: Array<[number, number]> = [
+  [ipToInt('10.0.0.0'),     ipToInt('10.255.255.255')],
+  [ipToInt('100.64.0.0'),   ipToInt('100.127.255.255')],
+  [ipToInt('127.0.0.0'),    ipToInt('127.255.255.255')],
+  [ipToInt('169.254.0.0'),  ipToInt('169.254.255.255')],
+  [ipToInt('172.16.0.0'),   ipToInt('172.31.255.255')],
+  [ipToInt('192.168.0.0'),  ipToInt('192.168.255.255')],
+  [ipToInt('224.0.0.0'),    ipToInt('239.255.255.255')],
+  [ipToInt('240.0.0.0'),    ipToInt('255.255.255.255')],
+];
+
+/** True iff `n` (a 32-bit unsigned integer form of an IPv4) falls in any
+ *  EXCLUDED_RANGES entry. Used as a defensive check after picking. */
+function isInExcludedRange(n: number): boolean {
+  // Linear scan — list is short, called once per pick.
+  for (const [lo, hi] of EXCLUDED_RANGES) {
+    if (n >= lo && n <= hi) return true;
+  }
+  return false;
+}
+
 function randomReservedIpv4(): { text: string; buffer: Buffer } {
-  const [lo, hi] = RESERVED_RANGES[Math.floor(Math.random() * RESERVED_RANGES.length)]!;
-  const span = hi - lo + 1;
-  const offset = Math.floor(Math.random() * span);
-  const n = lo + offset;
-  const b0 = (n >>> 24) & 0xff;
-  const b1 = (n >>> 16) & 0xff;
-  const b2 = (n >>> 8) & 0xff;
-  const b3 = n & 0xff;
-  const buf = Buffer.from([b0, b1, b2, b3]);
-  return {
-    text: `${b0}.${b1}.${b2}.${b3}`,
-    buffer: buf,
-  };
+  // Try up to a small handful of times in case future ranges are added
+  // that accidentally overlap an excluded one. With the current
+  // RESERVED_RANGES (which are already vetted) this loop always exits
+  // on the first iteration.
+  for (let attempt = 0; attempt < 16; attempt++) {
+    const [lo, hi] = RESERVED_RANGES[Math.floor(Math.random() * RESERVED_RANGES.length)]!;
+    const span = hi - lo + 1;
+    const offset = Math.floor(Math.random() * span);
+    const n = lo + offset;
+    if (isInExcludedRange(n)) continue;
+    const b0 = (n >>> 24) & 0xff;
+    const b1 = (n >>> 16) & 0xff;
+    const b2 = (n >>> 8) & 0xff;
+    const b3 = n & 0xff;
+    const buf = Buffer.from([b0, b1, b2, b3]);
+    return {
+      text: `${b0}.${b1}.${b2}.${b3}`,
+      buffer: buf,
+    };
+  }
+  // Should be unreachable given current RESERVED_RANGES (none overlap
+  // EXCLUDED_RANGES). If a future change adds overlap, throw so the
+  // problem is caught loudly rather than silently producing private IPs.
+  throw new Error('randomReservedIpv4: all picks fell in EXCLUDED_RANGES — RESERVED_RANGES needs review');
 }
 
 function ipToInt(s: string): number {
