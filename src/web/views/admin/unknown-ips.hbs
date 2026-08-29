@@ -67,6 +67,61 @@
   </div>
   {{/if}}
 
+  {{!-- Continuous random-IP ingest toggle. When enabled, the runner ticks
+       every 60s and runs runRandomGeneration() with count=10. The runner
+       is a separate plugin (src/web/plugins/randomIpGeneratorRunner.ts).
+       State persists in `settings` table so a server restart resumes the
+       previous toggle state. --}}
+  {{#if randomGenState}}
+  <div class="admin-continuous-card">
+    <div class="admin-continuous-head">
+      <h3>{{req.t 'admin.unknownIps.continuous.title'}}</h3>
+      <span class="admin-continuous-status admin-continuous-status--{{#if randomGenState.enabled}}on{{else}}off{{/if}}">
+        {{#if randomGenState.enabled}}
+          {{req.t 'admin.unknownIps.continuous.enabled'}}
+        {{else}}
+          {{req.t 'admin.unknownIps.continuous.disabled'}}
+        {{/if}}
+      </span>
+    </div>
+    <p class="admin-continuous-help">{{req.t 'admin.unknownIps.continuous.help'}}</p>
+
+    <div class="admin-continuous-meta">
+      <div class="admin-continuous-meta-row">
+        <span class="admin-continuous-meta-label">{{req.t 'admin.unknownIps.continuous.lastRunAt'}}</span>
+        {{#if randomGenState.lastRunAt}}
+          <span class="admin-continuous-meta-value" title="{{randomGenState.lastRunAt}}">{{formatRelative randomGenState.lastRunAt}}</span>
+        {{else}}
+          <span class="admin-continuous-meta-value admin-tag admin-tag--muted">{{req.t 'admin.unknownIps.continuous.lastRunNever'}}</span>
+        {{/if}}
+      </div>
+      {{#if randomGenState.lastSummary}}
+      <div class="admin-continuous-meta-row">
+        <span class="admin-continuous-meta-label">{{req.t 'admin.unknownIps.continuous.status'}}</span>
+        <span class="admin-continuous-meta-value">
+          {{req.t 'admin.unknownIps.continuous.lastSummaryMerged' merged=randomGenState.lastSummary.merged considered=randomGenState.lastSummary.considered}}
+        </span>
+      </div>
+      {{/if}}
+    </div>
+
+    <div class="admin-continuous-actions">
+      <form method="POST" action="/admin/unknown-ips/generate/continuous" style="display:inline">
+        <input type="hidden" name="csrf" value="{{csrfToken}}">
+        <input type="hidden" name="enabled" value="{{#if randomGenState.enabled}}off{{else}}on{{/if}}">
+        <button type="submit" class="btn-{{#if randomGenState.enabled}}secondary{{else}}primary{{/if}}">
+          {{#if randomGenState.enabled}}{{req.t 'admin.unknownIps.continuous.disable'}}{{else}}{{req.t 'admin.unknownIps.continuous.enable'}}{{/if}}
+        </button>
+      </form>
+      <form method="POST" action="/admin/unknown-ips/generate/continuous" style="display:inline">
+        <input type="hidden" name="csrf" value="{{csrfToken}}">
+        <input type="hidden" name="kick" value="1">
+        <button type="submit" class="btn-secondary">{{req.t 'admin.unknownIps.continuous.kickNow'}}</button>
+      </form>
+    </div>
+  </div>
+  {{/if}}
+
   <div class="admin-stats">
     <div class="admin-stat">
       <span class="admin-stat-value">{{stats.pending}}</span>

@@ -19,6 +19,7 @@ import { registerCsrf } from '../web/plugins/csrf';
 import { registerAuditLog } from '../web/plugins/auditLog';
 import { registerSetupGuard } from '../web/plugins/setupGuard';
 import { registerSessionPurger } from '../web/plugins/sessionPurger';
+import { registerRandomGenRunner } from '../web/plugins/randomIpGeneratorRunner';
 import { _resetForTests as resetLoginLimit } from '../web/plugins/loginRateLimit';
 import { createMailer } from '../mailer';
 import healthRoute from './routes/health';
@@ -37,6 +38,7 @@ declare module 'fastify' {
     mailer: ReturnType<typeof createMailer>;
     resetLoginLimit: () => void;
     flushQueryLog: () => Promise<void>;
+    randomGenRunner: { tickNow: () => Promise<void>; syncFromSettings: () => Promise<boolean> };
   }
 }
 
@@ -62,6 +64,11 @@ export async function buildServer(cfg: AppConfig, opts?: { extraRoutes?: (app: F
   await registerSecurityHeaders(app, { cookieSecure: cfg.web.cookieSecure });
   await registerSession(app);
   registerSessionPurger(app, app.pool);
+  const randomGenRunner = registerRandomGenRunner(app, app.pool);
+  // Sync the timer against the persisted setting. Default is OFF so
+  // no random generation happens until the admin opts in.
+  await randomGenRunner.syncFromSettings();
+  app.decorate('randomGenRunner', randomGenRunner);
   await registerAuthGuards(app);
   await registerCsrf(app);
   app.decorate('resetLoginLimit', resetLoginLimit);

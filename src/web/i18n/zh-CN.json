@@ -434,6 +434,20 @@
         "providersDisabled": "已自动停用数据源(429)",
         "ipList": "本次随机生成的 IP"
       },
+      "continuous": {
+        "title": "连续随机入库",
+        "help": "启用后,系统每分钟自动挑选 10 个随机 IP 并入库。停用则不再触发。可随时手动运行一次立即触发。",
+        "status": "当前状态",
+        "enabled": "已启用(每分钟触发)",
+        "disabled": "已停用",
+        "enable": "启用",
+        "disable": "停用",
+        "kickNow": "立即运行一次",
+        "kicked": "已触发一次手动运行,等待结果…",
+        "lastRunAt": "上次运行时间",
+        "lastRunNever": "尚未运行",
+        "lastSummaryMerged": "上次新入库 {merged}/{considered}"
+      },
       "providers": {
         "title": "回灌数据源",
         "help": "回灌任务会向以下外部 API 并行查询每个待处理 IP,并按多数票合并。可在此切换每个数据源是否启用,以及更新需要 API Key 的数据源凭证。修改后下一次回灌即生效,无需重启。",
