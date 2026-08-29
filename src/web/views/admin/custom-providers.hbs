@@ -1,0 +1,171 @@
+{{!-- SPDX-License-Identifier: MIT --}}
+{{!--
+  /admin/unknown-ips/providers/custom — admin-registered HTTP endpoints.
+
+  Two stacked sections:
+   1. Add form (top) — name + URL template + method + body + field paths.
+   2. List of existing custom providers (bottom) — each row shows the
+      health stats (1h/24h/7d) inline, plus an "edit/delete" pair and a
+      "test" mini-form that POSTs to /:name/test.
+
+  No new design language — reuses .provider-health-card for the existing
+  rows so custom providers visually match the built-in /unknown-ips list.
+--}}
+<h2>{{@root.req.t 'admin.unknownIps.customProviders.title'}}</h2>
+
+{{#if (eq flash.kind 'saved')}}
+<div class="admin-alert admin-alert--success">
+  {{@root.req.t 'admin.unknownIps.customProviders.saved' name=flash.name}}
+</div>
+{{/if}}
+{{#if (eq flash.kind 'deleted')}}
+<div class="admin-alert admin-alert--info">
+  {{@root.req.t 'admin.unknownIps.customProviders.deleted' name=flash.name}}
+</div>
+{{/if}}
+{{#if (eq flash.kind 'error')}}
+<div class="admin-alert admin-alert--danger">
+  {{flash.message}}
+</div>
+{{/if}}
+
+<h3>{{@root.req.t 'admin.unknownIps.customProviders.addTitle'}}</h3>
+<form method="POST" action="/admin/unknown-ips/providers/custom" class="custom-provider-form">
+  <input type="hidden" name="csrf" value="{{csrfToken}}">
+  <div class="custom-provider-form-grid">
+    <label>
+      <span>{{@root.req.t 'admin.unknownIps.customProviders.name'}}</span>
+      <input type="text" name="name" pattern="[a-z][a-z0-9_\-]{0,31}" required>
+      <small class="form-hint">{{@root.req.t 'admin.unknownIps.customProviders.nameHint'}}</small>
+    </label>
+    <label>
+      <span>{{@root.req.t 'admin.unknownIps.customProviders.displayName'}}</span>
+      <input type="text" name="displayName">
+    </label>
+    <label class="custom-provider-form-grid-full">
+      <span>{{@root.req.t 'admin.unknownIps.customProviders.urlTemplate'}}</span>
+      <input type="text" name="urlTemplate" placeholder="https://api.example.com/{ip}?key={apiKey}" required>
+      <small class="form-hint">{{@root.req.t 'admin.unknownIps.customProviders.urlTemplateHint'}}</small>
+    </label>
+    <label>
+      <span>{{@root.req.t 'admin.unknownIps.customProviders.method'}}</span>
+      <select name="method">
+        <option value="GET">{{@root.req.t 'admin.unknownIps.customProviders.methodGet'}}</option>
+        <option value="POST">{{@root.req.t 'admin.unknownIps.customProviders.methodPost'}}</option>
+      </select>
+    </label>
+    <label>
+      <span>{{@root.req.t 'admin.unknownIps.customProviders.responseFormat'}}</span>
+      <select name="responseFormat">
+        <option value="json">JSON</option>
+        <option value="text">Text</option>
+      </select>
+    </label>
+    <label>
+      <span>{{@root.req.t 'admin.unknownIps.customProviders.countryPath'}}</span>
+      <input type="text" name="countryPath" placeholder="country.code" required>
+    </label>
+    <label>
+      <span>{{@root.req.t 'admin.unknownIps.customProviders.cityPath'}}</span>
+      <input type="text" name="cityPath" placeholder="city.name">
+    </label>
+    <label>
+      <span>{{@root.req.t 'admin.unknownIps.customProviders.asnPath'}}</span>
+      <input type="text" name="asnPath" placeholder="asn">
+    </label>
+    <label>
+      <span>{{@root.req.t 'admin.unknownIps.customProviders.timeoutMs'}}</span>
+      <input type="number" name="timeoutMs" min="100" max="30000" value="5000">
+    </label>
+    <label class="custom-provider-form-grid-full">
+      <span>{{@root.req.t 'admin.unknownIps.customProviders.requestBody'}}</span>
+      <textarea name="requestBody" rows="2" placeholder='{"ip":"{ip}","key":"{apiKey}"}'></textarea>
+    </label>
+    <label>
+      <span>API Key</span>
+      <input type="password" name="apiKey" autocomplete="off" placeholder="{{@root.req.t 'admin.unknownIps.providers.apiKeyPlaceholder'}}">
+    </label>
+    <label class="provider-toggle">
+      <input type="checkbox" name="enabled" value="on" checked>
+      <span>{{@root.req.t 'admin.unknownIps.customProviders.enabled'}}</span>
+    </label>
+  </div>
+  <div class="custom-provider-form-actions">
+    <button type="submit" class="btn-primary">{{@root.req.t 'admin.unknownIps.customProviders.save'}}</button>
+  </div>
+</form>
+
+<h3>{{@root.req.t 'admin.unknownIps.customProviders.listTitle'}}</h3>
+{{#if customProviders.length}}
+<div class="custom-providers-list">
+  {{#each customProviders}}
+  <div class="provider-health-card provider-health-card--{{#if this.enabled}}idle{{else}}disabled{{/if}}">
+    <div class="provider-health-card-head">
+      <div>
+        <span class="provider-health-card-name">{{this.displayName}}</span>
+        <code class="provider-health-card-slug">{{this.name}}</code>
+      </div>
+      <span class="provider-health-status provider-health-status--{{#if this.enabled}}idle{{else}}disabled{{/if}}">
+        {{#if this.enabled}}{{@root.req.t 'admin.unknownIps.healthCard.statusIdle'}}
+        {{else}}{{@root.req.t 'admin.unknownIps.healthCard.statusDisabled'}}{{/if}}
+      </span>
+    </div>
+
+    <div class="provider-health-card-grid">
+      <div class="provider-health-stat">
+        <span class="provider-health-stat-label">URL</span>
+        <span class="provider-health-stat-value"><code>{{this.urlTemplate}}</code></span>
+      </div>
+      <div class="provider-health-stat">
+        <span class="provider-health-stat-label">{{@root.req.t 'admin.unknownIps.customProviders.method'}}</span>
+        <span class="provider-health-stat-value">{{this.method}} · {{this.responseFormat}}</span>
+      </div>
+      <div class="provider-health-stat">
+        <span class="provider-health-stat-label">{{@root.req.t 'admin.unknownIps.customProviders.countryPath'}}</span>
+        <span class="provider-health-stat-value"><code>{{this.countryPath}}</code></span>
+      </div>
+    </div>
+
+    {{!-- Same 1h/24h/7d window grid the built-in provider cards show --}}
+    <div class="provider-health-window">
+      <div class="provider-health-window-cell">
+        <div class="provider-health-window-label">{{@root.req.t 'admin.unknownIps.healthCard.window1h'}}</div>
+        <div class="provider-health-window-value">{{this.health1h.calls}} {{@root.req.t 'admin.unknownIps.healthCard.calls'}}</div>
+        <div class="provider-health-window-value">{{this.health1h.errors429}} {{@root.req.t 'admin.unknownIps.healthCard.err429'}}</div>
+        <div class="provider-health-window-value">{{this.health1h.failurePct}}% {{@root.req.t 'admin.unknownIps.healthCard.failurePct'}}</div>
+      </div>
+      <div class="provider-health-window-cell">
+        <div class="provider-health-window-label">{{@root.req.t 'admin.unknownIps.healthCard.window24h'}}</div>
+        <div class="provider-health-window-value">{{this.health24h.calls}} {{@root.req.t 'admin.unknownIps.healthCard.calls'}}</div>
+        <div class="provider-health-window-value">{{this.health24h.errors429}} {{@root.req.t 'admin.unknownIps.healthCard.err429'}}</div>
+        <div class="provider-health-window-value">{{this.health24h.failurePct}}% {{@root.req.t 'admin.unknownIps.healthCard.failurePct'}}</div>
+      </div>
+      <div class="provider-health-window-cell">
+        <div class="provider-health-window-label">{{@root.req.t 'admin.unknownIps.healthCard.window7d'}}</div>
+        <div class="provider-health-window-value">{{this.health7d.calls}} {{@root.req.t 'admin.unknownIps.healthCard.calls'}}</div>
+        <div class="provider-health-window-value">{{this.health7d.errors429}} {{@root.req.t 'admin.unknownIps.healthCard.err429'}}</div>
+        <div class="provider-health-window-value">{{this.health7d.failurePct}}% {{@root.req.t 'admin.unknownIps.healthCard.failurePct'}}</div>
+      </div>
+    </div>
+
+    <div class="custom-provider-actions">
+      <form method="POST" action="/admin/unknown-ips/providers/custom/{{this.name}}/delete" style="display:inline"
+            onsubmit="return confirm('{{@root.req.t 'admin.unknownIps.customProviders.deleteConfirm' name=this.name}}')">
+        <input type="hidden" name="csrf" value="{{@root.csrfToken}}">
+        <button type="submit" class="button">{{@root.req.t 'admin.unknownIps.customProviders.delete'}}</button>
+      </form>
+      <form method="POST" action="/admin/unknown-ips/providers/custom/{{this.name}}/test" class="custom-provider-test-form">
+        <input type="hidden" name="csrf" value="{{@root.csrfToken}}">
+        <input type="text" name="ip" placeholder="{{@root.req.t 'admin.unknownIps.customProviders.testIp'}}" required>
+        <button type="submit" class="button">{{@root.req.t 'admin.unknownIps.customProviders.test'}}</button>
+      </form>
+      <code class="custom-provider-test-result" id="test-result-{{this.name}}"></code>
+    </div>
+  </div>
+  {{/each}}
+</div>
+{{else}}
+<p class="admin-empty">{{@root.req.t 'admin.unknownIps.customProviders.empty'}}</p>
+{{/if}}
+
+<script src="/assets/custom-providers-test.js" defer></script>
