@@ -433,6 +433,20 @@
         "providersDisabled": "auto-disabled providers (429)",
         "ipList": "generated IPs"
       },
+      "continuous": {
+        "title": "Continuous random ingest",
+        "help": "When enabled, the system picks 10 random IPs every minute and ingests them via the backfill pipeline. Disable to stop. You can also kick a one-off run at any time.",
+        "status": "Status",
+        "enabled": "Enabled (fires every minute)",
+        "disabled": "Disabled",
+        "enable": "Enable",
+        "disable": "Disable",
+        "kickNow": "Run once now",
+        "kicked": "Manual run kicked off, waiting for result…",
+        "lastRunAt": "Last run",
+        "lastRunNever": "never",
+        "lastSummaryMerged": "last: {merged}/{considered} merged"
+      },
       "providers": {
         "title": "Backfill providers",
         "help": "Backfill fans out each pending IP to the external APIs below in parallel and merges via majority vote. Toggle each provider on/off and rotate API keys here. Changes take effect on the next backfill — no restart required.",

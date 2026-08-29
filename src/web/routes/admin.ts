@@ -546,6 +546,8 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
       queueStats(app.pool),
       listProviderConfigs(app.pool),
     ]);
+    const { readRandomGenState } = await import('../../web/plugins/randomIpGeneratorRunner');
+    const randomGenState = await readRandomGenState(app.pool);
     // Consume short-lived flash cookies set by POST handlers. Both
     // backfill and random-gen POST routes set JSON cookies on the
     // redirect; we decode them once here and clear them so the banner
@@ -571,6 +573,7 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
       stats,
       providers,
       flash,
+      randomGenState,
       limit,
       csrfToken: req.csrfToken,
       req,
@@ -654,6 +657,29 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
       httpOnly: true,
       sameSite: 'lax',
     });
+    return reply.redirect('/admin/unknown-ips');
+  });
+
+  // Continuous runner toggle + manual kick. The runner is a separate
+  // setInterval-based plugin (see registerRandomGenRunner) that fires
+  // every 60s when the persisted `random_gen_enabled` setting is '1'.
+  // POST accepts `enabled=on|off` to flip the setting (and start/stop
+  // the timer immediately) and `kick=1` to run an out-of-band tick.
+  app.post('/admin/unknown-ips/generate/continuous', async (req, reply) => {
+    if (!verifyCsrfRequest(req)) return reply.code(403).view('errors/csrf.hbs', { layout: 'layouts/public', req });
+    req.auditAction = { action: 'unknown_ips.generate.continuous', targetType: 'settings' };
+    const body = req.body as { enabled?: string; kick?: string };
+    const { setSetting } = await import('../../storage/settings');
+    if (body.kick === '1') {
+      // Manual kick — fire-and-forget but wait briefly so the next
+      // GET sees the updated lastSummary. tickNow already logs and
+      // persists on its own; we just await so the redirect lands
+      // after the write.
+      await app.randomGenRunner.tickNow();
+    } else if (body.enabled === 'on' || body.enabled === 'off') {
+      await setSetting(app.pool, 'random_gen_enabled', body.enabled === 'on' ? '1' : '0');
+      await app.randomGenRunner.syncFromSettings();
+    }
     return reply.redirect('/admin/unknown-ips');
   });
 }
