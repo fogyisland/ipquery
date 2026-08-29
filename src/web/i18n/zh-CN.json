@@ -264,7 +264,11 @@
         "lastUsed": "最后使用"
       },
       "option-revoked-yes": "已吊销",
-      "option-revoked-no": "有效"
+      "option-revoked-no": "有效",
+      "bulkRevoke": "批量吊销所选",
+      "bulkRevokeConfirm": "确定吊销选中的 API Key?此操作不可撤销。",
+      "bulkSelectAll": "全选",
+      "bulkSelectOne": "选择 Key #{id}"
     },
     "audit": {
       "title": "查询审计",
@@ -477,6 +481,86 @@
         "lastRunNever": "尚未运行",
         "lastSummaryMerged": "上次新入库 {merged}/{considered}"
       },
+      "scheduler": {
+        "title": "连续随机入库 · 任务调度",
+        "subtitle": "持续探针模式 | 当前每 {interval} 秒自动拉取 {batch} 个随机 IP…",
+        "status": {
+          "running": "运行中",
+          "stopped": "已停用",
+          "cooldown": "冷却中"
+        },
+        "cooldownNotice": "数据源 {provider} 触发限流,连续入库暂停中(剩余 {remaining} 分钟)",
+        "config": {
+          "interval": "运行间隔",
+          "batchSize": "每批数量",
+          "targetRange": "目标地址段",
+          "cooldown": "限流冷却(分钟)",
+          "cbLinkage": "429 自动暂停冷却",
+          "save": "保存调度配置"
+        },
+        "intervalOptions": {
+          "30s": "30 秒",
+          "1m": "1 分钟",
+          "5m": "5 分钟",
+          "15m": "15 分钟",
+          "30m": "30 分钟"
+        },
+        "targetRangeOptions": {
+          "reserved": "RFC 5737 + 6890 (文档/基准段)"
+        },
+        "metrics": {
+          "lastRun": "上次运行",
+          "lastYield": "上次入库",
+          "warmingRate": "预估写入",
+          "probeSuccessRate": "探针成功率",
+          "noLastRun": "尚未运行"
+        },
+        "runNow": "立即手动触发",
+        "runNowConfirm": "立即触发一次连续入库任务?",
+        "wizard": {
+          "enabled": "启动连续入库",
+          "disabled": "停止连续入库"
+        }
+      },
+      "recentProbes": {
+        "title": "最近探针结果",
+        "help": "最近 20 次探针:每个 IP 的多个数据源响应与最终共识。可点击展开查看每个数据源的完整回复。",
+        "detailToggle": "展开数据源明细",
+        "batchIdLabel": "批次",
+        "noProbes": "暂无探针记录 — 启用连续入库或点击手动触发后将在此显示。",
+        "cols": {
+          "ts": "时间",
+          "ip": "IP",
+          "providers": "数据源响应",
+          "consensus": "共识",
+          "outcome": "结果"
+        },
+        "detailCols": {
+          "provider": "数据源",
+          "status": "状态",
+          "country": "国家",
+          "city": "城市",
+          "asn": "ASN",
+          "duration": "耗时",
+          "errorCode": "错误码"
+        },
+        "providerCell": {
+          "ok": "正常",
+          "throttled": "限流",
+          "timeout": "超时",
+          "no_country": "无国家",
+          "network": "网络错误",
+          "error": "错误",
+          "empty": "空响应"
+        },
+        "outcomeLabel": {
+          "merged": "入库",
+          "no_consensus": "无共识",
+          "no_country": "无国家",
+          "all_abstained": "全部失败",
+          "duplicate": "重复"
+        }
+      },
       "providers": {
         "title": "回灌数据源",
         "help": "回灌任务会向以下外部 API 并行查询每个待处理 IP,并按多数票合并。可在此切换每个数据源是否启用,以及更新需要 API Key 的数据源凭证。修改后下一次回灌即生效,无需重启。",
@@ -542,6 +626,7 @@
         "allProviders": "全部",
         "allCodes": "全部",
         "allModes": "全部",
+        "applyFilters": "应用筛选",
         "since1h": "最近 1 小时",
         "since24h": "最近 24 小时",
         "since7d": "最近 7 天",

@@ -263,7 +263,11 @@
         "lastUsed": "Last used"
       },
       "option-revoked-yes": "Revoked",
-      "option-revoked-no": "Active"
+      "option-revoked-no": "Active",
+      "bulkRevoke": "Revoke selected",
+      "bulkRevokeConfirm": "Revoke the selected API keys? This cannot be undone.",
+      "bulkSelectAll": "Select all keys",
+      "bulkSelectOne": "Select key #{id}"
     },
     "audit": {
       "title": "Query audit",
@@ -476,6 +480,86 @@
         "lastRunNever": "never",
         "lastSummaryMerged": "last: {merged}/{considered} merged"
       },
+      "scheduler": {
+        "title": "Continuous random ingest · Task scheduler",
+        "subtitle": "Continuous probe mode | currently pulls {batch} random IPs every {interval} seconds…",
+        "status": {
+          "running": "Running",
+          "stopped": "Stopped",
+          "cooldown": "Cooldown"
+        },
+        "cooldownNotice": "Provider {provider} hit rate limit — pausing for {remaining} more minute(s)",
+        "config": {
+          "interval": "Interval",
+          "batchSize": "Batch size",
+          "targetRange": "Target range",
+          "cooldown": "Cooldown (min)",
+          "cbLinkage": "Auto-pause on 429",
+          "save": "Save scheduler"
+        },
+        "intervalOptions": {
+          "30s": "30 seconds",
+          "1m": "1 minute",
+          "5m": "5 minutes",
+          "15m": "15 minutes",
+          "30m": "30 minutes"
+        },
+        "targetRangeOptions": {
+          "reserved": "RFC 5737 + 6890 (documentation/benchmark)"
+        },
+        "metrics": {
+          "lastRun": "Last run",
+          "lastYield": "Last yield",
+          "warmingRate": "Projected write",
+          "probeSuccessRate": "Probe success",
+          "noLastRun": "never"
+        },
+        "runNow": "Run once now",
+        "runNowConfirm": "Run one continuous-ingest tick now?",
+        "wizard": {
+          "enabled": "Start continuous ingest",
+          "disabled": "Stop continuous ingest"
+        }
+      },
+      "recentProbes": {
+        "title": "Recent probe results",
+        "help": "Last 20 probes: per-provider responses and the consensus outcome for each IP. Click any row to expand the full per-provider detail.",
+        "detailToggle": "Show per-provider detail",
+        "batchIdLabel": "Batch",
+        "noProbes": "No probe records yet — enable continuous ingest or trigger a manual run.",
+        "cols": {
+          "ts": "Time",
+          "ip": "IP",
+          "providers": "Provider responses",
+          "consensus": "Consensus",
+          "outcome": "Outcome"
+        },
+        "detailCols": {
+          "provider": "Provider",
+          "status": "Status",
+          "country": "Country",
+          "city": "City",
+          "asn": "ASN",
+          "duration": "Duration",
+          "errorCode": "Error"
+        },
+        "providerCell": {
+          "ok": "ok",
+          "throttled": "throttled",
+          "timeout": "timeout",
+          "no_country": "no country",
+          "network": "network",
+          "error": "error",
+          "empty": "empty"
+        },
+        "outcomeLabel": {
+          "merged": "merged",
+          "no_consensus": "no consensus",
+          "no_country": "no country",
+          "all_abstained": "all abstained",
+          "duplicate": "duplicate"
+        }
+      },
       "providers": {
         "title": "Backfill providers",
         "help": "Backfill fans out each pending IP to the external APIs below in parallel and merges via majority vote. Toggle each provider on/off and rotate API keys here. Changes take effect on the next backfill — no restart required.",
@@ -541,6 +625,7 @@
         "allProviders": "All",
         "allCodes": "All",
         "allModes": "All",
+        "applyFilters": "Apply",
         "since1h": "Last 1 hour",
         "since24h": "Last 24 hours",
         "since7d": "Last 7 days",

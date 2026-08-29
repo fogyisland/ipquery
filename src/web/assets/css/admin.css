@@ -1443,6 +1443,216 @@ dl.settings-dl dd {
   font-family: var(--font-mono); font-size: 10px;
   letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-3);
 }
+
+/* ─── Scheduler card (continuous random-IP ingest) ──────────────────── */
+/* Replaces the old .admin-continuous-card. Same terminal-aesthetic as
+   .runner-card — flat panels, monospace headers, hairline borders.
+   Layout: head (title + status pill) → cooldown banner (conditional) →
+   config form (interval/batch/range/cb-linkage) → stats row (toggle +
+   4 metrics). */
+.scheduler-card {
+  background: var(--surface);
+  border: var(--hairline);
+  margin-bottom: var(--sp-4);
+}
+.scheduler-card-head {
+  display: flex; justify-content: space-between; align-items: flex-start;
+  gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-4);
+  border-bottom: var(--hairline);
+}
+.scheduler-card-head h3 {
+  margin: 0 0 var(--sp-1);
+  font-family: var(--font-mono); font-size: 11px;
+  letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-2);
+}
+.scheduler-card-sub {
+  margin: 0;
+  font-size: 12px; color: var(--text-3);
+}
+.scheduler-status-pill {
+  font-family: var(--font-mono); font-size: 10px;
+  letter-spacing: 0.1em; text-transform: uppercase;
+  padding: 4px var(--sp-3); border: var(--hairline);
+  white-space: nowrap;
+}
+.scheduler-status-pill--running {
+  color: var(--success); border-color: var(--success);
+  background: var(--success-glow);
+}
+.scheduler-status-pill--stopped { color: var(--text-3); }
+.scheduler-status-pill--cooldown {
+  color: var(--warning); border-color: var(--warning);
+  background: var(--warning-glow);
+}
+.scheduler-cooldown-banner {
+  padding: var(--sp-2) var(--sp-4);
+  background: var(--warning-glow);
+  border-bottom: var(--hairline);
+  color: var(--warning);
+  font-size: 12px;
+}
+.scheduler-card-form {
+  padding: var(--sp-3) var(--sp-4);
+  border-bottom: var(--hairline);
+  display: flex; flex-direction: column; gap: var(--sp-3);
+}
+.scheduler-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: var(--sp-3);
+}
+.scheduler-card-grid label { display: flex; flex-direction: column; gap: 4px; }
+.scheduler-card-grid label span {
+  font-family: var(--font-mono); font-size: 10px;
+  letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-3);
+}
+.scheduler-card-grid select,
+.scheduler-card-grid input[type="number"] {
+  background: var(--bg); border: var(--hairline); color: var(--text);
+  padding: 6px 8px;
+  font-family: var(--font-mono); font-size: 12px;
+}
+.scheduler-card-grid select[disabled] { opacity: 0.5; cursor: not-allowed; }
+.scheduler-toggle {
+  display: inline-flex; align-items: center; gap: var(--sp-2);
+  font-family: var(--font-mono); font-size: 12px;
+  color: var(--text-2); cursor: pointer;
+  align-self: end;
+}
+.scheduler-card-actions {
+  display: flex; gap: var(--sp-2); flex-wrap: wrap;
+  padding-top: var(--sp-2); border-top: var(--hairline);
+}
+.scheduler-card-actions .btn-primary,
+.scheduler-card-actions .btn-secondary { margin: 0; }
+.scheduler-card-stats {
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-4);
+  padding: var(--sp-3) var(--sp-4);
+}
+.scheduler-card-stats form { margin: 0; }
+.scheduler-stat { display: flex; flex-direction: column; gap: 2px; }
+.scheduler-stat-label {
+  font-family: var(--font-mono); font-size: 10px;
+  letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-3);
+}
+.scheduler-stat-value {
+  font-family: var(--font-mono); font-size: 18px; font-weight: 600;
+  color: var(--text); font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+}
+.scheduler-stat-unit {
+  font-size: 11px; color: var(--text-3); font-weight: 400;
+  margin-left: 2px;
+}
+
+/* ─── Recent probes table ───────────────────────────────────────────── */
+/* One row per IP, expandable to show the per-provider fan-out detail.
+   The provider cells at the top of each row give a one-glance health
+   verdict: green = ok+country, amber = throttled, red = error/timeout,
+   muted = empty/no country. */
+.probe-log-heading {
+  margin: var(--sp-5) 0 var(--sp-2);
+  font-family: var(--font-mono); font-size: 11px;
+  letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-2);
+}
+.probe-log-help { margin: 0 0 var(--sp-3); font-size: 12px; color: var(--text-3); }
+.probe-log-filters {
+  display: flex; flex-wrap: wrap; align-items: end; gap: var(--sp-3);
+  padding: var(--sp-2) var(--sp-3);
+  background: var(--surface-2); border: var(--hairline);
+  margin-bottom: var(--sp-3);
+}
+.probe-log-filters label { display: flex; flex-direction: column; gap: 4px; }
+.probe-log-filters label span {
+  font-family: var(--font-mono); font-size: 10px;
+  letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-3);
+}
+.probe-log-filters select {
+  background: var(--bg); border: var(--hairline); color: var(--text);
+  padding: 6px 8px; font-family: var(--font-mono); font-size: 12px;
+}
+.probe-log-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--surface);
+  border: var(--hairline);
+}
+.probe-log-table thead th {
+  text-align: left;
+  padding: var(--sp-2) var(--sp-3);
+  background: var(--surface-2);
+  border-bottom: var(--hairline);
+  font-family: var(--font-mono); font-size: 10px;
+  letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-3);
+}
+.probe-log-table tbody td {
+  padding: var(--sp-2) var(--sp-3);
+  border-bottom: var(--hairline);
+  vertical-align: top;
+  font-size: 12px;
+}
+.probe-log-cells {
+  display: flex; flex-wrap: wrap; gap: var(--sp-1);
+  margin-bottom: var(--sp-1);
+}
+.provider-cell {
+  font-family: var(--font-mono); font-size: 11px;
+  padding: 2px 6px;
+  border: var(--hairline);
+  white-space: nowrap;
+}
+.provider-cell--ok {
+  color: var(--success); border-color: var(--success);
+  background: var(--success-glow);
+}
+.provider-cell--throttled {
+  color: var(--warning); border-color: var(--warning);
+  background: var(--warning-glow);
+}
+.provider-cell--timeout,
+.provider-cell--error,
+.provider-cell--network {
+  color: var(--danger); border-color: var(--danger);
+  background: var(--danger-glow);
+}
+.provider-cell--no_country,
+.provider-cell--empty {
+  color: var(--text-3); border-color: var(--border-2);
+  background: transparent;
+}
+.probe-log-detail { margin-top: var(--sp-1); }
+.probe-log-detail summary {
+  font-family: var(--font-mono); font-size: 10px;
+  color: var(--text-3); cursor: pointer;
+  letter-spacing: 0.06em; text-transform: uppercase;
+}
+.probe-log-detail summary:hover { color: var(--accent); }
+.probe-detail-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: var(--sp-2);
+  background: var(--surface-2);
+  border: var(--hairline);
+}
+.probe-detail-table th,
+.probe-detail-table td {
+  padding: 4px var(--sp-2);
+  border-bottom: var(--hairline);
+  font-family: var(--font-mono); font-size: 11px;
+  text-align: left;
+}
+.probe-detail-table th {
+  background: var(--surface-3);
+  color: var(--text-3);
+  letter-spacing: 0.06em; text-transform: uppercase;
+  font-size: 10px;
+}
+.probe-detail-batch {
+  margin: var(--sp-2) 0 0;
+  font-family: var(--font-mono); font-size: 11px;
+  color: var(--text-3);
+}
 .circuit-breaker-row input[type="number"] {
   background: var(--bg);
   border: var(--hairline);
@@ -1496,4 +1706,29 @@ dl.settings-dl dd {
   border: var(--hairline);
   margin: 0 0 var(--sp-3);
   font-style: italic;
+}
+
+/* Bulk-select bar for the API keys table. Sits above the table so the
+   action is always visible while scrolling; on smaller screens the
+   button wraps below the row on its own. */
+.keys-bulk-bar {
+  display: flex; justify-content: flex-end;
+  padding: var(--sp-2) 0;
+  margin-bottom: var(--sp-2);
+}
+.keys-bulk-bar form { margin: 0; }
+.keys-bulk-bar .btn-secondary[disabled] {
+  opacity: 0.5; cursor: not-allowed;
+}
+
+/* Per-row checkbox column. Used by /admin/keys so the bulk-select UI has
+   a consistent gutter. Width is fixed so columns don't reflow when the
+   checkbox toggles. */
+.table-check {
+  width: 36px; text-align: center;
+  padding-left: var(--sp-3); padding-right: var(--sp-2);
+}
+.table-check input[type="checkbox"] {
+  margin: 0; vertical-align: middle;
+  cursor: pointer;
 }
