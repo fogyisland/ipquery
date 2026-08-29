@@ -25,8 +25,12 @@ export class IpApiProvider implements IpGeoProvider {
     const url = `${this.opts.endpoint ?? 'http://ip-api.com'}/json/${encodeURIComponent(ip)}?fields=status,country,countryCode,region,regionName,city,lat,lon,timezone,isp,org,as,query`;
     try {
       const res = await fetch(url, { signal: AbortSignal.timeout(5_000) });
-      if (res.status === 429) return { record: null, rateLimited: true };
-      if (!res.ok) return { record: null, rateLimited: false };
+      if (res.status === 429) {
+        return { record: null, rateLimited: true, errorCode: '429', rawResponse: await safeBody(res) };
+      }
+      if (!res.ok) {
+        return { record: null, rateLimited: false, errorCode: String(res.status), rawResponse: await safeBody(res) };
+      }
       const data = await res.json() as {
         status?: string;
         country?: string;
@@ -41,7 +45,9 @@ export class IpApiProvider implements IpGeoProvider {
         org?: string;
         as?: string;
       };
-      if (data.status !== 'success') return { record: null, rateLimited: false };
+      if (data.status !== 'success') {
+        return { record: null, rateLimited: false, errorCode: 'parse', rawResponse: JSON.stringify(data).slice(0, 240) };
+      }
       return {
         record: {
           countryCode: data.countryCode ?? null,
@@ -57,8 +63,10 @@ export class IpApiProvider implements IpGeoProvider {
         },
         rateLimited: false,
       };
-    } catch {
-      return { record: null, rateLimited: false };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      const code = msg.includes('timeout') || msg.includes('aborted') ? 'timeout' : 'network';
+      return { record: null, rateLimited: false, errorCode: code, rawResponse: msg.slice(0, 240) };
     }
   }
 }
@@ -71,6 +79,17 @@ function parseAsn(raw: string | null): number | null {
   if (!m) return null;
   const n = Number(m[1]);
   return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+/** Best-effort: read up to 240 bytes of the response body for audit.
+ *  Returns null when the body can't be read (stream error, etc). */
+async function safeBody(res: Response): Promise<string | null> {
+  try {
+    const text = await res.text();
+    return text.length > 240 ? text.slice(0, 240) : text;
+  } catch {
+    return null;
+  }
 }
 
 /** "AS15169 Google LLC" -> "Google LLC". Falls back to whole string if

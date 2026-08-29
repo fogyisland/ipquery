@@ -1,64 +1,69 @@
 {{!-- SPDX-License-Identifier: MIT --}}
-{{!-- /admin/unknown-ips — list IPs the local DB couldn't resolve, sorted by
-     how often users ask for them (queue pressure). The "立即回灌" button
-     kicks off the backfill job: each IP fans out to 3 external providers,
-     majority-vote decides the result, and a /32 or /128 range gets
-     upserted into ip_ranges tagged 'multi-provider'.
+{{!--
+  /admin/unknown-ips — three-tab ingest console:
+    #overview   → runner status + queue preview + last-run aggregate
+    #providers  → per-provider health cards sorted failing-first
+    #failure-logs → filterable failure audit + re-queue action
+  Tab state lives in the URL hash so reload + bookmark preserve the
+  active tab. Inline <script> at the bottom boots the hashchange handler.
+--}}
 
-     Data flow: /lookup miss → unknown_ip_queue (auto) → here (manual) →
-     POST /admin/unknown-ips/backfill → ip_ranges.
+<h2>{{@root.req.t 'admin.unknownIps.title'}}</h2>
 
-     After the POST the route sets a short-lived `backfill_summary` cookie
-     that this view reads once and renders as a banner. --}}
+<nav class="settings-tabs-nav" aria-label="Ingest sections">
+  <a class="settings-tab-link{{#if (eq activeTab 'overview')}} is-active{{/if}}" href="#overview" data-tab="overview">{{@root.req.t 'admin.unknownIps.tabs.overview'}}</a>
+  <a class="settings-tab-link{{#if (eq activeTab 'providers')}} is-active{{/if}}" href="#providers" data-tab="providers">{{@root.req.t 'admin.unknownIps.tabs.providers'}}</a>
+  <a class="settings-tab-link{{#if (eq activeTab 'failure-logs')}} is-active{{/if}}" href="#failure-logs" data-tab="failure-logs">{{@root.req.t 'admin.unknownIps.tabs.failureLogs'}}</a>
+</nav>
 
-<section class="admin-card">
-  <div class="admin-card-head">
-    <h1>{{req.t 'admin.unknownIps.title'}}</h1>
-    <div class="admin-card-actions">
-      <form method="GET" action="/admin/unknown-ips/backfill/confirm" style="display:inline">
-        <button type="submit" class="btn-primary">{{req.t 'admin.unknownIps.backfill.button'}}</button>
-      </form>
-      <form method="POST" action="/admin/unknown-ips/generate" style="display:inline"
-            onsubmit="return confirm('{{req.t 'admin.unknownIps.generate.confirm'}}')">
-        <input type="hidden" name="csrf" value="{{csrfToken}}">
-        <input type="hidden" name="count" value="10">
-        <button type="submit" class="btn-secondary">{{req.t 'admin.unknownIps.generate.button'}}</button>
-      </form>
-    </div>
-  </div>
+{{#if flash.queueFlash}}
+<div class="admin-alert admin-alert--{{#if (eq flash.queueFlash.kind 'invalidIp')}}danger{{else}}info{{/if}}">
+  {{#if (eq flash.queueFlash.kind 'cleared')}}
+    {{@root.req.t 'admin.unknownIps.queueFlash.cleared' removed=flash.queueFlash.removed}}
+  {{else if (eq flash.queueFlash.kind 'invalidIp')}}
+    {{@root.req.t 'admin.unknownIps.queueFlash.invalidIp' ip=flash.queueFlash.ip}}
+  {{/if}}
+</div>
+{{/if}}
 
+{{!-- ════════════════════════════════════════════════════════════════════
+     OVERVIEW TAB — runner control + queue preview + last-run stats
+     ════════════════════════════════════════════════════════════════════ --}}
+<div class="settings-tab-pane{{#if (eq activeTab 'overview')}} is-active{{/if}}" id="pane-overview" data-tab="overview">
+
+  {{!-- Banners: backfill / generate / failure logs / queue flash --}}
   {{#if flash.backfillSummary}}
   <div class="admin-alert admin-alert--success">
-    <strong>{{req.t 'admin.unknownIps.backfill.summary'}}</strong>
+    <strong>{{@root.req.t 'admin.unknownIps.backfill.summary'}}</strong>
     <ul class="admin-summary-list">
-      <li>{{req.t 'admin.unknownIps.backfill.considered'}}: {{flash.backfillSummary.considered}}</li>
-      <li>{{req.t 'admin.unknownIps.backfill.merged'}}: {{flash.backfillSummary.merged}}</li>
-      <li>{{req.t 'admin.unknownIps.backfill.noConsensus'}}: {{flash.backfillSummary.noConsensus}}</li>
-      <li>{{req.t 'admin.unknownIps.backfill.noCountry'}}: {{flash.backfillSummary.noCountry}}</li>
-      <li>{{req.t 'admin.unknownIps.backfill.allAbstained'}}: {{flash.backfillSummary.allAbstained}}</li>
+      <li>{{@root.req.t 'admin.unknownIps.backfill.considered'}}: {{flash.backfillSummary.considered}}</li>
+      <li>{{@root.req.t 'admin.unknownIps.backfill.merged'}}: {{flash.backfillSummary.merged}}</li>
+      <li>{{@root.req.t 'admin.unknownIps.backfill.noConsensus'}}: {{flash.backfillSummary.noConsensus}}</li>
+      <li>{{@root.req.t 'admin.unknownIps.backfill.noCountry'}}: {{flash.backfillSummary.noCountry}}</li>
+      <li>{{@root.req.t 'admin.unknownIps.backfill.allAbstained'}}: {{flash.backfillSummary.allAbstained}}</li>
     </ul>
   </div>
   {{/if}}
 
   {{#if flash.generateSummary}}
   <div class="admin-alert admin-alert--info">
-    <strong>{{req.t 'admin.unknownIps.generate.summary'}}</strong>
+    <strong>{{@root.req.t 'admin.unknownIps.generate.summary'}}</strong>
     <ul class="admin-summary-list">
-      <li>{{req.t 'admin.unknownIps.generate.considered'}}: {{flash.generateSummary.considered}}</li>
-      <li>{{req.t 'admin.unknownIps.generate.merged'}}: {{flash.generateSummary.merged}}</li>
-      <li>{{req.t 'admin.unknownIps.generate.noConsensus'}}: {{flash.generateSummary.noConsensus}}</li>
-      <li>{{req.t 'admin.unknownIps.generate.noCountry'}}: {{flash.generateSummary.noCountry}}</li>
-      <li>{{req.t 'admin.unknownIps.generate.allAbstained'}}: {{flash.generateSummary.allAbstained}}</li>
-      <li>{{req.t 'admin.unknownIps.generate.exhaustedRetries'}}: {{flash.generateSummary.exhaustedRetries}}</li>
+      <li>{{@root.req.t 'admin.unknownIps.generate.considered'}}: {{flash.generateSummary.considered}}</li>
+      <li>{{@root.req.t 'admin.unknownIps.generate.merged'}}: {{flash.generateSummary.merged}}</li>
+      <li>{{@root.req.t 'admin.unknownIps.generate.noConsensus'}}: {{flash.generateSummary.noConsensus}}</li>
+      <li>{{@root.req.t 'admin.unknownIps.generate.noCountry'}}: {{flash.generateSummary.noCountry}}</li>
+      <li>{{@root.req.t 'admin.unknownIps.generate.allAbstained'}}: {{flash.generateSummary.allAbstained}}</li>
+      <li>{{@root.req.t 'admin.unknownIps.generate.exhaustedRetries'}}: {{flash.generateSummary.exhaustedRetries}}</li>
       {{#if flash.generateSummary.providersDisabled.length}}
       <li class="admin-summary-disabled">
-        {{req.t 'admin.unknownIps.generate.providersDisabled'}}: {{flash.generateSummary.providersDisabled}}
+        {{@root.req.t 'admin.unknownIps.generate.providersDisabled'}}: {{flash.generateSummary.providersDisabled}}
       </li>
       {{/if}}
       {{#if flash.generateSummary.generatedIps.length}}
       <li class="admin-summary-ips">
         <details>
-          <summary>{{req.t 'admin.unknownIps.generate.ipList'}}</summary>
+          <summary>{{@root.req.t 'admin.unknownIps.generate.ipList'}}</summary>
           <code class="admin-ips">{{flash.generateSummary.generatedIps}}</code>
         </details>
       </li>
@@ -67,87 +72,115 @@
   </div>
   {{/if}}
 
-  {{!-- Continuous random-IP ingest toggle. When enabled, the runner ticks
-       every 60s and runs runRandomGeneration() with count=10. The runner
-       is a separate plugin (src/web/plugins/randomIpGeneratorRunner.ts).
-       State persists in `settings` table so a server restart resumes the
-       previous toggle state. --}}
+  {{!-- Runner Status card. Combines the 3 stats + backfill/generate
+       actions + queue bulk ops in one tight row. --}}
+  <div class="runner-card">
+    <div class="runner-card-head">
+      <h3>{{@root.req.t 'admin.unknownIps.runner.title'}}</h3>
+    </div>
+    <div class="runner-card-body">
+      <div class="runner-stat">
+        <span class="runner-stat-value">{{stats.pending}}</span>
+        <span class="runner-stat-label">{{@root.req.t 'admin.unknownIps.runner.queueBacklog'}}</span>
+      </div>
+      <div class="runner-stat">
+        <span class="runner-stat-value">
+          {{#if lastBackfillRunAt}}{{formatRelative lastBackfillRunAt}}{{else}}<span class="admin-tag admin-tag--muted">{{@root.req.t 'admin.unknownIps.runner.noLastRun'}}</span>{{/if}}
+        </span>
+        <span class="runner-stat-label">{{@root.req.t 'admin.unknownIps.runner.lastRun'}}</span>
+      </div>
+      <div class="runner-stat">
+        <span class="runner-stat-value">{{stats.processed}}</span>
+        <span class="runner-stat-label">{{@root.req.t 'admin.unknownIps.stats.processed'}}</span>
+      </div>
+      <div class="runner-stat">
+        <span class="runner-stat-value">{{stats.totalQueries}}</span>
+        <span class="runner-stat-label">{{@root.req.t 'admin.unknownIps.stats.totalQueries'}}</span>
+      </div>
+    </div>
+    <div class="runner-card-actions">
+      <form method="GET" action="/admin/unknown-ips/backfill/confirm" style="display:inline">
+        <button type="submit" class="btn-primary">{{@root.req.t 'admin.unknownIps.runner.backfillNow'}}</button>
+      </form>
+      <form method="POST" action="/admin/unknown-ips/generate" style="display:inline"
+            onsubmit="return confirm('{{@root.req.t 'admin.unknownIps.generate.confirm'}}')">
+        <input type="hidden" name="csrf" value="{{csrfToken}}">
+        <input type="hidden" name="count" value="10">
+        <button type="submit" class="btn-secondary">{{@root.req.t 'admin.unknownIps.runner.generateNow'}}</button>
+      </form>
+    </div>
+    <div class="runner-card-queue">
+      <span class="runner-card-queue-label">{{@root.req.t 'admin.unknownIps.runner.queueActions'}}</span>
+      <form method="POST" action="/admin/unknown-ips/queue/clear" style="display:inline"
+            onsubmit="return confirm('确定清空所有待回灌 IP?已入库的 IP 不会被删除。')">
+        <input type="hidden" name="csrf" value="{{csrfToken}}">
+        <button type="submit" class="btn-secondary" {{#unless stats.pending}}disabled{{/unless}}>{{@root.req.t 'admin.unknownIps.runner.clearQueue'}}</button>
+      </form>
+      <a class="btn-secondary" href="/admin/unknown-ips/queue/export">{{@root.req.t 'admin.unknownIps.runner.exportQueue'}}</a>
+    </div>
+  </div>
+
+  {{!-- Continuous random-IP ingest toggle (existing) --}}
   {{#if randomGenState}}
   <div class="admin-continuous-card">
     <div class="admin-continuous-head">
-      <h3>{{req.t 'admin.unknownIps.continuous.title'}}</h3>
+      <h3>{{@root.req.t 'admin.unknownIps.continuous.title'}}</h3>
       <span class="admin-continuous-status admin-continuous-status--{{#if randomGenState.enabled}}on{{else}}off{{/if}}">
         {{#if randomGenState.enabled}}
-          {{req.t 'admin.unknownIps.continuous.enabled'}}
+          {{@root.req.t 'admin.unknownIps.continuous.enabled'}}
         {{else}}
-          {{req.t 'admin.unknownIps.continuous.disabled'}}
+          {{@root.req.t 'admin.unknownIps.continuous.disabled'}}
         {{/if}}
       </span>
     </div>
-    <p class="admin-continuous-help">{{req.t 'admin.unknownIps.continuous.help'}}</p>
-
+    <p class="admin-continuous-help">{{@root.req.t 'admin.unknownIps.continuous.help'}}</p>
     <div class="admin-continuous-meta">
       <div class="admin-continuous-meta-row">
-        <span class="admin-continuous-meta-label">{{req.t 'admin.unknownIps.continuous.lastRunAt'}}</span>
+        <span class="admin-continuous-meta-label">{{@root.req.t 'admin.unknownIps.continuous.lastRunAt'}}</span>
         {{#if randomGenState.lastRunAt}}
           <span class="admin-continuous-meta-value" title="{{randomGenState.lastRunAt}}">{{formatRelative randomGenState.lastRunAt}}</span>
         {{else}}
-          <span class="admin-continuous-meta-value admin-tag admin-tag--muted">{{req.t 'admin.unknownIps.continuous.lastRunNever'}}</span>
+          <span class="admin-continuous-meta-value admin-tag admin-tag--muted">{{@root.req.t 'admin.unknownIps.continuous.lastRunNever'}}</span>
         {{/if}}
       </div>
       {{#if randomGenState.lastSummary}}
       <div class="admin-continuous-meta-row">
-        <span class="admin-continuous-meta-label">{{req.t 'admin.unknownIps.continuous.status'}}</span>
+        <span class="admin-continuous-meta-label">{{@root.req.t 'admin.unknownIps.continuous.status'}}</span>
         <span class="admin-continuous-meta-value">
-          {{req.t 'admin.unknownIps.continuous.lastSummaryMerged' merged=randomGenState.lastSummary.merged considered=randomGenState.lastSummary.considered}}
+          {{@root.req.t 'admin.unknownIps.continuous.lastSummaryMerged' merged=randomGenState.lastSummary.merged considered=randomGenState.lastSummary.considered}}
         </span>
       </div>
       {{/if}}
     </div>
-
     <div class="admin-continuous-actions">
       <form method="POST" action="/admin/unknown-ips/generate/continuous" style="display:inline">
         <input type="hidden" name="csrf" value="{{csrfToken}}">
         <input type="hidden" name="enabled" value="{{#if randomGenState.enabled}}off{{else}}on{{/if}}">
         <button type="submit" class="btn-{{#if randomGenState.enabled}}secondary{{else}}primary{{/if}}">
-          {{#if randomGenState.enabled}}{{req.t 'admin.unknownIps.continuous.disable'}}{{else}}{{req.t 'admin.unknownIps.continuous.enable'}}{{/if}}
+          {{#if randomGenState.enabled}}{{@root.req.t 'admin.unknownIps.continuous.disable'}}{{else}}{{@root.req.t 'admin.unknownIps.continuous.enable'}}{{/if}}
         </button>
       </form>
       <form method="POST" action="/admin/unknown-ips/generate/continuous" style="display:inline">
         <input type="hidden" name="csrf" value="{{csrfToken}}">
         <input type="hidden" name="kick" value="1">
-        <button type="submit" class="btn-secondary">{{req.t 'admin.unknownIps.continuous.kickNow'}}</button>
+        <button type="submit" class="btn-secondary">{{@root.req.t 'admin.unknownIps.continuous.kickNow'}}</button>
       </form>
     </div>
   </div>
   {{/if}}
 
-  <div class="admin-stats">
-    <div class="admin-stat">
-      <span class="admin-stat-value">{{stats.pending}}</span>
-      <span class="admin-stat-label">{{req.t 'admin.unknownIps.stats.pending'}}</span>
-    </div>
-    <div class="admin-stat">
-      <span class="admin-stat-value">{{stats.processed}}</span>
-      <span class="admin-stat-label">{{req.t 'admin.unknownIps.stats.processed'}}</span>
-    </div>
-    <div class="admin-stat">
-      <span class="admin-stat-value">{{stats.totalQueries}}</span>
-      <span class="admin-stat-label">{{req.t 'admin.unknownIps.stats.totalQueries'}}</span>
-    </div>
-  </div>
-
-  <h2>{{req.t 'admin.unknownIps.section.pending'}}</h2>
+  {{!-- Queue preview tables --}}
+  <h3>{{@root.req.t 'admin.unknownIps.section.pending'}}</h3>
   {{#if pending.length}}
   <table class="admin-table">
     <thead>
       <tr>
-        <th>{{req.t 'admin.unknownIps.col.ip'}}</th>
-        <th>{{req.t 'admin.unknownIps.col.queryCount'}}</th>
-        <th>{{req.t 'admin.unknownIps.col.firstSeen'}}</th>
-        <th>{{req.t 'admin.unknownIps.col.lastSeen'}}</th>
-        <th>{{req.t 'admin.unknownIps.col.source'}}</th>
-        <th>{{req.t 'admin.unknownIps.col.lastAttempt'}}</th>
+        <th>{{@root.req.t 'admin.unknownIps.col.ip'}}</th>
+        <th>{{@root.req.t 'admin.unknownIps.col.queryCount'}}</th>
+        <th>{{@root.req.t 'admin.unknownIps.col.firstSeen'}}</th>
+        <th>{{@root.req.t 'admin.unknownIps.col.lastSeen'}}</th>
+        <th>{{@root.req.t 'admin.unknownIps.col.source'}}</th>
+        <th>{{@root.req.t 'admin.unknownIps.col.lastAttempt'}}</th>
       </tr>
     </thead>
     <tbody>
@@ -170,18 +203,18 @@
     </tbody>
   </table>
   {{else}}
-  <p class="admin-empty">{{req.t 'admin.unknownIps.empty.pending'}}</p>
+  <p class="admin-empty">{{@root.req.t 'admin.unknownIps.empty.pending'}}</p>
   {{/if}}
 
   {{#if recentlyProcessed.length}}
-  <h2>{{req.t 'admin.unknownIps.section.recentlyProcessed'}}</h2>
+  <h3>{{@root.req.t 'admin.unknownIps.section.recentlyProcessed'}}</h3>
   <table class="admin-table">
     <thead>
       <tr>
-        <th>{{req.t 'admin.unknownIps.col.ip'}}</th>
-        <th>{{req.t 'admin.unknownIps.col.queryCount'}}</th>
-        <th>{{req.t 'admin.unknownIps.col.processedAt'}}</th>
-        <th>{{req.t 'admin.unknownIps.col.runId'}}</th>
+        <th>{{@root.req.t 'admin.unknownIps.col.ip'}}</th>
+        <th>{{@root.req.t 'admin.unknownIps.col.queryCount'}}</th>
+        <th>{{@root.req.t 'admin.unknownIps.col.processedAt'}}</th>
+        <th>{{@root.req.t 'admin.unknownIps.col.runId'}}</th>
       </tr>
     </thead>
     <tbody>
@@ -190,73 +223,242 @@
         <td><code>{{this.ipText}}</code></td>
         <td>{{this.queryCount}}</td>
         <td>{{formatDate this.processedAt}}</td>
-        <td>{{#if this.mergedRunId}}{{this.mergedRunId}}{{else}}<span class="admin-tag admin-tag--muted">{{req.t 'admin.unknownIps.runId.manual'}}</span>{{/if}}</td>
+        <td>{{#if this.mergedRunId}}{{this.mergedRunId}}{{else}}<span class="admin-tag admin-tag--muted">{{@root.req.t 'admin.unknownIps.runId.manual'}}</span>{{/if}}</td>
       </tr>
       {{/each}}
     </tbody>
   </table>
   {{/if}}
-</section>
+</div>
 
-{{!-- Provider config. Each row shows the free-tier quota and lets the
-     admin flip the enabled toggle + set/clear the api_key. The catalog
-     (which providers exist + their display name) is code-managed; only
-     enabled / api_key are persisted from this form. --}}
-<section class="admin-card">
-  <div class="admin-card-head">
-    <h2>{{req.t 'admin.unknownIps.providers.title'}}</h2>
-    <p class="admin-card-sub">{{req.t 'admin.unknownIps.providers.help'}}</p>
+{{!-- ════════════════════════════════════════════════════════════════════
+     PROVIDERS TAB — health card grid + per-provider config + CB
+     ════════════════════════════════════════════════════════════════════ --}}
+<div class="settings-tab-pane{{#if (eq activeTab 'providers')}} is-active{{/if}}" id="pane-providers" data-tab="providers">
+
+  {{#each providerHealth}}
+  <div class="provider-health-card provider-health-card--{{this.status}}">
+    <div class="provider-health-card-head">
+      <div>
+        <span class="provider-health-card-name">{{this.displayName}}</span>
+        <code class="provider-health-card-slug">{{this.name}}</code>
+      </div>
+      <span class="provider-health-status provider-health-status--{{this.status}}">
+        {{#if (eq this.status 'healthy')}}{{@root.req.t 'admin.unknownIps.healthCard.statusOk'}}
+        {{else if (eq this.status 'failing')}}{{@root.req.t 'admin.unknownIps.healthCard.statusFailing'}}
+        {{else if (eq this.status 'recovering')}}{{@root.req.t 'admin.unknownIps.healthCard.statusRecovering'}}
+        {{else if (eq this.status 'disabled')}}{{@root.req.t 'admin.unknownIps.healthCard.statusDisabled'}}
+        {{else}}{{@root.req.t 'admin.unknownIps.healthCard.statusIdle'}}{{/if}}
+      </span>
+    </div>
+
+    <div class="provider-health-card-grid">
+      <div class="provider-health-stat">
+        <span class="provider-health-stat-label">{{@root.req.t 'admin.unknownIps.healthCard.lastSuccess'}}</span>
+        <span class="provider-health-stat-value">
+          {{#if this.lastUsedAt}}<span title="{{formatDate this.lastUsedAt}}">{{formatRelative this.lastUsedAt}}</span>
+          {{else}}<span class="admin-tag admin-tag--muted">{{@root.req.t 'admin.unknownIps.healthCard.noSuccess'}}</span>{{/if}}
+        </span>
+      </div>
+      <div class="provider-health-stat">
+        <span class="provider-health-stat-label">{{@root.req.t 'admin.unknownIps.healthCard.lastError'}}</span>
+        <span class="provider-health-stat-value">
+          {{#if this.lastErrorAt}}<span title="{{this.lastErrorReason}}" class="provider-health-error-text">{{formatRelative this.lastErrorAt}}</span>
+          {{else}}<span class="admin-tag admin-tag--ok">{{@root.req.t 'admin.unknownIps.healthCard.noError'}}</span>{{/if}}
+        </span>
+      </div>
+      {{#if this.lastStats}}
+      <div class="provider-health-stat">
+        <span class="provider-health-stat-label">{{@root.req.t 'admin.unknownIps.healthCard.lastRun'}}</span>
+        <span class="provider-health-stat-value">
+          {{@root.req.t 'admin.unknownIps.healthCard.successCount'}}: <strong>{{this.lastStats.ok}}</strong>
+          · {{@root.req.t 'admin.unknownIps.healthCard.failedCount'}}: <strong>{{this.lastStats.failed}}</strong>
+          {{#if this.lastStats.rateLimited}}
+            · {{@root.req.t 'admin.unknownIps.healthCard.rateLimitedCount'}}: <strong>{{this.lastStats.rateLimited}}</strong>
+          {{/if}}
+          · {{@root.req.t 'admin.unknownIps.healthCard.abstainedCount'}}: <strong>{{this.lastStats.abstained}}</strong>
+        </span>
+      </div>
+      {{/if}}
+    </div>
+
+    {{#if this.lastErrorReason}}
+    <div class="provider-health-card-error" title="{{this.lastErrorReason}}">{{this.lastErrorReason}}</div>
+    {{/if}}
+
+    <div class="provider-health-card-config">
+      <form method="POST" action="/admin/unknown-ips/providers/{{this.name}}" class="provider-toggle-form">
+        <input type="hidden" name="csrf" value="{{csrfToken}}">
+        <input type="hidden" name="apiKey" value="">
+        <label class="provider-toggle">
+          <input type="checkbox" name="enabled" value="on" {{#if this.enabled}}checked{{/if}}>
+          <span>{{#if this.enabled}}{{@root.req.t 'admin.unknownIps.providers.enabled.on'}}{{else}}{{@root.req.t 'admin.unknownIps.providers.enabled.off'}}{{/if}}</span>
+        </label>
+        <button type="submit" class="button">{{@root.req.t 'admin.unknownIps.providers.save'}}</button>
+      </form>
+      <form method="POST" action="/admin/unknown-ips/providers/{{this.name}}" class="provider-key-form">
+        <input type="hidden" name="csrf" value="{{csrfToken}}">
+        <input type="hidden" name="enabled" value="{{#if this.enabled}}on{{else}}off{{/if}}">
+        <input type="password" name="apiKey" placeholder="{{@root.req.t 'admin.unknownIps.providers.apiKeyPlaceholder'}}" autocomplete="off">
+        <button type="submit" class="button">{{@root.req.t 'admin.unknownIps.providers.save'}}</button>
+      </form>
+    </div>
+
+    <div class="provider-health-card-quota">{{this.freeQuota}}</div>
   </div>
+  {{/each}}
 
-  <table class="admin-table provider-table">
+  {{!-- Circuit breaker config --}}
+  <div class="circuit-breaker-card">
+    <h3>{{@root.req.t 'admin.unknownIps.circuitBreaker.title'}}</h3>
+    <p class="circuit-breaker-help">{{@root.req.t 'admin.unknownIps.circuitBreaker.help'}}</p>
+    <form method="POST" action="/admin/unknown-ips/circuit-breaker" class="circuit-breaker-form">
+      <input type="hidden" name="csrf" value="{{csrfToken}}">
+      <label class="provider-toggle">
+        <input type="checkbox" name="enabled" value="on" {{#if circuitBreaker.enabled}}checked{{/if}}>
+        <span>{{@root.req.t 'admin.unknownIps.circuitBreaker.enabled'}}</span>
+      </label>
+      <div class="circuit-breaker-row">
+        <label>
+          <span>{{@root.req.t 'admin.unknownIps.circuitBreaker.threshold'}}</span>
+          <input type="number" name="threshold" min="1" max="100" value="{{circuitBreaker.failureThresholdPct}}">
+        </label>
+        <label>
+          <span>{{@root.req.t 'admin.unknownIps.circuitBreaker.window'}}</span>
+          <input type="number" name="window" min="1" max="1440" value="{{circuitBreaker.windowMinutes}}">
+        </label>
+        <label>
+          <span>{{@root.req.t 'admin.unknownIps.circuitBreaker.cooldown'}}</span>
+          <input type="number" name="cooldown" min="1" max="1440" value="{{circuitBreaker.cooldownMinutes}}">
+        </label>
+      </div>
+      <button type="submit" class="btn-primary">{{@root.req.t 'admin.unknownIps.circuitBreaker.save'}}</button>
+    </form>
+  </div>
+</div>
+
+{{!-- ════════════════════════════════════════════════════════════════════
+     FAILURE LOGS TAB — filterable audit + re-queue action
+     ════════════════════════════════════════════════════════════════════ --}}
+<div class="settings-tab-pane{{#if (eq activeTab 'failure-logs')}} is-active{{/if}}" id="pane-failure-logs" data-tab="failure-logs">
+
+  <h3>{{@root.req.t 'admin.unknownIps.failureLogs.title'}}</h3>
+  <p class="failure-logs-help">{{@root.req.t 'admin.unknownIps.failureLogs.help'}}</p>
+
+  <form method="GET" action="/admin/unknown-ips" class="failure-logs-filters">
+    <input type="hidden" name="tab" value="failure-logs">
+    <label>
+      <span>{{@root.req.t 'admin.unknownIps.failureLogs.filterProvider'}}</span>
+      <select name="provider">
+        <option value="">{{@root.req.t 'admin.unknownIps.failureLogs.allProviders'}}</option>
+        {{#each providers}}
+        <option value="{{this.name}}" {{#if (eq ../errorFilters.provider this.name)}}selected{{/if}}>{{this.displayName}}</option>
+        {{/each}}
+      </select>
+    </label>
+    <label>
+      <span>{{@root.req.t 'admin.unknownIps.failureLogs.filterCode'}}</span>
+      <select name="errorCode">
+        <option value="">{{@root.req.t 'admin.unknownIps.failureLogs.allCodes'}}</option>
+        {{#each errorCodes}}
+        <option value="{{this}}" {{#if (eq ../errorFilters.errorCode this)}}selected{{/if}}>{{this}}</option>
+        {{/each}}
+      </select>
+    </label>
+    <label>
+      <span>{{@root.req.t 'admin.unknownIps.failureLogs.filterMode'}}</span>
+      <select name="mode">
+        <option value="">{{@root.req.t 'admin.unknownIps.failureLogs.allModes'}}</option>
+        <option value="auto" {{#if (eq errorFilters.mode 'auto')}}selected{{/if}}>{{@root.req.t 'admin.unknownIps.failureLogs.modeLabel.auto'}}</option>
+        <option value="manual" {{#if (eq errorFilters.mode 'manual')}}selected{{/if}}>{{@root.req.t 'admin.unknownIps.failureLogs.modeLabel.manual'}}</option>
+        <option value="random" {{#if (eq errorFilters.mode 'random')}}selected{{/if}}>{{@root.req.t 'admin.unknownIps.failureLogs.modeLabel.random'}}</option>
+      </select>
+    </label>
+    <label>
+      <span>{{@root.req.t 'admin.unknownIps.failureLogs.filterSince'}}</span>
+      <select name="since">
+        <option value="">—</option>
+        <option value="1h" {{#if (eq errorFilters.since '1h')}}selected{{/if}}>{{@root.req.t 'admin.unknownIps.failureLogs.since1h'}}</option>
+        <option value="24h" {{#if (eq errorFilters.since '24h')}}selected{{/if}}>{{@root.req.t 'admin.unknownIps.failureLogs.since24h'}}</option>
+        <option value="7d" {{#if (eq errorFilters.since '7d')}}selected{{/if}}>{{@root.req.t 'admin.unknownIps.failureLogs.since7d'}}</option>
+      </select>
+    </label>
+    <button type="submit" class="btn-secondary">应用</button>
+  </form>
+
+  {{#if errors.length}}
+  <table class="admin-table">
     <thead>
       <tr>
-        <th>{{req.t 'admin.unknownIps.providers.col.name'}}</th>
-        <th>{{req.t 'admin.unknownIps.providers.col.quota'}}</th>
-        <th>{{req.t 'admin.unknownIps.providers.col.enabled'}}</th>
-        <th>{{req.t 'admin.unknownIps.providers.col.apiKey'}}</th>
-        <th>{{req.t 'admin.unknownIps.providers.col.lastUsed'}}</th>
-        <th></th>
+        <th>{{@root.req.t 'admin.unknownIps.failureLogs.col.ts'}}</th>
+        <th>{{@root.req.t 'admin.unknownIps.failureLogs.col.provider'}}</th>
+        <th>{{@root.req.t 'admin.unknownIps.failureLogs.col.ip'}}</th>
+        <th>{{@root.req.t 'admin.unknownIps.failureLogs.col.mode'}}</th>
+        <th>{{@root.req.t 'admin.unknownIps.failureLogs.col.code'}}</th>
+        <th>{{@root.req.t 'admin.unknownIps.failureLogs.col.reason'}}</th>
+        <th>{{@root.req.t 'admin.unknownIps.failureLogs.col.actions'}}</th>
       </tr>
     </thead>
     <tbody>
-      {{#each providers}}
+      {{#each errors}}
       <tr>
+        <td title="{{formatDate this.ts}}">{{formatRelative this.ts}}</td>
+        <td><code>{{this.providerName}}</code></td>
+        <td><code>{{this.ipText}}</code></td>
+        <td>{{#if (eq this.mode 'auto')}}{{@root.req.t 'admin.unknownIps.failureLogs.modeLabel.auto'}}{{else if (eq this.mode 'manual')}}{{@root.req.t 'admin.unknownIps.failureLogs.modeLabel.manual'}}{{else if (eq this.mode 'random')}}{{@root.req.t 'admin.unknownIps.failureLogs.modeLabel.random'}}{{else}}{{this.mode}}{{/if}}</td>
+        <td><span class="admin-tag admin-tag--warn">{{this.errorCode}}</span></td>
+        <td class="failure-log-reason" title="{{this.rawResponse}}">{{this.reason}}</td>
         <td>
-          <strong>{{this.displayName}}</strong>
-          <div class="provider-table-meta">{{this.name}}</div>
-        </td>
-        <td><code class="provider-table-quota">{{this.freeQuota}}</code></td>
-        <td>
-          <form method="POST" action="/admin/unknown-ips/providers/{{this.name}}" class="provider-toggle-form">
-            <input type="hidden" name="csrf" value="{{../csrfToken}}">
-            <input type="hidden" name="apiKey" value="{{this.apiKey}}">
-            <label class="provider-toggle">
-              <input type="checkbox" name="enabled" value="on" {{#if this.enabled}}checked{{/if}}>
-              <span>{{#if this.enabled}}{{../req.t 'admin.unknownIps.providers.enabled.on'}}{{else}}{{../req.t 'admin.unknownIps.providers.enabled.off'}}{{/if}}</span>
-            </label>
-            <button type="submit" class="button">{{../req.t 'admin.unknownIps.providers.save'}}</button>
+          <form method="POST" action="/admin/unknown-ips/failure-logs/requeue" style="display:inline">
+            <input type="hidden" name="csrf" value="{{../../csrfToken}}">
+            <input type="hidden" name="ip" value="{{this.ipText}}">
+            <button type="submit" class="button">{{@root.req.t 'admin.unknownIps.failureLogs.requeue'}}</button>
           </form>
-        </td>
-        <td>
-          <form method="POST" action="/admin/unknown-ips/providers/{{this.name}}" class="provider-key-form">
-            <input type="hidden" name="csrf" value="{{../csrfToken}}">
-            <input type="hidden" name="enabled" value="{{#if this.enabled}}on{{else}}off{{/if}}">
-            <input type="password" name="apiKey" placeholder="{{../req.t 'admin.unknownIps.providers.apiKeyPlaceholder'}}" value="{{this.apiKey}}" autocomplete="off">
-            <button type="submit" class="button">{{../req.t 'admin.unknownIps.providers.save'}}</button>
-          </form>
-        </td>
-        <td>
-          {{#if this.lastUsedAt}}<span title="{{formatDate this.lastUsedAt}}">{{formatRelative this.lastUsedAt}}</span>{{else}}<span class="admin-tag admin-tag--muted">—</span>{{/if}}
-          {{#if this.lastErrorReason}}
-            <div class="provider-table-err">{{this.lastErrorReason}}</div>
-          {{/if}}
-        </td>
-        <td>
-          {{#if this.enabled}}<span class="admin-tag admin-tag--ok">{{../req.t 'admin.unknownIps.providers.enabled.on'}}</span>{{else}}<span class="admin-tag admin-tag--muted">{{../req.t 'admin.unknownIps.providers.enabled.off'}}</span>{{/if}}
         </td>
       </tr>
       {{/each}}
     </tbody>
   </table>
-</section>
+  {{else}}
+  <p class="admin-empty">{{@root.req.t 'admin.unknownIps.failureLogs.empty'}}</p>
+  {{/if}}
+</div>
+
+{{!-- ─── Tab JS (hash-routed + ?tab= query fallback for SSR/POST) ──── --}}
+<script>
+(function() {
+  // Resolve the active tab in priority order:
+  //   1. URL hash (clicking a tab link updates location.hash)
+  //   2. ?tab= query param (POST redirects use ?tab=, plus direct links)
+  //   3. default 'overview'
+  // We need the query fallback because direct hits like
+  // /admin/unknown-ips?tab=providers have an empty hash on load, and
+  // the SSR-rendered is-active would otherwise be wiped on the first
+  // applyHash() call.
+  function resolveTab() {
+    const hashTab = (location.hash || '').replace(/^#/, '');
+    if (hashTab === 'overview' || hashTab === 'providers' || hashTab === 'failure-logs') return hashTab;
+    try {
+      const params = new URLSearchParams(location.search);
+      const qTab = params.get('tab');
+      if (qTab === 'overview' || qTab === 'providers' || qTab === 'failure-logs') return qTab;
+    } catch (_e) { /* no-op for legacy browsers */ }
+    return 'overview';
+  }
+  function activate(tabId) {
+    if (!tabId) tabId = 'overview';
+    document.querySelectorAll('.settings-tab-link').forEach(function(el) {
+      el.classList.toggle('is-active', el.dataset.tab === tabId);
+    });
+    document.querySelectorAll('.settings-tab-pane').forEach(function(el) {
+      el.classList.toggle('is-active', el.dataset.tab === tabId);
+    });
+  }
+  function applyHash() { activate(resolveTab()); }
+  document.querySelectorAll('.settings-tab-link').forEach(function(el) {
+    el.addEventListener('click', function() { setTimeout(applyHash, 0); });
+  });
+  window.addEventListener('hashchange', applyHash);
+  applyHash();
+})();
+</script>

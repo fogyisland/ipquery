@@ -27,8 +27,12 @@ export class IpapiCoProvider implements IpGeoProvider {
     const url = `${this.opts.endpoint ?? 'https://ipapi.co'}/${encodeURIComponent(ip)}/json/`;
     try {
       const res = await fetch(url, { signal: AbortSignal.timeout(5_000) });
-      if (res.status === 429) return { record: null, rateLimited: true };
-      if (!res.ok) return { record: null, rateLimited: false };
+      if (res.status === 429) {
+        return { record: null, rateLimited: true, errorCode: '429', rawResponse: await safeBody(res) };
+      }
+      if (!res.ok) {
+        return { record: null, rateLimited: false, errorCode: String(res.status), rawResponse: await safeBody(res) };
+      }
       const data = await res.json() as {
         country_code?: string;
         country_name?: string;
@@ -42,8 +46,12 @@ export class IpapiCoProvider implements IpGeoProvider {
         org?: string;
         error?: boolean;
       };
-      if (data.error) return { record: null, rateLimited: false };
-      if (!data.country_code) return { record: null, rateLimited: false };
+      if (data.error) {
+        return { record: null, rateLimited: false, errorCode: 'api_error', rawResponse: JSON.stringify(data).slice(0, 240) };
+      }
+      if (!data.country_code) {
+        return { record: null, rateLimited: false, errorCode: 'no_country' };
+      }
       return {
         record: {
           countryCode: data.country_code,
@@ -59,9 +67,20 @@ export class IpapiCoProvider implements IpGeoProvider {
         },
         rateLimited: false,
       };
-    } catch {
-      return { record: null, rateLimited: false };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      const code = msg.includes('timeout') || msg.includes('aborted') ? 'timeout' : 'network';
+      return { record: null, rateLimited: false, errorCode: code, rawResponse: msg.slice(0, 240) };
     }
+  }
+}
+
+async function safeBody(res: Response): Promise<string | null> {
+  try {
+    const text = await res.text();
+    return text.length > 240 ? text.slice(0, 240) : text;
+  } catch {
+    return null;
   }
 }
 

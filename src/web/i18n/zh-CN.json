@@ -404,7 +404,12 @@
       "etlRestart.confirm": "手动触发 ETL 流水线(异步)"
     },
     "unknownIps": {
-      "title": "未收录 IP 队列",
+      "title": "API 入库",
+      "tabs": {
+        "overview": "概览与调度",
+        "providers": "数据源配置",
+        "failureLogs": "失败日志"
+      },
       "stats": {
         "pending": "待回灌",
         "processed": "已入库",
@@ -488,6 +493,78 @@
         },
         "save": "保存",
         "apiKeyPlaceholder": "未填写"
+      },
+      "healthCard": {
+        "statusOk": "正常",
+        "statusFailing": "故障",
+        "statusRecovering": "恢复中",
+        "statusDisabled": "已停用",
+        "statusIdle": "未使用",
+        "lastSuccess": "上次成功",
+        "lastError": "上次失败",
+        "noError": "无错误",
+        "noSuccess": "尚无成功调用",
+        "successRate": "成功率",
+        "lastRun": "上次回灌",
+        "noLastRun": "尚无回灌",
+        "successCount": "成功",
+        "failedCount": "失败",
+        "rateLimitedCount": "限流",
+        "abstainedCount": "弃权"
+      },
+      "runner": {
+        "title": "运行控制",
+        "queueBacklog": "队列积压",
+        "lastRun": "上次回灌",
+        "noLastRun": "尚无回灌",
+        "backfillNow": "立即回灌",
+        "generateNow": "随机生成 10 个 IP 并入库",
+        "queueActions": "队列操作",
+        "clearQueue": "清空待回灌队列",
+        "exportQueue": "导出待回灌 CSV"
+      },
+      "circuitBreaker": {
+        "title": "自动熔断 (Circuit Breaker)",
+        "help": "当数据源在滑动窗口内的失败率超过阈值时自动停用,避免无效调用拖慢整体入库。",
+        "enabled": "启用自动熔断",
+        "threshold": "失败率阈值(%)",
+        "window": "滑动窗口(分钟)",
+        "cooldown": "停用持续时间(分钟)",
+        "save": "保存配置"
+      },
+      "failureLogs": {
+        "title": "失败日志",
+        "help": "回灌/随机入库时,每次非 OK 的数据源调用都会记录在这里。按数据源、错误码、时间筛选,点击 “重新入队” 把单条 IP 加回队列等待下一轮回灌。",
+        "filterProvider": "数据源",
+        "filterCode": "错误码",
+        "filterMode": "触发源",
+        "filterSince": "时间范围",
+        "allProviders": "全部",
+        "allCodes": "全部",
+        "allModes": "全部",
+        "since1h": "最近 1 小时",
+        "since24h": "最近 24 小时",
+        "since7d": "最近 7 天",
+        "col": {
+          "ts": "时间",
+          "provider": "数据源",
+          "ip": "目标 IP",
+          "mode": "触发源",
+          "code": "错误码",
+          "reason": "原因",
+          "actions": "操作"
+        },
+        "modeLabel": {
+          "auto": "自动回灌",
+          "manual": "手动生成",
+          "random": "随机生成"
+        },
+        "requeue": "重新入队",
+        "empty": "所选范围内暂无失败记录。"
+      },
+      "queueFlash": {
+        "cleared": "已清空 {removed} 条待回灌 IP。",
+        "invalidIp": "IP \"{ip}\" 格式不合法。"
       }
     }
   },

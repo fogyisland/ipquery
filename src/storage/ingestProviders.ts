@@ -17,6 +17,7 @@
 
 import type { Pool, RowDataPacket } from 'mysql2/promise';
 import type { IpGeoProvider } from '../etl/providers/types';
+import { getSetting, setSetting } from './settings';
 import { IpApiProvider } from '../etl/providers/ipApi';
 import { IpinfoProvider } from '../etl/providers/ipinfo';
 import { IplocateProvider } from '../etl/providers/iplocate';
@@ -173,3 +174,64 @@ export function buildProvidersFromConfig(configs: ProviderConfigRow[]): IpGeoPro
   }
   return out;
 }
+
+// ─── Last-backfill per-provider aggregate ─────────────────────────────────
+//
+// BackfillSummary.providers only lives in memory until the POST handler
+// serializes it to the backfill_summary flash cookie (which is gone after
+// one refresh). Persist the latest run's per-provider counts to settings
+// so the unknown-ips dashboard can show "this provider failed N times in
+// the last run" across sessions — without a DB migration.
+
+const LAST_BACKFILL_KEY = 'last_backfill_provider_stats';
+
+export interface LastBackfillProviderEntry {
+  ok: number;
+  failed: number;
+  abstained: number;
+  rateLimited: number;
+}
+
+export type LastBackfillProviderStats = Record<string, LastBackfillProviderEntry>;
+
+interface LastBackfillEnvelope {
+  runAt: string; // ISO timestamp
+  providers: LastBackfillProviderStats;
+}
+
+export async function saveLastBackfillProviderStats(
+  pool: Pool,
+  providers: BackfillSummary['providers'],
+  runAt: Date,
+): Promise<void> {
+  const env: LastBackfillEnvelope = {
+    runAt: runAt.toISOString(),
+    providers,
+  };
+  await setSetting(pool, LAST_BACKFILL_KEY, JSON.stringify(env));
+}
+
+export async function loadLastBackfillProviderStats(
+  pool: Pool,
+): Promise<{ runAt: Date | null; providers: LastBackfillProviderStats }> {
+  const raw = await getSetting(pool, LAST_BACKFILL_KEY);
+  if (!raw) return { runAt: null, providers: {} };
+  try {
+    const parsed = JSON.parse(raw) as Partial<LastBackfillEnvelope>;
+    if (!parsed || typeof parsed !== 'object' || !parsed.providers) {
+      return { runAt: null, providers: {} };
+    }
+    return {
+      runAt: parsed.runAt ? new Date(parsed.runAt) : null,
+      providers: parsed.providers as LastBackfillProviderStats,
+    };
+  } catch {
+    return { runAt: null, providers: {} };
+  }
+}
+
+// Local type-only import — keeps BackfillSummary type usable here without
+// a circular import (unknownIpBackfill imports from this module).
+type BackfillSummary = {
+  providers: Record<string, LastBackfillProviderEntry>;
+};

@@ -33,6 +33,7 @@ import { nextBatch, markProcessed, markAttempted, type UnknownIpRow } from '../s
 import type { IpGeoProvider, IpGeoLookupResult, IpGeoRecord } from './providers/types';
 import type { ProviderConfigRow } from '../storage/ingestProviders';
 import { touchProviderError, updateProviderConfig } from '../storage/ingestProviders';
+import { recordProviderError, getCircuitBreakerConfig } from '../storage/providerErrorLog';
 import { majorityVote } from './majority';
 import { parseIp } from '../ip';
 
@@ -42,6 +43,10 @@ export interface BackfillOptions {
   batchLimit?: number;
   /** Per-IP timeout for the fan-out (covers slowest provider). */
   perIpTimeoutMs?: number;
+  /** Which flow triggered this run. Recorded into provider_error_log so
+   *  the Failure Logs tab can filter by trigger source. Defaults to
+   *  'auto' (queue-driven backfill). */
+  mode?: 'auto' | 'manual' | 'random';
   logger?: Pick<Console, 'log' | 'warn' | 'error'>;
 }
 
@@ -99,6 +104,9 @@ export async function runBackfill(
     ])),
     providersDisabled: [],
   };
+  // Mode is threaded through to processIp so failure rows carry the
+  // right tag in provider_error_log. Defaults to 'auto' (queue backfill).
+  const runMode = opts.mode ?? 'auto';
 
   const queueRows = await nextBatch(pool, batchLimit);
   summary.considered = queueRows.length;
@@ -115,7 +123,7 @@ export async function runBackfill(
   for (let i = 0; i < queueRows.length; i += CONCURRENCY) {
     const slice = queueRows.slice(i, i + CONCURRENCY);
     const sliceOutcomes = await Promise.all(
-      slice.map(async (row) => ({ row, outcome: await processIp(pool, providers, row.ipText, row.ip, perIpTimeout, summary) })),
+      slice.map(async (row) => ({ row, outcome: await processIp(pool, providers, row.ipText, row.ip, perIpTimeout, summary, runMode) })),
     );
     outcomes.push(...sliceOutcomes);
   }
@@ -170,7 +178,12 @@ export async function runBackfill(
 
 /** Per-IP fan-out + vote + write. Used by both the queue-driven backfill
  *  and the random-IP generator. Updates `summary.providers[name]` stats
- *  in place. Returns the outcome so the caller can track it. */
+ *  in place. Returns the outcome so the caller can track it.
+ *
+ *  Each non-OK per-provider call is recorded into provider_error_log so
+ *  the Failure Logs tab can audit exactly what failed and why. The
+ *  record is fire-and-forget — a failure to log must not poison the
+ *  vote. */
 export async function processIp(
   pool: Pool,
   providers: IpGeoProvider[],
@@ -178,6 +191,7 @@ export async function processIp(
   ipBuffer: Buffer,
   _perIpTimeoutMs: number,
   summary: BackfillSummary,
+  mode: 'auto' | 'manual' | 'random' = 'auto',
 ): Promise<IpOutcome> {
   const responses = await Promise.all(
     providers.map(async (p) => {
@@ -185,9 +199,20 @@ export async function processIp(
       let result: IpGeoLookupResult;
       try {
         result = await p.lookup(ipText);
-      } catch {
+      } catch (err) {
         const stats = summary.providers[p.name];
         if (stats) stats.failed += 1;
+        const msg = err instanceof Error ? err.message : String(err);
+        const code = msg.includes('timeout') || msg.includes('aborted') ? 'timeout' : 'network';
+        // Fire-and-forget; logging failures shouldn't break the backfill.
+        recordProviderError(pool, {
+          providerName: p.name,
+          ipText,
+          mode,
+          errorCode: code,
+          reason: `lookup() threw: ${msg.slice(0, 200)}`,
+          rawResponse: null,
+        }).catch(() => { /* swallow */ });
         return { provider: p.name, record: null as IpGeoRecord | null, rateLimited: false };
       }
       const elapsed = Date.now() - start;
@@ -199,6 +224,23 @@ export async function processIp(
       }
       if (elapsed > 2_000) {
         console.warn?.(`[backfill] provider ${p.name} took ${elapsed}ms for ${ipText}`);
+      }
+      // Record every non-OK, non-abstain call (i.e. providers that returned
+      // an explicit errorCode) into the failure log. We skip abstains
+      // (provider returned no record, no errorCode) because they reflect
+      // "this IP has no data" — not a provider fault.
+      if (!result.rateLimited && !result.record && result.errorCode) {
+        const reason = result.errorCode === 'no_country'
+          ? `provider returned no country code for ${ipText}`
+          : `${result.errorCode}: ${(result.rawResponse ?? '').slice(0, 180) || '(no body)'}`;
+        recordProviderError(pool, {
+          providerName: p.name,
+          ipText,
+          mode,
+          errorCode: result.errorCode,
+          reason: reason.slice(0, 255),
+          rawResponse: result.rawResponse ?? null,
+        }).catch(() => { /* swallow */ });
       }
       return { provider: p.name, record: result.record, rateLimited: result.rateLimited };
     }),
@@ -213,26 +255,88 @@ export async function processIp(
   return { kind: 'merged', record: vote.record, newlyInserted };
 }
 
-/** Disable any provider whose rateLimited counter > 0. Idempotent. */
-async function disableRateLimitedProviders(
+/** Disable any provider whose rateLimited counter > 0. Idempotent. Also
+ *  consults the circuit-breaker config: when the failure rate (non-ok
+ *  outcomes / total) over the configured window exceeds the threshold,
+ *  the provider is auto-disabled even without a 429. The breaker reads
+ *  the persisted `provider_error_log` for a sliding-window check. */
+export async function disableRateLimitedProviders(
   pool: Pool,
   providers: IpGeoProvider[],
   summary: BackfillSummary,
 ): Promise<void> {
   const liveProviders = new Set(providers.map((p) => p.name));
+  // Read the breaker config ONCE per run — it's stable for the duration.
+  const cb = await getCircuitBreakerConfig(pool);
   for (const [name, stats] of Object.entries(summary.providers)) {
-    if (stats.rateLimited <= 0) continue;
     if (!liveProviders.has(name)) continue;
     if (summary.providersDisabled.includes(name)) continue;
+    let shouldDisable = false;
+    let reason = '';
+    if (stats.rateLimited > 0) {
+      shouldDisable = true;
+      reason = `429 rate limited (${stats.rateLimited}x in this run)`;
+    } else if (cb.enabled) {
+      // Count failures for this provider over the sliding window.
+      const total = stats.ok + stats.failed + stats.abstained;
+      const failures = stats.failed;
+      const rate = total > 0 ? (failures / total) * 100 : 0;
+      if (total >= 5 && rate >= cb.failureThresholdPct) {
+        shouldDisable = true;
+        reason = `circuit breaker: ${Math.round(rate)}% failure rate (${failures}/${total} in run, threshold ${cb.failureThresholdPct}%)`;
+      } else {
+        // Cross-window check via provider_error_log — only fires when the
+        // run had too few calls for a clean local decision.
+        const windowTotal = await countProviderCallsInWindow(pool, name, cb.windowMinutes);
+        const windowFailed = await countProviderFailuresInWindow(pool, name, cb.windowMinutes);
+        if (windowTotal >= 10) {
+          const winRate = (windowFailed / windowTotal) * 100;
+          if (winRate >= cb.failureThresholdPct) {
+            shouldDisable = true;
+            reason = `circuit breaker: ${Math.round(winRate)}% failure rate (${windowFailed}/${windowTotal} in ${cb.windowMinutes}m window, threshold ${cb.failureThresholdPct}%)`;
+          }
+        }
+      }
+    }
+    if (!shouldDisable) continue;
     try {
       await updateProviderConfig(pool, name, { enabled: false });
-      await touchProviderError(pool, name, `429 rate limited (${stats.rateLimited}x in this run)`);
+      await touchProviderError(pool, name, reason);
       summary.providersDisabled.push(name);
-      console.warn?.(`[backfill] auto-disabled provider ${name} after ${stats.rateLimited} x 429`);
+      console.warn?.(`[backfill] auto-disabled provider ${name}: ${reason}`);
     } catch (err) {
       console.error?.(`[backfill] failed to disable ${name}:`, err);
     }
   }
+}
+
+async function countProviderCallsInWindow(
+  pool: Pool,
+  providerName: string,
+  windowMinutes: number,
+): Promise<number> {
+  const [rows] = await pool.query<ResultSetHeader & { total: number }[] & unknown>(
+    `SELECT COUNT(*) AS total FROM provider_error_log
+      WHERE provider_name = ? AND ts >= (NOW() - INTERVAL ? MINUTE)`,
+    [providerName, windowMinutes],
+  );
+  const r = Array.isArray(rows) ? rows[0] as { total: number } | undefined : null;
+  return r?.total ?? 0;
+}
+
+async function countProviderFailuresInWindow(
+  pool: Pool,
+  providerName: string,
+  windowMinutes: number,
+): Promise<number> {
+  const [rows] = await pool.query<ResultSetHeader & { total: number }[] & unknown>(
+    `SELECT COUNT(*) AS total FROM provider_error_log
+      WHERE provider_name = ? AND ts >= (NOW() - INTERVAL ? MINUTE)
+        AND error_code NOT IN ('no_country')`,
+    [providerName, windowMinutes],
+  );
+  const r = Array.isArray(rows) ? rows[0] as { total: number } | undefined : null;
+  return r?.total ?? 0;
 }
 
 /** Insert a /32 (IPv4) or /128 (IPv6) range covering exactly `ip`. Tagged

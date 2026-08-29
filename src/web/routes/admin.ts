@@ -8,7 +8,12 @@ import { runPipeline } from '../../etl/pipeline';
 import { topByQueryCount, queueStats } from '../../storage/unknownIpQueue';
 import { runBackfill, buildDefaultProviders } from '../../etl/unknownIpBackfill';
 import { runRandomGeneration } from '../../etl/randomIpGenerator';
-import { listProviderConfigs, updateProviderConfig, buildProvidersFromConfig } from '../../storage/ingestProviders';
+import { listProviderConfigs, updateProviderConfig, buildProvidersFromConfig, saveLastBackfillProviderStats, loadLastBackfillProviderStats } from '../../storage/ingestProviders';
+import { clearPending, exportPendingCsv } from '../../storage/unknownIpQueue';
+import {
+  queryProviderErrors, distinctErrorCodes,
+  getCircuitBreakerConfig, setCircuitBreakerConfig,
+} from '../../storage/providerErrorLog';
 import { listAllApiKeys, revokeApiKey } from '../../storage/apiKeys';
 import { listQueryLogs, streamQueryLogsCsv } from '../../storage/queryLog';
 import { listAuditLog } from '../../storage/auditLog';
@@ -586,10 +591,28 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
   // from env at request time so admin can rotate them without a restart.
   app.get('/admin/unknown-ips', async (req, reply) => {
     const limit = Math.min(Number((req.query as { limit?: string }).limit ?? 50) || 50, 200);
-    const [data, stats, providers] = await Promise.all([
+    const q = req.query as { tab?: string; provider?: string; errorCode?: string; mode?: string; since?: string };
+    const tab: 'overview' | 'providers' | 'failure-logs' =
+      q.tab === 'providers' || q.tab === 'failure-logs' ? q.tab : 'overview';
+    // Failure Logs filters — applied only when on the failure-logs tab.
+    const errFilter: { providerName?: string; errorCode?: string; mode?: 'auto'|'manual'|'random'; sinceMs?: number; limit?: number } = {};
+    if (q.provider) errFilter.providerName = q.provider;
+    if (q.errorCode) errFilter.errorCode = q.errorCode;
+    if (q.mode === 'auto' || q.mode === 'manual' || q.mode === 'random') errFilter.mode = q.mode;
+    // Default "since" on Failure Logs = last 24h. Operators see recent
+    // failures without paging through ancient rows.
+    const sinceMs = q.since ? Date.parse(q.since) : (tab === 'failure-logs' ? Date.now() - 24 * 60 * 60 * 1000 : undefined);
+    if (sinceMs && !Number.isNaN(sinceMs)) errFilter.sinceMs = sinceMs;
+    errFilter.limit = 200;
+
+    const [data, stats, providers, lastBackfill, errors, errorCodes, circuitBreaker] = await Promise.all([
       topByQueryCount(app.pool, limit),
       queueStats(app.pool),
       listProviderConfigs(app.pool),
+      loadLastBackfillProviderStats(app.pool),
+      tab === 'failure-logs' ? queryProviderErrors(app.pool, errFilter) : Promise.resolve([]),
+      tab === 'failure-logs' ? distinctErrorCodes(app.pool) : Promise.resolve([]),
+      getCircuitBreakerConfig(app.pool),
     ]);
     const { readRandomGenState } = await import('../../web/plugins/randomIpGeneratorRunner');
     const randomGenState = await readRandomGenState(app.pool);
@@ -610,6 +633,48 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
       try { flash.generateSummary = JSON.parse(generateCookie); } catch { /* ignore */ }
       reply.clearCookie('generate_summary', { path: '/admin/unknown-ips' });
     }
+    const queueFlashCookie = req.cookies['queue_flash'];
+    if (queueFlashCookie) {
+      try { flash.queueFlash = JSON.parse(queueFlashCookie); } catch { /* ignore */ }
+      reply.clearCookie('queue_flash', { path: '/admin/unknown-ips' });
+    }
+    // Per-provider health summary. Sort order: failing → disabled →
+    // recovering → healthy → idle (operator sees bad providers first).
+    // Status computation uses lastErrorAt/lastUsedAt freshness and the
+    // disabled flag; counts come from the last persisted backfill run.
+    const now = Date.now();
+    const ONE_HOUR = 60 * 60 * 1000;
+    const providerHealth = providers
+      .map((p) => {
+        const lastStats = lastBackfill.providers[p.name];
+        const lastErrFresh = p.lastErrorAt && (now - p.lastErrorAt.getTime()) < ONE_HOUR;
+        const lastUseFresh = p.lastUsedAt && (now - p.lastUsedAt.getTime()) < ONE_HOUR;
+        let status: 'failing' | 'disabled' | 'recovering' | 'healthy' | 'idle';
+        if (!p.enabled) status = 'disabled';
+        else if (lastErrFresh && !lastUseFresh) status = 'failing';
+        else if (p.lastErrorAt && p.lastUsedAt && p.lastUsedAt > p.lastErrorAt) status = 'healthy';
+        else if (p.lastErrorAt) status = 'recovering';
+        else if (p.lastUsedAt) status = lastUseFresh ? 'healthy' : 'idle';
+        else status = 'idle';
+        return {
+          name: p.name,
+          displayName: p.displayName,
+          freeQuota: p.freeQuota,
+          enabled: p.enabled,
+          hasApiKey: Boolean(p.apiKey),
+          status,
+          lastUsedAt: p.lastUsedAt,
+          lastErrorAt: p.lastErrorAt,
+          lastErrorReason: p.lastErrorReason,
+          lastStats: lastStats ?? null,
+        };
+      })
+      .sort((a, b) => {
+        const order = { failing: 0, disabled: 1, recovering: 2, healthy: 3, idle: 4 };
+        const diff = order[a.status] - order[b.status];
+        if (diff !== 0) return diff;
+        return a.name.localeCompare(b.name);
+      });
     return reply.view('admin/unknown-ips.hbs', {
       layout: 'layouts/admin',
       title: req.t('admin.unknownIps.title'),
@@ -617,8 +682,20 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
       recentlyProcessed: data.recentlyProcessed,
       stats,
       providers,
+      providerHealth,
+      lastBackfillRunAt: lastBackfill.runAt,
       flash,
       randomGenState,
+      errors,
+      errorCodes,
+      errorFilters: {
+        provider: q.provider ?? '',
+        errorCode: q.errorCode ?? '',
+        mode: q.mode ?? '',
+        since: q.since ?? '',
+      },
+      circuitBreaker,
+      activeTab: tab,
       limit,
       csrfToken: req.csrfToken,
       req,
@@ -643,7 +720,84 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
       enabled: body.enabled === 'on',
       apiKey: body.apiKey === undefined ? undefined : (body.apiKey.trim() === '' ? null : body.apiKey.trim()),
     });
-    return reply.redirect('/admin/unknown-ips');
+    return reply.redirect('/admin/unknown-ips#providers');
+  });
+
+  // Bulk queue ops. Both CSRF-gated. The clear action wipes pending
+  // rows (preserving processed rows as the audit trail). Export streams
+  // the CSV inline with content-disposition so the browser saves a file.
+  app.post('/admin/unknown-ips/queue/clear', async (req, reply) => {
+    if (!verifyCsrfRequest(req)) return reply.code(403).view('errors/csrf.hbs', { layout: 'layouts/public', req });
+    req.auditAction = { action: 'unknown_ips.queue.clear', targetType: 'unknown_ip_queue' };
+    const removed = await clearPending(app.pool);
+    reply.setCookie('queue_flash', JSON.stringify({ kind: 'cleared', removed }), {
+      path: '/admin/unknown-ips',
+      maxAge: 30, httpOnly: true, sameSite: 'lax',
+    });
+    return reply.redirect('/admin/unknown-ips#overview');
+  });
+
+  app.get('/admin/unknown-ips/queue/export', async (req, reply) => {
+    // GET so the admin can right-click → "save link as" without JS.
+    // CSRF not required: this is a read-only data export, not a state
+    // change. The whole /admin/* tree already gates on session+admin.
+    const csv = await exportPendingCsv(app.pool);
+    const filename = `unknown-ip-queue-${new Date().toISOString().slice(0, 10)}.csv`;
+    reply.header('content-type', 'text/csv; charset=utf-8');
+    reply.header('content-disposition', `attachment; filename="${filename}"`);
+    return csv;
+  });
+
+  // Circuit-breaker config save. Persists to settings (cb_*) and
+  // refreshes the in-memory cache used by the next backfill run.
+  app.post('/admin/unknown-ips/circuit-breaker', async (req, reply) => {
+    if (!verifyCsrfRequest(req)) return reply.code(403).view('errors/csrf.hbs', { layout: 'layouts/public', req });
+    const body = req.body as { enabled?: string; threshold?: string; window?: string; cooldown?: string };
+    req.auditAction = {
+      action: 'unknown_ips.circuit_breaker.update',
+      targetType: 'settings',
+      metadata: {
+        enabled: body.enabled === 'on',
+        threshold: Number(body.threshold) || 50,
+        window: Number(body.window) || 10,
+        cooldown: Number(body.cooldown) || 15,
+      },
+    };
+    await setCircuitBreakerConfig(app.pool, {
+      enabled: body.enabled === 'on',
+      failureThresholdPct: Number(body.threshold),
+      windowMinutes: Number(body.window),
+      cooldownMinutes: Number(body.cooldown),
+    });
+    return reply.redirect('/admin/unknown-ips#providers');
+  });
+
+  // Re-queue a single IP from the Failure Logs tab. Insert-or-increment
+  // (idempotent) so re-clicking doesn't double-count.
+  app.post('/admin/unknown-ips/failure-logs/requeue', async (req, reply) => {
+    if (!verifyCsrfRequest(req)) return reply.code(403).view('errors/csrf.hbs', { layout: 'layouts/public', req });
+    const body = req.body as { ip?: string };
+    const ipText = (body.ip ?? '').trim();
+    if (!ipText) return reply.redirect('/admin/unknown-ips#failure-logs');
+    req.auditAction = {
+      action: 'unknown_ips.failure_logs.requeue',
+      targetType: 'unknown_ip_queue',
+      targetId: ipText,
+    };
+    const { insertOrIncrement } = await import('../../storage/unknownIpQueue');
+    const { parseIp } = await import('../../ip');
+    const parsed = parseIp(ipText);
+    if (!parsed) {
+      reply.setCookie('queue_flash', JSON.stringify({ kind: 'invalid_ip', ip: ipText }), {
+        path: '/admin/unknown-ips', maxAge: 30, httpOnly: true, sameSite: 'lax',
+      });
+      return reply.redirect('/admin/unknown-ips#failure-logs');
+    }
+    // parseIp returns a Buffer; insertOrIncrement expects one too. The
+    // static types collide because parseIp's return is structurally
+    // ArrayBufferLike in this TS version; cast at the boundary.
+    await insertOrIncrement(app.pool, Buffer.from(parsed.buffer), ipText, { source: 'manual_submit' });
+    return reply.redirect('/admin/unknown-ips#failure-logs');
   });
 
   app.get('/admin/unknown-ips/backfill/confirm', async (req, reply) => {
@@ -666,8 +820,13 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
     const providers = buildProvidersFromConfig(configs);
     const summary = await runBackfill(app.pool, providers, {
       batchLimit: Number((req.body as { batchLimit?: number }).batchLimit ?? 100) || 100,
+      mode: 'auto',
       logger: { log: () => {}, warn: (msg) => app.log.warn({ msg }, 'backfill'), error: (msg) => app.log.error({ msg }, 'backfill') },
     });
+    // Persist per-provider counts so the unknown-ips dashboard can show
+    // last-run stats across page refreshes (the flash cookie is gone
+    // after one render). Same shape as BackfillSummary.providers.
+    await saveLastBackfillProviderStats(app.pool, summary.providers, new Date());
     // Redirect back with summary in flash cookie. Cookie is HTTP-only and
     // max-age=30s — admin refreshes the page and sees the banner once.
     reply.setCookie('backfill_summary', JSON.stringify(summary), {
@@ -676,7 +835,7 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
       httpOnly: true,
       sameSite: 'lax',
     });
-    return reply.redirect('/admin/unknown-ips');
+    return reply.redirect('/admin/unknown-ips#overview');
   });
 
   // "Generate 10 random IPs and ingest them". Used to validate the
@@ -696,13 +855,16 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
       count,
       logger: { log: () => {}, warn: (msg) => app.log.warn({ msg }, 'random-gen'), error: (msg) => app.log.error({ msg }, 'random-gen') },
     });
+    // Random-gen also produces per-provider counts — persist so the
+    // dashboard reflects this run even after the flash cookie expires.
+    await saveLastBackfillProviderStats(app.pool, summary.providers, new Date());
     reply.setCookie('generate_summary', JSON.stringify(summary), {
       path: '/admin/unknown-ips',
       maxAge: 60,
       httpOnly: true,
       sameSite: 'lax',
     });
-    return reply.redirect('/admin/unknown-ips');
+    return reply.redirect('/admin/unknown-ips#overview');
   });
 
   // Continuous runner toggle + manual kick. The runner is a separate

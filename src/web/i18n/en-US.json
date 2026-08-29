@@ -403,7 +403,12 @@
       "etlRestart.confirm": "Trigger ETL pipeline manually (fire-and-forget)"
     },
     "unknownIps": {
-      "title": "Unknown IP Queue",
+      "title": "API Ingest",
+      "tabs": {
+        "overview": "Overview & Runner",
+        "providers": "Providers",
+        "failureLogs": "Failure Logs"
+      },
       "stats": {
         "pending": "Pending",
         "processed": "Merged",
@@ -487,6 +492,78 @@
         },
         "save": "Save",
         "apiKeyPlaceholder": "not set"
+      },
+      "healthCard": {
+        "statusOk": "Healthy",
+        "statusFailing": "Failing",
+        "statusRecovering": "Recovering",
+        "statusDisabled": "Disabled",
+        "statusIdle": "Idle",
+        "lastSuccess": "Last success",
+        "lastError": "Last error",
+        "noError": "no errors",
+        "noSuccess": "no successful calls yet",
+        "successRate": "Success rate",
+        "lastRun": "Last run",
+        "noLastRun": "never run",
+        "successCount": "ok",
+        "failedCount": "failed",
+        "rateLimitedCount": "throttled",
+        "abstainedCount": "abstained"
+      },
+      "runner": {
+        "title": "Runner",
+        "queueBacklog": "Queue backlog",
+        "lastRun": "Last run",
+        "noLastRun": "never",
+        "backfillNow": "Backfill now",
+        "generateNow": "Generate 10 random IPs",
+        "queueActions": "Queue actions",
+        "clearQueue": "Clear pending queue",
+        "exportQueue": "Export pending CSV"
+      },
+      "circuitBreaker": {
+        "title": "Circuit Breaker",
+        "help": "When a provider's failure rate over the sliding window exceeds the threshold, it is auto-disabled to keep the backfill from hammering a broken endpoint.",
+        "enabled": "Enable auto-disable",
+        "threshold": "Failure rate threshold (%)",
+        "window": "Sliding window (minutes)",
+        "cooldown": "Disable duration (minutes)",
+        "save": "Save config"
+      },
+      "failureLogs": {
+        "title": "Failure Logs",
+        "help": "Every non-OK provider call from backfill or random-ingest lands here. Filter by provider / error code / time, and re-queue a single IP to retry it on the next run.",
+        "filterProvider": "Provider",
+        "filterCode": "Error code",
+        "filterMode": "Source",
+        "filterSince": "Time range",
+        "allProviders": "All",
+        "allCodes": "All",
+        "allModes": "All",
+        "since1h": "Last 1 hour",
+        "since24h": "Last 24 hours",
+        "since7d": "Last 7 days",
+        "col": {
+          "ts": "Time",
+          "provider": "Provider",
+          "ip": "Target IP",
+          "mode": "Source",
+          "code": "Error code",
+          "reason": "Reason",
+          "actions": "Actions"
+        },
+        "modeLabel": {
+          "auto": "Auto backfill",
+          "manual": "Manual generate",
+          "random": "Random generate"
+        },
+        "requeue": "Re-queue",
+        "empty": "No failures in the selected range."
+      },
+      "queueFlash": {
+        "cleared": "Cleared {removed} pending IPs.",
+        "invalidIp": "IP \"{ip}\" is malformed."
       }
     }
   },

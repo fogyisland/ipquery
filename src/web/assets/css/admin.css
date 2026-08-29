@@ -1238,3 +1238,262 @@ dl.settings-dl dd {
 .settings-tab-pane .pill-row {
   display: flex; flex-wrap: wrap; gap: var(--sp-2);
 }
+
+/* ─── Ingest console (/admin/unknown-ips) ───────────────────────────── */
+
+/* Generic alert banner (success/info/danger) for flash messages. */
+.admin-alert {
+  display: block;
+  padding: var(--sp-3) var(--sp-4);
+  margin-bottom: var(--sp-3);
+  border: var(--hairline);
+  background: var(--surface-2);
+  font-size: 13px;
+}
+.admin-alert strong { display: block; margin-bottom: var(--sp-2); }
+.admin-alert--success { border-color: rgba(34, 197, 94, 0.35); background: rgba(34, 197, 94, 0.06); }
+.admin-alert--info { border-color: var(--accent-line); background: var(--accent-glow); }
+.admin-alert--danger { border-color: rgba(239, 68, 68, 0.35); background: rgba(239, 68, 68, 0.06); }
+
+.admin-summary-list {
+  margin: 0; padding-left: var(--sp-4);
+  font-family: var(--font-mono); font-size: 12px;
+  color: var(--text-2);
+  list-style: square;
+}
+.admin-summary-list li { margin: 2px 0; }
+.admin-summary-disabled { color: #f59e0b; }
+.admin-summary-ips code.admin-ips {
+  display: block; padding: var(--sp-2);
+  background: var(--bg); color: var(--text-2);
+  font-size: 11px; word-break: break-all;
+  border: var(--hairline);
+  margin-top: var(--sp-2);
+}
+
+/* Runner status card — top of Overview tab.
+   Layout: 4-stat row on top, then a 2-button action row, then a queue-bulk-ops row. */
+.runner-card {
+  background: var(--surface);
+  border: var(--hairline);
+  margin-bottom: var(--sp-4);
+}
+.runner-card-head { padding: var(--sp-3) var(--sp-4) var(--sp-2); border-bottom: var(--hairline); }
+.runner-card-head h3 {
+  margin: 0;
+  font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.12em;
+  text-transform: uppercase; color: var(--text-2);
+}
+.runner-card-body {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-4);
+}
+.runner-stat { display: flex; flex-direction: column; gap: 2px; }
+.runner-stat-value {
+  font-family: var(--font-mono); font-size: 22px; font-weight: 600;
+  color: var(--text); font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+}
+.runner-stat-label {
+  font-family: var(--font-mono); font-size: 10px;
+  letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-3);
+}
+.runner-card-actions,
+.runner-card-queue {
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-4);
+  border-top: var(--hairline);
+}
+.runner-card-queue { padding-top: var(--sp-2); padding-bottom: var(--sp-3); }
+.runner-card-queue-label {
+  font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.1em;
+  text-transform: uppercase; color: var(--text-3);
+  margin-right: var(--sp-2);
+}
+.runner-card-actions form { margin: 0; }
+
+/* Provider health card — one card per provider on the Providers tab.
+   Status color comes from --status-color set inline by the .provider-health-status modifier. */
+.provider-health-card {
+  background: var(--surface);
+  border: var(--hairline);
+  padding: var(--sp-3) var(--sp-4);
+  margin-bottom: var(--sp-3);
+  position: relative;
+}
+.provider-health-card::before {
+  /* Left border stripe keyed to status — at-a-glance triage. */
+  content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px;
+  background: var(--status-color, var(--accent));
+}
+.provider-health-card--healthy { --status-color: #22c55e; }
+.provider-health-card--failing { --status-color: #ef4444; }
+.provider-health-card--recovering { --status-color: #f59e0b; }
+.provider-health-card--disabled { --status-color: #6b7280; }
+.provider-health-card--idle { --status-color: var(--accent); }
+
+.provider-health-card-head {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  gap: var(--sp-3); margin-bottom: var(--sp-3);
+}
+.provider-health-card-name {
+  font-family: var(--font-mono); font-size: 14px; font-weight: 600;
+  color: var(--text); margin-right: var(--sp-2);
+}
+.provider-health-card-slug {
+  font-family: var(--font-mono); font-size: 11px; color: var(--text-3);
+}
+.provider-health-status {
+  font-family: var(--font-mono); font-size: 10px;
+  letter-spacing: 0.08em; text-transform: uppercase;
+  padding: 3px 8px; border: var(--hairline);
+  color: var(--status-color, var(--accent));
+  flex-shrink: 0;
+}
+.provider-health-status--healthy { --status-color: #22c55e; }
+.provider-health-status--failing { --status-color: #ef4444; }
+.provider-health-status--recovering { --status-color: #f59e0b; }
+.provider-health-status--disabled { --status-color: #6b7280; }
+.provider-health-status--idle { --status-color: var(--accent); }
+
+.provider-health-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--sp-3);
+  margin-bottom: var(--sp-3);
+}
+.provider-health-stat {
+  display: flex; flex-direction: column; gap: 2px;
+  padding: var(--sp-2) var(--sp-3);
+  background: var(--surface-2);
+  border: var(--hairline);
+}
+.provider-health-stat-label {
+  font-family: var(--font-mono); font-size: 10px;
+  letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-3);
+}
+.provider-health-stat-value {
+  font-family: var(--font-mono); font-size: 12px; color: var(--text);
+}
+.provider-health-error-text { color: #f59e0b; }
+
+.provider-health-card-error {
+  font-family: var(--font-mono); font-size: 11px;
+  color: #ef4444; background: rgba(239, 68, 68, 0.08);
+  border-left: 2px solid #ef4444;
+  padding: var(--sp-2) var(--sp-3);
+  margin-bottom: var(--sp-3);
+  overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.provider-health-card-config {
+  display: flex; flex-wrap: wrap; gap: var(--sp-3);
+  padding-top: var(--sp-3); border-top: var(--hairline);
+}
+.provider-toggle-form, .provider-key-form {
+  display: flex; align-items: center; gap: var(--sp-2);
+  margin: 0; flex-wrap: wrap;
+}
+.provider-toggle {
+  display: inline-flex; align-items: center; gap: var(--sp-2);
+  font-family: var(--font-mono); font-size: 12px;
+  color: var(--text-2); cursor: pointer;
+}
+.provider-key-form input[type="password"] {
+  width: 200px; max-width: 100%;
+  background: var(--bg);
+  border: var(--hairline);
+  color: var(--text);
+  padding: 6px 8px;
+  font-family: var(--font-mono); font-size: 12px;
+}
+.provider-health-card-quota {
+  margin-top: var(--sp-3); padding-top: var(--sp-2);
+  border-top: var(--hairline);
+  font-family: var(--font-mono); font-size: 11px; color: var(--text-3);
+}
+
+/* Circuit breaker card. */
+.circuit-breaker-card {
+  background: var(--surface);
+  border: var(--hairline);
+  padding: var(--sp-4);
+  margin-top: var(--sp-4);
+}
+.circuit-breaker-card h3 {
+  margin: 0 0 var(--sp-2);
+  font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.12em;
+  text-transform: uppercase; color: var(--text-2);
+}
+.circuit-breaker-help {
+  font-size: 12px; color: var(--text-3);
+  margin: 0 0 var(--sp-3);
+}
+.circuit-breaker-form { display: flex; flex-direction: column; gap: var(--sp-3); }
+.circuit-breaker-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: var(--sp-3);
+}
+.circuit-breaker-row label { display: flex; flex-direction: column; gap: 4px; }
+.circuit-breaker-row label span {
+  font-family: var(--font-mono); font-size: 10px;
+  letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-3);
+}
+.circuit-breaker-row input[type="number"] {
+  background: var(--bg);
+  border: var(--hairline);
+  color: var(--text);
+  padding: 6px 10px;
+  font-family: var(--font-mono); font-size: 13px;
+}
+
+/* Failure logs filter bar + table. */
+.failure-logs-help {
+  font-size: 12px; color: var(--text-3);
+  margin: 0 0 var(--sp-3);
+}
+.failure-logs-filters {
+  display: flex; flex-wrap: wrap; gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-4);
+  background: var(--surface-2);
+  border: var(--hairline);
+  margin-bottom: var(--sp-3);
+}
+.failure-logs-filters label {
+  display: flex; flex-direction: column; gap: 4px;
+  font-family: var(--font-mono); font-size: 10px;
+  letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-3);
+}
+.failure-logs-filters select {
+  background: var(--bg);
+  border: var(--hairline);
+  color: var(--text);
+  padding: 6px 10px;
+  font-family: var(--font-mono); font-size: 12px;
+  min-width: 140px;
+}
+
+.failure-log-reason {
+  font-family: var(--font-mono); font-size: 11px; color: var(--text-2);
+  max-width: 320px; overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Existing admin-* tag system uses inline class modifiers; keep consistent. */
+.admin-tag--warn { background: rgba(245, 158, 11, 0.12); color: #f59e0b; border-color: rgba(245, 158, 11, 0.35); }
+.admin-tag--ok { background: rgba(34, 197, 94, 0.12); color: #22c55e; border-color: rgba(34, 197, 94, 0.35); }
+.admin-tag--muted { background: var(--surface-2); color: var(--text-3); }
+.admin-tag--danger { background: rgba(239, 68, 68, 0.12); color: #ef4444; border-color: rgba(239, 68, 68, 0.35); }
+
+.admin-empty {
+  font-size: 12px; color: var(--text-3);
+  padding: var(--sp-3) var(--sp-4);
+  background: var(--surface-2);
+  border: var(--hairline);
+  margin: 0 0 var(--sp-3);
+  font-style: italic;
+}

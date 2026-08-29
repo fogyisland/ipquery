@@ -26,7 +26,7 @@ import type { Pool } from 'mysql2/promise';
 import type { IpGeoProvider } from './providers/types';
 import type { ProviderConfigRow } from '../storage/ingestProviders';
 import { touchProviderError, updateProviderConfig } from '../storage/ingestProviders';
-import { processIp, type BackfillSummary } from './unknownIpBackfill';
+import { processIp, disableRateLimitedProviders, type BackfillSummary } from './unknownIpBackfill';
 
 export interface RandomGenerationOptions {
   /** How many random IPs to pick. Default 10 — the user asked for 10. */
@@ -157,30 +157,6 @@ export async function runRandomGeneration(
     providers: workSummary.providers,
     providersDisabled: workSummary.providersDisabled,
   };
-}
-
-/** Disable any provider that returned 429 during this run. Same shape
- *  as the backfill's helper but lives here so callers don't need the
- *  queue to trigger auto-disable. */
-async function disableRateLimitedProviders(
-  pool: Pool,
-  providers: IpGeoProvider[],
-  summary: BackfillSummary,
-): Promise<void> {
-  const liveProviders = new Set(providers.map((p) => p.name));
-  for (const [name, stats] of Object.entries(summary.providers)) {
-    if (stats.rateLimited <= 0) continue;
-    if (!liveProviders.has(name)) continue;
-    if (summary.providersDisabled.includes(name)) continue;
-    try {
-      await updateProviderConfig(pool, name, { enabled: false });
-      await touchProviderError(pool, name, `429 rate limited (${stats.rateLimited}x in random-gen)`);
-      summary.providersDisabled.push(name);
-      console.warn?.(`[random-gen] auto-disabled provider ${name} after ${stats.rateLimited} x 429`);
-    } catch (err) {
-      console.error?.(`[random-gen] failed to disable ${name}:`, err);
-    }
-  }
 }
 
 /** Generate random IPv4s that don't fall in any existing ip_ranges row.
