@@ -746,6 +746,12 @@
           "invalidFieldPath": "Field path format invalid"
         }
       }
+    },
+    "providers": {
+      "title": "Providers",
+      "builtInSection": "Built-in providers",
+      "circuitBreakerSection": "Circuit breaker",
+      "customSection": "Custom providers"
     }
   },
   "home": {
