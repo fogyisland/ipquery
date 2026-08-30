@@ -768,16 +768,22 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
     return reply.redirect('/admin/settings#integrations');
   });
 
-  // ─── Unknown IP backfill ────────────────────────────────────────────────
-  // /admin/unknown-ips shows the queue (pending + recently-processed). The
+  // ─── Ingest console (Strategy Execution surface) ───────────────────────
+  // /admin/ingest shows the queue (pending + recently-processed). The
   // POST handler drains a batch via external IP geo providers + majority
   // vote, then redirects back with a summary flash. Provider keys are read
   // from env at request time so admin can rotate them without a restart.
-  app.get('/admin/unknown-ips', async (req, reply) => {
+  //
+  // PR2 rename: was /admin/unknown-ips; old path is preserved as a 302
+  // redirect (see redirectOld() calls at the bottom of this file).
+  app.get('/admin/ingest', async (req, reply) => {
     const limit = Math.min(Number((req.query as { limit?: string }).limit ?? 50) || 50, 200);
     const q = req.query as { tab?: string; provider?: string; errorCode?: string; mode?: string; since?: string };
-    const tab: 'overview' | 'providers' | 'failure-logs' =
-      q.tab === 'providers' || q.tab === 'failure-logs' ? q.tab : 'overview';
+    // The providers tab moved to /admin/providers in PR1; the union no
+    // longer includes 'providers' so legacy ?tab=providers links fall
+    // through to overview.
+    const tab: 'overview' | 'failure-logs' =
+      q.tab === 'failure-logs' ? q.tab : 'overview';
     // Failure Logs filters — applied only when on the failure-logs tab.
     const errFilter: { providerName?: string; errorCode?: string; mode?: 'auto'|'manual'|'random'; sinceMs?: number; limit?: number } = {};
     if (q.provider) errFilter.providerName = q.provider;
@@ -828,17 +834,17 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
     const backfillCookie = req.cookies['backfill_summary'];
     if (backfillCookie) {
       try { flash.backfillSummary = JSON.parse(backfillCookie); } catch { /* ignore */ }
-      reply.clearCookie('backfill_summary', { path: '/admin/unknown-ips' });
+      reply.clearCookie('backfill_summary', { path: '/admin/ingest' });
     }
     const generateCookie = req.cookies['generate_summary'];
     if (generateCookie) {
       try { flash.generateSummary = JSON.parse(generateCookie); } catch { /* ignore */ }
-      reply.clearCookie('generate_summary', { path: '/admin/unknown-ips' });
+      reply.clearCookie('generate_summary', { path: '/admin/ingest' });
     }
     const queueFlashCookie = req.cookies['queue_flash'];
     if (queueFlashCookie) {
       try { flash.queueFlash = JSON.parse(queueFlashCookie); } catch { /* ignore */ }
-      reply.clearCookie('queue_flash', { path: '/admin/unknown-ips' });
+      reply.clearCookie('queue_flash', { path: '/admin/ingest' });
     }
     // Per-provider health summary. Sort order: failing → disabled →
     // recovering → healthy → idle (operator sees bad providers first).
@@ -1002,7 +1008,7 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
   // filters on auto_reenable_at <= NOW() so this is a no-op for
   // providers whose cooldown hasn't elapsed yet — the cost is one
   // indexed SELECT.
-  app.post<{ Params: { name: string } }>('/admin/unknown-ips/providers/:name', async (req, reply) => {
+  app.post<{ Params: { name: string } }>('/admin/providers/:name', async (req, reply) => {
     if (!verifyCsrfRequest(req)) return reply.code(403).view('errors/csrf.hbs', { layout: 'layouts/public', req });
     const name = req.params.name;
     const body = req.body as { enabled?: string; apiKey?: string };
@@ -1018,24 +1024,24 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
       enabled: body.enabled === 'on',
       apiKey: body.apiKey === undefined ? undefined : (body.apiKey.trim() === '' ? null : body.apiKey.trim()),
     });
-    return reply.redirect('/admin/unknown-ips#providers');
+    return reply.redirect('/admin/providers');
   });
 
   // Bulk queue ops. Both CSRF-gated. The clear action wipes pending
   // rows (preserving processed rows as the audit trail). Export streams
   // the CSV inline with content-disposition so the browser saves a file.
-  app.post('/admin/unknown-ips/queue/clear', async (req, reply) => {
+  app.post('/admin/ingest/queue/clear', async (req, reply) => {
     if (!verifyCsrfRequest(req)) return reply.code(403).view('errors/csrf.hbs', { layout: 'layouts/public', req });
     req.auditAction = { action: 'unknown_ips.queue.clear', targetType: 'unknown_ip_queue' };
     const removed = await clearPending(app.pool);
     reply.setCookie('queue_flash', JSON.stringify({ kind: 'cleared', removed }), {
-      path: '/admin/unknown-ips',
+      path: '/admin/ingest',
       maxAge: 30, httpOnly: true, sameSite: 'lax',
     });
-    return reply.redirect('/admin/unknown-ips#overview');
+    return reply.redirect('/admin/ingest#overview');
   });
 
-  app.get('/admin/unknown-ips/queue/export', async (req, reply) => {
+  app.get('/admin/ingest/queue/export', async (req, reply) => {
     // GET so the admin can right-click → "save link as" without JS.
     // CSRF not required: this is a read-only data export, not a state
     // change. The whole /admin/* tree already gates on session+admin.
@@ -1048,7 +1054,7 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
 
   // Circuit-breaker config save. Persists to settings (cb_*) and
   // refreshes the in-memory cache used by the next backfill run.
-  app.post('/admin/unknown-ips/circuit-breaker', async (req, reply) => {
+  app.post('/admin/providers/circuit-breaker', async (req, reply) => {
     if (!verifyCsrfRequest(req)) return reply.code(403).view('errors/csrf.hbs', { layout: 'layouts/public', req });
     const body = req.body as { enabled?: string; threshold?: string; window?: string; cooldown?: string };
     req.auditAction = {
@@ -1067,16 +1073,16 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
       windowMinutes: Number(body.window),
       cooldownMinutes: Number(body.cooldown),
     });
-    return reply.redirect('/admin/unknown-ips#providers');
+    return reply.redirect('/admin/providers');
   });
 
   // Re-queue a single IP from the Failure Logs tab. Insert-or-increment
   // (idempotent) so re-clicking doesn't double-count.
-  app.post('/admin/unknown-ips/failure-logs/requeue', async (req, reply) => {
+  app.post('/admin/ingest/failure-logs/requeue', async (req, reply) => {
     if (!verifyCsrfRequest(req)) return reply.code(403).view('errors/csrf.hbs', { layout: 'layouts/public', req });
     const body = req.body as { ip?: string };
     const ipText = (body.ip ?? '').trim();
-    if (!ipText) return reply.redirect('/admin/unknown-ips#failure-logs');
+    if (!ipText) return reply.redirect('/admin/ingest#failure-logs');
     req.auditAction = {
       action: 'unknown_ips.failure_logs.requeue',
       targetType: 'unknown_ip_queue',
@@ -1087,18 +1093,18 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
     const parsed = parseIp(ipText);
     if (!parsed) {
       reply.setCookie('queue_flash', JSON.stringify({ kind: 'invalid_ip', ip: ipText }), {
-        path: '/admin/unknown-ips', maxAge: 30, httpOnly: true, sameSite: 'lax',
+        path: '/admin/ingest', maxAge: 30, httpOnly: true, sameSite: 'lax',
       });
-      return reply.redirect('/admin/unknown-ips#failure-logs');
+      return reply.redirect('/admin/ingest#failure-logs');
     }
     // parseIp returns a Buffer; insertOrIncrement expects one too. The
     // static types collide because parseIp's return is structurally
     // ArrayBufferLike in this TS version; cast at the boundary.
     await insertOrIncrement(app.pool, Buffer.from(parsed.buffer), ipText, { source: 'manual_submit' });
-    return reply.redirect('/admin/unknown-ips#failure-logs');
+    return reply.redirect('/admin/ingest#failure-logs');
   });
 
-  app.get('/admin/unknown-ips/backfill/confirm', async (req, reply) => {
+  app.get('/admin/ingest/backfill/confirm', async (req, reply) => {
     return reply.view('admin/unknown-ips-backfill-confirm.hbs', {
       layout: 'layouts/admin',
       title: req.t('admin.unknownIps.backfill.confirm.title'),
@@ -1106,7 +1112,7 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
     });
   });
 
-  app.post('/admin/unknown-ips/backfill', async (req, reply) => {
+  app.post('/admin/ingest/backfill/confirm', async (req, reply) => {
     if (!verifyCsrfRequest(req)) return reply.code(403).view('errors/csrf.hbs', { layout: 'layouts/public', req });
     req.auditAction = { action: 'unknown_ips.backfill', targetType: 'unknown_ip_queue' };
 
@@ -1121,19 +1127,19 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
       mode: 'auto',
       logger: { log: () => {}, warn: (msg) => app.log.warn({ msg }, 'backfill'), error: (msg) => app.log.error({ msg }, 'backfill') },
     });
-    // Persist per-provider counts so the unknown-ips dashboard can show
+    // Persist per-provider counts so the ingest dashboard can show
     // last-run stats across page refreshes (the flash cookie is gone
     // after one render). Same shape as BackfillSummary.providers.
     await saveLastBackfillProviderStats(app.pool, summary.providers, new Date());
     // Redirect back with summary in flash cookie. Cookie is HTTP-only and
     // max-age=30s — admin refreshes the page and sees the banner once.
     reply.setCookie('backfill_summary', JSON.stringify(summary), {
-      path: '/admin/unknown-ips',
+      path: '/admin/ingest',
       maxAge: 30,
       httpOnly: true,
       sameSite: 'lax',
     });
-    return reply.redirect('/admin/unknown-ips#overview');
+    return reply.redirect('/admin/ingest#overview');
   });
 
   // "Generate 10 random IPs and ingest them". Used to validate the
@@ -1141,7 +1147,7 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
   // to trickle in. Auto-disables providers that return HTTP 429 during
   // the run so we don't keep hammering a throttled provider. Target:
   // 10 IPs in 10 minutes (per-IP fan-out ~8s serial = ~80s for 10).
-  app.post('/admin/unknown-ips/generate', async (req, reply) => {
+  app.post('/admin/ingest/generate', async (req, reply) => {
     if (!verifyCsrfRequest(req)) return reply.code(403).view('errors/csrf.hbs', { layout: 'layouts/public', req });
     req.auditAction = { action: 'unknown_ips.generate', targetType: 'unknown_ip_queue' };
 
@@ -1160,12 +1166,12 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
     // dashboard reflects this run even after the flash cookie expires.
     await saveLastBackfillProviderStats(app.pool, summary.providers, new Date());
     reply.setCookie('generate_summary', JSON.stringify(summary), {
-      path: '/admin/unknown-ips',
+      path: '/admin/ingest',
       maxAge: 60,
       httpOnly: true,
       sameSite: 'lax',
     });
-    return reply.redirect('/admin/unknown-ips#overview');
+    return reply.redirect('/admin/ingest#overview');
   });
 
   // Continuous runner toggle + manual kick. The runner is a separate
@@ -1173,7 +1179,7 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
   // every 60s when the persisted `random_gen_enabled` setting is '1'.
   // POST accepts `enabled=on|off` to flip the setting (and start/stop
   // the timer immediately) and `kick=1` to run an out-of-band tick.
-  app.post('/admin/unknown-ips/generate/continuous', async (req, reply) => {
+  app.post('/admin/ingest/generate/continuous', async (req, reply) => {
     if (!verifyCsrfRequest(req)) return reply.code(403).view('errors/csrf.hbs', { layout: 'layouts/public', req });
     req.auditAction = { action: 'unknown_ips.generate.continuous', targetType: 'settings' };
     const body = req.body as { enabled?: string; kick?: string };
@@ -1188,14 +1194,14 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
       await setSetting(app.pool, 'random_gen_enabled', body.enabled === 'on' ? '1' : '0');
       await app.randomGenRunner.syncFromSettings();
     }
-    return reply.redirect('/admin/unknown-ips#overview');
+    return reply.redirect('/admin/ingest#overview');
   });
 
   // Scheduler config (interval / batch / cooldown / CB linkage). The
   // values are persisted to the `random_gen_*` settings; saveRandomGenConfig
   // clamps each one to a safe range. If `intervalSec` changed, the runner
   // needs to restart its setInterval — syncFromSettings handles that.
-  app.post('/admin/unknown-ips/scheduler', async (req, reply) => {
+  app.post('/admin/ingest/scheduler', async (req, reply) => {
     if (!verifyCsrfRequest(req)) return reply.code(403).view('errors/csrf.hbs', { layout: 'layouts/public', req });
     const body = req.body as { intervalSec?: string; batchSize?: string; cooldownMinutes?: string; cbLinkage?: string };
     const intervalSec = Number(body.intervalSec);
@@ -1214,7 +1220,7 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
       cbLinkage,
     });
     await app.randomGenRunner.syncFromSettings();
-    return reply.redirect('/admin/unknown-ips#overview');
+    return reply.redirect('/admin/ingest#overview');
   });
 
   // ─── Custom HTTP providers ─────────────────────────────────────────────
@@ -1388,41 +1394,10 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
     }));
   };
 
-  const renderCustomProvidersPage = async (
-    reply: { view: (tpl: string, ctx: Record<string, unknown>) => unknown },
-    req: { t: (k: string, v?: Record<string, string|number>) => string; csrfToken: string },
-    flash?: Record<string, unknown>,
-  ) => {
-    const customProviders = await enrichCustomProviders();
-    return reply.view('admin/custom-providers.hbs', {
-      layout: 'layouts/admin',
-      title: req.t('admin.unknownIps.customProviders.title'),
-      customProviders,
-      flash: flash ?? {},
-      csrfToken: req.csrfToken,
-      req,
-    });
-  };
-
-  app.get('/admin/unknown-ips/providers/custom', async (req, reply) => {
-    // Consume flash cookie if present; mirrors the queue_flash pattern.
-    let flash: Record<string, unknown> = {};
-    const cookie = req.cookies['custom_providers_flash'];
-    if (cookie) {
-      try { flash = JSON.parse(cookie); } catch { /* ignore */ }
-      reply.clearCookie('custom_providers_flash', { path: '/admin/unknown-ips/providers/custom' });
-    }
-    return renderCustomProvidersPage(
-      reply as unknown as { view: (tpl: string, ctx: Record<string, unknown>) => unknown },
-      req as unknown as { t: (k: string, v?: Record<string, string|number>) => string; csrfToken: string },
-      flash,
-    );
-  });
-
   // /admin/providers — consolidated Strategy Definition surface. Renders
   // built-in health cards + circuit-breaker form + custom-provider CRUD
   // on one URL. Pulled out of /admin/unknown-ips as part of the
-  // strategy-pattern UI refactor; PR2 will redirect the old URLs here.
+  // strategy-pattern UI refactor.
   app.get('/admin/providers', async (req, reply) => {
     const [providerHealth, customProviders, circuitBreaker] = await Promise.all([
       enrichBuiltInHealth(req as unknown as ReqForHealth),
@@ -1451,7 +1426,7 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
     });
   });
 
-  app.post('/admin/unknown-ips/providers/custom', async (req, reply) => {
+  app.post('/admin/providers/custom', async (req, reply) => {
     if (!verifyCsrfRequest(req)) return reply.code(403).view('errors/csrf.hbs', { layout: 'layouts/public', req });
     const body = req.body as Record<string, string>;
     const name = String(body.name ?? '').trim().toLowerCase();
@@ -1482,12 +1457,26 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
         targetId: name,
         metadata: { errors },
       };
+      // Render the providers page with an inline error banner — the old
+      // custom-providers page used to be its own URL, but with the
+      // consolidated /admin/providers surface we render the same view
+      // with the flash message so the admin sees context for the error.
+      const [providerHealth, customProviders, circuitBreaker] = await Promise.all([
+        enrichBuiltInHealth(req as unknown as ReqForHealth),
+        enrichCustomProviders(),
+        getCircuitBreakerConfig(app.pool),
+      ]);
       const flash = { kind: 'error', message: req.t(`admin.unknownIps.customProviders.errors.${errors[0]}`) };
-      return renderCustomProvidersPage(
-        reply as unknown as { view: (tpl: string, ctx: Record<string, unknown>) => unknown },
-        req as unknown as { t: (k: string, v?: Record<string, string|number>) => string; csrfToken: string },
+      return reply.view('admin/providers.hbs', {
+        layout: 'layouts/admin',
+        title: req.t('admin.providers.title'),
+        providerHealth,
+        customProviders,
+        circuitBreaker,
         flash,
-      );
+        csrfToken: req.csrfToken,
+        req,
+      });
     }
     req.auditAction = {
       action: 'unknown_ips.custom_providers.create',
@@ -1508,13 +1497,13 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
       enabled: body.enabled === 'on',
     });
     reply.setCookie('custom_providers_flash', JSON.stringify({ kind: 'saved', name }), {
-      path: '/admin/unknown-ips/providers/custom',
+      path: '/admin/providers',
       maxAge: 30, httpOnly: true, sameSite: 'lax',
     });
-    return reply.redirect('/admin/unknown-ips/providers/custom');
+    return reply.redirect('/admin/providers');
   });
 
-  app.post<{ Params: { name: string } }>('/admin/unknown-ips/providers/custom/:name/delete', async (req, reply) => {
+  app.post<{ Params: { name: string } }>('/admin/providers/custom/:name/delete', async (req, reply) => {
     if (!verifyCsrfRequest(req)) return reply.code(403).view('errors/csrf.hbs', { layout: 'layouts/public', req });
     const name = req.params.name;
     req.auditAction = {
@@ -1524,13 +1513,13 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
     };
     const removed = await deleteCustomProvider(app.pool, name);
     reply.setCookie('custom_providers_flash', JSON.stringify({ kind: 'deleted', name, removed }), {
-      path: '/admin/unknown-ips/providers/custom',
+      path: '/admin/providers',
       maxAge: 30, httpOnly: true, sameSite: 'lax',
     });
-    return reply.redirect('/admin/unknown-ips/providers/custom');
+    return reply.redirect('/admin/providers');
   });
 
-  app.post<{ Params: { name: string } }>('/admin/unknown-ips/providers/custom/:name/test', async (req, reply) => {
+  app.post<{ Params: { name: string } }>('/admin/providers/custom/:name/test', async (req, reply) => {
     if (!verifyCsrfRequest(req)) return reply.code(403).view('errors/csrf.hbs', { layout: 'layouts/public', req });
     const name = req.params.name;
     const body = req.body as { ip?: string };
@@ -1583,4 +1572,40 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
       return reply.code(500).send({ ok: false, error: 'lookup_threw', raw: msg });
     }
   });
+
+  // ─── Back-compat redirects (PR2) ──────────────────────────────────────
+  // The /admin/unknown-ips URL tree moved to /admin/ingest/* (Strategy
+  // Execution surface) and /admin/providers/* (Strategy Definition
+  // surface). External links / bookmarks / automation call sites
+  // pointing at the old paths continue to work via 302 redirects.
+  const redirectOld = (
+    from: string,
+    to: string,
+    method: 'GET' | 'POST' = 'GET',
+  ) => app.route({
+    method,
+    url: from,
+    handler: (_req, reply) => reply.redirect(to, 302),
+  });
+
+  // Strategy Execution surface (moved to /admin/ingest/*):
+  redirectOld('/admin/unknown-ips', '/admin/ingest');
+  redirectOld('/admin/unknown-ips/queue/export', '/admin/ingest/queue/export');
+  redirectOld('/admin/unknown-ips/queue/clear', '/admin/ingest/queue/clear', 'POST');
+  redirectOld('/admin/unknown-ips/generate', '/admin/ingest/generate', 'POST');
+  redirectOld('/admin/unknown-ips/generate/continuous', '/admin/ingest/generate/continuous', 'POST');
+  redirectOld('/admin/unknown-ips/scheduler', '/admin/ingest/scheduler', 'POST');
+  redirectOld('/admin/unknown-ips/failure-logs/requeue', '/admin/ingest/failure-logs/requeue', 'POST');
+  redirectOld('/admin/unknown-ips/backfill/confirm', '/admin/ingest/backfill/confirm');
+
+  // Strategy Definition surface (moved to /admin/providers/*):
+  redirectOld('/admin/unknown-ips/providers/custom', '/admin/providers#custom');
+  redirectOld('/admin/unknown-ips/providers/custom/:name/delete', '/admin/providers/custom/:name/delete', 'POST');
+  redirectOld('/admin/unknown-ips/providers/custom/:name/test', '/admin/providers/custom/:name/test', 'POST');
+  redirectOld('/admin/unknown-ips/providers/:name', '/admin/providers/:name', 'POST');
+  redirectOld('/admin/unknown-ips/circuit-breaker', '/admin/providers/circuit-breaker', 'POST');
+
+  // Legacy one-step backfill path (UI is preview-first; this is a
+  // redirect for any cron / external caller still hitting the old URL).
+  redirectOld('/admin/unknown-ips/backfill', '/admin/ingest/backfill/confirm', 'POST');
 }

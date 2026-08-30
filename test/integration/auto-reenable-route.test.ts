@@ -36,9 +36,9 @@ beforeEach(async () => {
 });
 
 async function csrfPair(): Promise<{ cookie: string; token: string }> {
-  // GET the unknown-ips page to obtain fresh csrf cookies. Same pattern
-  // as admin.users.test.ts.
-  const r = await request(app.server).get('/admin/unknown-ips').set('Cookie', 'sid=' + adminSid);
+  // GET the ingest page to obtain fresh csrf cookies. Same pattern
+  // as admin.users.test.ts. PR2: was /admin/unknown-ips.
+  const r = await request(app.server).get('/admin/ingest').set('Cookie', 'sid=' + adminSid);
   const cookies = r.headers['set-cookie'] as string[];
   const csrfLine = cookies.find((c) => c.startsWith('csrf='))!.split(';')[0]!;
   const issuedLine = cookies.find((c) => c.startsWith('csrf_issued='))!.split(';')[0]!;
@@ -46,7 +46,7 @@ async function csrfPair(): Promise<{ cookie: string; token: string }> {
   return { cookie: `${csrfLine}; ${issuedLine}`, token: tokenMatch[1]! };
 }
 
-describe('POST /admin/unknown-ips/providers/:name — manual toggle wins over reaper', () => {
+describe('POST /admin/providers/:name — manual toggle wins over reaper', () => {
   it('admin disables a provider; the row reflects enabled=0 (reap was a no-op)', async () => {
     // Sanity: provider starts enabled.
     let configs = await listProviderConfigs(td.pool);
@@ -55,12 +55,12 @@ describe('POST /admin/unknown-ips/providers/:name — manual toggle wins over re
     const { cookie, token } = await csrfPair();
     // POST the toggle form: enabled=off means unchecked checkbox.
     const r = await request(app.server)
-      .post('/admin/unknown-ips/providers/ip-api')
+      .post('/admin/providers/ip-api')
       .set('Cookie', 'sid=' + adminSid + '; ' + cookie)
       .type('form')
       .send({ csrf: token, enabled: 'off', apiKey: '' });
-    expect(r.status).toBe(302); // redirect back to /admin/unknown-ips#providers
-    expect(r.headers.location).toMatch(/\/admin\/unknown-ips/);
+    expect(r.status).toBe(302); // redirect back to /admin/providers
+    expect(r.headers.location).toMatch(/\/admin\/providers/);
 
     // The provider should now be disabled.
     configs = await listProviderConfigs(td.pool);
@@ -80,7 +80,7 @@ describe('POST /admin/unknown-ips/providers/:name — manual toggle wins over re
 
     const { cookie, token } = await csrfPair();
     const r = await request(app.server)
-      .post('/admin/unknown-ips/providers/ipinfo')
+      .post('/admin/providers/ipinfo')
       .set('Cookie', 'sid=' + adminSid + '; ' + cookie)
       .type('form')
       .send({ csrf: token, enabled: 'on', apiKey: '' });
@@ -111,7 +111,7 @@ describe('POST /admin/unknown-ips/providers/:name — manual toggle wins over re
 
     const { cookie, token } = await csrfPair();
     const r = await request(app.server)
-      .post('/admin/unknown-ips/providers/iplocate')
+      .post('/admin/providers/iplocate')
       .set('Cookie', 'sid=' + adminSid + '; ' + cookie)
       .type('form')
       .send({ csrf: token, enabled: 'off', apiKey: '' });

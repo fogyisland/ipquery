@@ -47,7 +47,8 @@
       "auditLog": "操作审计",
       "settings": "设置",
       "ingest": "API 入库",
-      "customProviders": "自定义 Provider"
+      "customProviders": "自定义 Provider",
+      "providers": "数据源"
     },
     "logout": "登出",
     "history": "查询历史",
