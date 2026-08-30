@@ -40,7 +40,7 @@ beforeEach(async () => {
   }
 });
 
-describe('GET /admin/unknown-ips — provider health card', () => {
+describe('GET /admin/providers — provider health card', () => {
   it('renders 1h/24h/7d window stats + today quota pill + 429 detail block when seeded', async () => {
     // Seed counter rows: ip-api has 100 calls with 12 of them being 429s.
     // Per-minute quota is 45 for ip-api, so daily cap = 45*60*24 = 64,800.
@@ -62,7 +62,7 @@ describe('GET /admin/unknown-ips — provider health card', () => {
       rawResponse: 'throttled by upstream',
     });
 
-    const r = await request(app.server).get('/admin/unknown-ips?tab=providers').set('Cookie', 'sid=' + adminSid);
+    const r = await request(app.server).get('/admin/providers').set('Cookie', 'sid=' + adminSid);
     expect(r.status).toBe(200);
     // Window labels rendered (Chinese locale is the default).
     expect(r.text).toMatch(/1 小时/);
@@ -90,7 +90,7 @@ describe('GET /admin/unknown-ips — provider health card', () => {
       autoDisabledReason: '429 rate limited',
     });
 
-    const r = await request(app.server).get('/admin/unknown-ips?tab=providers').set('Cookie', 'sid=' + adminSid);
+    const r = await request(app.server).get('/admin/providers').set('Cookie', 'sid=' + adminSid);
     expect(r.status).toBe(200);
     expect(r.text).toMatch(/\d+ 分钟后自动恢复/);
   });
@@ -103,7 +103,7 @@ describe('GET /admin/unknown-ips — provider health card', () => {
       enabled: true,
       autoReenableAt: fiveMinFromNow,
     });
-    const r = await request(app.server).get('/admin/unknown-ips?tab=providers').set('Cookie', 'sid=' + adminSid);
+    const r = await request(app.server).get('/admin/providers').set('Cookie', 'sid=' + adminSid);
     expect(r.status).toBe(200);
     expect(r.text).not.toMatch(/分钟后自动恢复/);
   });
@@ -116,7 +116,7 @@ describe('GET /admin/unknown-ips — provider health card', () => {
           calls_network_err, calls_other_err, last_called_at)
        VALUES ('ip-api', CURDATE(), 50, 0, 0, 0, 0, NOW(3))`,
     );
-    const r = await request(app.server).get('/admin/unknown-ips?tab=providers').set('Cookie', 'sid=' + adminSid);
+    const r = await request(app.server).get('/admin/providers').set('Cookie', 'sid=' + adminSid);
     expect(r.status).toBe(200);
     expect(r.text).not.toMatch(/<details class="provider-last-error">/);
   });

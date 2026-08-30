@@ -1,18 +1,19 @@
 {{!-- SPDX-License-Identifier: MIT --}}
 {{!--
-  /admin/unknown-ips — three-tab ingest console:
-    #overview   → runner status + queue preview + last-run aggregate
-    #providers  → per-provider health cards sorted failing-first
-    #failure-logs → filterable failure audit + re-queue action
+  /admin/ingest — two-tab ingest console (Strategy Execution surface):
+    #overview      → runner status + queue preview + last-run aggregate
+    #failure-logs  → filterable failure audit + re-queue action
+  The #providers pane was moved to /admin/providers in PR1 (Strategy
+  Definition surface). PR2 redirects /admin/unknown-ips/* to
+  /admin/ingest/* and /admin/providers/* for back-compat.
   Tab state lives in the URL hash so reload + bookmark preserve the
-  active tab. Inline <script> at the bottom boots the hashchange handler.
+  active tab.
 --}}
 
 <h2>{{@root.req.t 'admin.unknownIps.title'}}</h2>
 
 <nav class="settings-tabs-nav" aria-label="Ingest sections">
   <a class="settings-tab-link{{#if (eq activeTab 'overview')}} is-active{{/if}}" href="#overview" data-tab="overview">{{@root.req.t 'admin.unknownIps.tabs.overview'}}</a>
-  <a class="settings-tab-link{{#if (eq activeTab 'providers')}} is-active{{/if}}" href="#providers" data-tab="providers">{{@root.req.t 'admin.unknownIps.tabs.providers'}}</a>
   <a class="settings-tab-link{{#if (eq activeTab 'failure-logs')}} is-active{{/if}}" href="#failure-logs" data-tab="failure-logs">{{@root.req.t 'admin.unknownIps.tabs.failureLogs'}}</a>
 </nav>
 
@@ -99,10 +100,10 @@
       </div>
     </div>
     <div class="runner-card-actions">
-      <form method="GET" action="/admin/unknown-ips/backfill/confirm" style="display:inline">
+      <form method="GET" action="/admin/ingest/backfill/confirm" style="display:inline">
         <button type="submit" class="btn-primary">{{@root.req.t 'admin.unknownIps.runner.backfillNow'}}</button>
       </form>
-      <form method="POST" action="/admin/unknown-ips/generate" style="display:inline"
+      <form method="POST" action="/admin/ingest/generate" style="display:inline"
             onsubmit="return confirm('{{@root.req.t 'admin.unknownIps.generate.confirm'}}')">
         <input type="hidden" name="csrf" value="{{csrfToken}}">
         <input type="hidden" name="count" value="10">
@@ -111,12 +112,12 @@
     </div>
     <div class="runner-card-queue">
       <span class="runner-card-queue-label">{{@root.req.t 'admin.unknownIps.runner.queueActions'}}</span>
-      <form method="POST" action="/admin/unknown-ips/queue/clear" style="display:inline"
+      <form method="POST" action="/admin/ingest/queue/clear" style="display:inline"
             onsubmit="return confirm('确定清空所有待回灌 IP?已入库的 IP 不会被删除。')">
         <input type="hidden" name="csrf" value="{{csrfToken}}">
         <button type="submit" class="btn-secondary" {{#unless stats.pending}}disabled{{/unless}}>{{@root.req.t 'admin.unknownIps.runner.clearQueue'}}</button>
       </form>
-      <a class="btn-secondary" href="/admin/unknown-ips/queue/export">{{@root.req.t 'admin.unknownIps.runner.exportQueue'}}</a>
+      <a class="btn-secondary" href="/admin/ingest/queue/export">{{@root.req.t 'admin.unknownIps.runner.exportQueue'}}</a>
     </div>
   </div>
 
@@ -151,9 +152,9 @@
     {{/if}}
 
     {{!-- Config form — interval / batch / target range / CB linkage.
-         Saved via POST /admin/unknown-ips/scheduler which clamps to safe
+         Saved via POST /admin/ingest/scheduler which clamps to safe
          ranges and calls syncFromSettings to restart the timer. --}}
-    <form method="POST" action="/admin/unknown-ips/scheduler" class="scheduler-card-form">
+    <form method="POST" action="/admin/ingest/scheduler" class="scheduler-card-form">
       <input type="hidden" name="csrf" value="{{csrfToken}}">
       <div class="scheduler-card-grid">
         <label>
@@ -193,7 +194,7 @@
     {{!-- Kick form lives outside the config form so its submit doesn't
          accidentally POST the scheduler form fields. The disabled
          attribute mirrors the config form's button via the JS below. --}}
-    <form id="scheduler-kick-form" method="POST" action="/admin/unknown-ips/generate/continuous" style="display:inline"
+    <form id="scheduler-kick-form" method="POST" action="/admin/ingest/generate/continuous" style="display:inline"
           onsubmit="return confirm('{{@root.req.t 'admin.unknownIps.scheduler.runNowConfirm'}}')">
       <input type="hidden" name="csrf" value="{{csrfToken}}">
       <input type="hidden" name="kick" value="1">
@@ -201,7 +202,7 @@
 
     {{!-- Continuous toggle + metrics row --}}
     <div class="scheduler-card-stats">
-      <form method="POST" action="/admin/unknown-ips/generate/continuous" style="display:inline">
+      <form method="POST" action="/admin/ingest/generate/continuous" style="display:inline">
         <input type="hidden" name="csrf" value="{{csrfToken}}">
         <input type="hidden" name="enabled" value="{{#if randomGenState.enabled}}off{{else}}on{{/if}}">
         <button type="submit" class="btn-{{#if randomGenState.enabled}}secondary{{else}}primary{{/if}}">
@@ -247,7 +248,7 @@
 
   {{!-- Mode filter — narrows the recent table to a single ingest flow.
        URL-driven so it survives reload + bookmark; default is "all". --}}
-  <form method="GET" action="/admin/unknown-ips" class="probe-log-filters">
+  <form method="GET" action="/admin/ingest" class="probe-log-filters">
     <input type="hidden" name="tab" value="overview">
     <label>
       <span>{{@root.req.t 'admin.unknownIps.failureLogs.filterMode'}}</span>
@@ -412,160 +413,6 @@
 </div>
 
 {{!-- ════════════════════════════════════════════════════════════════════
-     PROVIDERS TAB — health card grid + per-provider config + CB
-     ════════════════════════════════════════════════════════════════════ --}}
-<div class="settings-tab-pane{{#if (eq activeTab 'providers')}} is-active{{/if}}" id="pane-providers" data-tab="providers">
-
-  {{#each providerHealth}}
-  <div class="provider-health-card provider-health-card--{{this.status}}">
-    <div class="provider-health-card-head">
-      <div>
-        <span class="provider-health-card-name">{{this.displayName}}</span>
-        <code class="provider-health-card-slug">{{this.name}}</code>
-      </div>
-      <span class="provider-health-status provider-health-status--{{this.status}}">
-        {{#if (eq this.status 'healthy')}}{{@root.req.t 'admin.unknownIps.healthCard.statusOk'}}
-        {{else if (eq this.status 'failing')}}{{@root.req.t 'admin.unknownIps.healthCard.statusFailing'}}
-        {{else if (eq this.status 'recovering')}}{{@root.req.t 'admin.unknownIps.healthCard.statusRecovering'}}
-        {{else if (eq this.status 'disabled')}}{{@root.req.t 'admin.unknownIps.healthCard.statusDisabled'}}
-        {{else}}{{@root.req.t 'admin.unknownIps.healthCard.statusIdle'}}{{/if}}
-      </span>
-    </div>
-
-    <div class="provider-health-card-grid">
-      <div class="provider-health-stat">
-        <span class="provider-health-stat-label">{{@root.req.t 'admin.unknownIps.healthCard.lastSuccess'}}</span>
-        <span class="provider-health-stat-value">
-          {{#if this.lastUsedAt}}<span title="{{formatDate this.lastUsedAt}}">{{formatRelative this.lastUsedAt}}</span>
-          {{else}}<span class="admin-tag admin-tag--muted">{{@root.req.t 'admin.unknownIps.healthCard.noSuccess'}}</span>{{/if}}
-        </span>
-      </div>
-      <div class="provider-health-stat">
-        <span class="provider-health-stat-label">{{@root.req.t 'admin.unknownIps.healthCard.lastError'}}</span>
-        <span class="provider-health-stat-value">
-          {{#if this.lastErrorAt}}<span title="{{this.lastErrorReason}}" class="provider-health-error-text">{{formatRelative this.lastErrorAt}}</span>
-          {{else}}<span class="admin-tag admin-tag--ok">{{@root.req.t 'admin.unknownIps.healthCard.noError'}}</span>{{/if}}
-        </span>
-      </div>
-      {{#if this.lastStats}}
-      <div class="provider-health-stat">
-        <span class="provider-health-stat-label">{{@root.req.t 'admin.unknownIps.healthCard.lastRun'}}</span>
-        <span class="provider-health-stat-value">
-          {{@root.req.t 'admin.unknownIps.healthCard.successCount'}}: <strong>{{this.lastStats.ok}}</strong>
-          · {{@root.req.t 'admin.unknownIps.healthCard.failedCount'}}: <strong>{{this.lastStats.failed}}</strong>
-          {{#if this.lastStats.rateLimited}}
-            · {{@root.req.t 'admin.unknownIps.healthCard.rateLimitedCount'}}: <strong>{{this.lastStats.rateLimited}}</strong>
-          {{/if}}
-          · {{@root.req.t 'admin.unknownIps.healthCard.abstainedCount'}}: <strong>{{this.lastStats.abstained}}</strong>
-        </span>
-      </div>
-      {{/if}}
-    </div>
-
-    {{#if this.lastErrorReason}}
-    <div class="provider-health-card-error" title="{{this.lastErrorReason}}">{{this.lastErrorReason}}</div>
-    {{/if}}
-
-    {{!-- 1h / 24h / 7d windowed call / 429 / failure rates. Pulled from
-         the cached aggregateProviderHealthAll, zipped by provider name
-         in the route handler. --}}
-    <div class="provider-health-window">
-      <div class="provider-health-window-cell">
-        <div class="provider-health-window-label">{{@root.req.t 'admin.unknownIps.healthCard.window1h'}}</div>
-        <div class="provider-health-window-value">{{this.health1h.calls}} {{@root.req.t 'admin.unknownIps.healthCard.calls'}}</div>
-        <div class="provider-health-window-value">{{this.health1h.errors429}} {{@root.req.t 'admin.unknownIps.healthCard.err429'}}</div>
-        <div class="provider-health-window-value">{{this.health1h.failurePct}}% {{@root.req.t 'admin.unknownIps.healthCard.failurePct'}}</div>
-      </div>
-      <div class="provider-health-window-cell">
-        <div class="provider-health-window-label">{{@root.req.t 'admin.unknownIps.healthCard.window24h'}}</div>
-        <div class="provider-health-window-value">{{this.health24h.calls}} {{@root.req.t 'admin.unknownIps.healthCard.calls'}}</div>
-        <div class="provider-health-window-value">{{this.health24h.errors429}} {{@root.req.t 'admin.unknownIps.healthCard.err429'}}</div>
-        <div class="provider-health-window-value">{{this.health24h.failurePct}}% {{@root.req.t 'admin.unknownIps.healthCard.failurePct'}}</div>
-      </div>
-      <div class="provider-health-window-cell">
-        <div class="provider-health-window-label">{{@root.req.t 'admin.unknownIps.healthCard.window7d'}}</div>
-        <div class="provider-health-window-value">{{this.health7d.calls}} {{@root.req.t 'admin.unknownIps.healthCard.calls'}}</div>
-        <div class="provider-health-window-value">{{this.health7d.errors429}} {{@root.req.t 'admin.unknownIps.healthCard.err429'}}</div>
-        <div class="provider-health-window-value">{{this.health7d.failurePct}}% {{@root.req.t 'admin.unknownIps.healthCard.failurePct'}}</div>
-      </div>
-    </div>
-
-    {{!-- Today's quota pill — always rendered. Kind (success / warning
-         / danger / muted) is pre-resolved in the route so the template
-         doesn't need a `gt` helper. Text is pre-localized for the same
-         reason. --}}
-    {{> pill kind=this.quotaKind text=this.quotaTodayText}}
-
-    {{!-- Auto-re-enable countdown — only when the provider was
-         disabled by the CB AND has a future auto_reenable_at. Both
-         text + kind pre-resolved in route. --}}
-    {{#if this.autoReenableAt}}{{#unless this.enabled}}
-    {{> pill kind=this.reenableKind text=this.reenableText}}
-    {{/unless}}{{/if}}
-
-    {{!-- Most recent 429 detail — collapsible pre block. rawResponse
-         comes from provider_error_log; truncated to 512 chars at write
-         time. --}}
-    {{#if this.lastError}}
-    <details class="provider-last-error">
-      <summary>{{@root.req.t 'admin.unknownIps.healthCard.last429'}}</summary>
-      <pre>{{this.lastError.rawResponse}}</pre>
-      <small>{{formatDate this.lastError.ts}} — {{this.lastError.ipText}}</small>
-    </details>
-    {{/if}}
-
-    <div class="provider-health-card-config">
-      <form method="POST" action="/admin/unknown-ips/providers/{{this.name}}" class="provider-toggle-form">
-        <input type="hidden" name="csrf" value="{{csrfToken}}">
-        <input type="hidden" name="apiKey" value="">
-        <label class="provider-toggle">
-          <input type="checkbox" name="enabled" value="on" {{#if this.enabled}}checked{{/if}}>
-          <span>{{#if this.enabled}}{{@root.req.t 'admin.unknownIps.providers.enabled.on'}}{{else}}{{@root.req.t 'admin.unknownIps.providers.enabled.off'}}{{/if}}</span>
-        </label>
-        <button type="submit" class="button">{{@root.req.t 'admin.unknownIps.providers.save'}}</button>
-      </form>
-      <form method="POST" action="/admin/unknown-ips/providers/{{this.name}}" class="provider-key-form">
-        <input type="hidden" name="csrf" value="{{csrfToken}}">
-        <input type="hidden" name="enabled" value="{{#if this.enabled}}on{{else}}off{{/if}}">
-        <input type="password" name="apiKey" placeholder="{{@root.req.t 'admin.unknownIps.providers.apiKeyPlaceholder'}}" autocomplete="off">
-        <button type="submit" class="button">{{@root.req.t 'admin.unknownIps.providers.save'}}</button>
-      </form>
-    </div>
-
-    <div class="provider-health-card-quota">{{this.freeQuota}}</div>
-  </div>
-  {{/each}}
-
-  {{!-- Circuit breaker config --}}
-  <div class="circuit-breaker-card">
-    <h3>{{@root.req.t 'admin.unknownIps.circuitBreaker.title'}}</h3>
-    <p class="circuit-breaker-help">{{@root.req.t 'admin.unknownIps.circuitBreaker.help'}}</p>
-    <form method="POST" action="/admin/unknown-ips/circuit-breaker" class="circuit-breaker-form">
-      <input type="hidden" name="csrf" value="{{csrfToken}}">
-      <label class="provider-toggle">
-        <input type="checkbox" name="enabled" value="on" {{#if circuitBreaker.enabled}}checked{{/if}}>
-        <span>{{@root.req.t 'admin.unknownIps.circuitBreaker.enabled'}}</span>
-      </label>
-      <div class="circuit-breaker-row">
-        <label>
-          <span>{{@root.req.t 'admin.unknownIps.circuitBreaker.threshold'}}</span>
-          <input type="number" name="threshold" min="1" max="100" value="{{circuitBreaker.failureThresholdPct}}">
-        </label>
-        <label>
-          <span>{{@root.req.t 'admin.unknownIps.circuitBreaker.window'}}</span>
-          <input type="number" name="window" min="1" max="1440" value="{{circuitBreaker.windowMinutes}}">
-        </label>
-        <label>
-          <span>{{@root.req.t 'admin.unknownIps.circuitBreaker.cooldown'}}</span>
-          <input type="number" name="cooldown" min="1" max="1440" value="{{circuitBreaker.cooldownMinutes}}">
-        </label>
-      </div>
-      <button type="submit" class="btn-primary">{{@root.req.t 'admin.unknownIps.circuitBreaker.save'}}</button>
-    </form>
-  </div>
-</div>
-
-{{!-- ════════════════════════════════════════════════════════════════════
      FAILURE LOGS TAB — filterable audit + re-queue action
      ════════════════════════════════════════════════════════════════════ --}}
 <div class="settings-tab-pane{{#if (eq activeTab 'failure-logs')}} is-active{{/if}}" id="pane-failure-logs" data-tab="failure-logs">
@@ -573,7 +420,7 @@
   <h3>{{@root.req.t 'admin.unknownIps.failureLogs.title'}}</h3>
   <p class="failure-logs-help">{{@root.req.t 'admin.unknownIps.failureLogs.help'}}</p>
 
-  <form method="GET" action="/admin/unknown-ips" class="failure-logs-filters">
+  <form method="GET" action="/admin/ingest" class="failure-logs-filters">
     <input type="hidden" name="tab" value="failure-logs">
     <label>
       <span>{{@root.req.t 'admin.unknownIps.failureLogs.filterProvider'}}</span>
@@ -637,7 +484,7 @@
         <td><span class="admin-tag admin-tag--warn">{{this.errorCode}}</span></td>
         <td class="failure-log-reason" title="{{this.rawResponse}}">{{this.reason}}</td>
         <td>
-          <form method="POST" action="/admin/unknown-ips/failure-logs/requeue" style="display:inline">
+          <form method="POST" action="/admin/ingest/failure-logs/requeue" style="display:inline">
             <input type="hidden" name="csrf" value="{{../../csrfToken}}">
             <input type="hidden" name="ip" value="{{this.ipText}}">
             <button type="submit" class="button">{{@root.req.t 'admin.unknownIps.failureLogs.requeue'}}</button>
