@@ -1224,26 +1224,148 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
   // and returns JSON so the admin can validate the URL/field mapping
   // before saving.
 
-  const renderCustomProvidersPage = async (
-    reply: { view: (tpl: string, ctx: Record<string, unknown>) => unknown },
-    req: { t: (k: string, v?: Record<string, string|number>) => string; csrfToken: string },
-    flash?: Record<string, unknown>,
-  ) => {
+  // Built-in provider health enrichment — mirrors the inline block in the
+  // /admin/unknown-ips handler. Pulled into a shared helper so the new
+  // /admin/providers page can reuse it without duplicating the 100-line
+  // status / quota / reenable / 429 resolution logic. The shape is
+  // identical to what /admin/unknown-ips already feeds its template.
+  type EnrichedProviderHealth = {
+    name: string; displayName: string; freeQuota: string; enabled: boolean;
+    hasApiKey: boolean; status: 'failing'|'disabled'|'recovering'|'healthy'|'idle';
+    lastUsedAt: Date | null; lastErrorAt: Date | null; lastErrorReason: string | null;
+    lastStats: { ok: number; failed: number; rateLimited: number; abstained: number } | null;
+    health1h: { calls: number; errors429: number; failurePct: number };
+    health24h: { calls: number; errors429: number; failurePct: number };
+    health7d: { calls: number; errors429: number; failurePct: number };
+    quotaTodayPct: number; quotaKind: 'success'|'warning'|'danger'|'muted';
+    quotaTodayText: string;
+    autoReenableAt: Date | null; autoDisabledReason: string | null;
+    reenableText: string; reenableKind: 'warning'|'muted';
+    lastError: { rawResponse: string | null; ipText: string; ts: Date } | null;
+  };
+  type ReqForHealth = { t: (k: string, v?: Record<string, string|number>) => string };
+  const enrichBuiltInHealth = async (
+    req: ReqForHealth,
+  ): Promise<EnrichedProviderHealth[]> => {
+    const [configs, lastBackfill, health1hAll, health24hAll, health7dAll, last429Rows] = await Promise.all([
+      listProviderConfigs(app.pool),
+      loadLastBackfillProviderStats(app.pool),
+      getAggregateProviderHealthAllCached(app.pool, 1 * 3600 * 1000),
+      getAggregateProviderHealthAllCached(app.pool, 24 * 3600 * 1000),
+      getAggregateProviderHealthAllCached(app.pool, 7 * 24 * 3600 * 1000),
+      queryProviderErrors(app.pool, { errorCode: '429', limit: 50 }),
+    ]);
+    // Catalog providers only — custom providers live in their own list.
+    const builtins = configs.filter((c) => !c.isCustom);
+    const now = Date.now();
+    const ONE_HOUR = 60 * 60 * 1000;
+    const h1hByName = new Map(health1hAll.map((w) => [w.providerName, w]));
+    const h24hByName = new Map(health24hAll.map((w) => [w.providerName, w]));
+    const h7dByName = new Map(health7dAll.map((w) => [w.providerName, w]));
+    const last429ByName = new Map<string, typeof last429Rows[number]>();
+    for (const row of last429Rows) {
+      if (!last429ByName.has(row.providerName)) last429ByName.set(row.providerName, row);
+    }
+    const enriched = builtins.map((p) => {
+      const lastStats = lastBackfill.providers[p.name];
+      const lastErrFresh = p.lastErrorAt && (now - p.lastErrorAt.getTime()) < ONE_HOUR;
+      const lastUseFresh = p.lastUsedAt && (now - p.lastUsedAt.getTime()) < ONE_HOUR;
+      let status: 'failing' | 'disabled' | 'recovering' | 'healthy' | 'idle';
+      if (!p.enabled) status = 'disabled';
+      else if (lastErrFresh && !lastUseFresh) status = 'failing';
+      else if (p.lastErrorAt && p.lastUsedAt && p.lastUsedAt > p.lastErrorAt) status = 'healthy';
+      else if (p.lastErrorAt) status = 'recovering';
+      else if (p.lastUsedAt) status = lastUseFresh ? 'healthy' : 'idle';
+      else status = 'idle';
+      const health1h = h1hByName.get(p.name);
+      const health24h = h24hByName.get(p.name);
+      const health7d = h7dByName.get(p.name);
+      const perMin = parseFreeQuotaPerMinute(p.name);
+      const dailyCap = perMin > 0 ? perMin * 60 * 24 : 0;
+      const calls24h = health24h?.calls ?? 0;
+      const quotaTodayPct = dailyCap > 0
+        ? Math.min(100, Math.round((calls24h / dailyCap) * 100))
+        : 0;
+      const quotaKind: 'success' | 'warning' | 'danger' | 'muted' =
+        dailyCap === 0 ? 'muted'
+        : quotaTodayPct > 100 ? 'danger'
+        : quotaTodayPct > 80 ? 'warning'
+        : 'success';
+      const reenableMsLeft = p.autoReenableAt ? Date.parse(p.autoReenableAt.toString()) - now : 0;
+      const reenableMinutesLeft = p.autoReenableAt
+        ? Math.max(1, Math.ceil(reenableMsLeft / 60000))
+        : 0;
+      const reenableText = p.autoReenableAt
+        ? req.t('admin.unknownIps.healthCard.reenablesIn', { minutes: reenableMinutesLeft })
+        : '';
+      const reenableKind: 'warning' | 'muted' = p.autoReenableAt ? 'warning' : 'muted';
+      return {
+        name: p.name,
+        displayName: p.displayName,
+        freeQuota: p.freeQuota,
+        enabled: p.enabled,
+        hasApiKey: Boolean(p.apiKey),
+        status,
+        lastUsedAt: p.lastUsedAt,
+        lastErrorAt: p.lastErrorAt,
+        lastErrorReason: p.lastErrorReason,
+        lastStats: lastStats ?? null,
+        health1h: {
+          calls: health1h?.calls ?? 0,
+          errors429: health1h?.errors429 ?? 0,
+          failurePct: health1h?.failureRatePct ?? 0,
+        },
+        health24h: {
+          calls: health24h?.calls ?? 0,
+          errors429: health24h?.errors429 ?? 0,
+          failurePct: health24h?.failureRatePct ?? 0,
+        },
+        health7d: {
+          calls: health7d?.calls ?? 0,
+          errors429: health7d?.errors429 ?? 0,
+          failurePct: health7d?.failureRatePct ?? 0,
+        },
+        quotaTodayPct,
+        quotaKind,
+        quotaTodayText: req.t('admin.unknownIps.healthCard.quotaToday', { pct: quotaTodayPct }),
+        autoReenableAt: p.autoReenableAt,
+        autoDisabledReason: p.autoDisabledReason,
+        reenableText,
+        reenableKind,
+        lastError: last429ByName.get(p.name) ?? null,
+      } satisfies EnrichedProviderHealth;
+    });
+    // Sort order matches the /admin/unknown-ips tab: failing → disabled →
+    // recovering → healthy → idle, alpha within tier.
+    return enriched.sort((a, b) => {
+      const order = { failing: 0, disabled: 1, recovering: 2, healthy: 3, idle: 4 };
+      const diff = order[a.status] - order[b.status];
+      if (diff !== 0) return diff;
+      return a.name.localeCompare(b.name);
+    });
+  };
+
+  // Custom-provider health enrichment — same shape as the existing
+  // /admin/unknown-ips/providers/custom helper but factored out so both
+  // views share it.
+  type EnrichedCustomProvider = {
+    name: string; displayName: string; enabled: boolean;
+    urlTemplate: string; method: string; requestBody: string; responseFormat: string;
+    countryPath: string; cityPath: string; asnPath: string; timeoutMs: number;
+    health1h: { calls: number; errors429: number; failurePct: number };
+    health24h: { calls: number; errors429: number; failurePct: number };
+    health7d: { calls: number; errors429: number; failurePct: number };
+    lastErrorAt: Date | null; lastErrorReason: string | null;
+  };
+  const enrichCustomProviders = async (): Promise<EnrichedCustomProvider[]> => {
     const configs = await listProviderConfigs(app.pool);
-    const customProviders = configs.filter((c) => c.isCustom);
-    // Built-in aggregate helper only iterates the static catalog (5
-    // names). For custom providers we read the same provider_call_counter
-    // table directly per row — there's at most a handful of custom
-    // providers so the cost is bounded.
-    const aggregateFor = async (name: string, windowMs: number) => {
-      const { aggregateProviderHealth } = await import('../../storage/providerErrorLog');
-      return aggregateProviderHealth(app.pool, name, windowMs);
-    };
-    const view = await Promise.all(customProviders.map(async (c) => {
+    const customConfigs = configs.filter((c) => c.isCustom);
+    const { aggregateProviderHealth } = await import('../../storage/providerErrorLog');
+    return Promise.all(customConfigs.map(async (c) => {
       const [h1h, h24h, h7d] = await Promise.all([
-        aggregateFor(c.name, 1 * 3600 * 1000),
-        aggregateFor(c.name, 24 * 3600 * 1000),
-        aggregateFor(c.name, 7 * 24 * 3600 * 1000),
+        aggregateProviderHealth(app.pool, c.name, 1 * 3600 * 1000),
+        aggregateProviderHealth(app.pool, c.name, 24 * 3600 * 1000),
+        aggregateProviderHealth(app.pool, c.name, 7 * 24 * 3600 * 1000),
       ]);
       return {
         name: c.name,
@@ -1262,12 +1384,20 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
         health7d: { calls: h7d.calls, errors429: h7d.errors429, failurePct: h7d.failureRatePct },
         lastErrorAt: c.lastErrorAt,
         lastErrorReason: c.lastErrorReason,
-      };
+      } satisfies EnrichedCustomProvider;
     }));
+  };
+
+  const renderCustomProvidersPage = async (
+    reply: { view: (tpl: string, ctx: Record<string, unknown>) => unknown },
+    req: { t: (k: string, v?: Record<string, string|number>) => string; csrfToken: string },
+    flash?: Record<string, unknown>,
+  ) => {
+    const customProviders = await enrichCustomProviders();
     return reply.view('admin/custom-providers.hbs', {
       layout: 'layouts/admin',
       title: req.t('admin.unknownIps.customProviders.title'),
-      customProviders: view,
+      customProviders,
       flash: flash ?? {},
       csrfToken: req.csrfToken,
       req,
@@ -1287,6 +1417,38 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
       req as unknown as { t: (k: string, v?: Record<string, string|number>) => string; csrfToken: string },
       flash,
     );
+  });
+
+  // /admin/providers — consolidated Strategy Definition surface. Renders
+  // built-in health cards + circuit-breaker form + custom-provider CRUD
+  // on one URL. Pulled out of /admin/unknown-ips as part of the
+  // strategy-pattern UI refactor; PR2 will redirect the old URLs here.
+  app.get('/admin/providers', async (req, reply) => {
+    const [providerHealth, customProviders, circuitBreaker] = await Promise.all([
+      enrichBuiltInHealth(req as unknown as ReqForHealth),
+      enrichCustomProviders(),
+      getCircuitBreakerConfig(app.pool),
+    ]);
+    let flash: Record<string, unknown> = {};
+    // Consume the same flash cookie the existing custom-providers POST
+    // handlers set. The cookie path differs between the old and new
+    // endpoints, so we read both — the union will pick whichever path
+    // was used last.
+    const oldCookie = req.cookies['custom_providers_flash'];
+    if (oldCookie) {
+      try { flash = JSON.parse(oldCookie); } catch { /* ignore */ }
+      reply.clearCookie('custom_providers_flash', { path: '/admin/unknown-ips/providers/custom' });
+    }
+    return reply.view('admin/providers.hbs', {
+      layout: 'layouts/admin',
+      title: req.t('admin.providers.title'),
+      providerHealth,
+      customProviders,
+      circuitBreaker,
+      flash,
+      csrfToken: req.csrfToken,
+      req,
+    });
   });
 
   app.post('/admin/unknown-ips/providers/custom', async (req, reply) => {
