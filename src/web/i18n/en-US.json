@@ -47,7 +47,8 @@
       "auditLog": "Audit Log",
       "settings": "Settings",
       "ingest": "API Ingest",
-      "customProviders": "Custom Providers"
+      "customProviders": "Custom Providers",
+      "providers": "Providers"
     },
     "logout": "Log out",
     "history": "History",

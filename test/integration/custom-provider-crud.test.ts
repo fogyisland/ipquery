@@ -56,9 +56,10 @@ const validBody = (over: Record<string, string> = {}): Record<string, string> =>
 /** GET-then-POST pattern that mirrors the browser flow: the GET seeds
  *  the csrf / csrf_issued cookies, then we pull the csrf token out of
  *  the response and send it in the POST body. Mirrors the
- *  auditlog-instrumentation.test.ts pattern. */
+ *  auditlog-instrumentation.test.ts pattern. PR2: was
+ *  /admin/unknown-ips/providers/custom, now /admin/providers. */
 async function csrfOf(): Promise<{ cookie: string; token: string }> {
-  const r = await request(app.server).get('/admin/unknown-ips/providers/custom').set('Cookie', 'sid=' + adminSid);
+  const r = await request(app.server).get('/admin/providers').set('Cookie', 'sid=' + adminSid);
   expect(r.status).toBe(200);
   const cookies = r.headers['set-cookie'] as string[];
   const csrfLine = cookies.find((c) => c.startsWith('csrf='))!.split(';')[0]!;
@@ -76,9 +77,9 @@ async function csrfPost(path: string, body: Record<string, string>) {
     .send({ ...body, csrf: token });
 }
 
-describe('POST /admin/unknown-ips/providers/custom', () => {
+describe('POST /admin/providers/custom', () => {
   it('accepts a valid HTTPS URL and inserts a row', async () => {
-    const r = await csrfPost('/admin/unknown-ips/providers/custom', validBody());
+    const r = await csrfPost('/admin/providers/custom', validBody());
     expect(r.status).toBe(302);
     const configs = await listProviderConfigs(td.pool);
     const row = configs.find((c) => c.name === 'demo');
@@ -90,7 +91,7 @@ describe('POST /admin/unknown-ips/providers/custom', () => {
   });
 
   it('rejects http://localhost/foo (SSRF guard)', async () => {
-    const r = await csrfPost('/admin/unknown-ips/providers/custom', validBody({ urlTemplate: 'http://localhost/foo' }));
+    const r = await csrfPost('/admin/providers/custom', validBody({ urlTemplate: 'http://localhost/foo' }));
     expect(r.status).toBe(200);
     expect(r.text).toMatch(/blocked|invalidUrl|防御/);
     const configs = await listProviderConfigs(td.pool);
@@ -98,7 +99,7 @@ describe('POST /admin/unknown-ips/providers/custom', () => {
   });
 
   it('rejects http://127.0.0.1/foo (SSRF guard)', async () => {
-    const r = await csrfPost('/admin/unknown-ips/providers/custom', validBody({ urlTemplate: 'http://127.0.0.1/foo' }));
+    const r = await csrfPost('/admin/providers/custom', validBody({ urlTemplate: 'http://127.0.0.1/foo' }));
     expect(r.status).toBe(200);
     const configs = await listProviderConfigs(td.pool);
     expect(configs.find((c) => c.name === 'demo')).toBeUndefined();
@@ -109,14 +110,14 @@ describe('POST /admin/unknown-ips/providers/custom', () => {
     (dns.lookup as unknown as { mockResolvedValueOnce: (v: unknown) => void }).mockResolvedValueOnce([
       { address: '169.254.169.254', family: 4 },
     ]);
-    const r = await csrfPost('/admin/unknown-ips/providers/custom', validBody({ urlTemplate: 'http://attacker.example/' }));
+    const r = await csrfPost('/admin/providers/custom', validBody({ urlTemplate: 'http://attacker.example/' }));
     expect(r.status).toBe(200);
     const configs = await listProviderConfigs(td.pool);
     expect(configs.find((c) => c.name === 'demo')).toBeUndefined();
   });
 
   it('rejects a name that collides with a built-in provider', async () => {
-    const r = await csrfPost('/admin/unknown-ips/providers/custom', validBody({ name: 'ip-api' }));
+    const r = await csrfPost('/admin/providers/custom', validBody({ name: 'ip-api' }));
     expect(r.status).toBe(200);
     const configs = await listProviderConfigs(td.pool);
     const ipApi = configs.find((c) => c.name === 'ip-api')!;
@@ -124,9 +125,9 @@ describe('POST /admin/unknown-ips/providers/custom', () => {
   });
 });
 
-describe('POST /admin/unknown-ips/providers/custom/:name/delete', () => {
+describe('POST /admin/providers/custom/:name/delete', () => {
   it('refuses to delete a built-in provider', async () => {
-    const r = await csrfPost('/admin/unknown-ips/providers/custom/ip-api/delete', {});
+    const r = await csrfPost('/admin/providers/custom/ip-api/delete', {});
     expect(r.status).toBe(302);
     const configs = await listProviderConfigs(td.pool);
     expect(configs.find((c) => c.name === 'ip-api')).toBeDefined();
@@ -154,21 +155,21 @@ describe('POST /admin/unknown-ips/providers/custom/:name/delete', () => {
        VALUES ('demo', 'Demo', '', 1, 1,
           'https://api.example.com/{ip}', 'GET', 'json', 'country.code')`,
     );
-    const r = await csrfPost('/admin/unknown-ips/providers/custom/demo/delete', {});
+    const r = await csrfPost('/admin/providers/custom/demo/delete', {});
     expect(r.status).toBe(302);
-    expect(r.headers.location).toMatch(/\/admin\/unknown-ips\/providers\/custom/);
+    expect(r.headers.location).toMatch(/\/admin\/providers/);
   });
 });
 
-describe('POST /admin/unknown-ips/providers/custom/:name/test', () => {
+describe('POST /admin/providers/custom/:name/test', () => {
   it('returns 400 when ip is missing', async () => {
-    const r = await csrfPost('/admin/unknown-ips/providers/custom/demo/test', {});
+    const r = await csrfPost('/admin/providers/custom/demo/test', {});
     expect(r.status).toBe(400);
     expect(r.body).toMatchObject({ ok: false, error: 'ip_required' });
   });
 
   it('returns 404 when the provider does not exist', async () => {
-    const r = await csrfPost('/admin/unknown-ips/providers/custom/missing/test', { ip: '8.8.8.8' });
+    const r = await csrfPost('/admin/providers/custom/missing/test', { ip: '8.8.8.8' });
     expect(r.status).toBe(404);
   });
 
@@ -186,7 +187,7 @@ describe('POST /admin/unknown-ips/providers/custom/:name/test', () => {
          VALUES ('demo', 'Demo', '', 1, 1,
             'https://api.example.com/{ip}', 'GET', 'json', 'country.code', 'city')`,
       );
-      const r = await csrfPost('/admin/unknown-ips/providers/custom/demo/test', { ip: '8.8.8.8' });
+      const r = await csrfPost('/admin/providers/custom/demo/test', { ip: '8.8.8.8' });
       expect(r.status).toBe(200);
       expect(r.body).toMatchObject({
         ok: true,
