@@ -36,9 +36,9 @@ beforeEach(async () => {
   await td.pool.query(`DELETE FROM ingest_providers WHERE is_custom = 1`);
 });
 
-describe('GET /admin/unknown-ips/providers/custom', () => {
+describe('GET /admin/providers (consolidated Strategy Definition surface)', () => {
   it('renders the add form and an empty list', async () => {
-    const r = await request(app.server).get('/admin/unknown-ips/providers/custom').set('Cookie', 'sid=' + adminSid);
+    const r = await request(app.server).get('/admin/providers').set('Cookie', 'sid=' + adminSid);
     expect(r.status).toBe(200);
     expect(r.text).toMatch(/添加自定义 Provider/);
     expect(r.text).toMatch(/urlTemplate/);
@@ -61,7 +61,7 @@ describe('GET /admin/unknown-ips/providers/custom', () => {
        VALUES ('demo', CURDATE(), 50, 5, 0, 0, 0, NOW(3))`,
     );
 
-    const r = await request(app.server).get('/admin/unknown-ips/providers/custom').set('Cookie', 'sid=' + adminSid);
+    const r = await request(app.server).get('/admin/providers').set('Cookie', 'sid=' + adminSid);
     expect(r.status).toBe(200);
     // Provider name + slug rendered.
     expect(r.text).toMatch(/Demo Provider/);
