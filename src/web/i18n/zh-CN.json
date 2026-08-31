@@ -754,6 +754,28 @@
       "builtInSection": "内置数据源",
       "circuitBreakerSection": "熔断器配置",
       "customSection": "自定义数据源"
+    },
+    "ingest": {
+      "backfill": {
+        "preview": {
+          "title": "回填预览",
+          "help": "下方表格展示本次将执行的查询与共识结果;确认后再写入主表。",
+          "cols": {
+            "ip": "IP",
+            "country": "国家/地区",
+            "city": "城市",
+            "asn": "ASN",
+            "providers": "提供者",
+            "outcome": "结果"
+          },
+          "confirm": "确认入库",
+          "cancel": "取消",
+          "expired": "预览已过期,请重新触发。",
+          "missing": "预览不存在,请重新触发。",
+          "previewFirst": "先预览再回填",
+          "busy": "正在处理…"
+        }
+      }
     }
   },
   "home": {
