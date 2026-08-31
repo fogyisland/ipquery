@@ -49,7 +49,26 @@ export interface BackfillOptions {
    *  the Failure Logs tab can filter by trigger source. Defaults to
    *  'auto' (queue-driven backfill). */
   mode?: 'auto' | 'manual' | 'random';
+  /** When true, skip all writes (ip_ranges INSERT + queue mark
+   *  processed/attempted). Used by the preview-before-commit admin flow
+   *  so operators can review consensus results before any row lands in
+   *  the main table. Defaults to false (existing behavior). */
+  dryRun?: boolean;
   logger?: Pick<Console, 'log' | 'warn' | 'error'>;
+}
+
+/** One row of preview output — what would happen for this IP if the
+ *  operator confirms the run. Per-provider detail is reduced to the
+ *  minimum the admin UI needs (name / ok flag / country / errorCode). */
+export interface BackfillPreviewRow {
+  ipText: string;
+  /** Null when the IP did not reach consensus / had no country. */
+  countryCode: string | null;
+  city: string | null;
+  asn: number | string | null;
+  /** Final per-IP outcome from majorityVote / write path. */
+  outcome: 'merged' | 'no_consensus' | 'no_country' | 'all_abstained';
+  perProvider: Array<{ name: string; ok: boolean; country: string | null; errorCode: string | null }>;
 }
 
 export interface BackfillSummary {
@@ -67,6 +86,13 @@ export interface BackfillSummary {
   providers: Record<string, { ok: number; failed: number; abstained: number; rateLimited: number }>;
   /** Provider names that we auto-disabled during this run due to 429. */
   providersDisabled: string[];
+  /** 'preview' when dryRun=true (no writes happened). 'committed' on
+   *  a normal run. Existing callers (random-gen, cron) always see
+   *  'committed'. */
+  mode: 'preview' | 'committed';
+  /** Per-IP preview rows. Populated when mode === 'preview'; empty
+   *  array on committed runs to keep the shape stable. */
+  previewRows: BackfillPreviewRow[];
 }
 
 const DEFAULT_BATCH = 100;
@@ -101,6 +127,7 @@ export async function runBackfill(
   const log = opts.logger ?? console;
 
   const startedAt = Date.now();
+  const dryRun = opts.dryRun ?? false;
   const summary: BackfillSummary = {
     considered: 0,
     merged: 0,
@@ -114,6 +141,8 @@ export async function runBackfill(
       p.name, { ok: 0, failed: 0, abstained: 0, rateLimited: 0 },
     ])),
     providersDisabled: [],
+    mode: dryRun ? 'preview' : 'committed',
+    previewRows: [],
   };
   // Mode is threaded through to processIp so failure rows carry the
   // right tag in provider_error_log. Defaults to 'auto' (queue backfill).
@@ -137,7 +166,7 @@ export async function runBackfill(
     const slice = queueRows.slice(i, i + CONCURRENCY);
     const sliceOutcomes = await Promise.all(
       slice.map(async (row) => {
-        const result = await processIp(pool, providers, row.ipText, row.ip, perIpTimeout, summary, runMode);
+        const result = await processIp(pool, providers, row.ipText, row.ip, perIpTimeout, summary, runMode, dryRun);
         const outcome = result.outcome;
         const consensus = outcome.kind === 'merged' ? outcome.record : null;
         // Fire-and-forget probe audit. Same defensive pattern as
@@ -155,6 +184,26 @@ export async function runBackfill(
           providers: result.perProvider,
           batchId,
         }).catch(() => { /* swallow */ });
+        // Preview rows: only populated when dryRun=true. We capture
+        // per-IP detail for the admin to review before confirming.
+        if (dryRun) {
+          summary.previewRows.push({
+            ipText: row.ipText,
+            countryCode: consensus?.countryCode ?? null,
+            city: consensus?.city ?? null,
+            asn: consensus?.asn ?? null,
+            outcome: outcome.kind,
+            perProvider: result.perProvider.map((p) => ({
+              name: p.provider,
+              // 'ok' = provider returned a non-null record (regardless
+              // of whether it agreed with the majority). A 429 or
+              // network error sets ok=false.
+              ok: p.countryCode !== null && !p.rateLimited && !p.errorCode,
+              country: p.countryCode ?? null,
+              errorCode: p.errorCode ?? (p.rateLimited ? '429' : null),
+            })),
+          });
+        }
         return { row, outcome };
       }),
     );
@@ -198,14 +247,19 @@ export async function runBackfill(
     // runId. Pick a high negative-as-uint convention: 0 means "manual
     // backfill, no etl_runs row". If a future maintainer wants the FK
     // strictly enforced, they can drop the constraint.
-    await markProcessed(pool, mergedIds, 0);
+    // Skip in dry-run mode: processIp's INSERT IGNORE was a no-op too,
+    // so we must not mutate the queue rows or they'd get stuck in the
+    // 'attempted' state without an actual run.
+    if (!dryRun) await markProcessed(pool, mergedIds, 0);
   }
-  if (attempted.no_consensus.length > 0) await markAttempted(pool, attempted.no_consensus, 'no_consensus');
-  if (attempted.no_country.length > 0) await markAttempted(pool, attempted.no_country, 'no_country');
-  if (attempted.all_abstained.length > 0) await markAttempted(pool, attempted.all_abstained, 'all_abstained');
+  if (!dryRun) {
+    if (attempted.no_consensus.length > 0) await markAttempted(pool, attempted.no_consensus, 'no_consensus');
+    if (attempted.no_country.length > 0) await markAttempted(pool, attempted.no_country, 'no_country');
+    if (attempted.all_abstained.length > 0) await markAttempted(pool, attempted.all_abstained, 'all_abstained');
+  }
 
   summary.finishedAt = Date.now();
-  log.log?.(`[backfill] ${summary.merged}/${summary.considered} merged in ${summary.finishedAt - startedAt}ms; disabled=${summary.providersDisabled.join(',') || 'none'}`);
+  log.log?.(`[backfill] ${summary.merged}/${summary.considered} merged in ${summary.finishedAt - startedAt}ms; disabled=${summary.providersDisabled.join(',') || 'none'}${dryRun ? ' [DRY-RUN]' : ''}`);
   return summary;
 }
 
@@ -225,6 +279,7 @@ export async function processIp(
   _perIpTimeoutMs: number,
   summary: BackfillSummary,
   mode: 'auto' | 'manual' | 'random' = 'auto',
+  dryRun: boolean = false,
 ): Promise<ProcessIpResult> {
   // Collect per-provider detail for the probe log alongside the
   // vote-shape we feed into majorityVote. The two arrays share the same
@@ -323,6 +378,12 @@ export async function processIp(
     return { outcome: { kind: vote.reason }, perProvider };
   }
 
+  // In dry-run mode, skip the actual INSERT and report `newlyInserted`
+  // as if the row would be written. The caller can still render
+  // summary.previewRows knowing each would-be-merged /32.
+  if (dryRun) {
+    return { outcome: { kind: 'merged', record: vote.record, newlyInserted: true }, perProvider };
+  }
   const newlyInserted = await writeConsensusRange(pool, ipBuffer, vote.record);
   return { outcome: { kind: 'merged', record: vote.record, newlyInserted }, perProvider };
 }

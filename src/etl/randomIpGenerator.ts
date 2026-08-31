@@ -97,6 +97,8 @@ export async function runRandomGeneration(
   // processIp() updates summary.providers in place. We use a BackfillSummary
   // here even though this flow doesn't touch the queue — the fields are
   // the same shape. Convert to RandomGenerationSummary at the end.
+  // The new mode/previewRows fields are committed/empty for this caller
+  // (random-gen isn't part of the preview flow).
   const workSummary: BackfillSummary = {
     considered: 0,
     merged: 0,
@@ -110,6 +112,8 @@ export async function runRandomGeneration(
       p.name, { ok: 0, failed: 0, abstained: 0, rateLimited: 0 },
     ])),
     providersDisabled: [],
+    mode: 'committed',
+    previewRows: [],
   };
 
   // Step 1: pick random IPs not in ip_ranges.
