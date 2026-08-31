@@ -135,16 +135,19 @@ describe('Back-compat 302 redirects from /admin/unknown-ips/*', () => {
     expect(r.headers.location).toBe('/admin/providers#custom');
   });
 
-  it('POST /admin/unknown-ips/backfill redirects to /admin/ingest/backfill/confirm (legacy cron path)', async () => {
+  it('POST /admin/unknown-ips/backfill runs the legacy one-step backfill and redirects to /admin/ingest#overview', async () => {
+    // PR3 added the preview/confirm flow on /admin/ingest/backfill/*.
+    // The legacy /admin/unknown-ips/backfill POST still runs the
+    // one-step backfill (no preview) so any cron caller that bypasses
+    // the UI keeps working until that caller is updated. The UI itself
+    // is preview-first.
     const { cookie, token } = await csrfPair();
     const r = await request(app.server)
       .post('/admin/unknown-ips/backfill')
       .set('Cookie', 'sid=' + adminSid + '; ' + cookie)
       .type('form')
       .send({ csrf: token });
-    // The redirect lands on the GET confirm page; supertest will follow
-    // the redirect by default? No — it returns the raw 302 response.
     expect(r.status).toBe(302);
-    expect(r.headers.location).toBe('/admin/ingest/backfill/confirm');
+    expect(r.headers.location).toBe('/admin/ingest#overview');
   });
 });

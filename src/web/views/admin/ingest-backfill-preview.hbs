@@ -1,0 +1,79 @@
+{{!-- SPDX-License-Identifier: MIT --}}
+{{!--
+  /admin/ingest/backfill/preview — diff-preview-before-commit (PR3).
+  Renders the rows that WOULD be written if the operator confirms.
+  Confirm form carries the matching token (issued server-side when the
+  preview cookie was signed) so a refresh or a stale cookie cannot
+  accidentally trigger a write. The CSP-safe /assets/backfill-preview.js
+  script disables the confirm button on first click to prevent
+  double-submit.
+--}}
+
+<h1>{{req.t 'admin.ingest.backfill.preview.title'}}</h1>
+<p>{{req.t 'admin.ingest.backfill.preview.help'}}</p>
+
+<div class="backfill-preview-actions">
+  {{!-- Confirm form: POST /admin/ingest/backfill/confirm with the
+       token + csrf + batchLimit hidden. Server verifies token matches
+       the one signed into the preview cookie, then re-runs the fan-out
+       for real and writes ip_ranges. --}}
+  <form class="backfill-confirm-form" method="POST" action="/admin/ingest/backfill/confirm">
+    <input type="hidden" name="csrf" value="{{csrfToken}}">
+    <input type="hidden" name="token" value="{{token}}">
+    <input type="hidden" name="batchLimit" value="{{batchLimit}}">
+    <button type="submit" class="btn-primary" data-busy-label="{{req.t 'admin.ingest.backfill.preview.busy'}}">
+      {{req.t 'admin.ingest.backfill.preview.confirm'}}
+    </button>
+    <a href="/admin/ingest" class="btn-secondary">{{req.t 'admin.ingest.backfill.preview.cancel'}}</a>
+  </form>
+</div>
+
+{{#if rows.length}}
+<table class="admin-table backfill-preview-table">
+  <thead>
+    <tr>
+      <th>{{req.t 'admin.ingest.backfill.preview.cols.ip'}}</th>
+      <th>{{req.t 'admin.ingest.backfill.preview.cols.country'}}</th>
+      <th>{{req.t 'admin.ingest.backfill.preview.cols.city'}}</th>
+      <th>{{req.t 'admin.ingest.backfill.preview.cols.asn'}}</th>
+      <th>{{req.t 'admin.ingest.backfill.preview.cols.providers'}}</th>
+      <th>{{req.t 'admin.ingest.backfill.preview.cols.outcome'}}</th>
+    </tr>
+  </thead>
+  <tbody>
+    {{#each rows}}
+    <tr>
+      <td><code>{{this.ipText}}</code></td>
+      <td>{{#if this.countryCode}}<span class="admin-tag admin-tag--ok">{{this.countryCode}}</span>{{else}}<span class="admin-tag admin-tag--muted">—</span>{{/if}}</td>
+      <td>{{#if this.city}}{{this.city}}{{else}}—{{/if}}</td>
+      <td>{{#if this.asn}}{{this.asn}}{{else}}—{{/if}}</td>
+      <td>
+        <div class="probe-log-cells">
+          {{#each this.perProvider}}
+          {{!-- Classify each provider cell into one of the visual states
+               used on the existing /admin/ingest Recent Probes table so
+               the look-and-feel is consistent. --}}
+          <span class="provider-cell
+            {{#if this.errorCode}}provider-cell--error
+            {{else if this.country}}provider-cell--ok
+            {{else}}provider-cell--no_country{{/if}}">
+            {{this.name}}{{#if this.country}} {{this.country}}{{/if}}
+          </span>
+          {{/each}}
+        </div>
+      </td>
+      <td>
+        {{#if (eq this.outcome 'merged')}}<span class="admin-tag admin-tag--ok">{{@root.req.t 'admin.unknownIps.recentProbes.outcomeLabel.merged'}}</span>
+        {{else if (eq this.outcome 'no_consensus')}}<span class="admin-tag admin-tag--warn">{{@root.req.t 'admin.unknownIps.recentProbes.outcomeLabel.no_consensus'}}</span>
+        {{else if (eq this.outcome 'no_country')}}<span class="admin-tag admin-tag--warn">{{@root.req.t 'admin.unknownIps.recentProbes.outcomeLabel.no_country'}}</span>
+        {{else}}<span class="admin-tag admin-tag--muted">{{@root.req.t 'admin.unknownIps.recentProbes.outcomeLabel.all_abstained'}}</span>{{/if}}
+      </td>
+    </tr>
+    {{/each}}
+  </tbody>
+</table>
+{{else}}
+<p class="admin-empty">{{req.t 'admin.unknownIps.empty.pending'}}</p>
+{{/if}}
+
+<script src="/assets/backfill-preview.js" defer></script>

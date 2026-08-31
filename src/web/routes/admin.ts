@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 import type { FastifyInstance } from 'fastify';
 import type { RowDataPacket } from 'mysql2';
+import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import { findUserById, setDisabled, markEmailVerified, deleteUser, updatePassword, findUserByEmail } from '../../storage/users';
 import { hashPassword } from '../auth/password';
 import { verifyCsrfRequest } from '../plugins/csrf';
@@ -53,6 +54,76 @@ function parseFreeQuotaPerMinute(providerName: string): number {
   if (!raw) return 0;
   const n = Number(raw.replace(/,/g, ''));
   return Number.isFinite(n) ? n : 0;
+}
+
+// ─── Backfill preview cookie (PR3: diff-preview-before-commit) ───────────
+//
+// The preview-before-commit flow keeps a signed cookie with the would-be
+// rows for 60s so the operator can review them before any ip_ranges write.
+// Cookie shape: base64url(JSON.stringify({ p: '<json payload>', s: '<hex sig>' })).
+// Payload shape: { runAt: <ms>, rows: BackfillPreviewRow[], batchLimit, token }.
+//
+// We sign ourselves rather than using Fastify's `signed: true` because
+// our payload contains nested JSON arrays of provider results; @fastify/cookie's
+// built-in signing only protects the literal cookie string, but we want a
+// stable, parseable schema for tests + easier debugging.
+
+const BACKFILL_PREVIEW_COOKIE = 'backfill_preview';
+const BACKFILL_PREVIEW_MAX_AGE_MS = 60 * 1000;
+const BACKFILL_PREVIEW_COOKIE_PATH = '/admin/ingest/backfill';
+const HMAC_KEY = process.env.SESSION_SECRET || process.env.CSRF_SECRET || 'dev-fallback-backfill-preview';
+
+function hmacSign(payloadJson: string): string {
+  return createHmac('sha256', HMAC_KEY).update(payloadJson).digest('hex');
+}
+
+function signBackfillPreview(payload: {
+  runAt: number;
+  rows: unknown[];
+  batchLimit: number;
+  token: string;
+}): string {
+  const json = JSON.stringify(payload);
+  const sig = hmacSign(json);
+  return Buffer.from(JSON.stringify({ p: json, s: sig })).toString('base64url');
+}
+
+type VerifyResult =
+  | { ok: true; payload: { runAt: number; rows: unknown[]; batchLimit: number; token: string } }
+  | { ok: false; reason: 'missing' | 'tampered' | 'expired' };
+
+function verifyBackfillPreview(cookie: string | undefined): VerifyResult {
+  if (!cookie) return { ok: false, reason: 'missing' };
+  let envelope: { p?: string; s?: string };
+  try {
+    envelope = JSON.parse(Buffer.from(cookie, 'base64url').toString('utf8'));
+  } catch {
+    return { ok: false, reason: 'tampered' };
+  }
+  if (!envelope || typeof envelope.p !== 'string' || typeof envelope.s !== 'string') {
+    return { ok: false, reason: 'tampered' };
+  }
+  // Verify HMAC with timingSafeEqual to defeat timing attacks.
+  const expected = hmacSign(envelope.p);
+  const a = Buffer.from(expected, 'hex');
+  const b = Buffer.from(envelope.s, 'hex');
+  if (a.length !== b.length || !timingSafeEqual(a, b)) {
+    return { ok: false, reason: 'tampered' };
+  }
+  let payload: { runAt: number; rows: unknown[]; batchLimit: number; token: string };
+  try {
+    payload = JSON.parse(envelope.p);
+  } catch {
+    return { ok: false, reason: 'tampered' };
+  }
+  if (!payload || typeof payload.runAt !== 'number' || !Array.isArray(payload.rows) ||
+      typeof payload.batchLimit !== 'number' || typeof payload.token !== 'string') {
+    return { ok: false, reason: 'tampered' };
+  }
+  if (Date.now() - payload.runAt > BACKFILL_PREVIEW_MAX_AGE_MS) {
+    return { ok: false, reason: 'expired' };
+  }
+  return { ok: true, payload };
 }
 
 export default async function adminRoutes(app: FastifyInstance): Promise<void> {
@@ -1104,6 +1175,9 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
     return reply.redirect('/admin/ingest#failure-logs');
   });
 
+  // GET — show the "Preview first / Run" form. Operator picks batchLimit,
+  // hits Preview to get a preview page, or hits Confirm (legacy path
+  // disabled — the new flow goes through /preview first).
   app.get('/admin/ingest/backfill/confirm', async (req, reply) => {
     return reply.view('admin/unknown-ips-backfill-confirm.hbs', {
       layout: 'layouts/admin',
@@ -1112,25 +1186,116 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
     });
   });
 
+  // POST /admin/ingest/backfill/preview — dry-run the fan-out, store the
+  // would-be rows in a signed cookie (60s TTL), redirect to the preview
+  // page. The confirm handler reads this cookie + the matching form token
+  // before doing any writes.
+  app.post('/admin/ingest/backfill/preview', async (req, reply) => {
+    if (!verifyCsrfRequest(req)) return reply.code(403).view('errors/csrf.hbs', { layout: 'layouts/public', req });
+    req.auditAction = { action: 'unknown_ips.backfill.preview', targetType: 'unknown_ip_queue' };
+
+    const batchLimit = Math.min(Math.max(Number((req.body as { batchLimit?: number }).batchLimit ?? 100) || 100, 1), 1000);
+    const configs = await listProviderConfigs(app.pool);
+    const providers = buildProvidersFromConfig(configs);
+    const result = await runBackfill(app.pool, providers, {
+      batchLimit,
+      mode: 'auto',
+      dryRun: true,
+      logger: { log: () => {}, warn: (msg) => app.log.warn({ msg }, 'backfill-preview'), error: (msg) => app.log.error({ msg }, 'backfill-preview') },
+    });
+
+    const token = randomBytes(16).toString('hex');
+    const cookie = signBackfillPreview({
+      runAt: Date.now(),
+      rows: result.previewRows,
+      batchLimit,
+      token,
+    });
+    reply.setCookie(BACKFILL_PREVIEW_COOKIE, cookie, {
+      path: BACKFILL_PREVIEW_COOKIE_PATH,
+      httpOnly: true,
+      sameSite: 'lax',
+      maxAge: Math.floor(BACKFILL_PREVIEW_MAX_AGE_MS / 1000),
+      // We sign ourselves (HMAC-SHA256 above); Fastify's built-in signed
+      // cookie helper would re-encode our JSON and break verification.
+      signed: false,
+    });
+    return reply.redirect('/admin/ingest/backfill/preview', 302);
+  });
+
+  // GET /admin/ingest/backfill/preview — render the preview table. If the
+  // cookie is missing/expired/tampered, flash a message and bounce to
+  // /admin/ingest (no surface to render).
+  app.get('/admin/ingest/backfill/preview', async (req, reply) => {
+    const cookie = req.cookies[BACKFILL_PREVIEW_COOKIE];
+    const v = cookie ? verifyBackfillPreview(cookie) : { ok: false as const, reason: 'missing' };
+    if (!v.ok) {
+      reply.clearCookie(BACKFILL_PREVIEW_COOKIE, { path: BACKFILL_PREVIEW_COOKIE_PATH });
+      const flashKey = v.reason === 'expired' ? 'expired' : 'missing';
+      reply.setCookie('backfill_summary', JSON.stringify({ kind: 'preview_' + flashKey }), {
+        path: '/admin/ingest',
+        maxAge: 30,
+        httpOnly: false,
+        sameSite: 'lax',
+        signed: false,
+      });
+      return reply.redirect('/admin/ingest', 302);
+    }
+    return reply.view('admin/ingest-backfill-preview.hbs', {
+      layout: 'layouts/admin',
+      title: req.t('admin.ingest.backfill.preview.title'),
+      rows: v.payload.rows,
+      batchLimit: v.payload.batchLimit,
+      token: v.payload.token,
+      runAt: v.payload.runAt,
+      csrfToken: req.csrfToken,
+      req,
+    });
+  });
+
+  // POST /admin/ingest/backfill/confirm — verify cookie + token, then
+  // re-run the fan-out for real (no dryRun). On success clear the cookie
+  // and flash a backfill_summary so /admin/ingest shows the run stats.
   app.post('/admin/ingest/backfill/confirm', async (req, reply) => {
     if (!verifyCsrfRequest(req)) return reply.code(403).view('errors/csrf.hbs', { layout: 'layouts/public', req });
     req.auditAction = { action: 'unknown_ips.backfill', targetType: 'unknown_ip_queue' };
 
-    // Build providers from the admin-managed DB config so toggling a
-    // provider or rotating its key takes effect on the very next run.
-    // buildDefaultProviders() is still available as the env-driven
-    // fallback for non-admin callers (CLI / cron).
+    const cookie = req.cookies[BACKFILL_PREVIEW_COOKIE];
+    const v = cookie ? verifyBackfillPreview(cookie) : { ok: false as const, reason: 'missing' };
+    const body = req.body as { token?: string; batchLimit?: number };
+    if (!v.ok) {
+      reply.clearCookie(BACKFILL_PREVIEW_COOKIE, { path: BACKFILL_PREVIEW_COOKIE_PATH });
+      reply.setCookie('backfill_summary', JSON.stringify({ kind: 'preview_' + v.reason }), {
+        path: '/admin/ingest',
+        maxAge: 30,
+        httpOnly: false,
+        sameSite: 'lax',
+        signed: false,
+      });
+      return reply.redirect('/admin/ingest', 302);
+    }
+    if (!body.token || body.token !== v.payload.token) {
+      // Token mismatch: replay/tamper. Clear cookie + redirect (no
+      // detailed error to avoid leaking probe details).
+      reply.clearCookie(BACKFILL_PREVIEW_COOKIE, { path: BACKFILL_PREVIEW_COOKIE_PATH });
+      return reply.redirect('/admin/ingest', 302);
+    }
+    const batchLimit = v.payload.batchLimit;
     const configs = await listProviderConfigs(app.pool);
     const providers = buildProvidersFromConfig(configs);
     const summary = await runBackfill(app.pool, providers, {
-      batchLimit: Number((req.body as { batchLimit?: number }).batchLimit ?? 100) || 100,
+      batchLimit,
       mode: 'auto',
+      // dryRun defaults to false — this is the real write path.
       logger: { log: () => {}, warn: (msg) => app.log.warn({ msg }, 'backfill'), error: (msg) => app.log.error({ msg }, 'backfill') },
     });
     // Persist per-provider counts so the ingest dashboard can show
     // last-run stats across page refreshes (the flash cookie is gone
     // after one render). Same shape as BackfillSummary.providers.
     await saveLastBackfillProviderStats(app.pool, summary.providers, new Date());
+    // Clear the preview cookie once we've committed — a refresh of the
+    // preview page should land on /admin/ingest, not re-render stale rows.
+    reply.clearCookie(BACKFILL_PREVIEW_COOKIE, { path: BACKFILL_PREVIEW_COOKIE_PATH });
     // Redirect back with summary in flash cookie. Cookie is HTTP-only and
     // max-age=30s — admin refreshes the page and sees the banner once.
     reply.setCookie('backfill_summary', JSON.stringify(summary), {
@@ -1139,7 +1304,7 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
       httpOnly: true,
       sameSite: 'lax',
     });
-    return reply.redirect('/admin/ingest#overview');
+    return reply.redirect('/admin/ingest#overview', 302);
   });
 
   // "Generate 10 random IPs and ingest them". Used to validate the
@@ -1605,7 +1770,28 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
   redirectOld('/admin/unknown-ips/providers/:name', '/admin/providers/:name', 'POST');
   redirectOld('/admin/unknown-ips/circuit-breaker', '/admin/providers/circuit-breaker', 'POST');
 
-  // Legacy one-step backfill path (UI is preview-first; this is a
-  // redirect for any cron / external caller still hitting the old URL).
-  redirectOld('/admin/unknown-ips/backfill', '/admin/ingest/backfill/confirm', 'POST');
+  // Legacy one-step backfill path. The admin UI is preview-first (PR3),
+  // but we keep this handler as a back-compat one-step run for any cron
+  // / external caller still POSTing to the old URL. The new flow lives at
+  // /admin/ingest/backfill/preview → /confirm.
+  app.post('/admin/unknown-ips/backfill', async (req, reply) => {
+    if (!verifyCsrfRequest(req)) return reply.code(403).view('errors/csrf.hbs', { layout: 'layouts/public', req });
+    req.auditAction = { action: 'unknown_ips.backfill', targetType: 'unknown_ip_queue' };
+    const batchLimit = Math.min(Math.max(Number((req.body as { batchLimit?: number }).batchLimit ?? 100) || 100, 1), 1000);
+    const configs = await listProviderConfigs(app.pool);
+    const providers = buildProvidersFromConfig(configs);
+    const summary = await runBackfill(app.pool, providers, {
+      batchLimit,
+      mode: 'auto',
+      logger: { log: () => {}, warn: (msg) => app.log.warn({ msg }, 'backfill-legacy'), error: (msg) => app.log.error({ msg }, 'backfill-legacy') },
+    });
+    await saveLastBackfillProviderStats(app.pool, summary.providers, new Date());
+    reply.setCookie('backfill_summary', JSON.stringify(summary), {
+      path: '/admin/ingest',
+      maxAge: 30,
+      httpOnly: true,
+      sameSite: 'lax',
+    });
+    return reply.redirect('/admin/ingest#overview', 302);
+  });
 }
