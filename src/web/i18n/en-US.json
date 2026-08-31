@@ -753,6 +753,28 @@
       "builtInSection": "Built-in providers",
       "circuitBreakerSection": "Circuit breaker",
       "customSection": "Custom providers"
+    },
+    "ingest": {
+      "backfill": {
+        "preview": {
+          "title": "Backfill preview",
+          "help": "Below is what this run would write. Confirm to ingest.",
+          "cols": {
+            "ip": "IP",
+            "country": "Country",
+            "city": "City",
+            "asn": "ASN",
+            "providers": "Providers",
+            "outcome": "Outcome"
+          },
+          "confirm": "Confirm & ingest",
+          "cancel": "Cancel",
+          "expired": "Preview expired — please re-run.",
+          "missing": "Preview missing — please re-run.",
+          "previewFirst": "Preview first",
+          "busy": "Processing…"
+        }
+      }
     }
   },
   "home": {
