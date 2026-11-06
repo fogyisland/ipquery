@@ -9,13 +9,23 @@
   },
   "scripts": {
     "build": "node scripts/build.js",
-    "test": "vitest run",
+    "test": "vitest run test/unit",
+    "test:all": "vitest run",
+    "test:unit": "vitest run test/unit",
+    "test:integration": "vitest run test/integration",
+    "test:e2e": "vitest run test/e2e",
     "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage",
-    "lint": "tsc --noEmit",
+    "test:coverage": "vitest run test/unit --coverage",
+    "lint": "tsc --noEmit && eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
     "dev": "tsx src/cli.ts",
     "start": "node dist/cli.js",
-    "serve:4001": "node -e \"require('child_process').spawnSync(process.execPath,['dist/cli.js','serve'],{env:{...process.env,PORT:'4001'},stdio:'inherit'})\""
+    "serve:4001": "node -e \"require('child_process').spawnSync(process.execPath,['dist/cli.js','serve'],{env:{...process.env,PORT:'4001'},stdio:'inherit'})\"",
+    "shoot:dashboard": "tsx scripts/dev/shoot-dashboard.ts",
+    "shoot:ingest": "tsx scripts/dev/shoot-ingest.ts",
+    "mcp": "node dist/mcp/server.js"
   },
   "dependencies": {
     "@fastify/compress": "^7.0.3",
@@ -25,6 +35,7 @@
     "@fastify/rate-limit": "^9.1.0",
     "@fastify/static": "^7.0.4",
     "@fastify/view": "^9.1.0",
+    "@modelcontextprotocol/sdk": "^1.32.2",
     "argon2": "^0.45.1",
     "commander": "^12.1.0",
     "date-fns": "^4.4.0",
@@ -43,10 +54,15 @@
     "@types/nodemailer": "^8.0.1",
     "@types/supertest": "^6.0.2",
     "@vitest/coverage-v8": "^2.0.0",
+    "eslint": "^9.39.5",
+    "eslint-config-prettier": "^9.1.2",
+    "globals": "^15.15.0",
     "playwright": "^1.62.1",
+    "prettier": "^3.9.6",
     "supertest": "^7.0.0",
     "tsx": "^4.19.0",
     "typescript": "^5.5.0",
+    "typescript-eslint": "^8.70.0",
     "vitest": "^2.0.0"
   }
 }
