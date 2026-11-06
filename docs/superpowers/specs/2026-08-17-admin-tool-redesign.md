@@ -25,6 +25,7 @@
 ### 2.1 范围内
 
 #### 后台
+
 - `/admin`(总览):5 个数字卡片 + 2 个趋势图(SVG sparkline,无图表库)+ 近期活动流(20 条)
 - `/admin/users`(增强):按邮箱 / 角色 / 启用状态 / 注册时间筛选,按 id / 注册时间排序,勾选批量启停 / 删除,CSV 导出
 - `/admin/etl/runs`(增强):按状态 / 时间范围筛选,CSV 导出
@@ -35,12 +36,14 @@
 - `/admin/queries`(新):查询量统计 — 总览 / Top 10 查询 IP / Top 10 用户 / 24h 时间序列
 
 #### 前台
+
 - `/`(改):hero 查询框 + "API 状态"卡片 + "最近 24h 查询"数字 + `/try` 链接
 - `/docs`(改):API 参考(从源码注释渲染)+ 集成示例(fetch / curl / Python / Node)
 - `/pricing`(删):路由删除,前端侧边栏移除入口
 - `/try`、`/about`、`/status`:保留,无大改
 
 #### 全局
+
 - 统一侧边栏布局(所有页面用 `layouts/app.hbs` + 部分 `layouts/admin.hbs`)
 - 侧边栏分组折叠:运营 / 用户 / API
 - 设计系统常量(`assets/style.css` 增量更新,不重写)
@@ -60,21 +63,21 @@
 
 ## 3. 需求摘要
 
-| 维度 | 决策 |
-|---|---|
-| 后台布局 | 左固定 220px 侧边栏 + 顶部 56px header + 主区 |
-| 前台布局 | 同上(统一) |
-| 样式 | 现有 `assets/style.css` 增量,不加新依赖 |
-| 图表 | 手写 SVG sparkline,零依赖 |
-| 数据表交互 | htmx(沿用)+ query string + 服务端重渲染 |
-| 自动刷新 | htmx `hx-trigger="every 30s"`(仅 Dashboard 总览) |
+| 维度         | 决策                                                                                                                   |
+| ------------ | ---------------------------------------------------------------------------------------------------------------------- |
+| 后台布局     | 左固定 220px 侧边栏 + 顶部 56px header + 主区                                                                          |
+| 前台布局     | 同上(统一)                                                                                                             |
+| 样式         | 现有 `assets/style.css` 增量,不加新依赖                                                                                |
+| 图表         | 手写 SVG sparkline,零依赖                                                                                              |
+| 数据表交互   | htmx(沿用)+ query string + 服务端重渲染                                                                                |
+| 自动刷新     | htmx `hx-trigger="every 30s"`(仅 Dashboard 总览)                                                                       |
 | 操作日志存储 | 新表 `admin_audit_log`(BIGINT id / actor_user_id / action / target_type / target_id / metadata JSON / ip / created_at) |
-| 操作日志写入 | `src/web/plugins/auditLog.ts` — `onResponse` hook 读 `req.auditAction`,自动写库,失败不影响响应 |
-| CSV 导出 | 已有 helper `csvForRows`(`admin/audit` 复用),其他列表各自实现 |
-| 配置脱敏 | 复用 `redactSecret()`(`src/config.ts:128`) |
-| 数据表筛选 | query string(`?role=admin&disabled=1&since=2026-01-01&sort=-created_at`)+ 服务端解析 |
-| 批量操作 | form POST 选中 id(逗号分隔)→ 后端循环处理 |
-| 测试 | vitest + supertest,沿用现有模式 |
+| 操作日志写入 | `src/web/plugins/auditLog.ts` — `onResponse` hook 读 `req.auditAction`,自动写库,失败不影响响应                         |
+| CSV 导出     | 已有 helper `csvForRows`(`admin/audit` 复用),其他列表各自实现                                                          |
+| 配置脱敏     | 复用 `redactSecret()`(`src/config.ts:128`)                                                                             |
+| 数据表筛选   | query string(`?role=admin&disabled=1&since=2026-01-01&sort=-created_at`)+ 服务端解析                                   |
+| 批量操作     | form POST 选中 id(逗号分隔)→ 后端循环处理                                                                              |
+| 测试         | vitest + supertest,沿用现有模式                                                                                        |
 
 ---
 
@@ -156,11 +159,11 @@ CREATE TABLE IF NOT EXISTS admin_audit_log (
 ### 6.1 操作日志插件 `src/web/plugins/auditLog.ts`
 
 ```ts
-declare module 'fastify' {
+declare module "fastify" {
   interface FastifyRequest {
     auditAction?: {
-      action: string;               // 'user.delete'
-      targetType?: string;          // 'user'
+      action: string; // 'user.delete'
+      targetType?: string; // 'user'
       targetId?: number | string;
       metadata?: Record<string, unknown>;
     };
@@ -178,13 +181,16 @@ declare module 'fastify' {
 //     await recordAuditLog(app.pool, { ...req, user: req.user, audit: req.auditAction, statusCode: reply.statusCode });
 //   });
 
-export function recordAuditLog(pool, opts: {
-  actor: { id: number; email: string } | null;
-  audit: NonNullable<FastifyRequest['auditAction']>;
-  ip: string;
-  userAgent: string;
-  statusCode: number;
-}): Promise<void>;
+export function recordAuditLog(
+  pool,
+  opts: {
+    actor: { id: number; email: string } | null;
+    audit: NonNullable<FastifyRequest["auditAction"]>;
+    ip: string;
+    userAgent: string;
+    statusCode: number;
+  },
+): Promise<void>;
 ```
 
 写入策略:**异步不阻塞响应**(不 await)。失败只 pino.error,不影响主响应。
@@ -197,22 +203,28 @@ export function recordAuditLog(pool, opts: {
 export interface Overview {
   generatedAt: Date;
   etl: {
-    lastRun: { id: number; startedAt: Date; finishedAt: Date | null; status: string; mergedRecords: number } | null;
+    lastRun: {
+      id: number;
+      startedAt: Date;
+      finishedAt: Date | null;
+      status: string;
+      mergedRecords: number;
+    } | null;
     lastSuccessAt: Date | null;
     runsToday: number;
   };
   db: {
-    ipRanges: number;           // SELECT COUNT(*) FROM ip_ranges
-    queryLogTotal: number;      // SELECT COUNT(*) FROM query_log
+    ipRanges: number; // SELECT COUNT(*) FROM ip_ranges
+    queryLogTotal: number; // SELECT COUNT(*) FROM query_log
     users: { total: number; verified: number; disabled: number };
     apiKeys: { total: number; active: number };
   };
   queries24h: {
     total: number;
-    hitRate: number;            // hit / total
-    trend: number[];            // last 24 hours bucketed, sparkline data
+    hitRate: number; // hit / total
+    trend: number[]; // last 24 hours bucketed, sparkline data
   };
-  recentActivity: AdminAuditLogEntry[];  // 20 条 admin_audit_log
+  recentActivity: AdminAuditLogEntry[]; // 20 条 admin_audit_log
 }
 
 export function getOverview(pool: Pool): Promise<Overview>;
@@ -227,15 +239,18 @@ export interface QueryStats {
   range: { since: Date; until: Date };
   total: number;
   byStatus: { hit: number; miss: number; invalid: number };
-  topIps: Array<{ ip_text: string; n: number }>;          // 10
-  topUsers: Array<{ user_email: string; n: number }>;    // 10
-  hourly: number[];                                       // sparkline bucketed
+  topIps: Array<{ ip_text: string; n: number }>; // 10
+  topUsers: Array<{ user_email: string; n: number }>; // 10
+  hourly: number[]; // sparkline bucketed
 }
 
-export function getQueryStats(pool: Pool, opts: {
-  since?: Date;
-  until?: Date;
-}): Promise<QueryStats>;
+export function getQueryStats(
+  pool: Pool,
+  opts: {
+    since?: Date;
+    until?: Date;
+  },
+): Promise<QueryStats>;
 ```
 
 ### 6.4 CSV 导出 helper
@@ -295,21 +310,21 @@ export function getQueryStats(pool: Pool, opts: {
 
 ```css
 :root {
-  --color-bg: #f7f8fa;            /* 主背景,工具站感 */
+  --color-bg: #f7f8fa; /* 主背景,工具站感 */
   --color-surface: #ffffff;
   --color-border: #e5e7eb;
   --color-text: #111827;
   --color-text-muted: #6b7280;
-  --color-accent: #2562d;          /* 主色,工具蓝 */
+  --color-accent: #2562d; /* 主色,工具蓝 */
   --color-success: #16a34a;
   --color-warning: #d97706;
   --color-danger: #dc2626;
-  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
-  --font-mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
   --radius-sm: 4px;
   --radius-md: 6px;
-  --shadow-sm: 0 1px 2px rgba(0,0,0,0.05);
-  --shadow-md: 0 4px 8px rgba(0,0,0,0.08);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 8px rgba(0, 0, 0, 0.08);
 }
 ```
 
@@ -358,35 +373,36 @@ export function getQueryStats(pool: Pool, opts: {
 
 ### 8.1 后台(全在 `src/web/routes/admin.ts` 或新文件)
 
-| Method | Path | Page | New / Modified |
-|---|---|---|---|
-| GET | `/admin` | `admin/dashboard.hbs` | **NEW** |
-| GET | `/admin/users` | `admin/users-list.hbs` | **MOD**(增强筛选) |
-| POST | `/admin/users/bulk` | redirect → `/admin/users` | **NEW** |
-| GET | `/admin/users.csv` | CSV | **NEW** |
-| GET | `/admin/etl/runs` | `admin/etl-runs.hbs` | **MOD**(增强筛选) |
-| GET | `/admin/etl/runs.csv` | CSV | **NEW** |
-| GET | `/admin/keys` | `admin/keys.hbs` | **MOD**(增强筛选) |
-| GET | `/admin/keys.csv` | CSV | **NEW** |
-| GET | `/admin/audit` | `admin/audit.hbs` | **MOD**(增强筛选) |
-| GET | `/admin/audit.csv` | CSV | 已有,验证仍工作 |
-| GET | `/admin/audit-log` | `admin/audit-log.hbs` | **NEW** |
-| GET | `/admin/audit-log.csv` | CSV | **NEW** |
-| GET | `/admin/queries` | `admin/queries.hbs` | **NEW** |
-| GET | `/admin/queries.csv` | CSV | **NEW** |
-| GET | `/admin/settings` | `admin/settings.hbs` | **NEW** |
+| Method | Path                   | Page                      | New / Modified    |
+| ------ | ---------------------- | ------------------------- | ----------------- |
+| GET    | `/admin`               | `admin/dashboard.hbs`     | **NEW**           |
+| GET    | `/admin/users`         | `admin/users-list.hbs`    | **MOD**(增强筛选) |
+| POST   | `/admin/users/bulk`    | redirect → `/admin/users` | **NEW**           |
+| GET    | `/admin/users.csv`     | CSV                       | **NEW**           |
+| GET    | `/admin/etl/runs`      | `admin/etl-runs.hbs`      | **MOD**(增强筛选) |
+| GET    | `/admin/etl/runs.csv`  | CSV                       | **NEW**           |
+| GET    | `/admin/keys`          | `admin/keys.hbs`          | **MOD**(增强筛选) |
+| GET    | `/admin/keys.csv`      | CSV                       | **NEW**           |
+| GET    | `/admin/audit`         | `admin/audit.hbs`         | **MOD**(增强筛选) |
+| GET    | `/admin/audit.csv`     | CSV                       | 已有,验证仍工作   |
+| GET    | `/admin/audit-log`     | `admin/audit-log.hbs`     | **NEW**           |
+| GET    | `/admin/audit-log.csv` | CSV                       | **NEW**           |
+| GET    | `/admin/queries`       | `admin/queries.hbs`       | **NEW**           |
+| GET    | `/admin/queries.csv`   | CSV                       | **NEW**           |
+| GET    | `/admin/settings`      | `admin/settings.hbs`      | **NEW**           |
 
 ### 8.2 前台
 
-| Method | Path | Page | New / Modified |
-|---|---|---|---|
-| GET | `/` | `home.hbs` | **MOD**(工具首页) |
-| GET | `/docs` | `docs.hbs` | **MOD**(API 参考) |
-| ~~GET~~ | ~~`/pricing`~~ | — | **DELETE** |
+| Method  | Path           | Page       | New / Modified    |
+| ------- | -------------- | ---------- | ----------------- |
+| GET     | `/`            | `home.hbs` | **MOD**(工具首页) |
+| GET     | `/docs`        | `docs.hbs` | **MOD**(API 参考) |
+| ~~GET~~ | ~~`/pricing`~~ | —          | **DELETE**        |
 
 ### 8.3 前台侧边栏
 
 `partials/sidebar.hbs`(替换现有 `partials/nav.hbs`):
+
 - 公共:`/`(首页) · `/docs` · `/try` · `/status` · `/about`
 - 登录用户:`/dashboard` · `/dashboard/history` · `/dashboard/keys` · `/dashboard/profile`
 - 管理员:同后台侧边栏
@@ -412,17 +428,17 @@ export function getQueryStats(pool: Pool, opts: {
 
 ## 10. 全局约束
 
-| 约束 | 值 |
-|---|---|
-| Node 版本 | ≥ 20.0.0(已有) |
-| 测试通过 | 180/180 → 195/195 |
-| TypeScript | strict,`tsc --noEmit` 干净 |
-| 新依赖 | **0**(SVG sparkline / htmx 复用) |
-| 行尾 | LF(仓库已统一) |
-| 文件结尾 | 必须有 newline |
-| i18n | 沿用 zh-CN / en-US,新文案两边都加(空字符串也行) |
-| 现有功能 | 不破坏,只是增强 |
-| ESLint | 仓库未配,不引入 |
+| 约束       | 值                                              |
+| ---------- | ----------------------------------------------- |
+| Node 版本  | ≥ 20.0.0(已有)                                  |
+| 测试通过   | 180/180 → 195/195                               |
+| TypeScript | strict,`tsc --noEmit` 干净                      |
+| 新依赖     | **0**(SVG sparkline / htmx 复用)                |
+| 行尾       | LF(仓库已统一)                                  |
+| 文件结尾   | 必须有 newline                                  |
+| i18n       | 沿用 zh-CN / en-US,新文案两边都加(空字符串也行) |
+| 现有功能   | 不破坏,只是增强                                 |
+| ESLint     | 仓库未配,不引入                                 |
 
 ---
 
@@ -450,15 +466,15 @@ Task 15: 全量集成测试 + README 更新
 
 ## 12. 风险与对策
 
-| 风险 | 对策 |
-|---|---|
-| 操作日志写入失败影响响应 | 异步不 await,pino.error,主响应已发 |
-| 聚合查询慢(Dashboard) | 走 InnoDB 统计,数据量小(< 1M 行时 < 100ms) |
-| SVG sparkline 数值越界 | 内部 normalize 到 [0, max],max 0 时退化为空 |
-| CSV Excel 编码乱码 | 输出 `﻿` BOM 头 |
-| 批量操作超时 | 默认批量上限 100,超出 422 |
-| 现有 admin 页面外观大改 | 改 design token + 组件 class,模板渐近迁移,不一次性重写所有 |
-| 操作日志的 `metadata` JSON | 已有 query_log 类似实践;MySQL JSON 类型 |
+| 风险                       | 对策                                                       |
+| -------------------------- | ---------------------------------------------------------- |
+| 操作日志写入失败影响响应   | 异步不 await,pino.error,主响应已发                         |
+| 聚合查询慢(Dashboard)      | 走 InnoDB 统计,数据量小(< 1M 行时 < 100ms)                 |
+| SVG sparkline 数值越界     | 内部 normalize 到 [0, max],max 0 时退化为空                |
+| CSV Excel 编码乱码         | 输出 `﻿` BOM 头                                            |
+| 批量操作超时               | 默认批量上限 100,超出 422                                  |
+| 现有 admin 页面外观大改    | 改 design token + 组件 class,模板渐近迁移,不一次性重写所有 |
+| 操作日志的 `metadata` JSON | 已有 query_log 类似实践;MySQL JSON 类型                    |
 
 ---
 

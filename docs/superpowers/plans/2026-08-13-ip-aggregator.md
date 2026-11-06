@@ -85,12 +85,14 @@ ipquery/
 ## Task 1: Project Scaffolding
 
 **Files:**
+
 - Create: `package.json`, `tsconfig.json`, `vitest.config.ts`, `.gitignore`, `.env.example`, `README.md`, `docker-compose.yml`
 - Create (empty placeholders for layout): `src/cli.ts`, `src/types.ts`, all directories
 
 **Goal:** Establish TypeScript + Vitest build, MySQL container, empty directory tree, and project-wide configs.
 
 **Interfaces:**
+
 - Consumes: nothing
 - Produces: working `npm install`, `npm test` (runs zero tests), `docker compose up -d mysql` brings up MySQL 8
 
@@ -162,18 +164,18 @@ ipquery/
 - [ ] **Step 3: Create `vitest.config.ts`**
 
 ```ts
-import { defineConfig } from 'vitest/config';
+import { defineConfig } from "vitest/config";
 
 export default defineConfig({
   test: {
-    include: ['test/**/*.test.ts'],
+    include: ["test/**/*.test.ts"],
     testTimeout: 30_000,
     hookTimeout: 30_000,
     coverage: {
-      provider: 'v8',
-      reporter: ['text', 'html'],
-      include: ['src/**/*.ts'],
-      exclude: ['src/cli.ts'],
+      provider: "v8",
+      reporter: ["text", "html"],
+      include: ["src/**/*.ts"],
+      exclude: ["src/cli.ts"],
     },
   },
 });
@@ -247,7 +249,7 @@ volumes:
 
 - [ ] **Step 7: Create `README.md`** (placeholder, finalized in Task 17)
 
-```markdown
+````markdown
 # IPQuery
 
 IP geolocation aggregator. See `docs/superpowers/specs/` for design and `docs/superpowers/plans/` for the implementation plan.
@@ -263,7 +265,9 @@ npm run build
 node dist/cli.js update
 node dist/cli.js serve
 ```
-```
+````
+
+````
 
 - [ ] **Step 8: Create empty directory tree with placeholder files**
 
@@ -276,7 +280,7 @@ for f in src/cli.ts src/config.ts src/ip.ts src/types.ts \
          src/api/server.ts src/api/routes/lookup.ts src/api/routes/health.ts src/api/routes/stats.ts; do
   echo "// SPDX-License-Identifier: MIT" > "$f"
 done
-```
+````
 
 - [ ] **Step 9: Install dependencies and verify**
 
@@ -310,53 +314,56 @@ git commit -m "chore: scaffold project with TypeScript, Vitest, Fastify, MySQL"
 ## Task 2: Type Definitions
 
 **Files:**
+
 - Modify: `src/types.ts`
 - Create: `test/unit/types.test.ts`
 
 **Goal:** Define core types used everywhere else.
 
 **Interfaces:**
+
 - Consumes: nothing
 - Produces: exported `Source`, `NormalizedRecord`, `LookupResult`, `EtlRun`, `IpRangeRow`
 
 - [ ] **Step 1: Write the failing test**
 
 `test/unit/types.test.ts`:
-```ts
-import { describe, it, expect } from 'vitest';
-import type { Source, NormalizedRecord, LookupResult, EtlRun } from '../../src/types';
 
-describe('types', () => {
-  it('Source is a union of three string literals', () => {
-    const sources: Source[] = ['maxmind', 'ip2region', 'dbip'];
+```ts
+import { describe, it, expect } from "vitest";
+import type { Source, NormalizedRecord, LookupResult, EtlRun } from "../../src/types";
+
+describe("types", () => {
+  it("Source is a union of three string literals", () => {
+    const sources: Source[] = ["maxmind", "ip2region", "dbip"];
     expect(sources).toHaveLength(3);
   });
 
-  it('NormalizedRecord has 16-byte Buffer start/end', () => {
+  it("NormalizedRecord has 16-byte Buffer start/end", () => {
     const r: NormalizedRecord = {
       startIp: Buffer.alloc(16),
       endIp: Buffer.alloc(16),
-      source: 'maxmind',
+      source: "maxmind",
     };
     expect(r.startIp).toHaveLength(16);
     expect(r.endIp).toHaveLength(16);
   });
 
-  it('LookupResult requires ip and etag', () => {
+  it("LookupResult requires ip and etag", () => {
     const r: LookupResult = {
-      ip: '8.8.8.8',
-      country: { source: 'maxmind' },
-      etag: '2026-08-12T02:00:00Z',
+      ip: "8.8.8.8",
+      country: { source: "maxmind" },
+      etag: "2026-08-12T02:00:00Z",
     };
-    expect(r.ip).toBe('8.8.8.8');
+    expect(r.ip).toBe("8.8.8.8");
   });
 
-  it('EtlRun has required status enum', () => {
+  it("EtlRun has required status enum", () => {
     const r: EtlRun = {
       startedAt: new Date(),
-      status: 'running',
+      status: "running",
     };
-    expect(['running', 'success', 'failed']).toContain(r.status);
+    expect(["running", "success", "failed"]).toContain(r.status);
   });
 });
 ```
@@ -373,7 +380,7 @@ Expected: FAIL with "Cannot find module '../../src/types'".
 
 ```ts
 // SPDX-License-Identifier: MIT
-export type Source = 'maxmind' | 'ip2region' | 'dbip';
+export type Source = "maxmind" | "ip2region" | "dbip";
 
 export interface NormalizedRecord {
   startIp: Buffer;
@@ -409,7 +416,7 @@ export interface EtlRun {
   id?: number;
   startedAt: Date;
   finishedAt?: Date;
-  status: 'running' | 'success' | 'failed';
+  status: "running" | "success" | "failed";
   maxmindRecords?: number;
   ip2regionRecords?: number;
   dbipRecords?: number;
@@ -462,12 +469,14 @@ git commit -m "feat: add core type definitions"
 ## Task 3: Config Loader
 
 **Files:**
+
 - Modify: `src/config.ts`
 - Create: `test/unit/config.test.ts`
 
 **Goal:** Load `.env` into typed config, validate, and provide a `redact()` helper that hides secrets when logged.
 
 **Interfaces:**
+
 - Consumes: `process.env`
 - Produces: exported `loadConfig(): AppConfig`, `redactSecret(s: string): string`
 
@@ -484,48 +493,53 @@ export interface AppConfig {
 - [ ] **Step 1: Write the failing test**
 
 `test/unit/config.test.ts`:
+
 ```ts
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { loadConfig, redactSecret } from '../../src/config';
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { loadConfig, redactSecret } from "../../src/config";
 
-describe('config', () => {
+describe("config", () => {
   const originalEnv = process.env;
-  beforeEach(() => { process.env = { ...originalEnv }; });
-  afterEach(() => { process.env = originalEnv; });
+  beforeEach(() => {
+    process.env = { ...originalEnv };
+  });
+  afterEach(() => {
+    process.env = originalEnv;
+  });
 
-  it('returns defaults when env vars are unset', () => {
+  it("returns defaults when env vars are unset", () => {
     delete process.env.DB_HOST;
     delete process.env.DB_PORT;
     delete process.env.MAXMIND_LICENSE_KEY;
     const cfg = loadConfig();
-    expect(cfg.db.host).toBe('localhost');
+    expect(cfg.db.host).toBe("localhost");
     expect(cfg.db.port).toBe(3306);
-    expect(cfg.maxmind.editions).toEqual(['GeoLite2-City', 'GeoLite2-ASN']);
+    expect(cfg.maxmind.editions).toEqual(["GeoLite2-City", "GeoLite2-ASN"]);
     expect(cfg.maxmind.licenseKey).toBeUndefined();
   });
 
-  it('parses comma-separated editions list', () => {
-    process.env.MAXMIND_EDITIONS = 'GeoLite2-City,GeoLite2-ASN,GeoLite2-Country';
+  it("parses comma-separated editions list", () => {
+    process.env.MAXMIND_EDITIONS = "GeoLite2-City,GeoLite2-ASN,GeoLite2-Country";
     const cfg = loadConfig();
-    expect(cfg.maxmind.editions).toEqual(['GeoLite2-City', 'GeoLite2-ASN', 'GeoLite2-Country']);
+    expect(cfg.maxmind.editions).toEqual(["GeoLite2-City", "GeoLite2-ASN", "GeoLite2-Country"]);
   });
 
-  it('throws on invalid cron expression', () => {
-    process.env.ETL_SCHEDULE = 'not a cron';
+  it("throws on invalid cron expression", () => {
+    process.env.ETL_SCHEDULE = "not a cron";
     expect(() => loadConfig()).toThrow(/ETL_SCHEDULE/);
   });
 
-  it('accepts a valid 5-field cron', () => {
-    process.env.ETL_SCHEDULE = '0 2 * * *';
+  it("accepts a valid 5-field cron", () => {
+    process.env.ETL_SCHEDULE = "0 2 * * *";
     expect(() => loadConfig()).not.toThrow();
   });
 
-  it('redactSecret masks middle of long string', () => {
-    expect(redactSecret('abcdefghijklmnop')).toBe('abcd…mnop');
+  it("redactSecret masks middle of long string", () => {
+    expect(redactSecret("abcdefghijklmnop")).toBe("abcd…mnop");
   });
 
-  it('redactSecret leaves short strings fully masked', () => {
-    expect(redactSecret('short')).toBe('*****');
+  it("redactSecret leaves short strings fully masked", () => {
+    expect(redactSecret("short")).toBe("*****");
   });
 });
 ```
@@ -542,12 +556,16 @@ Expected: FAIL with "Cannot find module".
 
 ```ts
 // SPDX-License-Identifier: MIT
-import * as cronParser from 'node-cron';
+import * as cronParser from "node-cron";
 
 export interface AppConfig {
   db: {
-    host: string; port: number; user: string; password: string;
-    database: string; poolSize: number;
+    host: string;
+    port: number;
+    user: string;
+    password: string;
+    database: string;
+    poolSize: number;
   };
   maxmind: { licenseKey?: string; editions: string[] };
   api: { port: number; rateLimit: number };
@@ -562,28 +580,30 @@ function num(v: string | undefined, fallback: number): number {
 }
 
 function str(v: string | undefined, fallback: string): string {
-  return v === undefined || v === '' ? fallback : v;
+  return v === undefined || v === "" ? fallback : v;
 }
 
 export function loadConfig(): AppConfig {
-  const schedule = str(process.env.ETL_SCHEDULE, '0 2 * * *');
+  const schedule = str(process.env.ETL_SCHEDULE, "0 2 * * *");
   if (!cronParser.validate(schedule)) {
     throw new Error(`ETL_SCHEDULE is not a valid cron expression: ${schedule}`);
   }
 
   return {
     db: {
-      host: str(process.env.DB_HOST, 'localhost'),
+      host: str(process.env.DB_HOST, "localhost"),
       port: num(process.env.DB_PORT, 3306),
-      user: str(process.env.DB_USER, 'root'),
-      password: str(process.env.DB_PASSWORD, 'rootpass'),
-      database: str(process.env.DB_NAME, 'ipquery'),
+      user: str(process.env.DB_USER, "root"),
+      password: str(process.env.DB_PASSWORD, "rootpass"),
+      database: str(process.env.DB_NAME, "ipquery"),
       poolSize: num(process.env.DB_POOL_SIZE, 10),
     },
     maxmind: {
       licenseKey: process.env.MAXMIND_LICENSE_KEY || undefined,
-      editions: str(process.env.MAXMIND_EDITIONS, 'GeoLite2-City,GeoLite2-ASN')
-        .split(',').map((s) => s.trim()).filter(Boolean),
+      editions: str(process.env.MAXMIND_EDITIONS, "GeoLite2-City,GeoLite2-ASN")
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean),
     },
     api: {
       port: num(process.env.PORT, 3000),
@@ -591,26 +611,26 @@ export function loadConfig(): AppConfig {
     },
     etl: {
       schedule,
-      timezone: str(process.env.ETL_TIMEZONE, 'UTC'),
-      dataDir: str(process.env.DATA_DIR, './data'),
+      timezone: str(process.env.ETL_TIMEZONE, "UTC"),
+      dataDir: str(process.env.DATA_DIR, "./data"),
     },
   };
 }
 
 export function redactSecret(value: string): string {
-  if (value.length <= 8) return '*'.repeat(value.length);
-  return value.slice(0, 4) + '…' + value.slice(-4);
+  if (value.length <= 8) return "*".repeat(value.length);
+  return value.slice(0, 4) + "…" + value.slice(-4);
 }
 
 export function configSummary(cfg: AppConfig): string {
   const lines = [
     `[config] db=${cfg.db.host}:${cfg.db.port}/${cfg.db.database}`,
-    `[config] maxmind key=${cfg.maxmind.licenseKey ? redactSecret(cfg.maxmind.licenseKey) : '(none)'}`,
-    `[config] editions=${cfg.maxmind.editions.join(',')}`,
+    `[config] maxmind key=${cfg.maxmind.licenseKey ? redactSecret(cfg.maxmind.licenseKey) : "(none)"}`,
+    `[config] editions=${cfg.maxmind.editions.join(",")}`,
     `[config] api port=${cfg.api.port} rateLimit=${cfg.api.rateLimit}/min`,
     `[config] etl schedule="${cfg.etl.schedule}" tz=${cfg.etl.timezone} dataDir=${cfg.etl.dataDir}`,
   ];
-  return lines.join('\n');
+  return lines.join("\n");
 }
 ```
 
@@ -634,61 +654,68 @@ git commit -m "feat: add env-driven config loader with secret redaction"
 ## Task 4: IP Utilities
 
 **Files:**
+
 - Modify: `src/ip.ts`
 - Create: `test/unit/ip.test.ts`
 
 **Goal:** Parse IPv4/IPv6 strings to `Buffer(16)`, validate, compare ranges.
 
 **Interfaces:**
+
 - Consumes: nothing
 - Produces: exported `parseIp(s: string): Buffer | null`, `isValidIp(s: string): boolean`, `bufferToString(b: Buffer): string`, `compareBuffers(a: Buffer, b: Buffer): number`
 
 - [ ] **Step 1: Write the failing test**
 
 `test/unit/ip.test.ts`:
+
 ```ts
-import { describe, it, expect } from 'vitest';
-import { parseIp, isValidIp, bufferToString, compareBuffers } from '../../src/ip';
+import { describe, it, expect } from "vitest";
+import { parseIp, isValidIp, bufferToString, compareBuffers } from "../../src/ip";
 
-describe('ip', () => {
-  it('isValidIp accepts IPv4 and IPv6', () => {
-    expect(isValidIp('8.8.8.8')).toBe(true);
-    expect(isValidIp('::1')).toBe(true);
-    expect(isValidIp('2001:db8::1')).toBe(true);
+describe("ip", () => {
+  it("isValidIp accepts IPv4 and IPv6", () => {
+    expect(isValidIp("8.8.8.8")).toBe(true);
+    expect(isValidIp("::1")).toBe(true);
+    expect(isValidIp("2001:db8::1")).toBe(true);
   });
 
-  it('isValidIp rejects garbage', () => {
-    expect(isValidIp('999.999.999.999')).toBe(false);
-    expect(isValidIp('abc')).toBe(false);
-    expect(isValidIp('')).toBe(false);
+  it("isValidIp rejects garbage", () => {
+    expect(isValidIp("999.999.999.999")).toBe(false);
+    expect(isValidIp("abc")).toBe(false);
+    expect(isValidIp("")).toBe(false);
   });
 
-  it('parseIp returns 16-byte buffer', () => {
-    expect(parseIp('8.8.8.8')).toHaveLength(16);
-    expect(parseIp('::1')?.slice(15, 16)[0]).toBe(1);
+  it("parseIp returns 16-byte buffer", () => {
+    expect(parseIp("8.8.8.8")).toHaveLength(16);
+    expect(parseIp("::1")?.slice(15, 16)[0]).toBe(1);
   });
 
-  it('parseIp IPv4 left-pads with zeros', () => {
-    const b = parseIp('8.8.8.8')!;
-    expect(b[0]).toBe(0); expect(b[1]).toBe(0); expect(b[2]).toBe(0);
-    expect(b[12]).toBe(8); expect(b[13]).toBe(8);
-    expect(b[14]).toBe(8); expect(b[15]).toBe(8);
+  it("parseIp IPv4 left-pads with zeros", () => {
+    const b = parseIp("8.8.8.8")!;
+    expect(b[0]).toBe(0);
+    expect(b[1]).toBe(0);
+    expect(b[2]).toBe(0);
+    expect(b[12]).toBe(8);
+    expect(b[13]).toBe(8);
+    expect(b[14]).toBe(8);
+    expect(b[15]).toBe(8);
   });
 
-  it('parseIp returns null on invalid', () => {
-    expect(parseIp('not.an.ip')).toBeNull();
-    expect(parseIp('256.0.0.1')).toBeNull();
+  it("parseIp returns null on invalid", () => {
+    expect(parseIp("not.an.ip")).toBeNull();
+    expect(parseIp("256.0.0.1")).toBeNull();
   });
 
-  it('bufferToString round-trips', () => {
-    for (const ip of ['8.8.8.8', '0.0.0.0', '255.255.255.255', '::1', '2001:db8::1']) {
+  it("bufferToString round-trips", () => {
+    for (const ip of ["8.8.8.8", "0.0.0.0", "255.255.255.255", "::1", "2001:db8::1"]) {
       expect(bufferToString(parseIp(ip)!)).toBe(ip);
     }
   });
 
-  it('compareBuffers is a total order', () => {
-    const a = parseIp('8.8.8.0')!;
-    const b = parseIp('8.8.8.255')!;
+  it("compareBuffers is a total order", () => {
+    const a = parseIp("8.8.8.0")!;
+    const b = parseIp("8.8.8.255")!;
     expect(compareBuffers(a, b)).toBeLessThan(0);
     expect(compareBuffers(b, a)).toBeGreaterThan(0);
     expect(compareBuffers(a, a)).toBe(0);
@@ -707,21 +734,21 @@ npm test -- test/unit/ip.test.ts
 ```ts
 // SPDX-License-Identifier: MIT
 export function isValidIp(s: string): boolean {
-  if (typeof s !== 'string' || s.length === 0) return false;
+  if (typeof s !== "string" || s.length === 0) return false;
   // Cheap pre-check: only contains digits, dots, colons, a-f, A-F
   if (!/^[0-9a-fA-F:.]+$/.test(s)) return false;
   return parseIp(s) !== null;
 }
 
 export function parseIp(s: string): Buffer | null {
-  if (typeof s !== 'string' || s.length === 0) return null;
-  if (s.includes(':')) return parseV6(s);
-  if (s.includes('.')) return parseV4(s);
+  if (typeof s !== "string" || s.length === 0) return null;
+  if (s.includes(":")) return parseV6(s);
+  if (s.includes(".")) return parseV4(s);
   return null;
 }
 
 function parseV4(s: string): Buffer | null {
-  const parts = s.split('.');
+  const parts = s.split(".");
   if (parts.length !== 4) return null;
   const buf = Buffer.alloc(16);
   for (let i = 0; i < 4; i++) {
@@ -742,23 +769,23 @@ function parseV6(s: string): Buffer | null {
   let foundDoubleColon = false;
   let doubleColonIndex = -1;
 
-  if (s === '::') {
+  if (s === "::") {
     return buf;
   }
 
-  const sides = s.split('::');
+  const sides = s.split("::");
   if (sides.length > 2) return null;
-  const leftPart = sides[0] ?? '';
-  const rightPart = sides[1] ?? '';
+  const leftPart = sides[0] ?? "";
+  const rightPart = sides[1] ?? "";
 
   if (leftPart.length > 0) {
-    for (const part of leftPart.split(':')) {
+    for (const part of leftPart.split(":")) {
       if (!/^[0-9a-fA-F]{1,4}$/.test(part)) return null;
       head.push(parseInt(part, 16));
     }
   }
   if (rightPart.length > 0) {
-    for (const part of rightPart.split(':')) {
+    for (const part of rightPart.split(":")) {
       if (!/^[0-9A-Fa-f]{1,4}$/.test(part)) return null;
       tail.push(parseInt(part, 16));
     }
@@ -791,11 +818,22 @@ function parseV6(s: string): Buffer | null {
 }
 
 export function bufferToString(b: Buffer): string {
-  if (b.length !== 16) throw new Error('expected 16-byte buffer');
+  if (b.length !== 16) throw new Error("expected 16-byte buffer");
   // IPv4 if first 12 bytes are zero
-  if (b[0] === 0 && b[1] === 0 && b[2] === 0 && b[3] === 0 &&
-      b[4] === 0 && b[5] === 0 && b[6] === 0 && b[7] === 0 &&
-      b[8] === 0 && b[9] === 0 && b[10] === 0 && b[11] === 0) {
+  if (
+    b[0] === 0 &&
+    b[1] === 0 &&
+    b[2] === 0 &&
+    b[3] === 0 &&
+    b[4] === 0 &&
+    b[5] === 0 &&
+    b[6] === 0 &&
+    b[7] === 0 &&
+    b[8] === 0 &&
+    b[9] === 0 &&
+    b[10] === 0 &&
+    b[11] === 0
+  ) {
     return `${b[12]}.${b[13]}.${b[14]}.${b[15]}`;
   }
   const groups: number[] = [];
@@ -803,23 +841,29 @@ export function bufferToString(b: Buffer): string {
     groups.push((b[i * 2]! << 8) | b[i * 2 + 1]!);
   }
   // Find longest run of zeros for :: abbreviation
-  let bestStart = -1, bestLen = 0;
-  let curStart = -1, curLen = 0;
+  let bestStart = -1,
+    bestLen = 0;
+  let curStart = -1,
+    curLen = 0;
   for (let i = 0; i < 8; i++) {
     if (groups[i] === 0) {
       if (curStart === -1) curStart = i;
       curLen++;
-      if (curLen > bestLen) { bestLen = curLen; bestStart = curStart; }
+      if (curLen > bestLen) {
+        bestLen = curLen;
+        bestStart = curStart;
+      }
     } else {
-      curStart = -1; curLen = 0;
+      curStart = -1;
+      curLen = 0;
     }
   }
   if (bestLen < 2) {
-    return groups.map((g) => g.toString(16)).join(':');
+    return groups.map((g) => g.toString(16)).join(":");
   }
   const head = groups.slice(0, bestStart).map((g) => g.toString(16));
   const tail = groups.slice(bestStart + bestLen).map((g) => g.toString(16));
-  return `${head.join(':')}::${tail.join(':')}`;
+  return `${head.join(":")}::${tail.join(":")}`;
 }
 
 export function compareBuffers(a: Buffer, b: Buffer): number {
@@ -852,12 +896,14 @@ git commit -m "feat: add IP parse/validate/buffer utilities"
 ## Task 5: MySQL Storage
 
 **Files:**
+
 - Modify: `src/storage/mysql.ts`, `src/storage/schema.sql`
 - Create: `test/integration/mysql.test.ts`
 
 **Goal:** Connection pool, schema bootstrap, atomic table swap, and basic insert/query.
 
 **Interfaces:**
+
 - Consumes: `AppConfig`
 - Produces:
   - `createPool(cfg): mysql.Pool`
@@ -917,24 +963,38 @@ CREATE TABLE IF NOT EXISTS etl_runs (
 - [ ] **Step 2: Write the failing integration test**
 
 `test/integration/mysql.test.ts`:
+
 ```ts
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import * as mysql from 'mysql2/promise';
-import { createPool, initSchema, atomicSwapRanges, insertIntoNew, truncateNew, findRange, recordEtlStart, recordEtlFinish, lastEtlRun } from '../../src/storage/mysql';
-import { loadConfig } from '../../src/config';
-import * as fs from 'node:fs/promises';
-import * as path from 'node:path';
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import * as mysql from "mysql2/promise";
+import {
+  createPool,
+  initSchema,
+  atomicSwapRanges,
+  insertIntoNew,
+  truncateNew,
+  findRange,
+  recordEtlStart,
+  recordEtlFinish,
+  lastEtlRun,
+} from "../../src/storage/mysql";
+import { loadConfig } from "../../src/config";
+import * as fs from "node:fs/promises";
+import * as path from "node:path";
 
-const TEST_DB = 'ipquery_test';
+const TEST_DB = "ipquery_test";
 
-describe('mysql storage', () => {
+describe("mysql storage", () => {
   let pool: mysql.Pool;
   let cfg = loadConfig();
 
   beforeAll(async () => {
     cfg.db.database = TEST_DB;
     const root = await mysql.createConnection({
-      host: cfg.db.host, port: cfg.db.port, user: cfg.db.user, password: cfg.db.password,
+      host: cfg.db.host,
+      port: cfg.db.port,
+      user: cfg.db.user,
+      password: cfg.db.password,
     });
     await root.query(`DROP DATABASE IF EXISTS ${TEST_DB}`);
     await root.query(`CREATE DATABASE ${TEST_DB}`);
@@ -946,42 +1006,48 @@ describe('mysql storage', () => {
   afterAll(async () => {
     await pool.end();
     const root = await mysql.createConnection({
-      host: cfg.db.host, port: cfg.db.port, user: cfg.db.user, password: cfg.db.password,
+      host: cfg.db.host,
+      port: cfg.db.port,
+      user: cfg.db.user,
+      password: cfg.db.password,
     });
     await root.query(`DROP DATABASE IF EXISTS ${TEST_DB}`);
     await root.end();
   });
 
-  it('initSchema creates tables', async () => {
+  it("initSchema creates tables", async () => {
     const [rows] = await pool.query<mysql.RowDataPacket[]>(
       `SELECT TABLE_NAME FROM information_schema.tables WHERE TABLE_SCHEMA = ?`,
-      [TEST_DB]
+      [TEST_DB],
     );
-    const names = rows.map(r => r.TABLE_NAME).sort();
-    expect(names).toEqual(['etl_runs', 'ip_ranges', 'ip_ranges_new']);
+    const names = rows.map((r) => r.TABLE_NAME).sort();
+    expect(names).toEqual(["etl_runs", "ip_ranges", "ip_ranges_new"]);
   });
 
-  it('insertIntoNew + atomicSwapRanges moves data', async () => {
+  it("insertIntoNew + atomicSwapRanges moves data", async () => {
     await truncateNew(pool);
     const row = {
-      startIp: Buffer.from([0,0,0,0,0,0,0,0,0,0,0xff,0xff,8,8,8,0]),
-      endIp:   Buffer.from([0,0,0,0,0,0,0,0,0,0,0xff,0xff,8,8,8,255]),
-      countryCode: 'US', countryName: 'United States', city: 'Mountain View',
-      countrySource: 'maxmind' as const, citySource: 'maxmind' as const,
+      startIp: Buffer.from([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff, 8, 8, 8, 0]),
+      endIp: Buffer.from([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff, 8, 8, 8, 255]),
+      countryCode: "US",
+      countryName: "United States",
+      city: "Mountain View",
+      countrySource: "maxmind" as const,
+      citySource: "maxmind" as const,
     };
     await insertIntoNew(pool, [row]);
     await atomicSwapRanges(pool);
-    const found = await findRange(pool, Buffer.from([0,0,0,0,0,0,0,0,0,0,0xff,0xff,8,8,8,8]));
-    expect(found?.countryCode).toBe('US');
-    expect(found?.city).toBe('Mountain View');
+    const found = await findRange(pool, Buffer.from([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff, 8, 8, 8, 8]));
+    expect(found?.countryCode).toBe("US");
+    expect(found?.city).toBe("Mountain View");
   });
 
-  it('records ETL start/finish and reads back', async () => {
+  it("records ETL start/finish and reads back", async () => {
     const id = await recordEtlStart(pool);
     expect(id).toBeGreaterThan(0);
-    await recordEtlFinish(pool, id, 'success', { mergedRecords: 100 });
+    await recordEtlFinish(pool, id, "success", { mergedRecords: 100 });
     const last = await lastEtlRun(pool);
-    expect(last?.status).toBe('success');
+    expect(last?.status).toBe("success");
     expect(last?.mergedRecords).toBe(100);
   });
 });
@@ -999,17 +1065,17 @@ Expected: FAIL — module not found.
 
 ```ts
 // SPDX-License-Identifier: MIT
-import * as mysql from 'mysql2/promise';
-import * as fs from 'node:fs/promises';
-import * as path from 'node:path';
-import type { AppConfig } from '../config';
-import type { IpRangeRow, EtlRun, Source } from '../types';
+import * as mysql from "mysql2/promise";
+import * as fs from "node:fs/promises";
+import * as path from "node:path";
+import type { AppConfig } from "../config";
+import type { IpRangeRow, EtlRun, Source } from "../types";
 
 let SCHEMA_SQL: string | null = null;
 async function loadSchema(): Promise<string> {
   if (SCHEMA_SQL) return SCHEMA_SQL;
-  const p = path.join(__dirname, 'schema.sql');
-  SCHEMA_SQL = await fs.readFile(p, 'utf8');
+  const p = path.join(__dirname, "schema.sql");
+  SCHEMA_SQL = await fs.readFile(p, "utf8");
   return SCHEMA_SQL;
 }
 
@@ -1023,7 +1089,7 @@ export function createPool(cfg: AppConfig): mysql.Pool {
     connectionLimit: cfg.db.poolSize,
     waitForConnections: true,
     multipleStatements: true,
-    timezone: 'Z',
+    timezone: "Z",
     dateStrings: false,
   });
 }
@@ -1034,7 +1100,7 @@ export async function initSchema(pool: mysql.Pool): Promise<void> {
 }
 
 export async function truncateNew(pool: mysql.Pool): Promise<void> {
-  await pool.query('TRUNCATE TABLE ip_ranges_new');
+  await pool.query("TRUNCATE TABLE ip_ranges_new");
 }
 
 export async function insertIntoNew(pool: mysql.Pool, rows: IpRangeRow[]): Promise<void> {
@@ -1043,18 +1109,31 @@ export async function insertIntoNew(pool: mysql.Pool, rows: IpRangeRow[]): Promi
   for (let i = 0; i < rows.length; i += CHUNK) {
     const slice = rows.slice(i, i + CHUNK);
     const values: unknown[] = [];
-    const placeholders = slice.map((r) => {
-      values.push(
-        r.startIp, r.endIp,
-        r.countryCode ?? null, r.countryName ?? null,
-        r.region ?? null, r.city ?? null, r.postalCode ?? null,
-        r.latitude ?? null, r.longitude ?? null, r.timezone ?? null,
-        r.isp ?? null, r.asn ?? null, r.asnOrg ?? null,
-        r.countrySource ?? null, r.citySource ?? null,
-        r.ispSource ?? null, r.asnSource ?? null, r.geoSource ?? null,
-      );
-      return '(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)';
-    }).join(',');
+    const placeholders = slice
+      .map((r) => {
+        values.push(
+          r.startIp,
+          r.endIp,
+          r.countryCode ?? null,
+          r.countryName ?? null,
+          r.region ?? null,
+          r.city ?? null,
+          r.postalCode ?? null,
+          r.latitude ?? null,
+          r.longitude ?? null,
+          r.timezone ?? null,
+          r.isp ?? null,
+          r.asn ?? null,
+          r.asnOrg ?? null,
+          r.countrySource ?? null,
+          r.citySource ?? null,
+          r.ispSource ?? null,
+          r.asnSource ?? null,
+          r.geoSource ?? null,
+        );
+        return "(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)";
+      })
+      .join(",");
     await pool.query(
       `INSERT INTO ip_ranges_new (start_ip,end_ip,country_code,country_name,region,city,postal_code,latitude,longitude,timezone,isp,asn,asn_org,country_source,city_source,isp_source,asn_source,geo_source) VALUES ${placeholders}`,
       values,
@@ -1066,7 +1145,9 @@ export async function atomicSwapRanges(pool: mysql.Pool): Promise<void> {
   const conn = await pool.getConnection();
   try {
     await conn.beginTransaction();
-    await conn.query('RENAME TABLE ip_ranges TO ip_ranges_old, ip_ranges_new TO ip_ranges, ip_ranges_old TO ip_ranges_new');
+    await conn.query(
+      "RENAME TABLE ip_ranges TO ip_ranges_old, ip_ranges_new TO ip_ranges, ip_ranges_old TO ip_ranges_new",
+    );
     await conn.commit();
   } catch (err) {
     await conn.rollback();
@@ -1092,11 +1173,15 @@ export async function findRange(pool: mysql.Pool, ipBuf: Buffer): Promise<IpRang
   return {
     startIp: r.start_ip as Buffer,
     endIp: r.end_ip as Buffer,
-    countryCode: r.country_code, countryName: r.country_name,
-    region: r.region, city: r.city, postalCode: r.postal_code,
+    countryCode: r.country_code,
+    countryName: r.country_name,
+    region: r.region,
+    city: r.city,
+    postalCode: r.postal_code,
     latitude: r.latitude == null ? undefined : Number(r.latitude),
     longitude: r.longitude == null ? undefined : Number(r.longitude),
-    timezone: r.timezone, isp: r.isp,
+    timezone: r.timezone,
+    isp: r.isp,
     asn: r.asn == null ? undefined : Number(r.asn),
     asnOrg: r.asn_org,
     countrySource: r.country_source as Source | undefined,
@@ -1115,35 +1200,65 @@ export async function recordEtlStart(pool: mysql.Pool): Promise<number> {
 }
 
 export async function recordEtlFinish(
-  pool: mysql.Pool, id: number, status: 'success' | 'failed', fields: Partial<EtlRun>,
+  pool: mysql.Pool,
+  id: number,
+  status: "success" | "failed",
+  fields: Partial<EtlRun>,
 ): Promise<void> {
-  const set: string[] = ['finished_at = NOW(3)', 'status = ?'];
+  const set: string[] = ["finished_at = NOW(3)", "status = ?"];
   const values: unknown[] = [status];
-  if (fields.maxmindRecords !== undefined) { set.push('maxmind_records = ?'); values.push(fields.maxmindRecords); }
-  if (fields.ip2regionRecords !== undefined) { set.push('ip2region_records = ?'); values.push(fields.ip2regionRecords); }
-  if (fields.dbipRecords !== undefined) { set.push('dbip_records = ?'); values.push(fields.dbipRecords); }
-  if (fields.mergedRecords !== undefined) { set.push('merged_records = ?'); values.push(fields.mergedRecords); }
-  if (fields.errorMessage !== undefined) { set.push('error_message = ?'); values.push(fields.errorMessage); }
-  if (fields.maxmindBuiltAt !== undefined) { set.push('maxmind_built_at = ?'); values.push(fields.maxmindBuiltAt); }
-  if (fields.ip2regionBuiltAt !== undefined) { set.push('ip2region_built_at = ?'); values.push(fields.ip2regionBuiltAt); }
-  if (fields.dbipBuiltAt !== undefined) { set.push('dbip_built_at = ?'); values.push(fields.dbipBuiltAt); }
+  if (fields.maxmindRecords !== undefined) {
+    set.push("maxmind_records = ?");
+    values.push(fields.maxmindRecords);
+  }
+  if (fields.ip2regionRecords !== undefined) {
+    set.push("ip2region_records = ?");
+    values.push(fields.ip2regionRecords);
+  }
+  if (fields.dbipRecords !== undefined) {
+    set.push("dbip_records = ?");
+    values.push(fields.dbipRecords);
+  }
+  if (fields.mergedRecords !== undefined) {
+    set.push("merged_records = ?");
+    values.push(fields.mergedRecords);
+  }
+  if (fields.errorMessage !== undefined) {
+    set.push("error_message = ?");
+    values.push(fields.errorMessage);
+  }
+  if (fields.maxmindBuiltAt !== undefined) {
+    set.push("maxmind_built_at = ?");
+    values.push(fields.maxmindBuiltAt);
+  }
+  if (fields.ip2regionBuiltAt !== undefined) {
+    set.push("ip2region_built_at = ?");
+    values.push(fields.ip2regionBuiltAt);
+  }
+  if (fields.dbipBuiltAt !== undefined) {
+    set.push("dbip_built_at = ?");
+    values.push(fields.dbipBuiltAt);
+  }
   values.push(id);
-  await pool.query(`UPDATE etl_runs SET ${set.join(', ')} WHERE id = ?`, values);
+  await pool.query(`UPDATE etl_runs SET ${set.join(", ")} WHERE id = ?`, values);
 }
 
 export async function lastEtlRun(pool: mysql.Pool): Promise<EtlRun | null> {
-  const [rows] = await pool.query<mysql.RowDataPacket[]>(
-    `SELECT * FROM etl_runs ORDER BY id DESC LIMIT 1`,
-  );
+  const [rows] = await pool.query<mysql.RowDataPacket[]>(`SELECT * FROM etl_runs ORDER BY id DESC LIMIT 1`);
   if (rows.length === 0) return null;
   const r = rows[0]!;
   return {
-    id: Number(r.id), startedAt: r.started_at, finishedAt: r.finished_at,
+    id: Number(r.id),
+    startedAt: r.started_at,
+    finishedAt: r.finished_at,
     status: r.status,
-    maxmindRecords: r.maxmind_records, ip2regionRecords: r.ip2region_records,
-    dbipRecords: r.dbip_records, mergedRecords: r.merged_records,
+    maxmindRecords: r.maxmind_records,
+    ip2regionRecords: r.ip2region_records,
+    dbipRecords: r.dbip_records,
+    mergedRecords: r.merged_records,
     errorMessage: r.error_message,
-    maxmindBuiltAt: r.maxmind_built_at, ip2regionBuiltAt: r.ip2region_built_at,
+    maxmindBuiltAt: r.maxmind_built_at,
+    ip2regionBuiltAt: r.ip2region_built_at,
     dbipBuiltAt: r.dbip_built_at,
   };
 }
@@ -1152,24 +1267,28 @@ export async function lastEtlRun(pool: mysql.Pool): Promise<EtlRun | null> {
 - [ ] **Step 5: Ensure schema.sql is copied to dist on build**
 
 In `package.json`, add to `scripts.build`:
+
 ```json
 "build": "tsc -p tsconfig.json && copy src\\storage\\schema.sql dist\\storage\\schema.sql"
 ```
+
 (On Linux/macOS substitute `cp src/storage/schema.sql dist/storage/schema.sql`.)
 
 For portability use a small Node script instead:
+
 ```json
 "build": "tsc -p tsconfig.json && node scripts/copy-schema.js"
 ```
 
 Create `scripts/copy-schema.js`:
+
 ```js
-const fs = require('fs');
-const path = require('path');
-fs.mkdirSync(path.join(__dirname, '..', 'dist', 'storage'), { recursive: true });
+const fs = require("fs");
+const path = require("path");
+fs.mkdirSync(path.join(__dirname, "..", "dist", "storage"), { recursive: true });
 fs.copyFileSync(
-  path.join(__dirname, '..', 'src', 'storage', 'schema.sql'),
-  path.join(__dirname, '..', 'dist', 'storage', 'schema.sql'),
+  path.join(__dirname, "..", "src", "storage", "schema.sql"),
+  path.join(__dirname, "..", "dist", "storage", "schema.sql"),
 );
 ```
 
@@ -1194,72 +1313,81 @@ git commit -m "feat: add MySQL storage with atomic table swap"
 ## Task 6: Downloader
 
 **Files:**
+
 - Modify: `src/etl/downloader.ts`
 - Create: `test/unit/downloader.test.ts`
 
 **Goal:** Download URL to local path with 3 retries and exponential backoff. Testable via local HTTP server fixture.
 
 **Interfaces:**
+
 - Produces: `downloadToFile(url: string, destPath: string, opts?: { retries?: number; timeoutMs?: number }): Promise<{ bytes: number; attempts: number }>`
 
 - [ ] **Step 1: Write the failing test**
 
 `test/unit/downloader.test.ts`:
+
 ```ts
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import * as http from 'node:http';
-import * as fs from 'node:fs/promises';
-import * as path from 'node:path';
-import * as os from 'node:os';
-import { downloadToFile } from '../../src/etl/downloader';
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import * as http from "node:http";
+import * as fs from "node:fs/promises";
+import * as path from "node:path";
+import * as os from "node:os";
+import { downloadToFile } from "../../src/etl/downloader";
 
 let server: http.Server;
 let port: number;
 let requests = 0;
 let failFirstN = 0;
-const payload = Buffer.from('hello world');
+const payload = Buffer.from("hello world");
 
 beforeAll(async () => {
   server = http.createServer((req, res) => {
     requests++;
     if (requests <= failFirstN) {
       res.statusCode = 503;
-      res.end('busy');
+      res.end("busy");
       return;
     }
     res.statusCode = 200;
     res.end(payload);
   });
-  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', () => resolve()));
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", () => resolve()));
   port = (server.address() as any).port;
 });
-afterAll(async () => { await new Promise<void>((r) => server.close(() => r())); });
+afterAll(async () => {
+  await new Promise<void>((r) => server.close(() => r()));
+});
 
-describe('downloader', () => {
-  it('downloads and writes file', async () => {
-    failFirstN = 0; requests = 0;
-    const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'dl-'));
-    const dest = path.join(tmp, 'out.bin');
+describe("downloader", () => {
+  it("downloads and writes file", async () => {
+    failFirstN = 0;
+    requests = 0;
+    const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "dl-"));
+    const dest = path.join(tmp, "out.bin");
     const r = await downloadToFile(`http://127.0.0.1:${port}/`, dest);
     expect(r.bytes).toBe(payload.length);
     expect(r.attempts).toBe(1);
     expect((await fs.readFile(dest)).equals(payload)).toBe(true);
   });
 
-  it('retries on 5xx then succeeds', async () => {
-    failFirstN = 2; requests = 0;
-    const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'dl-'));
-    const dest = path.join(tmp, 'out.bin');
+  it("retries on 5xx then succeeds", async () => {
+    failFirstN = 2;
+    requests = 0;
+    const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "dl-"));
+    const dest = path.join(tmp, "out.bin");
     const r = await downloadToFile(`http://127.0.0.1:${port}/`, dest, { retries: 3 });
     expect(r.attempts).toBe(3);
     expect(r.bytes).toBe(payload.length);
   });
 
-  it('throws after exceeding retries', async () => {
-    failFirstN = 99; requests = 0;
-    const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'dl-'));
-    await expect(downloadToFile(`http://127.0.0.1:${port}/`, path.join(tmp, 'out.bin'), { retries: 2 }))
-      .rejects.toThrow();
+  it("throws after exceeding retries", async () => {
+    failFirstN = 99;
+    requests = 0;
+    const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "dl-"));
+    await expect(
+      downloadToFile(`http://127.0.0.1:${port}/`, path.join(tmp, "out.bin"), { retries: 2 }),
+    ).rejects.toThrow();
   });
 });
 ```
@@ -1274,17 +1402,24 @@ npm test -- test/unit/downloader.test.ts
 
 ```ts
 // SPDX-License-Identifier: MIT
-import * as fs from 'node:fs/promises';
-import * as fssync from 'node:fs';
-import * as path from 'node:path';
+import * as fs from "node:fs/promises";
+import * as fssync from "node:fs";
+import * as path from "node:path";
 
-export interface DownloadResult { bytes: number; attempts: number }
+export interface DownloadResult {
+  bytes: number;
+  attempts: number;
+}
 
 const BACKOFF_MS = [5_000, 15_000, 45_000];
-function sleep(ms: number): Promise<void> { return new Promise((r) => setTimeout(r, ms)); }
+function sleep(ms: number): Promise<void> {
+  return new Promise((r) => setTimeout(r, ms));
+}
 
 export async function downloadToFile(
-  url: string, destPath: string, opts: { retries?: number; timeoutMs?: number } = {},
+  url: string,
+  destPath: string,
+  opts: { retries?: number; timeoutMs?: number } = {},
 ): Promise<DownloadResult> {
   const retries = opts.retries ?? 3;
   const timeoutMs = opts.timeoutMs ?? 60_000;
@@ -1297,7 +1432,7 @@ export async function downloadToFile(
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const buf = Buffer.from(await res.arrayBuffer());
       await fs.mkdir(path.dirname(destPath), { recursive: true });
-      const tmp = destPath + '.part';
+      const tmp = destPath + ".part";
       await fs.writeFile(tmp, buf);
       await fs.rename(tmp, destPath);
       clearTimeout(timer);
@@ -1336,6 +1471,7 @@ git commit -m "feat: add retry-aware downloader with exponential backoff"
 ## Task 7: DB-IP Source Parser
 
 **Files:**
+
 - Modify: `src/etl/sources/dbip.ts`
 - Create: `fixtures/dbip-sample.csv.gz`, `test/integration/dbip-source.test.ts`
 
@@ -1344,48 +1480,52 @@ git commit -m "feat: add retry-aware downloader with exponential backoff"
 **CSV format** (free version): `start_ip,end_ip,country,city` (some versions also include lat/lon — parser tolerates both).
 
 **Interfaces:**
+
 - Produces: `parseDbipCsv(gzPath: string): Promise<NormalizedRecord[]>`
 
 - [ ] **Step 1: Generate fixture**
 
 Create `test/fixtures/make-dbip-fixture.ts` and run once:
+
 ```ts
-import * as fs from 'node:fs';
-import * as path from 'node:path';
-import * as zlib from 'node:zlib';
+import * as fs from "node:fs";
+import * as path from "node:path";
+import * as zlib from "node:zlib";
 const csv = [
-  'ip_start,ip_end,country,stateprov,city',
-  '8.8.8.0,8.8.8.255,US,California,Mountain View',
-  '1.0.0.0,1.0.0.255,AU,New South Wales,Sydney',
-  '2001:db8::,2001:db8::ffff,XX,Test,Test',
-].join('\n');
-const out = path.join(__dirname, '..', 'fixtures', 'dbip-sample.csv.gz');
+  "ip_start,ip_end,country,stateprov,city",
+  "8.8.8.0,8.8.8.255,US,California,Mountain View",
+  "1.0.0.0,1.0.0.255,AU,New South Wales,Sydney",
+  "2001:db8::,2001:db8::ffff,XX,Test,Test",
+].join("\n");
+const out = path.join(__dirname, "..", "fixtures", "dbip-sample.csv.gz");
 fs.writeFileSync(out, zlib.gzipSync(csv));
-console.log('wrote', out);
+console.log("wrote", out);
 ```
+
 Run: `npx tsx test/fixtures/make-dbip-fixture.ts` then delete the script.
 
 - [ ] **Step 2: Write the failing test**
 
 `test/integration/dbip-source.test.ts`:
-```ts
-import { describe, it, expect } from 'vitest';
-import * as path from 'node:path';
-import { parseDbipCsv } from '../../src/etl/sources/dbip';
 
-describe('dbip source', () => {
-  it('parses fixture CSV.gz into NormalizedRecords', async () => {
-    const records = await parseDbipCsv(path.join(__dirname, '..', '..', 'fixtures', 'dbip-sample.csv.gz'));
+```ts
+import { describe, it, expect } from "vitest";
+import * as path from "node:path";
+import { parseDbipCsv } from "../../src/etl/sources/dbip";
+
+describe("dbip source", () => {
+  it("parses fixture CSV.gz into NormalizedRecords", async () => {
+    const records = await parseDbipCsv(path.join(__dirname, "..", "..", "fixtures", "dbip-sample.csv.gz"));
     expect(records).toHaveLength(3);
-    expect(records[0]?.source).toBe('dbip');
-    expect(records[0]?.countryCode).toBe('US');
-    expect(records[0]?.city).toBe('Mountain View');
+    expect(records[0]?.source).toBe("dbip");
+    expect(records[0]?.countryCode).toBe("US");
+    expect(records[0]?.city).toBe("Mountain View");
     expect(records[2]?.startIp.length).toBe(16); // IPv6 stored in 16-byte buffer
   });
 
-  it('attaches source = dbip to every record', async () => {
-    const records = await parseDbipCsv(path.join(__dirname, '..', '..', 'fixtures', 'dbip-sample.csv.gz'));
-    for (const r of records) expect(r.source).toBe('dbip');
+  it("attaches source = dbip to every record", async () => {
+    const records = await parseDbipCsv(path.join(__dirname, "..", "..", "fixtures", "dbip-sample.csv.gz"));
+    for (const r of records) expect(r.source).toBe("dbip");
   });
 });
 ```
@@ -1394,24 +1534,25 @@ describe('dbip source', () => {
 
 ```ts
 // SPDX-License-Identifier: MIT
-import * as fs from 'node:fs';
-import * as zlib from 'node:zlib';
-import * as readline from 'node:readline';
-import { parseIp } from '../../ip';
-import type { NormalizedRecord } from '../../types';
+import * as fs from "node:fs";
+import * as zlib from "node:zlib";
+import * as readline from "node:readline";
+import { parseIp } from "../../ip";
+import type { NormalizedRecord } from "../../types";
 
 export async function parseDbipCsv(gzPath: string): Promise<NormalizedRecord[]> {
   const raw = fs.readFileSync(gzPath);
-  const csv = zlib.gunzipSync(raw).toString('utf8');
-  const lines = csv.split('\n').filter(Boolean);
+  const csv = zlib.gunzipSync(raw).toString("utf8");
+  const lines = csv.split("\n").filter(Boolean);
   const records: NormalizedRecord[] = [];
-  for (let i = 1; i < lines.length; i++) { // skip header
-    const cols = lines[i]!.split(',');
+  for (let i = 1; i < lines.length; i++) {
+    // skip header
+    const cols = lines[i]!.split(",");
     if (cols.length < 4) continue;
     const start = parseIp(cols[0]!);
     const end = parseIp(cols[1]!);
     if (!start || !end) continue;
-    const rec: NormalizedRecord = { startIp: start, endIp: end, source: 'dbip' };
+    const rec: NormalizedRecord = { startIp: start, endIp: end, source: "dbip" };
     if (cols[2]) rec.countryCode = cols[2];
     if (cols[3]) rec.region = cols[3];
     if (cols[4]) rec.city = cols[4];
@@ -1443,6 +1584,7 @@ git commit -m "feat: add DB-IP CSV.gz source parser"
 ## Task 8: ip2region Source Parser
 
 **Files:**
+
 - Modify: `src/etl/sources/ip2region.ts`
 - Create: `fixtures/ip2region-sample.xdb`, `test/integration/ip2region-source.test.ts`
 
@@ -1453,6 +1595,7 @@ git commit -m "feat: add DB-IP CSV.gz source parser"
 For testing without running the official generator, we'll use a small hand-crafted xdb-like binary. Real ETL will use the upstream tool-generated file.
 
 **Interfaces:**
+
 - Produces: `parseIp2regionXdb(xdbPath: string): Promise<NormalizedRecord[]>`
 
 - [ ] **Step 1: Generate fixture (realistic minimal xdb)**
@@ -1462,18 +1605,24 @@ For v1 we use a stub: instead of implementing the full xdb parser, we **read the
 **Pragmatic adjustment:** since implementing a complete .xdb binary parser is out of scope for v1, we use the JSON export produced by `ip2region` tool's `--export` flag. The parser reads JSON, parses records.
 
 Create `test/fixtures/make-ip2region-fixture.ts`:
+
 ```ts
-import * as fs from 'node:fs';
-import * as path from 'node:path';
+import * as fs from "node:fs";
+import * as path from "node:path";
 const data = [
-  { start: '8.8.8.0', end: '8.8.8.255', country: '美国', province: '', city: '', isp: 'Google' },
-  { start: '114.114.114.0', end: '114.114.114.255', country: '中国', province: '江苏', city: '南京', isp: '南京信风' },
+  { start: "8.8.8.0", end: "8.8.8.255", country: "美国", province: "", city: "", isp: "Google" },
+  {
+    start: "114.114.114.0",
+    end: "114.114.114.255",
+    country: "中国",
+    province: "江苏",
+    city: "南京",
+    isp: "南京信风",
+  },
 ];
-fs.writeFileSync(
-  path.join(__dirname, '..', 'fixtures', 'ip2region-sample.xdb'),
-  JSON.stringify(data),
-);
+fs.writeFileSync(path.join(__dirname, "..", "fixtures", "ip2region-sample.xdb"), JSON.stringify(data));
 ```
+
 Run once: `npx tsx test/fixtures/make-ip2region-fixture.ts`.
 
 **Note:** The fixture extension `.xdb` is intentional placeholder. Task 8 establishes the interface; replacing it with a real binary xdb parser is a separate concern (deferred to v2). Document this in the parser's JSDoc.
@@ -1481,29 +1630,36 @@ Run once: `npx tsx test/fixtures/make-ip2region-fixture.ts`.
 - [ ] **Step 2: Write the failing test**
 
 `test/integration/ip2region-source.test.ts`:
-```ts
-import { describe, it, expect } from 'vitest';
-import * as path from 'node:path';
-import { parseIp2regionXdb } from '../../src/etl/sources/ip2region';
 
-describe('ip2region source', () => {
-  it('parses fixture into NormalizedRecords', async () => {
-    const records = await parseIp2regionXdb(path.join(__dirname, '..', '..', 'fixtures', 'ip2region-sample.xdb'));
+```ts
+import { describe, it, expect } from "vitest";
+import * as path from "node:path";
+import { parseIp2regionXdb } from "../../src/etl/sources/ip2region";
+
+describe("ip2region source", () => {
+  it("parses fixture into NormalizedRecords", async () => {
+    const records = await parseIp2regionXdb(
+      path.join(__dirname, "..", "..", "fixtures", "ip2region-sample.xdb"),
+    );
     expect(records).toHaveLength(2);
-    expect(records[0]?.countryCode).toBe('US');
-    expect(records[0]?.isp).toBe('Google');
-    expect(records[1]?.countryCode).toBe('CN');
-    expect(records[1]?.city).toBe('南京');
+    expect(records[0]?.countryCode).toBe("US");
+    expect(records[0]?.isp).toBe("Google");
+    expect(records[1]?.countryCode).toBe("CN");
+    expect(records[1]?.city).toBe("南京");
   });
 
-  it('marks source = ip2region', async () => {
-    const records = await parseIp2regionXdb(path.join(__dirname, '..', '..', 'fixtures', 'ip2region-sample.xdb'));
-    for (const r of records) expect(r.source).toBe('ip2region');
+  it("marks source = ip2region", async () => {
+    const records = await parseIp2regionXdb(
+      path.join(__dirname, "..", "..", "fixtures", "ip2region-sample.xdb"),
+    );
+    for (const r of records) expect(r.source).toBe("ip2region");
   });
 
   it('country name "中国" maps to CN, "美国" to US', async () => {
-    const records = await parseIp2regionXdb(path.join(__dirname, '..', '..', 'fixtures', 'ip2region-sample.xdb'));
-    expect(records.find((r) => r.countryCode === 'CN')?.countryName).toBe('中国');
+    const records = await parseIp2regionXdb(
+      path.join(__dirname, "..", "..", "fixtures", "ip2region-sample.xdb"),
+    );
+    expect(records.find((r) => r.countryCode === "CN")?.countryName).toBe("中国");
   });
 });
 ```
@@ -1512,19 +1668,23 @@ describe('ip2region source', () => {
 
 ```ts
 // SPDX-License-Identifier: MIT
-import * as fs from 'node:fs';
-import { parseIp } from '../../ip';
-import type { NormalizedRecord } from '../../types';
+import * as fs from "node:fs";
+import { parseIp } from "../../ip";
+import type { NormalizedRecord } from "../../types";
 
 /**
  * v1: parses JSON-export form of ip2region. Future work: replace with
  * a real binary .xdb reader per https://gitee.com/lionsoul/ip2region
  */
 export async function parseIp2regionXdb(xdbPath: string): Promise<NormalizedRecord[]> {
-  const raw = fs.readFileSync(xdbPath, 'utf8');
+  const raw = fs.readFileSync(xdbPath, "utf8");
   const rows = JSON.parse(raw) as Array<{
-    start: string; end: string;
-    country: string; province?: string; city?: string; isp?: string;
+    start: string;
+    end: string;
+    country: string;
+    province?: string;
+    city?: string;
+    isp?: string;
   }>;
 
   const records: NormalizedRecord[] = [];
@@ -1532,9 +1692,12 @@ export async function parseIp2regionXdb(xdbPath: string): Promise<NormalizedReco
     const start = parseIp(row.start);
     const end = parseIp(row.end);
     if (!start || !end) continue;
-    const rec: NormalizedRecord = { startIp: start, endIp: end, source: 'ip2region' };
+    const rec: NormalizedRecord = { startIp: start, endIp: end, source: "ip2region" };
     const cc = countryNameToCode(row.country);
-    if (cc) { rec.countryCode = cc; rec.countryName = row.country; }
+    if (cc) {
+      rec.countryCode = cc;
+      rec.countryName = row.country;
+    }
     if (row.province) rec.region = row.province;
     if (row.city) rec.city = row.city;
     if (row.isp) rec.isp = row.isp;
@@ -1544,9 +1707,18 @@ export async function parseIp2regionXdb(xdbPath: string): Promise<NormalizedReco
 }
 
 const COUNTRY_NAME_TO_CODE: Record<string, string> = {
-  '中国': 'CN', '美国': 'US', '日本': 'JP', '韩国': 'KR',
-  '英国': 'GB', '德国': 'DE', '法国': 'FR', '俄罗斯': 'RU',
-  '加拿大': 'CA', '澳大利亚': 'AU', '巴西': 'BR', '印度': 'IN',
+  中国: "CN",
+  美国: "US",
+  日本: "JP",
+  韩国: "KR",
+  英国: "GB",
+  德国: "DE",
+  法国: "FR",
+  俄罗斯: "RU",
+  加拿大: "CA",
+  澳大利亚: "AU",
+  巴西: "BR",
+  印度: "IN",
 };
 function countryNameToCode(name: string): string | undefined {
   return COUNTRY_NAME_TO_CODE[name];
@@ -1573,12 +1745,14 @@ git commit -m "feat: add ip2region source parser (JSON-export form)"
 ## Task 9: MaxMind Source Parser
 
 **Files:**
+
 - Modify: `src/etl/sources/maxmind.ts`
 - Create: `fixtures/maxmind-sample.mmdb`, `test/integration/maxmind-source.test.ts`
 
 **Goal:** Open `.mmdb` and extract all IP ranges with their records.
 
 **Interfaces:**
+
 - Produces: `parseMaxmindMmdb(mmdbPath: string, edition: 'city' | 'asn'): Promise<NormalizedRecord[]>`
 
 - [ ] **Step 1: Generate fixture**
@@ -1586,6 +1760,7 @@ git commit -m "feat: add ip2region source parser (JSON-export form)"
 MaxMind publishes small test databases at `https://github.com/maxmind/MaxMind-DB/tree/main/test-data`. Download `MaxMind-DB-test-ipv4-24.mmdb` and `MaxMind-DB-test-ipv6-24.mmdb` into `fixtures/`. License: these are CC0 / public for testing.
 
 Run once:
+
 ```bash
 mkdir -p fixtures
 curl -L -o fixtures/maxmind-sample.mmdb \
@@ -1597,23 +1772,24 @@ Verify it's a real mmdb file: `file fixtures/maxmind-sample.mmdb` (if `file` is 
 - [ ] **Step 2: Write the failing test**
 
 `test/integration/maxmind-source.test.ts`:
+
 ```ts
-import { describe, it, expect } from 'vitest';
-import * as path from 'node:path';
-import { parseMaxmindMmdb } from '../../src/etl/sources/maxmind';
+import { describe, it, expect } from "vitest";
+import * as path from "node:path";
+import { parseMaxmindMmdb } from "../../src/etl/sources/maxmind";
 
-const FIXTURE = path.join(__dirname, '..', '..', 'fixtures', 'maxmind-sample.mmdb');
+const FIXTURE = path.join(__dirname, "..", "..", "fixtures", "maxmind-sample.mmdb");
 
-describe('maxmind source', () => {
-  it('extracts records with country and city', async () => {
-    const records = await parseMaxmindMmdb(FIXTURE, 'city');
+describe("maxmind source", () => {
+  it("extracts records with country and city", async () => {
+    const records = await parseMaxmindMmdb(FIXTURE, "city");
     expect(records.length).toBeGreaterThan(0);
-    expect(records[0]?.source).toBe('maxmind');
+    expect(records[0]?.source).toBe("maxmind");
     expect(records[0]?.startIp.length).toBe(16);
   });
 
-  it('all records have valid 16-byte start/end buffers', async () => {
-    const records = await parseMaxmindMmdb(FIXTURE, 'city');
+  it("all records have valid 16-byte start/end buffers", async () => {
+    const records = await parseMaxmindMmdb(FIXTURE, "city");
     for (const r of records) {
       expect(r.startIp.length).toBe(16);
       expect(r.endIp.length).toBe(16);
@@ -1626,10 +1802,10 @@ describe('maxmind source', () => {
 
 ```ts
 // SPDX-License-Identifier: MIT
-import * as fs from 'node:fs';
-import * as maxmind from 'maxmind';
-import { parseIp } from '../../ip';
-import type { NormalizedRecord } from '../../types';
+import * as fs from "node:fs";
+import * as maxmind from "maxmind";
+import { parseIp } from "../../ip";
+import type { NormalizedRecord } from "../../types";
 
 interface MmdbReader {
   get(ip: string): unknown;
@@ -1655,7 +1831,10 @@ function reader(path: string): MmdbReader {
  * For production scale we use maxmind's open iterator over the mmdb tree;
  * here we keep a simpler implementation that works with the public API.
  */
-export async function parseMaxmindMmdb(mmdbPath: string, edition: 'city' | 'asn'): Promise<NormalizedRecord[]> {
+export async function parseMaxmindMmdb(
+  mmdbPath: string,
+  edition: "city" | "asn",
+): Promise<NormalizedRecord[]> {
   const r = reader(mmdbPath);
   const records: NormalizedRecord[] = [];
 
@@ -1669,7 +1848,7 @@ export async function parseMaxmindMmdb(mmdbPath: string, edition: 'city' | 'asn'
         const data = r.get(ip) as Record<string, unknown> | null;
         if (!data) continue;
         const buf = parseIp(ip)!;
-        const rec: NormalizedRecord = { startIp: buf, endIp: buf, source: 'maxmind' };
+        const rec: NormalizedRecord = { startIp: buf, endIp: buf, source: "maxmind" };
         applyCityFields(rec, data);
         records.push(rec);
       }
@@ -1721,12 +1900,14 @@ git commit -m "feat: add MaxMind mmdb parser (sparse-probe MVP)"
 ## Task 10: Multi-Source Merger
 
 **Files:**
+
 - Modify: `src/etl/merger.ts`
 - Create: `test/unit/merger.test.ts`
 
 **Goal:** Combine per-source `NormalizedRecord[]` into a single deduped, sorted `IpRangeRow[]` using a sweep-line algorithm and priority-based field filling.
 
 **Algorithm:**
+
 1. Collect every (start_ip, end_ip, source, record) tuple.
 2. Build a sorted list of all boundary IPs (every start and end_ip+1).
 3. Walk consecutive segments. For each segment:
@@ -1736,63 +1917,83 @@ git commit -m "feat: add MaxMind mmdb parser (sparse-probe MVP)"
 4. Emit one merged record per segment.
 
 **Interfaces:**
+
 - Produces: `mergeByPriority(bySource: Map<Source, NormalizedRecord[]>, priority: Source[]): IpRangeRow[]`
 
 - [ ] **Step 1: Write the failing test**
 
 `test/unit/merger.test.ts`:
-```ts
-import { describe, it, expect } from 'vitest';
-import { mergeByPriority } from '../../src/etl/merger';
-import { parseIp } from '../../src/ip';
-import type { NormalizedRecord, Source } from '../../src/types';
 
-function mk(start: string, end: string, source: Source, fields: Partial<NormalizedRecord> = {}): NormalizedRecord {
+```ts
+import { describe, it, expect } from "vitest";
+import { mergeByPriority } from "../../src/etl/merger";
+import { parseIp } from "../../src/ip";
+import type { NormalizedRecord, Source } from "../../src/types";
+
+function mk(
+  start: string,
+  end: string,
+  source: Source,
+  fields: Partial<NormalizedRecord> = {},
+): NormalizedRecord {
   return { startIp: parseIp(start)!, endIp: parseIp(end)!, source, ...fields };
 }
 
-describe('merger', () => {
-  it('uses highest priority source when ranges overlap', () => {
-    const merged = mergeByPriority(new Map([
-      ['maxmind', [mk('8.8.8.0', '8.8.8.255', 'maxmind', { countryCode: 'US', city: 'MV' })]],
-      ['dbip',    [mk('8.8.8.0', '8.8.8.255', 'dbip',    { countryCode: 'GB', city: 'London' })]],
-    ]), ['maxmind', 'dbip']);
-    expect(merged[0]?.countryCode).toBe('US');
-    expect(merged[0]?.countrySource).toBe('maxmind');
+describe("merger", () => {
+  it("uses highest priority source when ranges overlap", () => {
+    const merged = mergeByPriority(
+      new Map([
+        ["maxmind", [mk("8.8.8.0", "8.8.8.255", "maxmind", { countryCode: "US", city: "MV" })]],
+        ["dbip", [mk("8.8.8.0", "8.8.8.255", "dbip", { countryCode: "GB", city: "London" })]],
+      ]),
+      ["maxmind", "dbip"],
+    );
+    expect(merged[0]?.countryCode).toBe("US");
+    expect(merged[0]?.countrySource).toBe("maxmind");
   });
 
-  it('falls back to lower priority when higher priority lacks field', () => {
-    const merged = mergeByPriority(new Map([
-      ['maxmind', [mk('8.8.8.0', '8.8.8.255', 'maxmind', { countryCode: 'US' })]],
-      ['dbip',    [mk('8.8.8.0', '8.8.8.255', 'dbip',    { countryCode: 'GB', city: 'London' })]],
-    ]), ['maxmind', 'dbip']);
-    expect(merged[0]?.countryCode).toBe('US');
-    expect(merged[0]?.city).toBe('London');
-    expect(merged[0]?.citySource).toBe('dbip');
+  it("falls back to lower priority when higher priority lacks field", () => {
+    const merged = mergeByPriority(
+      new Map([
+        ["maxmind", [mk("8.8.8.0", "8.8.8.255", "maxmind", { countryCode: "US" })]],
+        ["dbip", [mk("8.8.8.0", "8.8.8.255", "dbip", { countryCode: "GB", city: "London" })]],
+      ]),
+      ["maxmind", "dbip"],
+    );
+    expect(merged[0]?.countryCode).toBe("US");
+    expect(merged[0]?.city).toBe("London");
+    expect(merged[0]?.citySource).toBe("dbip");
   });
 
-  it('handles disjoint ranges from different sources', () => {
-    const merged = mergeByPriority(new Map([
-      ['maxmind', [mk('8.8.8.0', '8.8.8.255', 'maxmind', { countryCode: 'US' })]],
-      ['dbip',    [mk('9.9.9.0', '9.9.9.255', 'dbip',    { countryCode: 'GB' })]],
-    ]), ['maxmind', 'dbip']);
+  it("handles disjoint ranges from different sources", () => {
+    const merged = mergeByPriority(
+      new Map([
+        ["maxmind", [mk("8.8.8.0", "8.8.8.255", "maxmind", { countryCode: "US" })]],
+        ["dbip", [mk("9.9.9.0", "9.9.9.255", "dbip", { countryCode: "GB" })]],
+      ]),
+      ["maxmind", "dbip"],
+    );
     expect(merged).toHaveLength(2);
   });
 
-  it('emits records sorted by start_ip', () => {
-    const merged = mergeByPriority(new Map([
-      ['maxmind', [mk('8.8.8.0', '8.8.8.255', 'maxmind', { countryCode: 'US' })]],
-      ['dbip',    [mk('9.9.9.0', '9.9.9.255', 'dbip',    { countryCode: 'GB' })]],
-    ]), ['dbip', 'maxmind']); // reversed priority
+  it("emits records sorted by start_ip", () => {
+    const merged = mergeByPriority(
+      new Map([
+        ["maxmind", [mk("8.8.8.0", "8.8.8.255", "maxmind", { countryCode: "US" })]],
+        ["dbip", [mk("9.9.9.0", "9.9.9.255", "dbip", { countryCode: "GB" })]],
+      ]),
+      ["dbip", "maxmind"],
+    ); // reversed priority
     expect(merged[0]?.startIp.compare(merged[1]!.startIp)).toBeLessThan(0);
   });
 
-  it('skips segments where no source has data', () => {
-    const merged = mergeByPriority(new Map([
-      ['maxmind', [mk('8.8.8.0', '8.8.8.10', 'maxmind', { countryCode: 'US' })]],
-    ]), ['maxmind']);
+  it("skips segments where no source has data", () => {
+    const merged = mergeByPriority(
+      new Map([["maxmind", [mk("8.8.8.0", "8.8.8.10", "maxmind", { countryCode: "US" })]]]),
+      ["maxmind"],
+    );
     expect(merged).toHaveLength(1);
-    expect(merged[0]?.countryCode).toBe('US');
+    expect(merged[0]?.countryCode).toBe("US");
   });
 });
 ```
@@ -1913,53 +2114,60 @@ git commit -m "feat: add multi-source priority merger (sweep-line)"
 ## Task 11: ETL Pipeline Orchestrator
 
 **Files:**
+
 - Modify: `src/etl/pipeline.ts`
 - Create: `test/integration/etl-pipeline.test.ts`
 
 **Goal:** Coordinate download → parse → merge → atomic swap, write to MySQL, record run log.
 
 **Interfaces:**
+
 - Produces: `runPipeline(opts: { cfg: AppConfig; now?: Date }): Promise<{ runId: number; merged: number }>`
 
 - [ ] **Step 1: Write the failing test**
 
 `test/integration/etl-pipeline.test.ts`:
-```ts
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import * as mysql from 'mysql2/promise';
-import { createPool, initSchema, findRange, lastEtlRun } from '../../src/storage/mysql';
-import { runPipeline } from '../../src/etl/pipeline';
-import { loadConfig } from '../../src/config';
-import * as fs from 'node:fs/promises';
-import * as path from 'node:path';
-import * as zlib from 'node:zlib';
 
-const TEST_DB = 'ipquery_test';
+```ts
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import * as mysql from "mysql2/promise";
+import { createPool, initSchema, findRange, lastEtlRun } from "../../src/storage/mysql";
+import { runPipeline } from "../../src/etl/pipeline";
+import { loadConfig } from "../../src/config";
+import * as fs from "node:fs/promises";
+import * as path from "node:path";
+import * as zlib from "node:zlib";
+
+const TEST_DB = "ipquery_test";
 let pool: mysql.Pool;
 let cfg = loadConfig();
 
 beforeAll(async () => {
   cfg.db.database = TEST_DB;
-  cfg.etl.dataDir = path.join(__dirname, '..', 'tmp-data');
+  cfg.etl.dataDir = path.join(__dirname, "..", "tmp-data");
   await fs.mkdir(cfg.etl.dataDir, { recursive: true });
 
   // Lay down fixture files into dataDir/raw
-  const rawDir = path.join(cfg.etl.dataDir, 'raw');
+  const rawDir = path.join(cfg.etl.dataDir, "raw");
   await fs.mkdir(rawDir, { recursive: true });
 
-  const csv = 'ip_start,ip_end,country,stateprov,city\n9.9.9.0,9.9.9.255,GB,England,London\n';
-  await fs.writeFile(path.join(rawDir, 'dbip.csv.gz'), zlib.gzipSync(Buffer.from(csv)));
-  await fs.writeFile(path.join(rawDir, 'ip2region.xdb'), JSON.stringify([
-    { start: '9.9.9.0', end: '9.9.9.255', country: '英国', city: 'London' },
-  ]));
+  const csv = "ip_start,ip_end,country,stateprov,city\n9.9.9.0,9.9.9.255,GB,England,London\n";
+  await fs.writeFile(path.join(rawDir, "dbip.csv.gz"), zlib.gzipSync(Buffer.from(csv)));
+  await fs.writeFile(
+    path.join(rawDir, "ip2region.xdb"),
+    JSON.stringify([{ start: "9.9.9.0", end: "9.9.9.255", country: "英国", city: "London" }]),
+  );
   // Re-use the existing maxmind-sample.mmdb from fixtures/
   await fs.copyFile(
-    path.join(__dirname, '..', '..', 'fixtures', 'maxmind-sample.mmdb'),
-    path.join(rawDir, 'maxmind.mmdb'),
+    path.join(__dirname, "..", "..", "fixtures", "maxmind-sample.mmdb"),
+    path.join(rawDir, "maxmind.mmdb"),
   );
 
   const root = await mysql.createConnection({
-    host: cfg.db.host, port: cfg.db.port, user: cfg.db.user, password: cfg.db.password,
+    host: cfg.db.host,
+    port: cfg.db.port,
+    user: cfg.db.user,
+    password: cfg.db.password,
   });
   await root.query(`DROP DATABASE IF EXISTS ${TEST_DB}`);
   await root.query(`CREATE DATABASE ${TEST_DB}`);
@@ -1971,23 +2179,26 @@ beforeAll(async () => {
 afterAll(async () => {
   await pool.end();
   const root = await mysql.createConnection({
-    host: cfg.db.host, port: cfg.db.port, user: cfg.db.user, password: cfg.db.password,
+    host: cfg.db.host,
+    port: cfg.db.port,
+    user: cfg.db.user,
+    password: cfg.db.password,
   });
   await root.query(`DROP DATABASE IF EXISTS ${TEST_DB}`);
   await root.end();
   await fs.rm(cfg.etl.dataDir, { recursive: true, force: true });
 });
 
-describe('etl pipeline', () => {
-  it('runs end-to-end and populates ip_ranges', async () => {
+describe("etl pipeline", () => {
+  it("runs end-to-end and populates ip_ranges", async () => {
     const result = await runPipeline({ cfg });
     expect(result.merged).toBeGreaterThan(0);
     const last = await lastEtlRun(pool);
-    expect(last?.status).toBe('success');
+    expect(last?.status).toBe("success");
   });
 
-  it('subsequent /lookup finds seeded data', async () => {
-    const r = await findRange(pool, Buffer.from([0,0,0,0,0,0,0,0,0,0,0xff,0xff,9,9,9,5]));
+  it("subsequent /lookup finds seeded data", async () => {
+    const r = await findRange(pool, Buffer.from([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff, 9, 9, 9, 5]));
     expect(r?.countryCode).toBeDefined();
   });
 });
@@ -2003,20 +2214,31 @@ npm test -- test/integration/etl-pipeline.test.ts
 
 ```ts
 // SPDX-License-Identifier: MIT
-import * as fs from 'node:fs/promises';
-import * as path from 'node:path';
-import * as mysql from 'mysql2/promise';
-import { createPool, initSchema, truncateNew, insertIntoNew, atomicSwapRanges, recordEtlStart, recordEtlFinish } from '../storage/mysql';
-import { parseDbipCsv } from './sources/dbip';
-import { parseIp2regionXdb } from './sources/ip2region';
-import { parseMaxmindMmdb } from './sources/maxmind';
-import { mergeByPriority } from './merger';
-import type { AppConfig } from '../config';
-import type { Source, NormalizedRecord } from '../types';
+import * as fs from "node:fs/promises";
+import * as path from "node:path";
+import * as mysql from "mysql2/promise";
+import {
+  createPool,
+  initSchema,
+  truncateNew,
+  insertIntoNew,
+  atomicSwapRanges,
+  recordEtlStart,
+  recordEtlFinish,
+} from "../storage/mysql";
+import { parseDbipCsv } from "./sources/dbip";
+import { parseIp2regionXdb } from "./sources/ip2region";
+import { parseMaxmindMmdb } from "./sources/maxmind";
+import { mergeByPriority } from "./merger";
+import type { AppConfig } from "../config";
+import type { Source, NormalizedRecord } from "../types";
 
-const PRIORITY: Source[] = ['maxmind', 'ip2region', 'dbip'];
+const PRIORITY: Source[] = ["maxmind", "ip2region", "dbip"];
 
-export interface PipelineResult { runId: number; merged: number; }
+export interface PipelineResult {
+  runId: number;
+  merged: number;
+}
 
 async function ensurePool(cfg: AppConfig): Promise<mysql.Pool> {
   const pool = createPool(cfg);
@@ -2025,7 +2247,9 @@ async function ensurePool(cfg: AppConfig): Promise<mysql.Pool> {
 }
 
 async function loadLocalSource(
-  rawDir: string, filename: string, parser: (p: string) => Promise<NormalizedRecord[]>,
+  rawDir: string,
+  filename: string,
+  parser: (p: string) => Promise<NormalizedRecord[]>,
 ): Promise<NormalizedRecord[]> {
   const p = path.join(rawDir, filename);
   try {
@@ -2046,19 +2270,19 @@ export async function runPipeline(opts: { cfg: AppConfig }): Promise<PipelineRes
   const { cfg } = opts;
   const pool = await ensurePool(cfg);
   const runId = await recordEtlStart(pool);
-  const rawDir = path.join(cfg.etl.dataDir, 'raw');
+  const rawDir = path.join(cfg.etl.dataDir, "raw");
 
   try {
     const [maxmind, ip2region, dbip] = await Promise.all([
-      loadLocalSource(rawDir, 'maxmind.mmdb', (p) => parseMaxmindMmdb(p, 'city')),
-      loadLocalSource(rawDir, 'ip2region.xdb', parseIp2regionXdb),
-      loadLocalSource(rawDir, 'dbip.csv.gz', parseDbipCsv),
+      loadLocalSource(rawDir, "maxmind.mmdb", (p) => parseMaxmindMmdb(p, "city")),
+      loadLocalSource(rawDir, "ip2region.xdb", parseIp2regionXdb),
+      loadLocalSource(rawDir, "dbip.csv.gz", parseDbipCsv),
     ]);
 
     const bySource = new Map<Source, NormalizedRecord[]>();
-    bySource.set('maxmind', maxmind);
-    bySource.set('ip2region', ip2region);
-    bySource.set('dbip', dbip);
+    bySource.set("maxmind", maxmind);
+    bySource.set("ip2region", ip2region);
+    bySource.set("dbip", dbip);
 
     const merged = mergeByPriority(bySource, PRIORITY);
 
@@ -2066,17 +2290,19 @@ export async function runPipeline(opts: { cfg: AppConfig }): Promise<PipelineRes
     await insertIntoNew(pool, merged);
     await atomicSwapRanges(pool);
 
-    await recordEtlFinish(pool, runId, 'success', {
+    await recordEtlFinish(pool, runId, "success", {
       maxmindRecords: maxmind.length,
       ip2regionRecords: ip2region.length,
       dbipRecords: dbip.length,
       mergedRecords: merged.length,
     });
-    console.log(`[etl] success run=${runId} merged=${merged.length} (maxmind=${maxmind.length}, ip2region=${ip2region.length}, dbip=${dbip.length})`);
+    console.log(
+      `[etl] success run=${runId} merged=${merged.length} (maxmind=${maxmind.length}, ip2region=${ip2region.length}, dbip=${dbip.length})`,
+    );
     return { runId, merged: merged.length };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    await recordEtlFinish(pool, runId, 'failed', { errorMessage: msg });
+    await recordEtlFinish(pool, runId, "failed", { errorMessage: msg });
     console.error(`[etl] failed run=${runId}:`, msg);
     throw err;
   } finally {
@@ -2106,32 +2332,35 @@ git commit -m "feat: add ETL pipeline orchestrator with MySQL atomic swap"
 ## Task 12: Fastify Server + Health Endpoint
 
 **Files:**
+
 - Modify: `src/api/server.ts`, `src/api/routes/health.ts`
 - Create: `test/integration/health-route.test.ts`
 
 **Goal:** Bootstrap Fastify, register health route, expose `listen()` function.
 
 **Interfaces:**
+
 - Produces: `buildServer(cfg: AppConfig): Promise<FastifyInstance>`
 
 - [ ] **Step 1: Write the failing test**
 
 `test/integration/health-route.test.ts`:
-```ts
-import { describe, it, expect } from 'vitest';
-import request from 'supertest';
-import { buildServer } from '../../src/api/server';
-import { loadConfig } from '../../src/config';
 
-describe('health route', () => {
-  it('GET /healthz returns 200 with status ok', async () => {
+```ts
+import { describe, it, expect } from "vitest";
+import request from "supertest";
+import { buildServer } from "../../src/api/server";
+import { loadConfig } from "../../src/config";
+
+describe("health route", () => {
+  it("GET /healthz returns 200 with status ok", async () => {
     const cfg = loadConfig();
     cfg.api.port = 0;
     const app = await buildServer(cfg);
     try {
-      const res = await request(app.server).get('/healthz');
+      const res = await request(app.server).get("/healthz");
       expect(res.status).toBe(200);
-      expect(res.body).toEqual({ status: 'ok' });
+      expect(res.body).toEqual({ status: "ok" });
     } finally {
       await app.close();
     }
@@ -2143,10 +2372,10 @@ describe('health route', () => {
 
 ```ts
 // SPDX-License-Identifier: MIT
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance } from "fastify";
 
 export default async function healthRoute(app: FastifyInstance): Promise<void> {
-  app.get('/healthz', async () => ({ status: 'ok' }));
+  app.get("/healthz", async () => ({ status: "ok" }));
 }
 ```
 
@@ -2154,15 +2383,15 @@ export default async function healthRoute(app: FastifyInstance): Promise<void> {
 
 ```ts
 // SPDX-License-Identifier: MIT
-import Fastify, { type FastifyInstance } from 'fastify';
-import compress from '@fastify/compress';
-import cors from '@fastify/cors';
-import rateLimit from '@fastify/rate-limit';
-import type { AppConfig } from '../config';
-import { createPool } from '../storage/mysql';
-import healthRoute from './routes/health';
+import Fastify, { type FastifyInstance } from "fastify";
+import compress from "@fastify/compress";
+import cors from "@fastify/cors";
+import rateLimit from "@fastify/rate-limit";
+import type { AppConfig } from "../config";
+import { createPool } from "../storage/mysql";
+import healthRoute from "./routes/health";
 
-declare module 'fastify' {
+declare module "fastify" {
   interface FastifyInstance {
     cfg: AppConfig;
     pool: ReturnType<typeof createPool>;
@@ -2171,15 +2400,15 @@ declare module 'fastify' {
 
 export async function buildServer(cfg: AppConfig): Promise<FastifyInstance> {
   const app = Fastify({
-    logger: { level: process.env.LOG_LEVEL ?? 'info' },
+    logger: { level: process.env.LOG_LEVEL ?? "info" },
   });
 
   await app.register(cors, { origin: true });
   await app.register(compress);
-  await app.register(rateLimit, { max: cfg.api.rateLimit, timeWindow: '1 minute' });
+  await app.register(rateLimit, { max: cfg.api.rateLimit, timeWindow: "1 minute" });
 
-  app.decorate('cfg', cfg);
-  app.decorate('pool', createPool(cfg));
+  app.decorate("cfg", cfg);
+  app.decorate("pool", createPool(cfg));
 
   await app.register(healthRoute);
 
@@ -2207,87 +2436,114 @@ git commit -m "feat: add Fastify server bootstrap with health endpoint"
 ## Task 13: `/lookup` Endpoint
 
 **Files:**
+
 - Modify: `src/api/routes/lookup.ts`, `src/api/server.ts`
 - Create: `test/integration/lookup-route.test.ts`
 
 **Goal:** Implement `GET /lookup?ip=...` and `GET /lookup/:ip` that reads from `ip_ranges`.
 
 **Interfaces:**
+
 - `LookupResult` returned as JSON
 
 - [ ] **Step 1: Write the failing test**
 
 `test/integration/lookup-route.test.ts`:
-```ts
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import request from 'supertest';
-import * as mysql from 'mysql2/promise';
-import { buildServer } from '../../src/api/server';
-import { loadConfig } from '../../src/config';
-import { createPool, initSchema, truncateNew, insertIntoNew, atomicSwapRanges } from '../../src/storage/mysql';
 
-const TEST_DB = 'ipquery_lookup_test';
+```ts
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import request from "supertest";
+import * as mysql from "mysql2/promise";
+import { buildServer } from "../../src/api/server";
+import { loadConfig } from "../../src/config";
+import {
+  createPool,
+  initSchema,
+  truncateNew,
+  insertIntoNew,
+  atomicSwapRanges,
+} from "../../src/storage/mysql";
+
+const TEST_DB = "ipquery_lookup_test";
 let cfg = loadConfig();
 let app: Awaited<ReturnType<typeof buildServer>>;
 
 beforeAll(async () => {
   cfg.db.database = TEST_DB;
-  const root = await mysql.createConnection({ host: cfg.db.host, port: cfg.db.port, user: cfg.db.user, password: cfg.db.password });
+  const root = await mysql.createConnection({
+    host: cfg.db.host,
+    port: cfg.db.port,
+    user: cfg.db.user,
+    password: cfg.db.password,
+  });
   await root.query(`DROP DATABASE IF EXISTS ${TEST_DB}`);
   await root.query(`CREATE DATABASE ${TEST_DB}`);
   await root.end();
   const pool = createPool(cfg);
   await initSchema(pool);
   await truncateNew(pool);
-  await insertIntoNew(pool, [{
-    startIp: Buffer.from([0,0,0,0,0,0,0,0,0,0,0xff,0xff,8,8,8,0]),
-    endIp:   Buffer.from([0,0,0,0,0,0,0,0,0,0,0xff,0xff,8,8,8,255]),
-    countryCode: 'US', countryName: 'United States', city: 'Mountain View',
-    latitude: 37.4056, longitude: -122.0775, timezone: 'America/Los_Angeles',
-    countrySource: 'maxmind', citySource: 'maxmind', geoSource: 'maxmind',
-  }]);
+  await insertIntoNew(pool, [
+    {
+      startIp: Buffer.from([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff, 8, 8, 8, 0]),
+      endIp: Buffer.from([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff, 8, 8, 8, 255]),
+      countryCode: "US",
+      countryName: "United States",
+      city: "Mountain View",
+      latitude: 37.4056,
+      longitude: -122.0775,
+      timezone: "America/Los_Angeles",
+      countrySource: "maxmind",
+      citySource: "maxmind",
+      geoSource: "maxmind",
+    },
+  ]);
   await atomicSwapRanges(pool);
   await pool.end();
   app = await buildServer(cfg);
 });
 afterAll(async () => {
   await app.close();
-  const root = await mysql.createConnection({ host: cfg.db.host, port: cfg.db.port, user: cfg.db.user, password: cfg.db.password });
+  const root = await mysql.createConnection({
+    host: cfg.db.host,
+    port: cfg.db.port,
+    user: cfg.db.user,
+    password: cfg.db.password,
+  });
   await root.query(`DROP DATABASE IF EXISTS ${TEST_DB}`);
   await root.end();
 });
 
-describe('lookup route', () => {
-  it('returns 200 with country for query string', async () => {
-    const res = await request(app.server).get('/lookup').query({ ip: '8.8.8.8' });
+describe("lookup route", () => {
+  it("returns 200 with country for query string", async () => {
+    const res = await request(app.server).get("/lookup").query({ ip: "8.8.8.8" });
     expect(res.status).toBe(200);
-    expect(res.body.country.code).toBe('US');
-    expect(res.body.city.name).toBe('Mountain View');
+    expect(res.body.country.code).toBe("US");
+    expect(res.body.city.name).toBe("Mountain View");
     expect(res.body.location.lat).toBe(37.4056);
     expect(res.body.etag).toBeDefined();
   });
 
-  it('returns 200 with path-style URL', async () => {
-    const res = await request(app.server).get('/lookup/8.8.8.8');
+  it("returns 200 with path-style URL", async () => {
+    const res = await request(app.server).get("/lookup/8.8.8.8");
     expect(res.status).toBe(200);
-    expect(res.body.country.code).toBe('US');
+    expect(res.body.country.code).toBe("US");
   });
 
-  it('returns 400 on missing ip', async () => {
-    const res = await request(app.server).get('/lookup');
+  it("returns 400 on missing ip", async () => {
+    const res = await request(app.server).get("/lookup");
     expect(res.status).toBe(400);
-    expect(res.body.error).toBe('invalid_ip');
+    expect(res.body.error).toBe("invalid_ip");
   });
 
-  it('returns 400 on malformed ip', async () => {
-    const res = await request(app.server).get('/lookup').query({ ip: 'not.an.ip' });
+  it("returns 400 on malformed ip", async () => {
+    const res = await request(app.server).get("/lookup").query({ ip: "not.an.ip" });
     expect(res.status).toBe(400);
   });
 
-  it('returns 404 for unmatched IP', async () => {
-    const res = await request(app.server).get('/lookup').query({ ip: '192.168.1.1' });
+  it("returns 404 for unmatched IP", async () => {
+    const res = await request(app.server).get("/lookup").query({ ip: "192.168.1.1" });
     expect(res.status).toBe(404);
-    expect(res.body.error).toBe('not_found');
+    expect(res.body.error).toBe("not_found");
   });
 });
 ```
@@ -2296,53 +2552,57 @@ describe('lookup route', () => {
 
 ```ts
 // SPDX-License-Identifier: MIT
-import type { FastifyInstance } from 'fastify';
-import { parseIp, isValidIp } from '../../ip';
-import { findRange } from '../../storage/mysql';
-import type { LookupResult } from '../../types';
+import type { FastifyInstance } from "fastify";
+import { parseIp, isValidIp } from "../../ip";
+import { findRange } from "../../storage/mysql";
+import type { LookupResult } from "../../types";
 
 async function doLookup(app: FastifyInstance, ip: string): Promise<LookupResult> {
   const buf = parseIp(ip);
   if (!buf) {
     const err = new Error(`invalid ip: ${ip}`);
     (err as any).statusCode = 400;
-    (err as any).code = 'invalid_ip';
+    (err as any).code = "invalid_ip";
     throw err;
   }
   const row = await findRange(app.pool, buf);
   if (!row) {
     const err = new Error(`not found: ${ip}`);
     (err as any).statusCode = 404;
-    (err as any).code = 'not_found';
+    (err as any).code = "not_found";
     (err as any).ip = ip;
     throw err;
   }
   const etag = `unknown`; // Replaced in Task 15 (stats endpoint provides etag source)
   return {
     ip,
-    country: { code: row.countryCode, name: row.countryName, source: row.countrySource ?? 'maxmind' },
+    country: { code: row.countryCode, name: row.countryName, source: row.countrySource ?? "maxmind" },
     region: row.region,
-    city: row.city ? { name: row.city, source: row.citySource ?? 'maxmind' } : undefined,
+    city: row.city ? { name: row.city, source: row.citySource ?? "maxmind" } : undefined,
     postalCode: row.postalCode,
-    location: row.latitude !== undefined && row.longitude !== undefined
-      ? { lat: row.latitude, lon: row.longitude, source: row.geoSource ?? 'maxmind' }
-      : undefined,
+    location:
+      row.latitude !== undefined && row.longitude !== undefined
+        ? { lat: row.latitude, lon: row.longitude, source: row.geoSource ?? "maxmind" }
+        : undefined,
     timezone: row.timezone,
-    isp: row.isp ? { name: row.isp, source: row.ispSource ?? 'maxmind' } : undefined,
-    asn: row.asn !== undefined ? { number: row.asn, org: row.asnOrg, source: row.asnSource ?? 'maxmind' } : undefined,
+    isp: row.isp ? { name: row.isp, source: row.ispSource ?? "maxmind" } : undefined,
+    asn:
+      row.asn !== undefined
+        ? { number: row.asn, org: row.asnOrg, source: row.asnSource ?? "maxmind" }
+        : undefined,
     etag,
   };
 }
 
 export default async function lookupRoute(app: FastifyInstance): Promise<void> {
-  app.get('/lookup', async (req, reply) => {
+  app.get("/lookup", async (req, reply) => {
     const ip = (req.query as { ip?: string }).ip;
-    if (!ip || !isValidIp(ip)) return reply.code(400).send({ error: 'invalid_ip', message: ip ?? 'missing' });
+    if (!ip || !isValidIp(ip)) return reply.code(400).send({ error: "invalid_ip", message: ip ?? "missing" });
     return doLookup(app, ip);
   });
-  app.get<{ Params: { ip: string } }>('/lookup/:ip', async (req, reply) => {
+  app.get<{ Params: { ip: string } }>("/lookup/:ip", async (req, reply) => {
     const ip = req.params.ip;
-    if (!isValidIp(ip)) return reply.code(400).send({ error: 'invalid_ip', message: ip });
+    if (!isValidIp(ip)) return reply.code(400).send({ error: "invalid_ip", message: ip });
     return doLookup(app, ip);
   });
 }
@@ -2351,8 +2611,9 @@ export default async function lookupRoute(app: FastifyInstance): Promise<void> {
 - [ ] **Step 3: Register lookup route in `src/api/server.ts`**
 
 Add after the existing `await app.register(healthRoute);`:
+
 ```ts
-import lookupRoute from './routes/lookup';
+import lookupRoute from "./routes/lookup";
 // ...
 await app.register(lookupRoute);
 ```
@@ -2378,18 +2639,21 @@ git commit -m "feat: add /lookup endpoint with query and path styles"
 ## Task 14: `/stats` Endpoint
 
 **Files:**
+
 - Modify: `src/api/routes/stats.ts`, `src/api/server.ts`, `src/api/routes/lookup.ts`
 - Create: `test/integration/stats-route.test.ts`
 
 **Goal:** Return last ETL run summary. Also use it to provide the `etag` for `/lookup` results.
 
 **Interfaces:**
+
 - Produces: `GET /stats` returning `{ lastRun: { ... } | null }`
 - `lastSuccessfulEtl(pool)` returns finished_at timestamp → used as etag
 
 - [ ] **Step 1: Add `lastSuccessfulEtl` to mysql.ts**
 
 Append to `src/storage/mysql.ts`:
+
 ```ts
 export async function lastSuccessfulEtl(pool: mysql.Pool): Promise<Date | null> {
   const [rows] = await pool.query<mysql.RowDataPacket[]>(
@@ -2403,43 +2667,54 @@ export async function lastSuccessfulEtl(pool: mysql.Pool): Promise<Date | null> 
 - [ ] **Step 2: Write the failing test**
 
 `test/integration/stats-route.test.ts`:
-```ts
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import request from 'supertest';
-import * as mysql from 'mysql2/promise';
-import { buildServer } from '../../src/api/server';
-import { loadConfig } from '../../src/config';
-import { createPool, initSchema, recordEtlStart, recordEtlFinish } from '../../src/storage/mysql';
 
-const TEST_DB = 'ipquery_stats_test';
+```ts
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import request from "supertest";
+import * as mysql from "mysql2/promise";
+import { buildServer } from "../../src/api/server";
+import { loadConfig } from "../../src/config";
+import { createPool, initSchema, recordEtlStart, recordEtlFinish } from "../../src/storage/mysql";
+
+const TEST_DB = "ipquery_stats_test";
 let cfg = loadConfig();
 let app: Awaited<ReturnType<typeof buildServer>>;
 
 beforeAll(async () => {
   cfg.db.database = TEST_DB;
-  const root = await mysql.createConnection({ host: cfg.db.host, port: cfg.db.port, user: cfg.db.user, password: cfg.db.password });
+  const root = await mysql.createConnection({
+    host: cfg.db.host,
+    port: cfg.db.port,
+    user: cfg.db.user,
+    password: cfg.db.password,
+  });
   await root.query(`DROP DATABASE IF EXISTS ${TEST_DB}`);
   await root.query(`CREATE DATABASE ${TEST_DB}`);
   await root.end();
   const pool = createPool(cfg);
   await initSchema(pool);
   const id = await recordEtlStart(pool);
-  await recordEtlFinish(pool, id, 'success', { mergedRecords: 42 });
+  await recordEtlFinish(pool, id, "success", { mergedRecords: 42 });
   await pool.end();
   app = await buildServer(cfg);
 });
 afterAll(async () => {
   await app.close();
-  const root = await mysql.createConnection({ host: cfg.db.host, port: cfg.db.port, user: cfg.db.user, password: cfg.db.password });
+  const root = await mysql.createConnection({
+    host: cfg.db.host,
+    port: cfg.db.port,
+    user: cfg.db.user,
+    password: cfg.db.password,
+  });
   await root.query(`DROP DATABASE IF EXISTS ${TEST_DB}`);
   await root.end();
 });
 
-describe('stats route', () => {
-  it('returns last run summary', async () => {
-    const res = await request(app.server).get('/stats');
+describe("stats route", () => {
+  it("returns last run summary", async () => {
+    const res = await request(app.server).get("/stats");
     expect(res.status).toBe(200);
-    expect(res.body.lastRun.status).toBe('success');
+    expect(res.body.lastRun.status).toBe("success");
     expect(res.body.lastRun.mergedRecords).toBe(42);
   });
 });
@@ -2449,11 +2724,11 @@ describe('stats route', () => {
 
 ```ts
 // SPDX-License-Identifier: MIT
-import type { FastifyInstance } from 'fastify';
-import { lastEtlRun } from '../../storage/mysql';
+import type { FastifyInstance } from "fastify";
+import { lastEtlRun } from "../../storage/mysql";
 
 export default async function statsRoute(app: FastifyInstance): Promise<void> {
-  app.get('/stats', async () => {
+  app.get("/stats", async () => {
     const last = await lastEtlRun(app.pool);
     if (!last) return { lastRun: null };
     return {
@@ -2464,7 +2739,10 @@ export default async function statsRoute(app: FastifyInstance): Promise<void> {
         mergedRecords: last.mergedRecords,
         sources: {
           maxmind: { records: last.maxmindRecords ?? 0, builtAt: last.maxmindBuiltAt?.toISOString() ?? null },
-          ip2region: { records: last.ip2regionRecords ?? 0, builtAt: last.ip2regionBuiltAt?.toISOString() ?? null },
+          ip2region: {
+            records: last.ip2regionRecords ?? 0,
+            builtAt: last.ip2regionBuiltAt?.toISOString() ?? null,
+          },
           dbip: { records: last.dbipRecords ?? 0, builtAt: last.dbipBuiltAt?.toISOString() ?? null },
         },
       },
@@ -2476,18 +2754,20 @@ export default async function statsRoute(app: FastifyInstance): Promise<void> {
 - [ ] **Step 4: Register stats route and use etag in lookup**
 
 In `src/api/server.ts`, add:
+
 ```ts
-import statsRoute from './routes/stats';
+import statsRoute from "./routes/stats";
 // ...
 await app.register(statsRoute);
 ```
 
 In `src/api/routes/lookup.ts`, replace the placeholder `etag = 'unknown'` with:
+
 ```ts
-import { lastSuccessfulEtl } from '../../storage/mysql';
+import { lastSuccessfulEtl } from "../../storage/mysql";
 // inside doLookup:
 const lastRun = await lastSuccessfulEtl(app.pool);
-const etag = lastRun ? lastRun.toISOString() : 'never';
+const etag = lastRun ? lastRun.toISOString() : "never";
 ```
 
 - [ ] **Step 5: Run tests**
@@ -2510,6 +2790,7 @@ git commit -m "feat: add /stats endpoint and etag injection in /lookup"
 ## Task 15: CLI (update / serve / status)
 
 **Files:**
+
 - Modify: `src/cli.ts`
 
 **Goal:** Provide `node dist/cli.js update|serve|status [--once]` subcommands. `update` runs the pipeline; `serve` starts the API server with optional initial ETL and a daily cron; `status` prints the last ETL run.
@@ -2608,6 +2889,7 @@ git commit -m "feat: add CLI with update/serve/status subcommands"
 ## Task 16: docker-compose + .env.example + Makefile polish
 
 **Files:**
+
 - Modify: `docker-compose.yml`, `.env.example`, `README.md`
 - Create: `Makefile`
 
@@ -2713,13 +2995,14 @@ git commit -m "chore: add Docker, Makefile, docker-compose app service"
 ## Task 17: README Finalization + Data-Source Setup Guide
 
 **Files:**
+
 - Modify: `README.md`
 
 **Goal:** Document installation, data-source registration (MaxMind, DB-IP attribution), license notes, and project overview.
 
 - [ ] **Step 1: Replace `README.md`**
 
-```markdown
+````markdown
 # IPQuery
 
 IP geolocation aggregator over **MaxMind GeoLite2**, **ip2region**, and **DB-IP**. Code under MIT; data files downloaded at runtime and **never redistributed** by this repository.
@@ -2740,6 +3023,7 @@ make docker-up           # mysql + app
 # OR
 make install build run    # local node + uses local MySQL
 ```
+````
 
 The first run downloads data sources and populates the database (~10 min). Subsequent runs take the daily cron.
 
@@ -2751,11 +3035,11 @@ The first run downloads data sources and populates the database (~10 min). Subse
 
 ## Data sources & licenses
 
-| Source | License | Notes |
-|---|---|---|
+| Source                                                  | License                                 | Notes                                          |
+| ------------------------------------------------------- | --------------------------------------- | ---------------------------------------------- |
 | [MaxMind GeoLite2](https://www.maxmind.com/en/geolite2) | GeoLite2 EULA (free, no redistribution) | User registers and sets `MAXMIND_LICENSE_KEY`. |
-| [ip2region](https://github.com/lionsoul2014/ip2region) | Apache-2.0 | Attribution preserved in NOTICE. |
-| [DB-IP](https://db-ip.com/db/download/ip-to-city) | CC-BY 4.0 | Attribution required in derivative UI. |
+| [ip2region](https://github.com/lionsoul2014/ip2region)  | Apache-2.0                              | Attribution preserved in NOTICE.               |
+| [DB-IP](https://db-ip.com/db/download/ip-to-city)       | CC-BY 4.0                               | Attribution required in derivative UI.         |
 
 This repository contains **no data files**. You are responsible for downloading and complying with each source's license.
 
@@ -2781,20 +3065,22 @@ make lint
 ## License
 
 MIT for code in this repository.
-```
+
+````
 
 - [ ] **Step 2: Commit**
 
 ```bash
 git add README.md
 git commit -m "docs: finalize README with setup, licenses, limitations"
-```
+````
 
 ---
 
 ## Task 18: End-to-End Verification
 
 **Files:**
+
 - Create: `test/e2e/full-flow.test.ts`
 
 **Goal:** Drive the full flow: spin up ETL against fixture data → start server → curl `/lookup`, `/healthz`, `/stats` → verify behavior.
@@ -2802,38 +3088,45 @@ git commit -m "docs: finalize README with setup, licenses, limitations"
 - [ ] **Step 1: Write the e2e test**
 
 `test/e2e/full-flow.test.ts`:
-```ts
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import * as mysql from 'mysql2/promise';
-import * as fs from 'node:fs/promises';
-import * as path from 'node:path';
-import * as zlib from 'node:zlib';
-import request from 'supertest';
-import { buildServer } from '../../src/api/server';
-import { loadConfig } from '../../src/config';
-import { createPool, initSchema } from '../../src/storage/mysql';
-import { runPipeline } from '../../src/etl/pipeline';
 
-const TEST_DB = 'ipquery_e2e_test';
+```ts
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import * as mysql from "mysql2/promise";
+import * as fs from "node:fs/promises";
+import * as path from "node:path";
+import * as zlib from "node:zlib";
+import request from "supertest";
+import { buildServer } from "../../src/api/server";
+import { loadConfig } from "../../src/config";
+import { createPool, initSchema } from "../../src/storage/mysql";
+import { runPipeline } from "../../src/etl/pipeline";
+
+const TEST_DB = "ipquery_e2e_test";
 let cfg = loadConfig();
 let app: Awaited<ReturnType<typeof buildServer>>;
 
 beforeAll(async () => {
   cfg.db.database = TEST_DB;
-  cfg.etl.dataDir = path.join(__dirname, '..', 'tmp-data-e2e');
-  const rawDir = path.join(cfg.etl.dataDir, 'raw');
+  cfg.etl.dataDir = path.join(__dirname, "..", "tmp-data-e2e");
+  const rawDir = path.join(cfg.etl.dataDir, "raw");
   await fs.mkdir(rawDir, { recursive: true });
-  const csv = 'ip_start,ip_end,country,stateprov,city\n8.8.8.0,8.8.8.255,US,California,Mountain View\n';
-  await fs.writeFile(path.join(rawDir, 'dbip.csv.gz'), zlib.gzipSync(Buffer.from(csv)));
-  await fs.writeFile(path.join(rawDir, 'ip2region.xdb'), JSON.stringify([
-    { start: '8.8.8.0', end: '8.8.8.255', country: '美国', city: 'Mountain View' },
-  ]));
+  const csv = "ip_start,ip_end,country,stateprov,city\n8.8.8.0,8.8.8.255,US,California,Mountain View\n";
+  await fs.writeFile(path.join(rawDir, "dbip.csv.gz"), zlib.gzipSync(Buffer.from(csv)));
+  await fs.writeFile(
+    path.join(rawDir, "ip2region.xdb"),
+    JSON.stringify([{ start: "8.8.8.0", end: "8.8.8.255", country: "美国", city: "Mountain View" }]),
+  );
   await fs.copyFile(
-    path.join(__dirname, '..', '..', 'fixtures', 'maxmind-sample.mmdb'),
-    path.join(rawDir, 'maxmind.mmdb'),
+    path.join(__dirname, "..", "..", "fixtures", "maxmind-sample.mmdb"),
+    path.join(rawDir, "maxmind.mmdb"),
   );
 
-  const root = await mysql.createConnection({ host: cfg.db.host, port: cfg.db.port, user: cfg.db.user, password: cfg.db.password });
+  const root = await mysql.createConnection({
+    host: cfg.db.host,
+    port: cfg.db.port,
+    user: cfg.db.user,
+    password: cfg.db.password,
+  });
   await root.query(`DROP DATABASE IF EXISTS ${TEST_DB}`);
   await root.query(`CREATE DATABASE ${TEST_DB}`);
   await root.end();
@@ -2844,29 +3137,34 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await app.close();
-  const root = await mysql.createConnection({ host: cfg.db.host, port: cfg.db.port, user: cfg.db.user, password: cfg.db.password });
+  const root = await mysql.createConnection({
+    host: cfg.db.host,
+    port: cfg.db.port,
+    user: cfg.db.user,
+    password: cfg.db.password,
+  });
   await root.query(`DROP DATABASE IF EXISTS ${TEST_DB}`);
   await root.end();
   await fs.rm(cfg.etl.dataDir, { recursive: true, force: true });
 });
 
-describe('end-to-end flow', () => {
-  it('/healthz returns ok', async () => {
-    const r = await request(app.server).get('/healthz');
+describe("end-to-end flow", () => {
+  it("/healthz returns ok", async () => {
+    const r = await request(app.server).get("/healthz");
     expect(r.status).toBe(200);
-    expect(r.body.status).toBe('ok');
+    expect(r.body.status).toBe("ok");
   });
 
-  it('/lookup returns the seeded record', async () => {
-    const r = await request(app.server).get('/lookup').query({ ip: '8.8.8.8' });
+  it("/lookup returns the seeded record", async () => {
+    const r = await request(app.server).get("/lookup").query({ ip: "8.8.8.8" });
     expect(r.status).toBe(200);
-    expect(r.body.country.code).toBe('US');
+    expect(r.body.country.code).toBe("US");
   });
 
-  it('/stats reports the run', async () => {
-    const r = await request(app.server).get('/stats');
+  it("/stats reports the run", async () => {
+    const r = await request(app.server).get("/stats");
     expect(r.status).toBe(200);
-    expect(r.body.lastRun.status).toBe('success');
+    expect(r.body.lastRun.status).toBe("success");
   });
 });
 ```

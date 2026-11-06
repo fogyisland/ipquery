@@ -5,15 +5,15 @@
 // by the backfill + random-gen flows (and by the circuit breaker when
 // it auto-disables a provider). See migration 017.
 
-import type { Pool, RowDataPacket } from 'mysql2/promise';
-import { getSetting, setSetting } from './settings';
-import { PROVIDER_CATALOG } from './ingestProviders';
+import type { Pool, RowDataPacket } from "mysql2/promise";
+import { getSetting, setSetting } from "./settings";
+import { PROVIDER_CATALOG } from "./ingestProviders";
 
 export interface ProviderErrorRow {
   id: number;
   providerName: string;
   ipText: string;
-  mode: 'auto' | 'manual' | 'random';
+  mode: "auto" | "manual" | "random";
   errorCode: string;
   reason: string;
   rawResponse: string | null;
@@ -24,7 +24,7 @@ export interface ProviderErrorRow {
 export interface ProviderErrorInsert {
   providerName: string;
   ipText: string;
-  mode: 'auto' | 'manual' | 'random';
+  mode: "auto" | "manual" | "random";
   errorCode: string;
   reason: string;
   rawResponse?: string | null;
@@ -34,7 +34,7 @@ export interface ProviderErrorInsert {
 export interface ProviderErrorFilter {
   providerName?: string;
   errorCode?: string;
-  mode?: 'auto' | 'manual' | 'random';
+  mode?: "auto" | "manual" | "random";
   sinceMs?: number; // epoch ms — only rows with ts >= sinceMs
   limit?: number; // default 200, hard-capped at 500
 }
@@ -44,7 +44,7 @@ function rowToError(r: RowDataPacket): ProviderErrorRow {
     id: Number(r.id),
     providerName: String(r.provider_name),
     ipText: String(r.ip_text),
-    mode: String(r.mode) as ProviderErrorRow['mode'],
+    mode: String(r.mode) as ProviderErrorRow["mode"],
     errorCode: String(r.error_code),
     reason: String(r.reason),
     rawResponse: r.raw_response == null ? null : String(r.raw_response),
@@ -53,10 +53,7 @@ function rowToError(r: RowDataPacket): ProviderErrorRow {
   };
 }
 
-export async function recordProviderError(
-  pool: Pool,
-  row: ProviderErrorInsert,
-): Promise<void> {
+export async function recordProviderError(pool: Pool, row: ProviderErrorInsert): Promise<void> {
   await pool.query(
     `INSERT INTO provider_error_log
        (provider_name, ip_text, mode, error_code, reason, raw_response, retry_count)
@@ -80,26 +77,26 @@ export async function queryProviderErrors(
   const where: string[] = [];
   const args: unknown[] = [];
   if (filter.providerName) {
-    where.push('provider_name = ?');
+    where.push("provider_name = ?");
     args.push(filter.providerName);
   }
   if (filter.errorCode) {
-    where.push('error_code = ?');
+    where.push("error_code = ?");
     args.push(filter.errorCode);
   }
   if (filter.mode) {
-    where.push('mode = ?');
+    where.push("mode = ?");
     args.push(filter.mode);
   }
   if (filter.sinceMs) {
-    where.push('ts >= FROM_UNIXTIME(? / 1000)');
+    where.push("ts >= FROM_UNIXTIME(? / 1000)");
     args.push(filter.sinceMs);
   }
   const limit = Math.min(filter.limit ?? 200, 500);
   const sql = `SELECT id, provider_name, ip_text, mode, error_code, reason,
                       raw_response, ts, retry_count
                  FROM provider_error_log
-                ${where.length ? 'WHERE ' + where.join(' AND ') : ''}
+                ${where.length ? "WHERE " + where.join(" AND ") : ""}
                 ORDER BY ts DESC, id DESC
                 LIMIT ${limit}`;
   const [rows] = await pool.query<RowDataPacket[]>(sql, args);
@@ -133,22 +130,25 @@ const DEFAULT_CB: CircuitBreakerConfig = {
 
 export async function getCircuitBreakerConfig(pool: Pool): Promise<CircuitBreakerConfig> {
   const [enabledRaw, thresholdRaw, windowRaw, cooldownRaw] = await Promise.all([
-    getSetting(pool, 'cb_enabled'),
-    getSetting(pool, 'cb_failure_threshold'),
-    getSetting(pool, 'cb_window_minutes'),
-    getSetting(pool, 'cb_cooldown_minutes'),
+    getSetting(pool, "cb_enabled"),
+    getSetting(pool, "cb_failure_threshold"),
+    getSetting(pool, "cb_window_minutes"),
+    getSetting(pool, "cb_cooldown_minutes"),
   ]);
   return {
-    enabled: enabledRaw === null ? DEFAULT_CB.enabled : enabledRaw === '1',
-    failureThresholdPct: thresholdRaw === null
-      ? DEFAULT_CB.failureThresholdPct
-      : Math.min(100, Math.max(0, Number(thresholdRaw) || DEFAULT_CB.failureThresholdPct)),
-    windowMinutes: windowRaw === null
-      ? DEFAULT_CB.windowMinutes
-      : Math.max(1, Number(windowRaw) || DEFAULT_CB.windowMinutes),
-    cooldownMinutes: cooldownRaw === null
-      ? DEFAULT_CB.cooldownMinutes
-      : Math.max(1, Number(cooldownRaw) || DEFAULT_CB.cooldownMinutes),
+    enabled: enabledRaw === null ? DEFAULT_CB.enabled : enabledRaw === "1",
+    failureThresholdPct:
+      thresholdRaw === null
+        ? DEFAULT_CB.failureThresholdPct
+        : Math.min(100, Math.max(0, Number(thresholdRaw) || DEFAULT_CB.failureThresholdPct)),
+    windowMinutes:
+      windowRaw === null
+        ? DEFAULT_CB.windowMinutes
+        : Math.max(1, Number(windowRaw) || DEFAULT_CB.windowMinutes),
+    cooldownMinutes:
+      cooldownRaw === null
+        ? DEFAULT_CB.cooldownMinutes
+        : Math.max(1, Number(cooldownRaw) || DEFAULT_CB.cooldownMinutes),
   };
 }
 
@@ -159,22 +159,19 @@ export interface CircuitBreakerUpdate {
   cooldownMinutes?: number;
 }
 
-export async function setCircuitBreakerConfig(
-  pool: Pool,
-  patch: CircuitBreakerUpdate,
-): Promise<void> {
-  if (patch.enabled !== undefined) await setSetting(pool, 'cb_enabled', patch.enabled ? '1' : '0');
+export async function setCircuitBreakerConfig(pool: Pool, patch: CircuitBreakerUpdate): Promise<void> {
+  if (patch.enabled !== undefined) await setSetting(pool, "cb_enabled", patch.enabled ? "1" : "0");
   if (patch.failureThresholdPct !== undefined) {
     const clamped = Math.min(100, Math.max(0, Math.round(patch.failureThresholdPct)));
-    await setSetting(pool, 'cb_failure_threshold', String(clamped));
+    await setSetting(pool, "cb_failure_threshold", String(clamped));
   }
   if (patch.windowMinutes !== undefined) {
     const clamped = Math.max(1, Math.round(patch.windowMinutes));
-    await setSetting(pool, 'cb_window_minutes', String(clamped));
+    await setSetting(pool, "cb_window_minutes", String(clamped));
   }
   if (patch.cooldownMinutes !== undefined) {
     const clamped = Math.max(1, Math.round(patch.cooldownMinutes));
-    await setSetting(pool, 'cb_cooldown_minutes', String(clamped));
+    await setSetting(pool, "cb_cooldown_minutes", String(clamped));
   }
 }
 

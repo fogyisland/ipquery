@@ -12,7 +12,7 @@
 //   backfill filter (NOT EXISTS subquery) decides at read time. That's
 //   intentional: a stale row from before a recent ETL merge shouldn't be
 //   re-queued just because someone rebuilds ip_ranges.
-import type { Pool, RowDataPacket, ResultSetHeader } from 'mysql2/promise';
+import type { Pool, RowDataPacket, ResultSetHeader } from "mysql2/promise";
 
 export interface UnknownIpRow {
   id: number;
@@ -21,7 +21,7 @@ export interface UnknownIpRow {
   queryCount: number;
   firstSeenAt: Date;
   lastSeenAt: Date;
-  source: 'auto_miss' | 'manual_submit';
+  source: "auto_miss" | "manual_submit";
   submittedByUserId: number | null;
   processedAt: Date | null;
   mergedRunId: number | null;
@@ -35,7 +35,7 @@ interface QueueRow extends RowDataPacket {
   query_count: number;
   first_seen_at: Date;
   last_seen_at: Date;
-  source: 'auto_miss' | 'manual_submit';
+  source: "auto_miss" | "manual_submit";
   submitted_by_user_id: number | null;
   processed_at: Date | null;
   merged_run_id: number | null;
@@ -65,10 +65,10 @@ export async function insertOrIncrement(
   pool: Pool,
   ip: Buffer,
   ipText: string,
-  opts: { submittedByUserId?: number; source?: 'auto_miss' | 'manual_submit' } = {},
+  opts: { submittedByUserId?: number; source?: "auto_miss" | "manual_submit" } = {},
 ): Promise<void> {
   const userId = opts.submittedByUserId ?? null;
-  const source = opts.source ?? 'auto_miss';
+  const source = opts.source ?? "auto_miss";
   // When the row already exists we DO NOT overwrite submitted_by_user_id
   // — once a user manually submitted, manual wins. Likewise source stays
   // as 'auto_miss' unless this insert was manual itself.
@@ -107,17 +107,13 @@ export async function nextBatch(pool: Pool, limit: number): Promise<UnknownIpRow
 }
 
 /** Mark a batch of queue rows as merged into ip_ranges under `runId`. */
-export async function markProcessed(
-  pool: Pool,
-  ids: number[],
-  runId: number,
-): Promise<void> {
+export async function markProcessed(pool: Pool, ids: number[], runId: number): Promise<void> {
   if (ids.length === 0) return;
   // Use chunked updates to keep the IN-list under MySQL's max packet size.
   const CHUNK = 500;
   for (let i = 0; i < ids.length; i += CHUNK) {
     const slice = ids.slice(i, i + CHUNK);
-    const placeholders = slice.map(() => '?').join(',');
+    const placeholders = slice.map(() => "?").join(",");
     await pool.query<ResultSetHeader>(
       `UPDATE unknown_ip_queue
        SET processed_at = CURRENT_TIMESTAMP(3),
@@ -132,16 +128,12 @@ export async function markProcessed(
 /** Record that we tried these rows but couldn't merge them (e.g. no
  *  consensus). They stay pending; `last_attempt_reason` is informational
  *  for the admin view. */
-export async function markAttempted(
-  pool: Pool,
-  ids: number[],
-  reason: string,
-): Promise<void> {
+export async function markAttempted(pool: Pool, ids: number[], reason: string): Promise<void> {
   if (ids.length === 0) return;
   const CHUNK = 500;
   for (let i = 0; i < ids.length; i += CHUNK) {
     const slice = ids.slice(i, i + CHUNK);
-    const placeholders = slice.map(() => '?').join(',');
+    const placeholders = slice.map(() => "?").join(",");
     await pool.query<ResultSetHeader>(
       `UPDATE unknown_ip_queue
        SET last_attempt_reason = ?
@@ -190,7 +182,11 @@ export async function queueStats(pool: Pool): Promise<{
        COALESCE(SUM(query_count), 0) AS total_queries
      FROM unknown_ip_queue`,
   );
-  const r = rows[0] as { pending: number | null; processed: number | null; total_queries: number | string | null };
+  const r = rows[0] as {
+    pending: number | null;
+    processed: number | null;
+    total_queries: number | string | null;
+  };
   return {
     pending: Number(r.pending ?? 0),
     processed: Number(r.processed ?? 0),
@@ -203,9 +199,7 @@ export async function queueStats(pool: Pool): Promise<{
  *  back. We deliberately do NOT delete processed rows — those are the
  *  audit trail of past backfills. */
 export async function clearPending(pool: Pool): Promise<number> {
-  const [res] = await pool.query<ResultSetHeader>(
-    `DELETE FROM unknown_ip_queue WHERE processed_at IS NULL`,
-  );
+  const [res] = await pool.query<ResultSetHeader>(`DELETE FROM unknown_ip_queue WHERE processed_at IS NULL`);
   return res.affectedRows;
 }
 
@@ -220,22 +214,24 @@ export async function exportPendingCsv(pool: Pool): Promise<string> {
        WHERE processed_at IS NULL
        ORDER BY query_count DESC, last_seen_at DESC`,
   );
-  const lines: string[] = ['ip,query_count,first_seen_at,last_seen_at,source,last_attempt_reason'];
+  const lines: string[] = ["ip,query_count,first_seen_at,last_seen_at,source,last_attempt_reason"];
   for (const r of rows) {
     const esc = (s: string | number | null | Date) => {
-      if (s == null) return '';
+      if (s == null) return "";
       const v = s instanceof Date ? s.toISOString() : String(s);
       // Quote if it contains comma / quote / newline.
       return /[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v;
     };
-    lines.push([
-      esc(r.ip_text),
-      esc(r.query_count),
-      esc(r.first_seen_at),
-      esc(r.last_seen_at),
-      esc(r.source),
-      esc(r.last_attempt_reason),
-    ].join(','));
+    lines.push(
+      [
+        esc(r.ip_text),
+        esc(r.query_count),
+        esc(r.first_seen_at),
+        esc(r.last_seen_at),
+        esc(r.source),
+        esc(r.last_attempt_reason),
+      ].join(","),
+    );
   }
-  return lines.join('\n');
+  return lines.join("\n");
 }

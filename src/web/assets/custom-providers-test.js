@@ -8,30 +8,34 @@
 // external file, no inline scripts.
 
 (function () {
-  document.querySelectorAll('.custom-provider-test-form').forEach(function (form) {
-    form.addEventListener('submit', function (ev) {
+  document.querySelectorAll(".custom-provider-test-form").forEach(function (form) {
+    form.addEventListener("submit", function (ev) {
       ev.preventDefault();
-      var url = form.getAttribute('action');
-      var fd = new FormData(form);
-      var resultCell = form.parentElement.querySelector('.custom-provider-test-result');
+      const url = form.getAttribute("action");
+      const fd = new FormData(form);
+      const resultCell = form.parentElement.querySelector(".custom-provider-test-result");
       if (!resultCell) return;
-      resultCell.textContent = '...';
+      resultCell.textContent = "...";
       fetch(url, {
-        method: 'POST',
+        method: "POST",
         body: fd,
-        credentials: 'same-origin',
-        headers: { 'Accept': 'application/json' },
+        credentials: "same-origin",
+        headers: { Accept: "application/json" },
       })
-        .then(function (r) { return r.json().catch(function () { return { ok: false, error: 'parse' }; }); })
+        .then(function (r) {
+          return r.json().catch(function () {
+            return { ok: false, error: "parse" };
+          });
+        })
         .then(function (j) {
           if (j.ok && j.record) {
-            resultCell.textContent = j.record.countryCode + (j.record.city ? ' · ' + j.record.city : '');
+            resultCell.textContent = j.record.countryCode + (j.record.city ? " · " + j.record.city : "");
           } else {
-            resultCell.textContent = 'ERR ' + (j.error || 'unknown');
+            resultCell.textContent = "ERR " + (j.error || "unknown");
           }
         })
         .catch(function (err) {
-          resultCell.textContent = 'ERR ' + (err && err.message ? err.message : 'fetch');
+          resultCell.textContent = "ERR " + (err && err.message ? err.message : "fetch");
         });
     });
   });

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
-import type { Pool, ResultSetHeader, RowDataPacket } from 'mysql2/promise';
-import type { User, Role } from '../types';
+import type { Pool, ResultSetHeader, RowDataPacket } from "mysql2/promise";
+import type { User, Role } from "../types";
 
 export interface CreateUserInput {
   email: string;
@@ -25,31 +25,25 @@ function mapRow(r: RowDataPacket): User {
 export async function createUser(pool: Pool, input: CreateUserInput): Promise<User> {
   const [res] = await pool.query<ResultSetHeader>(
     `INSERT INTO users (email, password_hash, display_name, role) VALUES (?, ?, ?, ?)`,
-    [input.email, input.passwordHash, input.displayName, input.role ?? 'user'],
+    [input.email, input.passwordHash, input.displayName, input.role ?? "user"],
   );
   const u = await findUserById(pool, res.insertId);
-  if (!u) throw new Error('user vanished after insert');
+  if (!u) throw new Error("user vanished after insert");
   return u;
 }
 
 export async function findUserByEmail(pool: Pool, email: string): Promise<User | null> {
-  const [rows] = await pool.query<RowDataPacket[]>(
-    `SELECT * FROM users WHERE email = ?`, [email],
-  );
+  const [rows] = await pool.query<RowDataPacket[]>(`SELECT * FROM users WHERE email = ?`, [email]);
   return rows[0] ? mapRow(rows[0]) : null;
 }
 
 export async function findUserById(pool: Pool, id: number): Promise<User | null> {
-  const [rows] = await pool.query<RowDataPacket[]>(
-    `SELECT * FROM users WHERE id = ?`, [id],
-  );
+  const [rows] = await pool.query<RowDataPacket[]>(`SELECT * FROM users WHERE id = ?`, [id]);
   return rows[0] ? mapRow(rows[0]) : null;
 }
 
 export async function getUserPasswordHash(pool: Pool, userId: number): Promise<string | null> {
-  const [rows] = await pool.query<RowDataPacket[]>(
-    `SELECT password_hash FROM users WHERE id = ?`, [userId],
-  );
+  const [rows] = await pool.query<RowDataPacket[]>(`SELECT password_hash FROM users WHERE id = ?`, [userId]);
   return rows[0] ? (rows[0].password_hash as string) : null;
 }
 
@@ -81,21 +75,34 @@ export async function deleteUser(pool: Pool, userId: number): Promise<void> {
   await pool.query(`DELETE FROM users WHERE id = ?`, [userId]);
 }
 
-export async function listUsers(pool: Pool, opts: {
-  offset: number; limit: number; search?: string; role?: Role;
-}): Promise<{ rows: User[]; total: number }> {
+export async function listUsers(
+  pool: Pool,
+  opts: {
+    offset: number;
+    limit: number;
+    search?: string;
+    role?: Role;
+  },
+): Promise<{ rows: User[]; total: number }> {
   const where: string[] = [];
   const params: unknown[] = [];
-  if (opts.search) { where.push('email LIKE ?'); params.push(`%${opts.search}%`); }
-  if (opts.role) { where.push('role = ?'); params.push(opts.role); }
-  const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
+  if (opts.search) {
+    where.push("email LIKE ?");
+    params.push(`%${opts.search}%`);
+  }
+  if (opts.role) {
+    where.push("role = ?");
+    params.push(opts.role);
+  }
+  const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
 
   const [rows] = await pool.query<RowDataPacket[]>(
     `SELECT * FROM users ${whereSql} ORDER BY id DESC LIMIT ? OFFSET ?`,
     [...params, opts.limit, opts.offset],
   );
   const [totalRows] = await pool.query<RowDataPacket[]>(
-    `SELECT COUNT(*) AS c FROM users ${whereSql}`, params,
+    `SELECT COUNT(*) AS c FROM users ${whereSql}`,
+    params,
   );
   return {
     rows: rows.map(mapRow),

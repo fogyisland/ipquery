@@ -29,8 +29,8 @@ export class TokenBucket {
   private lastRefillAt: number;
 
   constructor(cfg: RateLimiterConfig) {
-    if (cfg.capacity <= 0) throw new Error('capacity must be > 0');
-    if (cfg.refillPerMin <= 0) throw new Error('refillPerMin must be > 0');
+    if (cfg.capacity <= 0) throw new Error("capacity must be > 0");
+    if (cfg.refillPerMin <= 0) throw new Error("refillPerMin must be > 0");
     this.capacity = cfg.capacity;
     this.refillPerMs = cfg.refillPerMin / 60_000;
     this.tokens = cfg.capacity;
@@ -41,14 +41,14 @@ export class TokenBucket {
    *  time in ms — handy for logging and for tests. */
   async acquire(): Promise<number> {
     while (true) {
-        this.refill();
-        if (this.tokens >= 1) {
-          this.tokens -= 1;
-          return 0;
-        }
-        const waitMs = Math.max(1, Math.ceil((1 - this.tokens) / this.refillPerMs));
-        await sleep(waitMs);
+      this.refill();
+      if (this.tokens >= 1) {
+        this.tokens -= 1;
+        return 0;
       }
+      const waitMs = Math.max(1, Math.ceil((1 - this.tokens) / this.refillPerMs));
+      await sleep(waitMs);
+    }
   }
 
   /** Inspect without consuming. Returns tokens available (fractional). */

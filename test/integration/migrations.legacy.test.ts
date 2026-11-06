@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: MIT
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import * as mysql from 'mysql2/promise';
-import * as fs from 'node:fs';
-import * as path from 'node:path';
-import { loadConfig } from '../../src/config';
-import { runMigrations } from '../../src/storage/migrations/runner';
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import * as mysql from "mysql2/promise";
+import * as fs from "node:fs";
+import * as path from "node:path";
+import { loadConfig } from "../../src/config";
+import { runMigrations } from "../../src/storage/migrations/runner";
 
-const TEST_DB_LEGACY = 'ipquery_mig_legacy_test';
+const TEST_DB_LEGACY = "ipquery_mig_legacy_test";
 let pool: mysql.Pool;
 
 beforeAll(async () => {
@@ -31,8 +31,8 @@ beforeAll(async () => {
 
   // Simulate a legacy install by applying the deprecated schema.sql directly.
   // This file represents the "old" pre-migration bootstrap.
-  const schemaPath = path.join(__dirname, '..', '..', 'src', 'storage', 'schema.sql');
-  const schemaSql = fs.readFileSync(schemaPath, 'utf8');
+  const schemaPath = path.join(__dirname, "..", "..", "src", "storage", "schema.sql");
+  const schemaSql = fs.readFileSync(schemaPath, "utf8");
   const conn = await pool.getConnection();
   try {
     await conn.query(schemaSql);
@@ -54,8 +54,8 @@ afterAll(async () => {
   await root.end();
 });
 
-describe('migrations legacy upgrade', () => {
-  it('skips 001/002 already created via legacy schema.sql and applies the rest', async () => {
+describe("migrations legacy upgrade", () => {
+  it("skips 001/002 already created via legacy schema.sql and applies the rest", async () => {
     const result = await runMigrations(pool);
     // 001 and 002 tables existed before runMigrations was called.
     // They were never recorded in schema_migrations, but because the runner
@@ -66,23 +66,43 @@ describe('migrations legacy upgrade', () => {
     expect(result.applied.length).toBeGreaterThanOrEqual(0);
 
     const applied = await pool.query<mysql.RowDataPacket[]>(
-      'SELECT version FROM schema_migrations ORDER BY version ASC',
+      "SELECT version FROM schema_migrations ORDER BY version ASC",
     );
     const versions = (applied[0] as Array<{ version: string }>).map((r) => r.version);
-    expect(versions).toEqual(['001', '002', '003', '004', '005', '006', '007', '008', '010', '011', '012', '013', '014', '015', '016', '017', '018', '019', '020']);
+    expect(versions).toEqual([
+      "001",
+      "002",
+      "003",
+      "004",
+      "005",
+      "006",
+      "007",
+      "008",
+      "010",
+      "011",
+      "012",
+      "013",
+      "014",
+      "015",
+      "016",
+      "017",
+      "018",
+      "019",
+      "020",
+    ]);
 
     // The 11 expected tables all still exist after the upgrade.
-    const [rows] = await pool.query<mysql.RowDataPacket[]>('SHOW TABLES');
+    const [rows] = await pool.query<mysql.RowDataPacket[]>("SHOW TABLES");
     const tables = rows.map((r) => Object.values(r)[0] as string).sort();
-    expect(tables).toContain('ip_ranges');
-    expect(tables).toContain('ip_ranges_new');
-    expect(tables).toContain('etl_runs');
-    expect(tables).toContain('users');
-    expect(tables).toContain('api_keys');
-    expect(tables).toContain('sessions');
-    expect(tables).toContain('email_verifications');
-    expect(tables).toContain('password_resets');
-    expect(tables).toContain('query_log');
-    expect(tables).toContain('schema_migrations');
+    expect(tables).toContain("ip_ranges");
+    expect(tables).toContain("ip_ranges_new");
+    expect(tables).toContain("etl_runs");
+    expect(tables).toContain("users");
+    expect(tables).toContain("api_keys");
+    expect(tables).toContain("sessions");
+    expect(tables).toContain("email_verifications");
+    expect(tables).toContain("password_resets");
+    expect(tables).toContain("query_log");
+    expect(tables).toContain("schema_migrations");
   });
 });

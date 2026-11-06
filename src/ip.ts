@@ -1,20 +1,20 @@
 // SPDX-License-Identifier: MIT
 export function isValidIp(s: string): boolean {
-  if (typeof s !== 'string' || s.length === 0) return false;
+  if (typeof s !== "string" || s.length === 0) return false;
   // Cheap pre-check: only contains digits, dots, colons, a-f, A-F
   if (!/^[0-9a-fA-F:.]+$/.test(s)) return false;
   return parseIp(s) !== null;
 }
 
 export function parseIp(s: string): Buffer | null {
-  if (typeof s !== 'string' || s.length === 0) return null;
-  if (s.includes(':')) return parseV6(s);
-  if (s.includes('.')) return parseV4(s);
+  if (typeof s !== "string" || s.length === 0) return null;
+  if (s.includes(":")) return parseV6(s);
+  if (s.includes(".")) return parseV4(s);
   return null;
 }
 
 function parseV4(s: string): Buffer | null {
-  const parts = s.split('.');
+  const parts = s.split(".");
   if (parts.length !== 4) return null;
   const buf = Buffer.alloc(16);
   for (let i = 0; i < 4; i++) {
@@ -35,23 +35,23 @@ function parseV6(s: string): Buffer | null {
   let foundDoubleColon = false;
   let doubleColonIndex = -1;
 
-  if (s === '::') {
+  if (s === "::") {
     return buf;
   }
 
-  const sides = s.split('::');
+  const sides = s.split("::");
   if (sides.length > 2) return null;
-  const leftPart = sides[0] ?? '';
-  const rightPart = sides[1] ?? '';
+  const leftPart = sides[0] ?? "";
+  const rightPart = sides[1] ?? "";
 
   if (leftPart.length > 0) {
-    for (const part of leftPart.split(':')) {
+    for (const part of leftPart.split(":")) {
       if (!/^[0-9a-fA-F]{1,4}$/.test(part)) return null;
       head.push(parseInt(part, 16));
     }
   }
   if (rightPart.length > 0) {
-    for (const part of rightPart.split(':')) {
+    for (const part of rightPart.split(":")) {
       if (!/^[0-9A-Fa-f]{1,4}$/.test(part)) return null;
       tail.push(parseInt(part, 16));
     }
@@ -84,11 +84,22 @@ function parseV6(s: string): Buffer | null {
 }
 
 export function bufferToString(b: Buffer): string {
-  if (b.length !== 16) throw new Error('expected 16-byte buffer');
+  if (b.length !== 16) throw new Error("expected 16-byte buffer");
   // IPv4 if first 12 bytes are zero
-  if (b[0] === 0 && b[1] === 0 && b[2] === 0 && b[3] === 0 &&
-      b[4] === 0 && b[5] === 0 && b[6] === 0 && b[7] === 0 &&
-      b[8] === 0 && b[9] === 0 && b[10] === 0 && b[11] === 0) {
+  if (
+    b[0] === 0 &&
+    b[1] === 0 &&
+    b[2] === 0 &&
+    b[3] === 0 &&
+    b[4] === 0 &&
+    b[5] === 0 &&
+    b[6] === 0 &&
+    b[7] === 0 &&
+    b[8] === 0 &&
+    b[9] === 0 &&
+    b[10] === 0 &&
+    b[11] === 0
+  ) {
     return `${b[12]}.${b[13]}.${b[14]}.${b[15]}`;
   }
   const groups: number[] = [];
@@ -96,23 +107,29 @@ export function bufferToString(b: Buffer): string {
     groups.push((b[i * 2]! << 8) | b[i * 2 + 1]!);
   }
   // Find longest run of zeros for :: abbreviation
-  let bestStart = -1, bestLen = 0;
-  let curStart = -1, curLen = 0;
+  let bestStart = -1,
+    bestLen = 0;
+  let curStart = -1,
+    curLen = 0;
   for (let i = 0; i < 8; i++) {
     if (groups[i] === 0) {
       if (curStart === -1) curStart = i;
       curLen++;
-      if (curLen > bestLen) { bestLen = curLen; bestStart = curStart; }
+      if (curLen > bestLen) {
+        bestLen = curLen;
+        bestStart = curStart;
+      }
     } else {
-      curStart = -1; curLen = 0;
+      curStart = -1;
+      curLen = 0;
     }
   }
   if (bestLen < 2) {
-    return groups.map((g) => g.toString(16)).join(':');
+    return groups.map((g) => g.toString(16)).join(":");
   }
   const head = groups.slice(0, bestStart).map((g) => g.toString(16));
   const tail = groups.slice(bestStart + bestLen).map((g) => g.toString(16));
-  return `${head.join(':')}::${tail.join(':')}`;
+  return `${head.join(":")}::${tail.join(":")}`;
 }
 
 export function compareBuffers(a: Buffer, b: Buffer): number {

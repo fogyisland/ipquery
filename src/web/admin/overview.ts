@@ -1,12 +1,18 @@
 // SPDX-License-Identifier: MIT
-import type { Pool, RowDataPacket } from 'mysql2/promise';
-import { listAuditLog, type AuditLogEntry } from '../../storage/auditLog';
-import { countQueriesByStatusSince, countQueriesByDay, type DailyBucket } from '../../storage/queryLog';
+import type { Pool, RowDataPacket } from "mysql2/promise";
+import { listAuditLog, type AuditLogEntry } from "../../storage/auditLog";
+import { countQueriesByStatusSince, countQueriesByDay, type DailyBucket } from "../../storage/queryLog";
 
 export interface Overview {
   generatedAt: Date;
   etl: {
-    lastRun: { id: number; startedAt: Date; finishedAt: Date | null; status: string; mergedRecords: number } | null;
+    lastRun: {
+      id: number;
+      startedAt: Date;
+      finishedAt: Date | null;
+      status: string;
+      mergedRecords: number;
+    } | null;
     lastSuccessAt: Date | null;
     runsToday: number;
   };
@@ -46,13 +52,15 @@ export async function getOverview(pool: Pool): Promise<Overview> {
     `SELECT id, started_at, finished_at, status, merged_records FROM etl_runs ORDER BY id DESC LIMIT 1`,
   );
   const etlRow = etlRows[0];
-  const lastRun = etlRow ? {
-    id: Number(etlRow.id),
-    startedAt: etlRow.started_at as Date,
-    finishedAt: (etlRow.finished_at ?? null) as Date | null,
-    status: etlRow.status as string,
-    mergedRecords: Number(etlRow.merged_records ?? 0),
-  } : null;
+  const lastRun = etlRow
+    ? {
+        id: Number(etlRow.id),
+        startedAt: etlRow.started_at as Date,
+        finishedAt: (etlRow.finished_at ?? null) as Date | null,
+        status: etlRow.status as string,
+        mergedRecords: Number(etlRow.merged_records ?? 0),
+      }
+    : null;
 
   const [successRows] = await pool.query<RowDataPacket[]>(
     `SELECT MAX(finished_at) AS last FROM etl_runs WHERE status = 'success' AND finished_at IS NOT NULL`,
@@ -93,7 +101,11 @@ export async function getOverview(pool: Pool): Promise<Overview> {
     db: {
       ipRanges: Number(c.ip_ranges),
       queryLogTotal: Number(c.query_log_total),
-      users: { total: Number(c.users_total), verified: Number(c.users_verified), disabled: Number(c.users_disabled) },
+      users: {
+        total: Number(c.users_total),
+        verified: Number(c.users_verified),
+        disabled: Number(c.users_disabled),
+      },
       apiKeys: { total: Number(c.keys_total), active: Number(c.keys_active) },
     },
     queries24h: { ...split, total, hitRate },

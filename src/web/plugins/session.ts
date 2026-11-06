@@ -1,21 +1,21 @@
 // SPDX-License-Identifier: MIT
-import type { FastifyInstance, FastifyRequest } from 'fastify';
-import { loadSession } from '../../storage/sessions';
-import { findUserById } from '../../storage/users';
-import type { Session, User } from '../../types';
+import type { FastifyInstance, FastifyRequest } from "fastify";
+import { loadSession } from "../../storage/sessions";
+import { findUserById } from "../../storage/users";
+import type { Session, User } from "../../types";
 
-declare module 'fastify' {
+declare module "fastify" {
   interface FastifyRequest {
-    session: (Session & { role?: User['role']; email?: string }) | null;
+    session: (Session & { role?: User["role"]; email?: string }) | null;
     user: User | null;
   }
 }
 
 export async function registerSession(app: FastifyInstance): Promise<void> {
-  app.decorateRequest('session', null as (Session & { role?: User['role']; email?: string }) | null);
-  app.decorateRequest('user', null as User | null);
+  app.decorateRequest("session", null as (Session & { role?: User["role"]; email?: string }) | null);
+  app.decorateRequest("user", null as User | null);
 
-  app.addHook('onRequest', async (req: FastifyRequest) => {
+  app.addHook("onRequest", async (req: FastifyRequest) => {
     const sid = req.cookies?.sid;
     if (!sid) return;
     const session = await loadSession(app.pool, sid);

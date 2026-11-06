@@ -1,13 +1,17 @@
 // SPDX-License-Identifier: MIT
-import type { FastifyInstance, FastifyReply } from 'fastify';
-import view from '@fastify/view';
-import * as Handlebars from 'handlebars';
-import * as path from 'node:path';
-import * as fs from 'node:fs';
-import { formatDistanceToNow } from 'date-fns';
-import { zhCN } from 'date-fns/locale';
+import type { FastifyInstance, FastifyReply } from "fastify";
+import view from "@fastify/view";
+import * as Handlebars from "handlebars";
+import * as path from "node:path";
+import * as fs from "node:fs";
+import { formatDistanceToNow } from "date-fns";
+import { zhCN } from "date-fns/locale";
 
-type ReplyView = (page: string, data?: Record<string, unknown>, opts?: { layout?: string }) => Promise<unknown>;
+type ReplyView = (
+  page: string,
+  data?: Record<string, unknown>,
+  opts?: { layout?: string },
+) => Promise<unknown>;
 
 const wrapped = new WeakSet<FastifyReply>();
 
@@ -18,11 +22,11 @@ function promoteLayout(
   raw: ReplyView,
 ): Promise<unknown> {
   const mergedOpts: { layout?: string } = { ...(opts ?? {}) };
-  if (!mergedOpts.layout && data && typeof data.layout === 'string') {
+  if (!mergedOpts.layout && data && typeof data.layout === "string") {
     mergedOpts.layout = data.layout;
   }
   const cleanData: Record<string, unknown> = data ? { ...data } : {};
-  if ('layout' in cleanData) delete cleanData.layout;
+  if ("layout" in cleanData) delete cleanData.layout;
   return raw(page, cleanData, mergedOpts);
 }
 
@@ -32,107 +36,120 @@ function promoteLayout(
  *  section to a CTA. */
 function injectPath(reply: FastifyReply, data: Record<string, unknown> | undefined): void {
   const url = reply.request.url;
-  const qIdx = url.indexOf('?');
+  const qIdx = url.indexOf("?");
   const path = qIdx >= 0 ? url.slice(0, qIdx) : url;
   if (data) {
     data.path = path;
-    if (data.req && typeof data.req === 'object') {
+    if (data.req && typeof data.req === "object") {
       (data.req as Record<string, unknown>).path = path;
     }
   }
 }
 
 export async function registerView(app: FastifyInstance, cfg: { baseUrl: string }): Promise<void> {
-  const viewsDir = path.join(__dirname, '..', 'views');
+  const viewsDir = path.join(__dirname, "..", "views");
 
-  Handlebars.registerHelper('t', function (this: unknown, key: string, opts: unknown) {
+  Handlebars.registerHelper("t", function (this: unknown, key: string, opts: unknown) {
     const hash = (opts as { hash?: Record<string, string | number> } | undefined)?.hash ?? {};
-    const locale = (this as { locale?: string })?.locale ?? 'zh-CN';
-    const tFn = (globalThis as { __ipqT?: (l: string, k: string, v?: Record<string, string | number>) => string }).__ipqT;
+    const locale = (this as { locale?: string })?.locale ?? "zh-CN";
+    const tFn = (
+      globalThis as { __ipqT?: (l: string, k: string, v?: Record<string, string | number>) => string }
+    ).__ipqT;
     return tFn ? tFn(locale, key, hash) : key;
   });
 
-  Handlebars.registerHelper('eq', (a: unknown, b: unknown) => a === b);
-  Handlebars.registerHelper('ne', (a: unknown, b: unknown) => a !== b);
-  Handlebars.registerHelper('startsWith', (str: unknown, prefix: unknown) =>
-    typeof str === 'string' && typeof prefix === 'string' && str.startsWith(prefix),
+  Handlebars.registerHelper("eq", (a: unknown, b: unknown) => a === b);
+  Handlebars.registerHelper("ne", (a: unknown, b: unknown) => a !== b);
+  Handlebars.registerHelper(
+    "startsWith",
+    (str: unknown, prefix: unknown) =>
+      typeof str === "string" && typeof prefix === "string" && str.startsWith(prefix),
   );
-  Handlebars.registerHelper('not', (v: unknown) => !v);
-  Handlebars.registerHelper('and', (a: unknown, b: unknown) => Boolean(a) && Boolean(b));
-  Handlebars.registerHelper('or', (a: unknown, b: unknown) => Boolean(a) || Boolean(b));
-  Handlebars.registerHelper('range', function (this: unknown, start: unknown, end: unknown) {
+  Handlebars.registerHelper("not", (v: unknown) => !v);
+  Handlebars.registerHelper("and", (a: unknown, b: unknown) => Boolean(a) && Boolean(b));
+  Handlebars.registerHelper("or", (a: unknown, b: unknown) => Boolean(a) || Boolean(b));
+  Handlebars.registerHelper("range", function (this: unknown, start: unknown, end: unknown) {
     const s = Number(start);
     const e = Number(end);
     const out: number[] = [];
     for (let i = s; i < e; i++) out.push(i);
     return out;
   });
-  Handlebars.registerHelper('gt', (a: unknown, b: unknown) => Number(a) > Number(b));
-  Handlebars.registerHelper('lt', (a: unknown, b: unknown) => Number(a) < Number(b));
-  Handlebars.registerHelper('add', (a: unknown, b: unknown) => Number(a) + Number(b));
-  Handlebars.registerHelper('subtract', (a: unknown, b: unknown) => Number(a) - Number(b));
-  Handlebars.registerHelper('json', (v: unknown) => JSON.stringify(v));
-  Handlebars.registerHelper('lookup', (obj: unknown, key: unknown) => {
-    if (obj == null || typeof obj !== 'object') return undefined;
+  Handlebars.registerHelper("gt", (a: unknown, b: unknown) => Number(a) > Number(b));
+  Handlebars.registerHelper("lt", (a: unknown, b: unknown) => Number(a) < Number(b));
+  Handlebars.registerHelper("add", (a: unknown, b: unknown) => Number(a) + Number(b));
+  Handlebars.registerHelper("subtract", (a: unknown, b: unknown) => Number(a) - Number(b));
+  Handlebars.registerHelper("json", (v: unknown) => JSON.stringify(v));
+  Handlebars.registerHelper("lookup", (obj: unknown, key: unknown) => {
+    if (obj == null || typeof obj !== "object") return undefined;
     return (obj as Record<string, unknown>)[String(key)];
   });
-  Handlebars.registerHelper('sparkline-path', (data: unknown, max: unknown, width: unknown, height: unknown) => {
-    const arr = Array.isArray(data) ? data.map(Number) : [];
-    const m = Number(max) || 1;
-    const w = Number(width) || 80;
-    const h = Number(height) || 24;
-    if (arr.length === 0) return '';
-    if (arr.length === 1) {
-      const y = (h - (arr[0]! / m) * h * 0.85 + h * 0.075).toFixed(1);
-      return `M 0,${y}`;
-    }
-    const step = w / (arr.length - 1);
-    return arr.map((v, i) => {
-      const x = (i * step).toFixed(1);
-      const y = `(${(h - (v / m) * h * 0.85 + h * 0.075).toFixed(1)})`;
-      return `${i === 0 ? 'M' : 'L'} ${x},${y.slice(1, -1)}`;
-    }).join(' ');
+  Handlebars.registerHelper(
+    "sparkline-path",
+    (data: unknown, max: unknown, width: unknown, height: unknown) => {
+      const arr = Array.isArray(data) ? data.map(Number) : [];
+      const m = Number(max) || 1;
+      const w = Number(width) || 80;
+      const h = Number(height) || 24;
+      if (arr.length === 0) return "";
+      if (arr.length === 1) {
+        const y = (h - (arr[0]! / m) * h * 0.85 + h * 0.075).toFixed(1);
+        return `M 0,${y}`;
+      }
+      const step = w / (arr.length - 1);
+      return arr
+        .map((v, i) => {
+          const x = (i * step).toFixed(1);
+          const y = `(${(h - (v / m) * h * 0.85 + h * 0.075).toFixed(1)})`;
+          return `${i === 0 ? "M" : "L"} ${x},${y.slice(1, -1)}`;
+        })
+        .join(" ");
+    },
+  );
+  Handlebars.registerHelper("formatDate", (d: Date | string | null | undefined) => {
+    if (!d) return "";
+    const date = typeof d === "string" ? new Date(d) : d;
+    return date.toISOString().replace("T", " ").slice(0, 19);
   });
-  Handlebars.registerHelper('formatDate', (d: Date | string | null | undefined) => {
-    if (!d) return '';
-    const date = typeof d === 'string' ? new Date(d) : d;
-    return date.toISOString().replace('T', ' ').slice(0, 19);
-  });
-  Handlebars.registerHelper('formatRelative', (d: Date | string | null | undefined) => {
-    if (!d) return '';
-    const date = typeof d === 'string' ? new Date(d) : d;
+  Handlebars.registerHelper("formatRelative", (d: Date | string | null | undefined) => {
+    if (!d) return "";
+    const date = typeof d === "string" ? new Date(d) : d;
     return formatDistanceToNow(date, { addSuffix: true, locale: zhCN });
   });
-  Handlebars.registerHelper('year', () => new Date().getFullYear());
-  Handlebars.registerHelper('ternary', (cond: unknown, a: unknown, b: unknown) => (cond ? a : b));
-  Handlebars.registerHelper('percent', (n: unknown, digits?: unknown) => {
+  Handlebars.registerHelper("year", () => new Date().getFullYear());
+  Handlebars.registerHelper("ternary", (cond: unknown, a: unknown, b: unknown) => (cond ? a : b));
+  Handlebars.registerHelper("percent", (n: unknown, digits?: unknown) => {
     const d = digits == null ? 0 : Number(digits);
     return `${(Number(n) * 100).toFixed(d)}%`;
   });
-  Handlebars.registerHelper('max', (...args: unknown[]) => {
+  Handlebars.registerHelper("max", (...args: unknown[]) => {
     const last = args[args.length - 1];
-    const vals = (last && typeof last === 'object' && 'name' in (last as object) && 'fn' in (last as object)
-      ? args.slice(0, -1)
-      : args) as unknown[];
+    const vals = (
+      last && typeof last === "object" && "name" in (last as object) && "fn" in (last as object)
+        ? args.slice(0, -1)
+        : args
+    ) as unknown[];
     return vals.reduce((m: number, v: unknown) => Math.max(m, Number(v)), 0);
   });
-  Handlebars.registerHelper('array', (...args: unknown[]) => {
+  Handlebars.registerHelper("array", (...args: unknown[]) => {
     const last = args[args.length - 1];
-    const vals = (last && typeof last === 'object' && 'name' in (last as object) && 'fn' in (last as object)
-      ? args.slice(0, -1)
-      : args) as unknown[];
+    const vals = (
+      last && typeof last === "object" && "name" in (last as object) && "fn" in (last as object)
+        ? args.slice(0, -1)
+        : args
+    ) as unknown[];
     return vals;
   });
-  Handlebars.registerHelper('hash', (obj: unknown) => obj);
+  Handlebars.registerHelper("hash", (obj: unknown) => obj);
 
   // Render a stacked-bar chart for a DailyBucket[]. CSS-grid based — matches
   // the NOC console layout (chart-bars / chart-y / chart-bars-track /
   // chart-bar-col / chart-bar--*). Stacks hit (green) / miss (amber) /
   // invalid (red). x-axis: dates, oldest left. y-axis: query count.
-  Handlebars.registerHelper('daily-chart', (data: unknown) => {
+  Handlebars.registerHelper("daily-chart", (data: unknown) => {
     const buckets = Array.isArray(data)
       ? data.map((b) => ({
-          date: String((b as Record<string, unknown>).date ?? ''),
+          date: String((b as Record<string, unknown>).date ?? ""),
           hit: Number((b as Record<string, unknown>).hit ?? 0),
           miss: Number((b as Record<string, unknown>).miss ?? 0),
           invalid: Number((b as Record<string, unknown>).invalid ?? 0),
@@ -151,31 +168,42 @@ export async function registerView(app: FastifyInstance, cfg: { baseUrl: string 
     }
 
     // Y-axis ticks: 0 / 25% / 50% / 75% / 100% of niceMax
-    const ticks = [niceMax, Math.round(niceMax * 0.75), Math.round(niceMax * 0.5), Math.round(niceMax * 0.25), 0];
-    const yLabels = ticks.map((v) => `<span>${v}</span>`).join('');
+    const ticks = [
+      niceMax,
+      Math.round(niceMax * 0.75),
+      Math.round(niceMax * 0.5),
+      Math.round(niceMax * 0.25),
+      0,
+    ];
+    const yLabels = ticks.map((v) => `<span>${v}</span>`).join("");
 
     // Each column: stacked divs sized by percentage of niceMax. Empty bars get
     // a 1px min-height so the column outline is visible.
-    const cols = buckets.map((b) => {
-      const pctHit = (b.hit / niceMax) * 100;
-      const pctMiss = (b.miss / niceMax) * 100;
-      const pctInv = (b.invalid / niceMax) * 100;
-      const dt = new Date(b.date);
-      const label = `${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
-      const safe = (n: number): number => (n > 0 ? n : 0);
-      return `<div class="chart-bar-col" title="${b.date}: hit ${b.hit} / miss ${b.miss} / invalid ${b.invalid}">
-        <div class="chart-bar chart-bar--invalid" style="height: ${safe(pctInv).toFixed(2)}%; min-height: ${b.invalid > 0 ? '2px' : '0'};"></div>
-        <div class="chart-bar chart-bar--miss" style="height: ${safe(pctMiss).toFixed(2)}%; min-height: ${b.miss > 0 ? '2px' : '0'};"></div>
-        <div class="chart-bar chart-bar--hit" style="height: ${safe(pctHit).toFixed(2)}%; min-height: ${b.hit > 0 ? '2px' : '0'};"></div>
-        <div class="chart-bar-total">${b.total || ''}</div>
+    const cols = buckets
+      .map((b) => {
+        const pctHit = (b.hit / niceMax) * 100;
+        const pctMiss = (b.miss / niceMax) * 100;
+        const pctInv = (b.invalid / niceMax) * 100;
+        const dt = new Date(b.date);
+        const label = `${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
+        const safe = (n: number): number => (n > 0 ? n : 0);
+        return `<div class="chart-bar-col" title="${b.date}: hit ${b.hit} / miss ${b.miss} / invalid ${b.invalid}">
+        <div class="chart-bar chart-bar--invalid" style="height: ${safe(pctInv).toFixed(2)}%; min-height: ${b.invalid > 0 ? "2px" : "0"};"></div>
+        <div class="chart-bar chart-bar--miss" style="height: ${safe(pctMiss).toFixed(2)}%; min-height: ${b.miss > 0 ? "2px" : "0"};"></div>
+        <div class="chart-bar chart-bar--hit" style="height: ${safe(pctHit).toFixed(2)}%; min-height: ${b.hit > 0 ? "2px" : "0"};"></div>
+        <div class="chart-bar-total">${b.total || ""}</div>
       </div>
       <span></span>`; // spacer for axis below
-    }).join('');
+      })
+      .join("");
 
-    const axisLabels = buckets.map((b) => {
-      const dt = new Date(b.date);
-      return `${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
-    }).map((l) => `<span>${l}</span>`).join('');
+    const axisLabels = buckets
+      .map((b) => {
+        const dt = new Date(b.date);
+        return `${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
+      })
+      .map((l) => `<span>${l}</span>`)
+      .join("");
 
     return `<div class="chart-bars" role="img" aria-label="7-day query volume">
       <div class="chart-y">${yLabels}</div>
@@ -186,7 +214,7 @@ export async function registerView(app: FastifyInstance, cfg: { baseUrl: string 
     </div>`;
   });
 
-  const partialsDir = path.join(viewsDir, 'partials');
+  const partialsDir = path.join(viewsDir, "partials");
   if (fs.existsSync(partialsDir)) {
     // Recursive walk so marketing/admin/dashboard partials can be namespaced
     // in subfolders and referenced as `{{> marketing/_topnav}}`. Partial
@@ -198,15 +226,15 @@ export async function registerView(app: FastifyInstance, cfg: { baseUrl: string 
         const stat = fs.statSync(full);
         if (stat.isDirectory()) {
           walk(full, prefix ? `${prefix}/${name}` : name);
-        } else if (name.endsWith('.hbs')) {
+        } else if (name.endsWith(".hbs")) {
           const partialName = prefix
-            ? `${prefix}/${name.slice(0, -'.hbs'.length)}`
-            : name.slice(0, -'.hbs'.length);
-          Handlebars.registerPartial(partialName, fs.readFileSync(full, 'utf-8'));
+            ? `${prefix}/${name.slice(0, -".hbs".length)}`
+            : name.slice(0, -".hbs".length);
+          Handlebars.registerPartial(partialName, fs.readFileSync(full, "utf-8"));
         }
       }
     };
-    walk(partialsDir, '');
+    walk(partialsDir, "");
   }
 
   // We deliberately do NOT pass `opts.layout` here. @fastify/view's handlebars
@@ -228,7 +256,7 @@ export async function registerView(app: FastifyInstance, cfg: { baseUrl: string 
   // Tracking wrapped replies in a module-scoped WeakSet instead of mutating
   // an instance property keeps the reply object untouched.
 
-  app.addHook('onRequest', async (_req, reply) => {
+  app.addHook("onRequest", async (_req, reply) => {
     if (wrapped.has(reply)) return;
     wrapped.add(reply);
 
@@ -254,14 +282,11 @@ export async function registerView(app: FastifyInstance, cfg: { baseUrl: string 
     };
   });
 
-  app.decorate('viewBaseUrl', cfg.baseUrl);
+  app.decorate("viewBaseUrl", cfg.baseUrl);
 }
 
-declare module 'fastify' {
+declare module "fastify" {
   interface FastifyInstance {
     viewBaseUrl: string;
   }
 }
-
-
-

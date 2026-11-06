@@ -15,27 +15,38 @@
 // unless-this.revokedAt guard in the table body), so they're naturally
 // excluded from the bulk action.
 (function () {
-  var checkAll = document.getElementById('keys-check-all');
-  var rows = document.querySelectorAll('.keys-check-row');
-  var btn = document.getElementById('keys-bulk-btn');
-  var count = document.getElementById('keys-bulk-count');
+  const checkAll = document.getElementById("keys-check-all");
+  const rows = document.querySelectorAll(".keys-check-row");
+  const btn = document.getElementById("keys-bulk-btn");
+  const count = document.getElementById("keys-bulk-count");
 
   function update() {
-    var n = 0;
-    rows.forEach(function (r) { if (r.checked) n++; });
+    let n = 0;
+    rows.forEach(function (r) {
+      if (r.checked) n++;
+    });
     if (count) count.textContent = String(n);
     if (btn) btn.disabled = n === 0;
     if (checkAll) {
-      if (n === 0) { checkAll.indeterminate = false; checkAll.checked = false; }
-      else if (n === rows.length) { checkAll.indeterminate = false; checkAll.checked = true; }
-      else checkAll.indeterminate = true;
+      if (n === 0) {
+        checkAll.indeterminate = false;
+        checkAll.checked = false;
+      } else if (n === rows.length) {
+        checkAll.indeterminate = false;
+        checkAll.checked = true;
+      } else checkAll.indeterminate = true;
     }
   }
 
-  if (checkAll) checkAll.addEventListener('change', function () {
-    rows.forEach(function (r) { r.checked = checkAll.checked; });
-    update();
+  if (checkAll)
+    checkAll.addEventListener("change", function () {
+      rows.forEach(function (r) {
+        r.checked = checkAll.checked;
+      });
+      update();
+    });
+  rows.forEach(function (r) {
+    r.addEventListener("change", update);
   });
-  rows.forEach(function (r) { r.addEventListener('change', update); });
   update();
 })();

@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: MIT
-import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
-import type { Pool } from 'mysql2/promise';
-import { insertQueryLogs, type QueryLogInsertable } from '../../storage/queryLog';
+import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
+import type { Pool } from "mysql2/promise";
+import { insertQueryLogs, type QueryLogInsertable } from "../../storage/queryLog";
 
 export interface PendingLookup {
   ip: Buffer;
   ipText: string;
-  status: 'hit' | 'miss' | 'invalid';
+  status: "hit" | "miss" | "invalid";
   userId: number | null;
   apiKeyId: number | null;
   sessionId: string | null;
@@ -14,13 +14,17 @@ export interface PendingLookup {
   userAgent: string | null;
 }
 
-declare module 'fastify' {
+declare module "fastify" {
   interface FastifyRequest {
     pendingLog?: PendingLookup;
   }
 }
 
-export function registerQueryLogWriter(app: FastifyInstance, pool: Pool, opts?: { flushIntervalMs?: number; maxBatch?: number }): { flush: () => Promise<void> } {
+export function registerQueryLogWriter(
+  app: FastifyInstance,
+  pool: Pool,
+  opts?: { flushIntervalMs?: number; maxBatch?: number },
+): { flush: () => Promise<void> } {
   const flushIntervalMs = opts?.flushIntervalMs ?? 5000;
   const maxBatch = opts?.maxBatch ?? 100;
   let buffer: QueryLogInsertable[] = [];
@@ -33,20 +37,22 @@ export function registerQueryLogWriter(app: FastifyInstance, pool: Pool, opts?: 
     try {
       await insertQueryLogs(pool, slice);
     } catch (err) {
-      app.log.error({ err, count: slice.length }, 'queryLog flush failed');
+      app.log.error({ err, count: slice.length }, "queryLog flush failed");
     }
   }
 
-  timer = setInterval(() => { void flush(); }, flushIntervalMs);
+  timer = setInterval(() => {
+    void flush();
+  }, flushIntervalMs);
   timer.unref();
 
-  app.addHook('onResponse', async (req: FastifyRequest, _reply: FastifyReply) => {
+  app.addHook("onResponse", async (req: FastifyRequest, _reply: FastifyReply) => {
     if (!req.pendingLog) return;
     buffer.push(req.pendingLog);
     if (buffer.length >= maxBatch) await flush();
   });
 
-  app.addHook('onClose', async () => {
+  app.addHook("onClose", async () => {
     if (timer) clearInterval(timer);
     await flush();
   });

@@ -1,16 +1,16 @@
 // SPDX-License-Identifier: MIT
-import { describe, it, expect, beforeAll, beforeEach, afterAll, vi } from 'vitest';
-import request from 'supertest';
-import { createTestDb, dropTestDb, type TestDb } from '../helpers/db';
-import { loadConfig } from '../../src/config';
-import { buildServer } from '../../src/api/server';
-import { createUser } from '../../src/storage/users';
-import { createSession } from '../../src/storage/sessions';
-import { generateToken } from '../../src/web/auth/tokens';
-import { _resetProviderHealthCache } from '../../src/storage/providerErrorLog';
+import { describe, it, expect, beforeAll, beforeEach, afterAll, vi } from "vitest";
+import request from "supertest";
+import { createTestDb, dropTestDb, type TestDb } from "../helpers/db";
+import { loadConfig } from "../../src/config";
+import { buildServer } from "../../src/api/server";
+import { createUser } from "../../src/storage/users";
+import { createSession } from "../../src/storage/sessions";
+import { generateToken } from "../../src/web/auth/tokens";
+import { _resetProviderHealthCache } from "../../src/storage/providerErrorLog";
 
-vi.mock('node:dns/promises', () => ({
-  lookup: vi.fn(async () => [{ address: '1.1.1.1', family: 4 }]),
+vi.mock("node:dns/promises", () => ({
+  lookup: vi.fn(async () => [{ address: "1.1.1.1", family: 4 }]),
 }));
 
 let td: TestDb;
@@ -18,17 +18,24 @@ let app: Awaited<ReturnType<typeof buildServer>>;
 let adminSid: string;
 
 beforeAll(async () => {
-  td = await createTestDb('providers-page');
-  const cfg = loadConfig(); cfg.db.database = td.dbName;
+  td = await createTestDb("providers-page");
+  const cfg = loadConfig();
+  cfg.db.database = td.dbName;
   app = await buildServer(cfg);
   const admin = await createUser(app.pool, {
-    email: 'a@x.com', passwordHash: 'h', displayName: 'A', role: 'admin',
+    email: "a@x.com",
+    passwordHash: "h",
+    displayName: "A",
+    role: "admin",
   });
   adminSid = generateToken(16);
   await createSession(app.pool, adminSid, admin.id, new Date(Date.now() + 3600_000));
 });
 
-afterAll(async () => { await app.close(); await dropTestDb(td); });
+afterAll(async () => {
+  await app.close();
+  await dropTestDb(td);
+});
 
 beforeEach(async () => {
   _resetProviderHealthCache();
@@ -36,9 +43,11 @@ beforeEach(async () => {
   await td.pool.query(`DELETE FROM ingest_providers WHERE is_custom = 1`);
 });
 
-describe('GET /admin/providers — Strategy Definition surface', () => {
-  it('returns 200 with built-in provider cards and custom empty state', async () => {
-    const r = await request(app.server).get('/admin/providers').set('Cookie', 'sid=' + adminSid);
+describe("GET /admin/providers — Strategy Definition surface", () => {
+  it("returns 200 with built-in provider cards and custom empty state", async () => {
+    const r = await request(app.server)
+      .get("/admin/providers")
+      .set("Cookie", "sid=" + adminSid);
     expect(r.status).toBe(200);
     // Section headings render (from the new admin.providers.* keys).
     expect(r.text).toMatch(/数据源管理/);
@@ -57,7 +66,7 @@ describe('GET /admin/providers — Strategy Definition surface', () => {
     expect(r.text).toMatch(/\/assets\/custom-providers-test\.js/);
   });
 
-  it('renders a seeded custom provider alongside built-ins', async () => {
+  it("renders a seeded custom provider alongside built-ins", async () => {
     // Seed one custom provider with a known counter row.
     await td.pool.query(
       `INSERT INTO ingest_providers
@@ -73,7 +82,9 @@ describe('GET /admin/providers — Strategy Definition surface', () => {
        VALUES ('demo', CURDATE(), 50, 5, 0, 0, 0, NOW(3))`,
     );
 
-    const r = await request(app.server).get('/admin/providers').set('Cookie', 'sid=' + adminSid);
+    const r = await request(app.server)
+      .get("/admin/providers")
+      .set("Cookie", "sid=" + adminSid);
     expect(r.status).toBe(200);
     // Built-in IP-API card still renders.
     expect(r.text).toMatch(/IP-API/);
@@ -95,23 +106,17 @@ describe('GET /admin/providers — Strategy Definition surface', () => {
     expect(r.text).toMatch(/action="\/admin\/providers\/circuit-breaker"/);
   });
 
-  it('renders the circuit-breaker form with the saved config values', async () => {
+  it("renders the circuit-breaker form with the saved config values", async () => {
     // Override the migration-seeded default CB values with non-default
     // ones so we can assert they survive the round-trip into the template.
-    await td.pool.query(
-      `UPDATE settings SET v = '1'  WHERE k = 'cb_enabled'`,
-    );
-    await td.pool.query(
-      `UPDATE settings SET v = '77' WHERE k = 'cb_failure_threshold'`,
-    );
-    await td.pool.query(
-      `UPDATE settings SET v = '11' WHERE k = 'cb_window_minutes'`,
-    );
-    await td.pool.query(
-      `UPDATE settings SET v = '22' WHERE k = 'cb_cooldown_minutes'`,
-    );
+    await td.pool.query(`UPDATE settings SET v = '1'  WHERE k = 'cb_enabled'`);
+    await td.pool.query(`UPDATE settings SET v = '77' WHERE k = 'cb_failure_threshold'`);
+    await td.pool.query(`UPDATE settings SET v = '11' WHERE k = 'cb_window_minutes'`);
+    await td.pool.query(`UPDATE settings SET v = '22' WHERE k = 'cb_cooldown_minutes'`);
 
-    const r = await request(app.server).get('/admin/providers').set('Cookie', 'sid=' + adminSid);
+    const r = await request(app.server)
+      .get("/admin/providers")
+      .set("Cookie", "sid=" + adminSid);
     expect(r.status).toBe(200);
     expect(r.text).toMatch(/circuit-breaker-form|circuit-breaker-card/);
     // Inputs render with the persisted values.

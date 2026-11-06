@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
-import * as mysql from 'mysql2/promise';
-import * as fs from 'node:fs/promises';
-import * as path from 'node:path';
+import * as mysql from "mysql2/promise";
+import * as fs from "node:fs/promises";
+import * as path from "node:path";
 
 const SCHEMA_MIGRATIONS_DDL = `
 CREATE TABLE IF NOT EXISTS schema_migrations (
@@ -12,9 +12,7 @@ CREATE TABLE IF NOT EXISTS schema_migrations (
 
 export async function getAppliedVersions(pool: mysql.Pool): Promise<Set<string>> {
   await pool.query(SCHEMA_MIGRATIONS_DDL);
-  const [rows] = await pool.query<mysql.RowDataPacket[]>(
-    'SELECT version FROM schema_migrations',
-  );
+  const [rows] = await pool.query<mysql.RowDataPacket[]>("SELECT version FROM schema_migrations");
   return new Set(rows.map((r) => String(r.version)));
 }
 
@@ -38,12 +36,12 @@ export async function runMigrations(pool: mysql.Pool): Promise<MigrationResult> 
       skipped.push(version);
       continue;
     }
-    const sql = await fs.readFile(path.join(migrationsDir, file), 'utf8');
+    const sql = await fs.readFile(path.join(migrationsDir, file), "utf8");
     const conn = await pool.getConnection();
     try {
       await conn.beginTransaction();
       await conn.query(sql);
-      await conn.query('INSERT INTO schema_migrations (version) VALUES (?)', [version]);
+      await conn.query("INSERT INTO schema_migrations (version) VALUES (?)", [version]);
       await conn.commit();
       newlyApplied.push(version);
     } catch (err) {

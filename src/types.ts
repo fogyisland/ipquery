@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-export type Source = 'maxmind' | 'ip2region' | 'dbip' | 'dbip-country' | 'dbip-asn' | 'ipinfo';
+export type Source = "maxmind" | "ip2region" | "dbip" | "dbip-country" | "dbip-asn" | "ipinfo";
 
 export interface NormalizedRecord {
   startIp: Buffer;
@@ -31,11 +31,16 @@ export interface LookupResult {
   etag: string;
 }
 
+/** Lifecycle stage of an in-flight ETL run. Used by the admin UI to
+ *  colour the live progress panel and to suppress out-of-order bar
+ *  updates (insert can't run before download completes, etc.). */
+export type EtlStage = "download" | "parse" | "insert" | "swap" | "done";
+
 export interface EtlRun {
   id?: number;
   startedAt: Date;
   finishedAt?: Date;
-  status: 'running' | 'success' | 'failed';
+  status: "running" | "success" | "failed";
   maxmindRecords?: number;
   ip2regionRecords?: number;
   dbipRecords?: number;
@@ -44,6 +49,36 @@ export interface EtlRun {
   maxmindBuiltAt?: Date;
   ip2regionBuiltAt?: Date;
   dbipBuiltAt?: Date;
+  /** Bytes downloaded so far across all in-flight downloads (sum). */
+  downloadBytesDone?: number;
+  /** Sum of expected sizes (Content-Length where known, otherwise
+   *  bytes-done-so-far). 0 means "unknown total" and the UI renders
+   *  an indeterminate bar instead of a percentage. */
+  downloadBytesTotal?: number;
+  /** Rows successfully inserted (or updated via ON DUPLICATE) across
+   *  every source so far. */
+  insertRowsDone?: number;
+  /** Expected row count: total rows in source CSVs after parse. We
+   *  fill this lazily so the bar starts moving from second zero
+   *  instead of waiting for the full parse to complete. */
+  insertRowsTotal?: number;
+  currentStage?: EtlStage;
+  progressUpdatedAt?: Date;
+}
+
+/** Snapshot passed from the pipeline to the admin UI via htmx polling.
+ *  Cheap to JSON-serialise and stable across schema changes (anything
+ *  new goes through EtlRun, not this). */
+export interface EtlRunProgress {
+  runId: number;
+  status: "running" | "success" | "failed";
+  currentStage: EtlStage | null;
+  downloadBytesDone: number;
+  downloadBytesTotal: number;
+  insertRowsDone: number;
+  insertRowsTotal: number;
+  progressUpdatedAt: string | null;
+  errorMessage: string | null;
 }
 
 export interface IpRangeRow {
@@ -67,8 +102,8 @@ export interface IpRangeRow {
   geoSource?: Source;
 }
 
-export type Role = 'user' | 'admin';
-export type QueryStatus = 'hit' | 'miss' | 'invalid';
+export type Role = "user" | "admin";
+export type QueryStatus = "hit" | "miss" | "invalid";
 
 export interface User {
   id: number;

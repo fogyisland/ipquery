@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: MIT
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import request from 'supertest';
-import * as mysql from 'mysql2/promise';
-import { loadConfig } from '../../src/config';
-import { runMigrations } from '../../src/storage/migrations/runner';
-import { buildServer } from '../../src/api/server';
-import { markInitialized } from '../../src/storage/settings';
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import request from "supertest";
+import * as mysql from "mysql2/promise";
+import { loadConfig } from "../../src/config";
+import { runMigrations } from "../../src/storage/migrations/runner";
+import { buildServer } from "../../src/api/server";
+import { markInitialized } from "../../src/storage/settings";
 
 interface TestDb {
   pool: mysql.Pool;
@@ -18,16 +18,26 @@ let appPost: Awaited<ReturnType<typeof buildServer>>;
 
 async function dropAndCreate(): Promise<{ pool: mysql.Pool; dbName: string }> {
   const cfg = loadConfig();
-  const dbName = 'ipquery_test_setup_guard';
+  const dbName = "ipquery_test_setup_guard";
   const root = await mysql.createConnection({
-    host: cfg.db.host, port: cfg.db.port, user: cfg.db.user, password: cfg.db.password,
+    host: cfg.db.host,
+    port: cfg.db.port,
+    user: cfg.db.user,
+    password: cfg.db.password,
   });
   await root.query(`DROP DATABASE IF EXISTS \`${dbName}\``);
   await root.query(`CREATE DATABASE \`${dbName}\``);
   await root.end();
   const pool = mysql.createPool({
-    host: cfg.db.host, port: cfg.db.port, user: cfg.db.user, password: cfg.db.password,
-    database: dbName, connectionLimit: 2, multipleStatements: true, timezone: 'Z', dateStrings: false,
+    host: cfg.db.host,
+    port: cfg.db.port,
+    user: cfg.db.user,
+    password: cfg.db.password,
+    database: dbName,
+    connectionLimit: 2,
+    multipleStatements: true,
+    timezone: "Z",
+    dateStrings: false,
   });
   await runMigrations(pool);
   return { pool, dbName };
@@ -36,7 +46,10 @@ async function dropAndCreate(): Promise<{ pool: mysql.Pool; dbName: string }> {
 async function dropDb(dbName: string): Promise<void> {
   const cfg = loadConfig();
   const root = await mysql.createConnection({
-    host: cfg.db.host, port: cfg.db.port, user: cfg.db.user, password: cfg.db.password,
+    host: cfg.db.host,
+    port: cfg.db.port,
+    user: cfg.db.user,
+    password: cfg.db.password,
   });
   await root.query(`DROP DATABASE IF EXISTS \`${dbName}\``);
   await root.end();
@@ -44,7 +57,8 @@ async function dropDb(dbName: string): Promise<void> {
 
 beforeAll(async () => {
   td = await dropAndCreate();
-  const cfg = loadConfig(); cfg.db.database = td.dbName;
+  const cfg = loadConfig();
+  cfg.db.database = td.dbName;
 
   // The setupGuard plugin enforces on every non-setup request when
   // `initialized_at` is missing. Test fixture: build pre-init server
@@ -62,53 +76,53 @@ afterAll(async () => {
   await dropDb(td.dbName);
 });
 
-describe('setupGuard plugin', () => {
-  describe('before init', () => {
-    it('redirects GET / to /setup', async () => {
-      const r = await request(appPre.server).get('/');
+describe("setupGuard plugin", () => {
+  describe("before init", () => {
+    it("redirects GET / to /setup", async () => {
+      const r = await request(appPre.server).get("/");
       expect(r.status).toBe(302);
-      expect(r.headers['location']).toBe('/setup');
+      expect(r.headers["location"]).toBe("/setup");
     });
 
-    it('redirects GET /login to /setup', async () => {
-      const r = await request(appPre.server).get('/login');
+    it("redirects GET /login to /setup", async () => {
+      const r = await request(appPre.server).get("/login");
       expect(r.status).toBe(302);
-      expect(r.headers['location']).toBe('/setup');
+      expect(r.headers["location"]).toBe("/setup");
     });
 
-    it('allows GET /healthz through (external probes)', async () => {
-      const r = await request(appPre.server).get('/healthz');
+    it("allows GET /healthz through (external probes)", async () => {
+      const r = await request(appPre.server).get("/healthz");
       expect(r.status).toBe(200);
     });
 
-    it('allows GET /lookup through (public IP-API works during setup)', async () => {
-      const r = await request(appPre.server).get('/lookup');
+    it("allows GET /lookup through (public IP-API works during setup)", async () => {
+      const r = await request(appPre.server).get("/lookup");
       // Endpoint is reachable; status depends on whether seed data was loaded.
       // We only care that setupGuard didn't redirect to /setup.
       expect(r.status).not.toBe(302);
-      expect(r.headers['location']).toBeUndefined();
+      expect(r.headers["location"]).toBeUndefined();
     });
 
-    it('allows GET /stats through (public stats API works during setup)', async () => {
-      const r = await request(appPre.server).get('/stats');
+    it("allows GET /stats through (public stats API works during setup)", async () => {
+      const r = await request(appPre.server).get("/stats");
       expect(r.status).not.toBe(302);
-      expect(r.headers['location']).toBeUndefined();
+      expect(r.headers["location"]).toBeUndefined();
     });
   });
 
-  describe('after init', () => {
-    it('does NOT redirect GET / to /setup', async () => {
-      const r = await request(appPost.server).get('/');
+  describe("after init", () => {
+    it("does NOT redirect GET / to /setup", async () => {
+      const r = await request(appPost.server).get("/");
       expect(r.status).not.toBe(302);
     });
 
-    it('returns 404 for GET /setup (lock-out)', async () => {
-      const r = await request(appPost.server).get('/setup');
+    it("returns 404 for GET /setup (lock-out)", async () => {
+      const r = await request(appPost.server).get("/setup");
       expect(r.status).toBe(404);
     });
   });
 
-  describe('onResponse cache refresh (regression)', () => {
+  describe("onResponse cache refresh (regression)", () => {
     // Regression test for the production bug where `setupGuard`'s onResponse
     // hook skipped cache refresh on 3xx responses. POST /setup/complete returns
     // 302, so the cache was never refreshed in production: after the wizard
@@ -121,20 +135,31 @@ describe('setupGuard plugin', () => {
     let liveApp: Awaited<ReturnType<typeof buildServer>>;
     beforeAll(async () => {
       const cfg = loadConfig();
-      const dbName = 'ipquery_test_setup_guard_refresh';
+      const dbName = "ipquery_test_setup_guard_refresh";
       const root = await mysql.createConnection({
-        host: cfg.db.host, port: cfg.db.port, user: cfg.db.user, password: cfg.db.password,
+        host: cfg.db.host,
+        port: cfg.db.port,
+        user: cfg.db.user,
+        password: cfg.db.password,
       });
       await root.query(`DROP DATABASE IF EXISTS \`${dbName}\``);
       await root.query(`CREATE DATABASE \`${dbName}\``);
       await root.end();
       const pool = mysql.createPool({
-        host: cfg.db.host, port: cfg.db.port, user: cfg.db.user, password: cfg.db.password,
-        database: dbName, connectionLimit: 2, multipleStatements: true, timezone: 'Z', dateStrings: false,
+        host: cfg.db.host,
+        port: cfg.db.port,
+        user: cfg.db.user,
+        password: cfg.db.password,
+        database: dbName,
+        connectionLimit: 2,
+        multipleStatements: true,
+        timezone: "Z",
+        dateStrings: false,
       });
       await runMigrations(pool);
       await pool.end();
-      const liveCfg = loadConfig(); liveCfg.db.database = dbName;
+      const liveCfg = loadConfig();
+      liveCfg.db.database = dbName;
       liveApp = await buildServer(liveCfg);
     });
 
@@ -142,7 +167,10 @@ describe('setupGuard plugin', () => {
       await liveApp.close();
       const cfg = loadConfig();
       const root = await mysql.createConnection({
-        host: cfg.db.host, port: cfg.db.port, user: cfg.db.user, password: cfg.db.password,
+        host: cfg.db.host,
+        port: cfg.db.port,
+        user: cfg.db.user,
+        password: cfg.db.password,
       });
       await root.query(`DROP DATABASE IF EXISTS \`ipquery_test_setup_guard_refresh\``);
       await root.end();
@@ -150,36 +178,46 @@ describe('setupGuard plugin', () => {
 
     function extractCsrf(html: string, setCookie: string[] | undefined): string {
       const tokenMatch = /<input[^>]+name="csrf"[^>]+value="([^"]+)"/.exec(html);
-      if (!tokenMatch) throw new Error('csrf token not found in page');
-      const csrfCookie = setCookie?.find((c) => c.startsWith('csrf='))!.split(';')[0]!;
-      const issuedCookie = setCookie?.find((c) => c.startsWith('csrf_issued='))!.split(';')[0]!;
+      if (!tokenMatch) throw new Error("csrf token not found in page");
+      const csrfCookie = setCookie?.find((c) => c.startsWith("csrf="))!.split(";")[0]!;
+      const issuedCookie = setCookie?.find((c) => c.startsWith("csrf_issued="))!.split(";")[0]!;
       void csrfCookie;
       void issuedCookie;
       return tokenMatch[1]!;
     }
 
-    async function wizardStep(agent: ReturnType<typeof request.agent>, path: string, fields: Record<string, string> = {}): Promise<void> {
-      const getR = await agent.get(path.replace(/^POST_/, ''));
-      const token = extractCsrf(getR.text, getR.headers['set-cookie'] as string[] | undefined);
-      const r = await agent.post(path.replace(/^POST_/, '')).type('form').send({ csrf: token, ...fields });
+    async function wizardStep(
+      agent: ReturnType<typeof request.agent>,
+      path: string,
+      fields: Record<string, string> = {},
+    ): Promise<void> {
+      const getR = await agent.get(path.replace(/^POST_/, ""));
+      const token = extractCsrf(getR.text, getR.headers["set-cookie"] as string[] | undefined);
+      const r = await agent
+        .post(path.replace(/^POST_/, ""))
+        .type("form")
+        .send({ csrf: token, ...fields });
       expect(r.status).toBe(302);
     }
 
-    it('POST /setup/complete (302) refreshes cache so GET /login is NOT redirected', async () => {
+    it("POST /setup/complete (302) refreshes cache so GET /login is NOT redirected", async () => {
       const agent = request.agent(liveApp.server);
-      await wizardStep(agent, 'POST_/setup/site', { name: 'X', tagline: 'Y' });
-      await wizardStep(agent, 'POST_/setup/admin', { email: 'x@y.z', password: 'longpassword1', displayName: 'X' });
-      await wizardStep(agent, 'POST_/setup/seed', { load: 'true' });
-      await wizardStep(agent, 'POST_/setup/complete');
+      await wizardStep(agent, "POST_/setup/site", { name: "X", tagline: "Y" });
+      await wizardStep(agent, "POST_/setup/admin", {
+        email: "x@y.z",
+        password: "longpassword1",
+        displayName: "X",
+      });
+      await wizardStep(agent, "POST_/setup/seed", { load: "true" });
+      await wizardStep(agent, "POST_/setup/complete");
 
       // Same server instance — no rebuild. Pre-fix this redirected 302 to /setup.
-      const loginR = await request(liveApp.server).get('/login');
+      const loginR = await request(liveApp.server).get("/login");
       expect(loginR.status).toBe(200);
-      expect(loginR.headers['location']).toBeUndefined();
+      expect(loginR.headers["location"]).toBeUndefined();
 
-      const setupR = await request(liveApp.server).get('/setup');
+      const setupR = await request(liveApp.server).get("/setup");
       expect(setupR.status).toBe(404);
     });
   });
 });
-

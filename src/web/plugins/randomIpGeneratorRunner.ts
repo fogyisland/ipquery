@@ -25,12 +25,16 @@
 // / onClose cleanup) so the timer doesn't block process shutdown or
 // pin Node alive on its own.
 
-import type { FastifyInstance } from 'fastify';
-import type { Pool, RowDataPacket } from 'mysql2/promise';
-import { runRandomGeneration } from '../../etl/randomIpGenerator';
-import { listProviderConfigs, buildProvidersFromConfig, updateProviderConfig } from '../../storage/ingestProviders';
-import { getSetting, setSetting } from '../../storage/settings';
-import { loadRandomGenConfig, type RandomGenConfig } from '../../storage/randomProbeLog';
+import type { FastifyInstance } from "fastify";
+import type { Pool, RowDataPacket } from "mysql2/promise";
+import { runRandomGeneration } from "../../etl/randomIpGenerator";
+import {
+  listProviderConfigs,
+  buildProvidersFromConfig,
+  updateProviderConfig,
+} from "../../storage/ingestProviders";
+import { getSetting, setSetting } from "../../storage/settings";
+import { loadRandomGenConfig, type RandomGenConfig } from "../../storage/randomProbeLog";
 
 export interface RandomGenRunnerOptions {
   /** Override intervalMs at construction (e.g. tests). When unset, the
@@ -52,11 +56,11 @@ export interface RandomGenRunnerHandle {
   reapNow: () => Promise<number>;
 }
 
-const ENABLED_KEY = 'random_gen_enabled';
-const LAST_RUN_KEY = 'random_gen_last_run_at';
-const LAST_SUMMARY_KEY = 'random_gen_last_summary';
-const LAST_SKIPPED_AT_KEY = 'random_gen_last_skipped_at';
-const LAST_SKIP_REASON_KEY = 'random_gen_last_skip_reason';
+const ENABLED_KEY = "random_gen_enabled";
+const LAST_RUN_KEY = "random_gen_last_run_at";
+const LAST_SUMMARY_KEY = "random_gen_last_summary";
+const LAST_SKIPPED_AT_KEY = "random_gen_last_skipped_at";
+const LAST_SKIP_REASON_KEY = "random_gen_last_skip_reason";
 
 /** Auto-re-enable providers whose `auto_reenable_at` has elapsed. The
  *  circuit breaker (see unknownIpBackfill.disableRateLimitedProviders)
@@ -111,8 +115,12 @@ export function registerRandomGenRunner(
     lastSkippedProvider = provider;
     const now = new Date().toISOString();
     await Promise.all([
-      setSetting(pool, LAST_SKIPPED_AT_KEY, now).catch((err) => app.log.warn({ err }, 'random-gen-runner persist skipAt')),
-      setSetting(pool, LAST_SKIP_REASON_KEY, reason).catch((err) => app.log.warn({ err }, 'random-gen-runner persist skipReason')),
+      setSetting(pool, LAST_SKIPPED_AT_KEY, now).catch((err) =>
+        app.log.warn({ err }, "random-gen-runner persist skipAt"),
+      ),
+      setSetting(pool, LAST_SKIP_REASON_KEY, reason).catch((err) =>
+        app.log.warn({ err }, "random-gen-runner persist skipReason"),
+      ),
     ]);
   };
 
@@ -127,16 +135,16 @@ export function registerRandomGenRunner(
       try {
         const reaped = await reapProviders(pool);
         if (reaped > 0) {
-          app.log.info({ reaped }, 'random-gen-runner tick: re-enabled providers past cooldown');
+          app.log.info({ reaped }, "random-gen-runner tick: re-enabled providers past cooldown");
         }
       } catch (err) {
-        app.log.warn({ err }, 'random-gen-runner tick: reapProviders failed (continuing)');
+        app.log.warn({ err }, "random-gen-runner tick: reapProviders failed (continuing)");
       }
       const config = await loadRandomGenConfig(pool);
       const configs = await listProviderConfigs(pool);
       const providers = buildProvidersFromConfig(configs);
       if (providers.length === 0) {
-        app.log.warn('[random-gen-runner] no enabled providers; skipping tick');
+        app.log.warn("[random-gen-runner] no enabled providers; skipping tick");
         return;
       }
       // Cooldown gate: if a provider was auto-disabled in the PREVIOUS
@@ -147,8 +155,14 @@ export function registerRandomGenRunner(
         const elapsedMin = lastRunAtMs > 0 ? (Date.now() - lastRunAtMs) / 60_000 : Infinity;
         if (elapsedMin < config.cooldownMinutes) {
           const remainingMin = Math.max(0, Math.ceil(config.cooldownMinutes - elapsedMin));
-          await persistSkip(`provider ${lastSkippedProvider} disabled (${remainingMin}m remaining)`, lastSkippedProvider);
-          app.log.info({ provider: lastSkippedProvider, remainingMin }, 'random-gen-runner tick skipped (cooldown)');
+          await persistSkip(
+            `provider ${lastSkippedProvider} disabled (${remainingMin}m remaining)`,
+            lastSkippedProvider,
+          );
+          app.log.info(
+            { provider: lastSkippedProvider, remainingMin },
+            "random-gen-runner tick skipped (cooldown)",
+          );
           return;
         }
       }
@@ -158,9 +172,9 @@ export function registerRandomGenRunner(
       const summary = await runRandomGeneration(pool, providers, {
         count: config.batchSize,
         logger: {
-          log: (msg) => app.log.info({ msg }, 'random-gen-runner'),
-          warn: (msg) => app.log.warn({ msg }, 'random-gen-runner'),
-          error: (msg) => app.log.error({ msg }, 'random-gen-runner'),
+          log: (msg) => app.log.info({ msg }, "random-gen-runner"),
+          warn: (msg) => app.log.warn({ msg }, "random-gen-runner"),
+          error: (msg) => app.log.error({ msg }, "random-gen-runner"),
         },
       });
       const now = new Date().toISOString();
@@ -175,19 +189,30 @@ export function registerRandomGenRunner(
       // Best-effort persistence — if the write fails the tick still
       // counts as a run, the next tick will record its own summary.
       await Promise.all([
-        setSetting(pool, LAST_RUN_KEY, now).catch((err) => app.log.warn({ err }, 'random-gen-runner persist lastRunAt')),
-        setSetting(pool, LAST_SUMMARY_KEY, JSON.stringify(summary)).catch((err) => app.log.warn({ err }, 'random-gen-runner persist lastSummary')),
+        setSetting(pool, LAST_RUN_KEY, now).catch((err) =>
+          app.log.warn({ err }, "random-gen-runner persist lastRunAt"),
+        ),
+        setSetting(pool, LAST_SUMMARY_KEY, JSON.stringify(summary)).catch((err) =>
+          app.log.warn({ err }, "random-gen-runner persist lastSummary"),
+        ),
         // Clear any prior skip — this tick actually ran.
-        setSetting(pool, LAST_SKIPPED_AT_KEY, '').catch(() => { /* ignore */ }),
-        setSetting(pool, LAST_SKIP_REASON_KEY, '').catch(() => { /* ignore */ }),
+        setSetting(pool, LAST_SKIPPED_AT_KEY, "").catch(() => {
+          /* ignore */
+        }),
+        setSetting(pool, LAST_SKIP_REASON_KEY, "").catch(() => {
+          /* ignore */
+        }),
       ]);
-      app.log.info({
-        merged: summary.merged,
-        considered: summary.considered,
-        disabled: summary.providersDisabled,
-      }, 'random-gen-runner tick');
+      app.log.info(
+        {
+          merged: summary.merged,
+          considered: summary.considered,
+          disabled: summary.providersDisabled,
+        },
+        "random-gen-runner tick",
+      );
     } catch (err) {
-      app.log.error({ err }, 'random-gen-runner tick failed');
+      app.log.error({ err }, "random-gen-runner tick failed");
     } finally {
       running = false;
     }
@@ -195,16 +220,18 @@ export function registerRandomGenRunner(
 
   const start = (): void => {
     if (timer) return;
-    timer = setInterval(() => { void tick(); }, intervalMs);
+    timer = setInterval(() => {
+      void tick();
+    }, intervalMs);
     timer.unref();
-    app.log.info({ intervalMs }, 'random-gen-runner started');
+    app.log.info({ intervalMs }, "random-gen-runner started");
   };
 
   const stop = (): void => {
     if (!timer) return;
     clearInterval(timer);
     timer = null;
-    app.log.info('random-gen-runner stopped');
+    app.log.info("random-gen-runner stopped");
   };
 
   /** Independent 5-minute timer that runs reapProviders() outside the
@@ -215,15 +242,17 @@ export function registerRandomGenRunner(
   const reapTick = async (): Promise<void> => {
     try {
       const n = await reapProviders(pool);
-      if (n > 0) app.log.info({ reaped: n }, 'random-gen-runner reap timer');
+      if (n > 0) app.log.info({ reaped: n }, "random-gen-runner reap timer");
     } catch (err) {
-      app.log.warn({ err }, 'random-gen-runner reap timer failed');
+      app.log.warn({ err }, "random-gen-runner reap timer failed");
     }
   };
 
   const startReapTimer = (): void => {
     if (reapTimer) return;
-    reapTimer = setInterval(() => { void reapTick(); }, 5 * 60_000);
+    reapTimer = setInterval(() => {
+      void reapTick();
+    }, 5 * 60_000);
     reapTimer.unref();
   };
 
@@ -235,7 +264,7 @@ export function registerRandomGenRunner(
 
   const reapNow = async (): Promise<number> => {
     const n = await reapProviders(pool);
-    if (n > 0) app.log.info({ reaped: n }, 'random-gen-runner reapNow');
+    if (n > 0) app.log.info({ reaped: n }, "random-gen-runner reapNow");
     return n;
   };
 
@@ -248,7 +277,7 @@ export function registerRandomGenRunner(
       getSetting(pool, ENABLED_KEY),
       loadRandomGenConfig(pool),
     ]);
-    const enabled = enabledRaw === '1';
+    const enabled = enabledRaw === "1";
     const newIntervalMs = config.intervalSec * 1000;
     if (newIntervalMs !== intervalMs) {
       const wasRunning = timer !== null;
@@ -260,7 +289,7 @@ export function registerRandomGenRunner(
     } else {
       stop();
     }
-    app.log.info({ enabled, config }, 'random-gen-runner synced');
+    app.log.info({ enabled, config }, "random-gen-runner synced");
     return enabled;
   };
 
@@ -268,7 +297,10 @@ export function registerRandomGenRunner(
   // tear it down on server close. If multiple workers run this, each
   // would tick independently — out of scope for the single-process dev
   // deployment, but noted for future multi-instance scaling.
-  app.addHook('onClose', () => { stop(); stopReapTimer(); });
+  app.addHook("onClose", () => {
+    stop();
+    stopReapTimer();
+  });
   // Reap timer runs unconditionally — it's cheap (one SELECT per 5 min)
   // and lets providers auto-recover even when continuous gen is OFF.
   startReapTimer();
@@ -301,13 +333,17 @@ export async function readRandomGenState(pool: Pool): Promise<{
   ]);
   let lastSummary: unknown = null;
   if (lastSum) {
-    try { lastSummary = JSON.parse(lastSum); } catch { /* ignore malformed */ }
+    try {
+      lastSummary = JSON.parse(lastSum);
+    } catch {
+      /* ignore malformed */
+    }
   }
   // Compute remaining cooldown minutes from the skip timestamp + cooldown
   // window. Only meaningful if the runner is currently enabled AND the
   // skip happened within the window; otherwise return null.
   let cooldownRemainingMin: number | null = null;
-  if (v === '1' && skippedAt && config.cooldownMinutes > 0) {
+  if (v === "1" && skippedAt && config.cooldownMinutes > 0) {
     const skippedMs = Date.parse(skippedAt);
     if (!Number.isNaN(skippedMs)) {
       const elapsedMin = (Date.now() - skippedMs) / 60_000;
@@ -316,7 +352,7 @@ export async function readRandomGenState(pool: Pool): Promise<{
     }
   }
   return {
-    enabled: v === '1',
+    enabled: v === "1",
     lastRunAt: lastRun,
     lastSummary,
     lastSkippedAt: skippedAt || null,

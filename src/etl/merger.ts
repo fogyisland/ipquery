@@ -1,27 +1,33 @@
 // SPDX-License-Identifier: MIT
-import { compareBuffers } from '../ip';
-import type { Source, NormalizedRecord, IpRangeRow } from '../types';
+import { compareBuffers } from "../ip";
+import type { Source, NormalizedRecord, IpRangeRow } from "../types";
 
-const FIELD_MAP: Record<keyof Pick<IpRangeRow, 'countryCode' | 'city' | 'isp' | 'asn' | 'latitude'>, (keyof NormalizedRecord | [keyof NormalizedRecord, keyof NormalizedRecord])> = {
-  countryCode: ['countryCode', 'countryName'],
-  city: 'city',
-  isp: 'isp',
-  asn: 'asn',
-  latitude: 'latitude',
+const FIELD_MAP: Record<
+  keyof Pick<IpRangeRow, "countryCode" | "city" | "isp" | "asn" | "latitude">,
+  keyof NormalizedRecord | [keyof NormalizedRecord, keyof NormalizedRecord]
+> = {
+  countryCode: ["countryCode", "countryName"],
+  city: "city",
+  isp: "isp",
+  asn: "asn",
+  latitude: "latitude",
 };
 
 const SOURCE_KEY_MAP: Record<keyof typeof FIELD_MAP, keyof IpRangeRow> = {
-  countryCode: 'countrySource',
-  city: 'citySource',
-  isp: 'ispSource',
-  asn: 'asnSource',
-  latitude: 'geoSource',
+  countryCode: "countrySource",
+  city: "citySource",
+  isp: "ispSource",
+  asn: "asnSource",
+  latitude: "geoSource",
 };
 
 function bufferAddOne(b: Buffer): Buffer {
   const out = Buffer.from(b);
   for (let i = out.length - 1; i >= 0; i--) {
-    if (out[i]! < 0xff) { out[i] = out[i]! + 1; return out; }
+    if (out[i]! < 0xff) {
+      out[i] = out[i]! + 1;
+      return out;
+    }
     out[i] = 0;
   }
   return out; // overflow (255... +1) returns zero buffer
@@ -30,7 +36,10 @@ function bufferAddOne(b: Buffer): Buffer {
 function bufferSubOne(b: Buffer): Buffer {
   const out = Buffer.from(b);
   for (let i = out.length - 1; i >= 0; i--) {
-    if (out[i]! > 0) { out[i] = out[i]! - 1; return out; }
+    if (out[i]! > 0) {
+      out[i] = out[i]! - 1;
+      return out;
+    }
     out[i] = 0xff;
   }
   return out;
@@ -38,19 +47,16 @@ function bufferSubOne(b: Buffer): Buffer {
 
 function hasField(rec: NormalizedRecord, key: keyof NormalizedRecord): boolean {
   const v = rec[key];
-  return v !== undefined && v !== null && v !== '';
+  return v !== undefined && v !== null && v !== "";
 }
 
-export function mergeByPriority(
-  bySource: Map<Source, NormalizedRecord[]>,
-  priority: Source[],
-): IpRangeRow[] {
+export function mergeByPriority(bySource: Map<Source, NormalizedRecord[]>, priority: Source[]): IpRangeRow[] {
   // Gather all boundary IPs (start and end+1) so we can split into segments.
   const boundaries = new Set<string>();
   for (const records of bySource.values()) {
     for (const r of records) {
-      boundaries.add(r.startIp.toString('hex'));
-      boundaries.add(bufferAddOne(r.endIp).toString('hex'));
+      boundaries.add(r.startIp.toString("hex"));
+      boundaries.add(bufferAddOne(r.endIp).toString("hex"));
     }
   }
   const sortedHex = [...boundaries].sort();
@@ -58,8 +64,8 @@ export function mergeByPriority(
 
   const out: IpRangeRow[] = [];
   for (let i = 0; i < sortedHex.length - 1; i++) {
-    const segStart = Buffer.from(sortedHex[i]!, 'hex');
-    const segEndExclusive = Buffer.from(sortedHex[i + 1]!, 'hex');
+    const segStart = Buffer.from(sortedHex[i]!, "hex");
+    const segEndExclusive = Buffer.from(sortedHex[i + 1]!, "hex");
     const segEnd = bufferSubOne(segEndExclusive);
     if (compareBuffers(segStart, segEnd) > 0) continue;
 
@@ -67,8 +73,8 @@ export function mergeByPriority(
     const activeBySource = new Map<Source, NormalizedRecord>();
     for (const source of priority) {
       const records = bySource.get(source) ?? [];
-      const covering = records.find((r) =>
-        compareBuffers(r.startIp, segStart) <= 0 && compareBuffers(r.endIp, segEnd) >= 0,
+      const covering = records.find(
+        (r) => compareBuffers(r.startIp, segStart) <= 0 && compareBuffers(r.endIp, segEnd) >= 0,
       );
       if (covering) activeBySource.set(source, covering);
     }

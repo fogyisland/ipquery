@@ -16,24 +16,29 @@
 // number. org is the display name. 429 -> rateLimited=true. Other
 // 4xx/5xx, timeout, or malformed JSON -> record=null, rateLimited=false.
 
-import type { IpGeoProvider, IpGeoLookupResult } from './types';
+import type { IpGeoProvider, IpGeoLookupResult } from "./types";
 
 export class IpapiCoProvider implements IpGeoProvider {
-  readonly name = 'ipapi-co';
+  readonly name = "ipapi-co";
 
   constructor(private readonly opts: { endpoint?: string } = {}) {}
 
   async lookup(ip: string): Promise<IpGeoLookupResult> {
-    const url = `${this.opts.endpoint ?? 'https://ipapi.co'}/${encodeURIComponent(ip)}/json/`;
+    const url = `${this.opts.endpoint ?? "https://ipapi.co"}/${encodeURIComponent(ip)}/json/`;
     try {
       const res = await fetch(url, { signal: AbortSignal.timeout(5_000) });
       if (res.status === 429) {
-        return { record: null, rateLimited: true, errorCode: '429', rawResponse: await safeBody(res) };
+        return { record: null, rateLimited: true, errorCode: "429", rawResponse: await safeBody(res) };
       }
       if (!res.ok) {
-        return { record: null, rateLimited: false, errorCode: String(res.status), rawResponse: await safeBody(res) };
+        return {
+          record: null,
+          rateLimited: false,
+          errorCode: String(res.status),
+          rawResponse: await safeBody(res),
+        };
       }
-      const data = await res.json() as {
+      const data = (await res.json()) as {
         country_code?: string;
         country_name?: string;
         city?: string;
@@ -47,10 +52,15 @@ export class IpapiCoProvider implements IpGeoProvider {
         error?: boolean;
       };
       if (data.error) {
-        return { record: null, rateLimited: false, errorCode: 'api_error', rawResponse: JSON.stringify(data).slice(0, 240) };
+        return {
+          record: null,
+          rateLimited: false,
+          errorCode: "api_error",
+          rawResponse: JSON.stringify(data).slice(0, 240),
+        };
       }
       if (!data.country_code) {
-        return { record: null, rateLimited: false, errorCode: 'no_country' };
+        return { record: null, rateLimited: false, errorCode: "no_country" };
       }
       return {
         record: {
@@ -58,8 +68,8 @@ export class IpapiCoProvider implements IpGeoProvider {
           countryName: data.country_name ?? null,
           region: data.region ?? null,
           city: data.city ?? null,
-          latitude: typeof data.latitude === 'number' ? data.latitude : null,
-          longitude: typeof data.longitude === 'number' ? data.longitude : null,
+          latitude: typeof data.latitude === "number" ? data.latitude : null,
+          longitude: typeof data.longitude === "number" ? data.longitude : null,
           timezone: data.timezone ?? null,
           isp: data.org ?? null,
           asn: parseAsn(data.asn ?? null),
@@ -69,7 +79,7 @@ export class IpapiCoProvider implements IpGeoProvider {
       };
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      const code = msg.includes('timeout') || msg.includes('aborted') ? 'timeout' : 'network';
+      const code = msg.includes("timeout") || msg.includes("aborted") ? "timeout" : "network";
       return { record: null, rateLimited: false, errorCode: code, rawResponse: msg.slice(0, 240) };
     }
   }

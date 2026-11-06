@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
-import type { FastifyInstance, FastifyRequest } from 'fastify';
-import { recordAuditLog } from '../../storage/auditLog';
+import type { FastifyInstance, FastifyRequest } from "fastify";
+import { recordAuditLog } from "../../storage/auditLog";
 
-declare module 'fastify' {
+declare module "fastify" {
   interface FastifyRequest {
     auditAction?: {
       action: string;
@@ -14,9 +14,9 @@ declare module 'fastify' {
 }
 
 export function registerAuditLog(app: FastifyInstance): void {
-  app.decorateRequest('auditAction', null as unknown as NonNullable<FastifyRequest['auditAction']>);
+  app.decorateRequest("auditAction", null as unknown as NonNullable<FastifyRequest["auditAction"]>);
 
-  app.addHook('onResponse', async (req, reply) => {
+  app.addHook("onResponse", async (req, reply) => {
     const audit = req.auditAction;
     if (!audit) return;
     if (reply.statusCode >= 400) return;
@@ -29,11 +29,11 @@ export function registerAuditLog(app: FastifyInstance): void {
         targetId: audit.targetId,
         metadata: audit.metadata ?? null,
         ip: req.ip,
-        userAgent: (req.headers['user-agent'] as string | undefined) ?? null,
+        userAgent: (req.headers["user-agent"] as string | undefined) ?? null,
         statusCode: reply.statusCode,
       });
     } catch (err) {
-      app.log.error({ err }, 'audit log write failed');
+      app.log.error({ err }, "audit log write failed");
     }
   });
 }

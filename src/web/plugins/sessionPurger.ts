@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
-import type { FastifyInstance } from 'fastify';
-import type { Pool } from 'mysql2/promise';
-import { purgeExpired } from '../../storage/sessions';
+import type { FastifyInstance } from "fastify";
+import type { Pool } from "mysql2/promise";
+import { purgeExpired } from "../../storage/sessions";
 
 // Periodic cleanup of expired session rows. Sessions are deleted by
 // destroySession/destroyAllForUserExcept on logout + password change, but
@@ -17,7 +17,9 @@ import { purgeExpired } from '../../storage/sessions';
 // (src/web/plugins/queryLog.ts:40) so the timer never blocks process
 // shutdown and doesn't pin Node alive on its own.
 export function registerSessionPurger(
-  app: FastifyInstance, pool: Pool, opts?: { intervalMs?: number },
+  app: FastifyInstance,
+  pool: Pool,
+  opts?: { intervalMs?: number },
 ): { purgeNow: () => Promise<number> } {
   const intervalMs = opts?.intervalMs ?? 60 * 60 * 1000;
   let timer: NodeJS.Timeout | null = null;
@@ -25,18 +27,20 @@ export function registerSessionPurger(
   const tick = async (): Promise<number> => {
     try {
       const n = await purgeExpired(pool);
-      if (n > 0) app.log.info({ purged: n }, 'sessionPurger tick');
+      if (n > 0) app.log.info({ purged: n }, "sessionPurger tick");
       return n;
     } catch (err) {
-      app.log.error({ err }, 'sessionPurger tick failed');
+      app.log.error({ err }, "sessionPurger tick failed");
       return 0;
     }
   };
 
-  timer = setInterval(() => { void tick(); }, intervalMs);
+  timer = setInterval(() => {
+    void tick();
+  }, intervalMs);
   timer.unref();
 
-  app.addHook('onClose', async () => {
+  app.addHook("onClose", async () => {
     if (timer) clearInterval(timer);
     await tick();
   });

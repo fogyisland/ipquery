@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
-import * as mysql from 'mysql2/promise';
-import type { AppConfig } from '../config';
-import type { IpRangeRow, EtlRun, Source } from '../types';
-import { compareBuffers } from '../ip';
+import * as mysql from "mysql2/promise";
+import type { AppConfig } from "../config";
+import type { IpRangeRow, EtlRun, Source } from "../types";
+import { compareBuffers } from "../ip";
 
 export function createPool(cfg: AppConfig): mysql.Pool {
   return mysql.createPool({
@@ -14,13 +14,13 @@ export function createPool(cfg: AppConfig): mysql.Pool {
     connectionLimit: cfg.db.poolSize,
     waitForConnections: true,
     multipleStatements: true,
-    timezone: 'Z',
+    timezone: "Z",
     dateStrings: false,
   });
 }
 
 export async function truncateNew(pool: mysql.Pool): Promise<void> {
-  await pool.query('TRUNCATE TABLE ip_ranges_new');
+  await pool.query("TRUNCATE TABLE ip_ranges_new");
 }
 
 // BIGINT UNSIGNED max (2^64 - 1). range_size can't store anything bigger;
@@ -35,8 +35,8 @@ function rangeSize(startIp: Buffer, endIp: Buffer): bigint {
   // = end - start, used by findRange to pick the smallest covering range.
   // Subtract byte-by-byte with borrow to avoid losing precision on the
   // full IPv6 address space (2^128).
-  const start = BigInt('0x' + startIp.toString('hex'));
-  const end = BigInt('0x' + endIp.toString('hex'));
+  const start = BigInt("0x" + startIp.toString("hex"));
+  const end = BigInt("0x" + endIp.toString("hex"));
   if (end < start) return 0n;
   const diff = end - start;
   return diff > MAX_RANGE_SIZE ? MAX_RANGE_SIZE : diff;
@@ -48,19 +48,32 @@ export async function insertIntoNew(pool: mysql.Pool, rows: IpRangeRow[]): Promi
   for (let i = 0; i < rows.length; i += CHUNK) {
     const slice = rows.slice(i, i + CHUNK);
     const values: unknown[] = [];
-    const placeholders = slice.map((r) => {
-      values.push(
-        r.startIp, r.endIp,
-        rangeSize(r.startIp, r.endIp).toString(),
-        r.countryCode ?? null, r.countryName ?? null,
-        r.region ?? null, r.city ?? null, r.postalCode ?? null,
-        r.latitude ?? null, r.longitude ?? null, r.timezone ?? null,
-        r.isp ?? null, r.asn ?? null, r.asnOrg ?? null,
-        r.countrySource ?? null, r.citySource ?? null,
-        r.ispSource ?? null, r.asnSource ?? null, r.geoSource ?? null,
-      );
-      return '(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)';
-    }).join(',');
+    const placeholders = slice
+      .map((r) => {
+        values.push(
+          r.startIp,
+          r.endIp,
+          rangeSize(r.startIp, r.endIp).toString(),
+          r.countryCode ?? null,
+          r.countryName ?? null,
+          r.region ?? null,
+          r.city ?? null,
+          r.postalCode ?? null,
+          r.latitude ?? null,
+          r.longitude ?? null,
+          r.timezone ?? null,
+          r.isp ?? null,
+          r.asn ?? null,
+          r.asnOrg ?? null,
+          r.countrySource ?? null,
+          r.citySource ?? null,
+          r.ispSource ?? null,
+          r.asnSource ?? null,
+          r.geoSource ?? null,
+        );
+        return "(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)";
+      })
+      .join(",");
     await pool.query(
       `INSERT INTO ip_ranges_new (start_ip,end_ip,range_size,country_code,country_name,region,city,postal_code,latitude,longitude,timezone,isp,asn,asn_org,country_source,city_source,isp_source,asn_source,geo_source) VALUES ${placeholders}`,
       values,
@@ -102,69 +115,107 @@ export async function insertIntoNewUpsert(
   const CHUNK = 1000;
   totals.attempted = rows.length;
   const allCols: Array<keyof IpRangeRow> = [
-    'startIp', 'endIp',
-    'countryCode', 'countryName', 'region', 'city', 'postalCode',
-    'latitude', 'longitude', 'timezone',
-    'isp', 'asn', 'asnOrg',
-    'countrySource', 'citySource', 'ispSource', 'asnSource', 'geoSource',
+    "startIp",
+    "endIp",
+    "countryCode",
+    "countryName",
+    "region",
+    "city",
+    "postalCode",
+    "latitude",
+    "longitude",
+    "timezone",
+    "isp",
+    "asn",
+    "asnOrg",
+    "countrySource",
+    "citySource",
+    "ispSource",
+    "asnSource",
+    "geoSource",
   ];
   // Always insert start, end, range_size; fillCols decides what else.
-  const insertCols: Array<keyof IpRangeRow | 'rangeSize'> = [
-    'startIp', 'endIp', 'rangeSize',
-    ...allCols.filter((c) => c !== 'startIp' && c !== 'endIp' && fillCols.has(c)),
+  const insertCols: Array<keyof IpRangeRow | "rangeSize"> = [
+    "startIp",
+    "endIp",
+    "rangeSize",
+    ...allCols.filter((c) => c !== "startIp" && c !== "endIp" && fillCols.has(c)),
   ];
-  const colSql = (c: keyof IpRangeRow | 'rangeSize'): string => {
+  const colSql = (c: keyof IpRangeRow | "rangeSize"): string => {
     switch (c) {
-      case 'startIp': return 'start_ip';
-      case 'endIp': return 'end_ip';
-      case 'rangeSize': return 'range_size';
-      case 'countryCode': return 'country_code';
-      case 'countryName': return 'country_name';
-      case 'postalCode': return 'postal_code';
-      case 'asnOrg': return 'asn_org';
-      case 'countrySource': return 'country_source';
-      case 'citySource': return 'city_source';
-      case 'ispSource': return 'isp_source';
-      case 'asnSource': return 'asn_source';
-      case 'geoSource': return 'geo_source';
-      default: return c;
+      case "startIp":
+        return "start_ip";
+      case "endIp":
+        return "end_ip";
+      case "rangeSize":
+        return "range_size";
+      case "countryCode":
+        return "country_code";
+      case "countryName":
+        return "country_name";
+      case "postalCode":
+        return "postal_code";
+      case "asnOrg":
+        return "asn_org";
+      case "countrySource":
+        return "country_source";
+      case "citySource":
+        return "city_source";
+      case "ispSource":
+        return "isp_source";
+      case "asnSource":
+        return "asn_source";
+      case "geoSource":
+        return "geo_source";
+      default:
+        return c;
     }
   };
   // range_size is always overwritten with the new row's computed size
   // because (start_ip, end_ip) is the unique key — same key means same
   // range, so the size is necessarily identical.
   const updateClauses = allCols
-    .filter((c) => c !== 'startIp' && c !== 'endIp' && fillCols.has(c))
+    .filter((c) => c !== "startIp" && c !== "endIp" && fillCols.has(c))
     .map((c) => `${colSql(c)} = COALESCE(${colSql(c)}, VALUES(${colSql(c)}))`)
-    .concat(['range_size = VALUES(range_size)'])
-    .join(', ');
+    .concat(["range_size = VALUES(range_size)"])
+    .join(", ");
   for (let i = 0; i < rows.length; i += CHUNK) {
     const slice = rows.slice(i, i + CHUNK);
     const values: unknown[] = [];
-    const placeholders = slice.map((r) => {
-      for (const c of insertCols) {
-        if (c === 'startIp') values.push(r.startIp);
-        else if (c === 'endIp') values.push(r.endIp);
-        else if (c === 'rangeSize') values.push(rangeSize(r.startIp, r.endIp).toString());
-        else values.push((r as unknown as Record<string, unknown>)[c as string] ?? null);
-      }
-      return `(${insertCols.map(() => '?').join(',')})`;
-    }).join(',');
+    const placeholders = slice
+      .map((r) => {
+        for (const c of insertCols) {
+          if (c === "startIp") values.push(r.startIp);
+          else if (c === "endIp") values.push(r.endIp);
+          else if (c === "rangeSize") values.push(rangeSize(r.startIp, r.endIp).toString());
+          else values.push((r as unknown as Record<string, unknown>)[c as string] ?? null);
+        }
+        return `(${insertCols.map(() => "?").join(",")})`;
+      })
+      .join(",");
     const [res] = await pool.query<mysql.ResultSetHeader>(
-      `INSERT INTO ip_ranges_new (${insertCols.map(colSql).join(',')}) VALUES ${placeholders}` +
-      ` ON DUPLICATE KEY UPDATE ${updateClauses}`,
+      `INSERT INTO ip_ranges_new (${insertCols.map(colSql).join(",")}) VALUES ${placeholders}` +
+        ` ON DUPLICATE KEY UPDATE ${updateClauses}`,
       values,
     );
     const affected = Number(res.affectedRows);
-    totals.inserted += affected;
-    totals.duplicates += slice.length - affected;
+    // MySQL semantics for INSERT ... ON DUPLICATE KEY UPDATE:
+    //   fresh insert     → affectedRows += 1
+    //   duplicate updated→ affectedRows += 2
+    // So `affected - slice.length` is the duplicate count, and the
+    // remainder (slice.length - duplicates) is the freshly inserted rows.
+    // (INSERT IGNORE would give 0 for dup, but we use ON DUPLICATE so we
+    // can fill in missing columns via COALESCE.)
+    const duplicates = Math.max(0, affected - slice.length);
+    totals.duplicates += duplicates;
+    totals.inserted += slice.length - duplicates;
     totals.batchCount += 1;
   }
   return totals;
 }
 
 export interface SwapResult {
-  status: 'success' | 'failed';
+  status: "success" | "failed";
   durationMs: number;
   errorMessage?: string;
 }
@@ -174,13 +225,15 @@ export async function atomicSwapRanges(pool: mysql.Pool): Promise<SwapResult> {
   const t0 = Date.now();
   try {
     await conn.beginTransaction();
-    await conn.query('RENAME TABLE ip_ranges TO ip_ranges_old, ip_ranges_new TO ip_ranges, ip_ranges_old TO ip_ranges_new');
+    await conn.query(
+      "RENAME TABLE ip_ranges TO ip_ranges_old, ip_ranges_new TO ip_ranges, ip_ranges_old TO ip_ranges_new",
+    );
     await conn.commit();
-    return { status: 'success', durationMs: Date.now() - t0 };
+    return { status: "success", durationMs: Date.now() - t0 };
   } catch (err) {
     await conn.rollback();
     const msg = (err as Error).message;
-    return { status: 'failed', durationMs: Date.now() - t0, errorMessage: msg };
+    return { status: "failed", durationMs: Date.now() - t0, errorMessage: msg };
   } finally {
     conn.release();
   }
@@ -227,11 +280,15 @@ export async function findRange(pool: mysql.Pool, ipBuf: Buffer): Promise<IpRang
   return {
     startIp: r.start_ip as Buffer,
     endIp: r.end_ip as Buffer,
-    countryCode: r.country_code, countryName: r.country_name,
-    region: r.region, city: r.city, postalCode: r.postal_code,
+    countryCode: r.country_code,
+    countryName: r.country_name,
+    region: r.region,
+    city: r.city,
+    postalCode: r.postal_code,
     latitude: r.latitude == null ? undefined : Number(r.latitude),
     longitude: r.longitude == null ? undefined : Number(r.longitude),
-    timezone: r.timezone, isp: r.isp,
+    timezone: r.timezone,
+    isp: r.isp,
     asn: r.asn == null ? undefined : Number(r.asn),
     asnOrg: r.asn_org,
     countrySource: r.country_source as Source | undefined,
@@ -250,48 +307,184 @@ export async function recordEtlStart(pool: mysql.Pool): Promise<number> {
 }
 
 export async function recordEtlFinish(
-  pool: mysql.Pool, id: number, status: 'success' | 'failed', fields: Partial<EtlRun>,
+  pool: mysql.Pool,
+  id: number,
+  status: "success" | "failed",
+  fields: Partial<EtlRun>,
 ): Promise<void> {
-  const set: string[] = ['finished_at = NOW(3)', 'status = ?'];
+  const set: string[] = ["finished_at = NOW(3)", "status = ?"];
   const values: unknown[] = [status];
-  if (fields.maxmindRecords !== undefined) { set.push('maxmind_records = ?'); values.push(fields.maxmindRecords); }
-  if (fields.ip2regionRecords !== undefined) { set.push('ip2region_records = ?'); values.push(fields.ip2regionRecords); }
-  if (fields.dbipRecords !== undefined) { set.push('dbip_records = ?'); values.push(fields.dbipRecords); }
-  if (fields.mergedRecords !== undefined) { set.push('merged_records = ?'); values.push(fields.mergedRecords); }
-  if (fields.errorMessage !== undefined) { set.push('error_message = ?'); values.push(fields.errorMessage); }
-  if (fields.maxmindBuiltAt !== undefined) { set.push('maxmind_built_at = ?'); values.push(fields.maxmindBuiltAt); }
-  if (fields.ip2regionBuiltAt !== undefined) { set.push('ip2region_built_at = ?'); values.push(fields.ip2regionBuiltAt); }
-  if (fields.dbipBuiltAt !== undefined) { set.push('dbip_built_at = ?'); values.push(fields.dbipBuiltAt); }
+  if (fields.maxmindRecords !== undefined) {
+    set.push("maxmind_records = ?");
+    values.push(fields.maxmindRecords);
+  }
+  if (fields.ip2regionRecords !== undefined) {
+    set.push("ip2region_records = ?");
+    values.push(fields.ip2regionRecords);
+  }
+  if (fields.dbipRecords !== undefined) {
+    set.push("dbip_records = ?");
+    values.push(fields.dbipRecords);
+  }
+  if (fields.mergedRecords !== undefined) {
+    set.push("merged_records = ?");
+    values.push(fields.mergedRecords);
+  }
+  if (fields.errorMessage !== undefined) {
+    set.push("error_message = ?");
+    values.push(fields.errorMessage);
+  }
+  if (fields.maxmindBuiltAt !== undefined) {
+    set.push("maxmind_built_at = ?");
+    values.push(fields.maxmindBuiltAt);
+  }
+  if (fields.ip2regionBuiltAt !== undefined) {
+    set.push("ip2region_built_at = ?");
+    values.push(fields.ip2regionBuiltAt);
+  }
+  if (fields.dbipBuiltAt !== undefined) {
+    set.push("dbip_built_at = ?");
+    values.push(fields.dbipBuiltAt);
+  }
+  // Mirror final progress counters onto the run row so the run-detail
+  // page renders a clean post-mortem bar without polling per-file stages.
+  if (fields.downloadBytesDone !== undefined) {
+    set.push("download_bytes_done = ?");
+    values.push(fields.downloadBytesDone);
+  }
+  if (fields.downloadBytesTotal !== undefined) {
+    set.push("download_bytes_total = ?");
+    values.push(fields.downloadBytesTotal);
+  }
+  if (fields.insertRowsDone !== undefined) {
+    set.push("insert_rows_done = ?");
+    values.push(fields.insertRowsDone);
+  }
+  if (fields.insertRowsTotal !== undefined) {
+    set.push("insert_rows_total = ?");
+    values.push(fields.insertRowsTotal);
+  }
+  if (fields.currentStage !== undefined) {
+    set.push("current_stage = ?");
+    values.push(fields.currentStage);
+  }
   values.push(id);
-  await pool.query(`UPDATE etl_runs SET ${set.join(', ')} WHERE id = ?`, values);
+  await pool.query(`UPDATE etl_runs SET ${set.join(", ")} WHERE id = ?`, values);
+}
+
+/** Live-progress columns to refresh while the run is in flight. Called
+ *  by the pipeline's progress sink — throttled to ≤1 UPDATE/sec to keep
+ *  the poll endpoint cheap and to avoid hammering the DB during the
+ *  1000-row INSERT batches. Unknown-total values (null) are stored as
+ *  NULL so the UI can render an indeterminate bar. */
+export async function updateEtlRunProgress(
+  pool: mysql.Pool,
+  id: number,
+  fields: {
+    downloadBytesDone?: number;
+    downloadBytesTotal?: number | null;
+    insertRowsDone?: number;
+    insertRowsTotal?: number | null;
+    currentStage?: EtlRun["currentStage"];
+  },
+): Promise<void> {
+  const set: string[] = ["progress_updated_at = NOW(3)"];
+  const values: unknown[] = [];
+  if (fields.downloadBytesDone !== undefined) {
+    set.push("download_bytes_done = ?");
+    values.push(fields.downloadBytesDone);
+  }
+  if (fields.downloadBytesTotal !== undefined) {
+    set.push("download_bytes_total = ?");
+    values.push(fields.downloadBytesTotal);
+  }
+  if (fields.insertRowsDone !== undefined) {
+    set.push("insert_rows_done = ?");
+    values.push(fields.insertRowsDone);
+  }
+  if (fields.insertRowsTotal !== undefined) {
+    set.push("insert_rows_total = ?");
+    values.push(fields.insertRowsTotal);
+  }
+  if (fields.currentStage !== undefined) {
+    set.push("current_stage = ?");
+    values.push(fields.currentStage);
+  }
+  values.push(id);
+  await pool.query(`UPDATE etl_runs SET ${set.join(", ")} WHERE id = ?`, values);
+}
+
+/** Cheap poll target — reads ONLY the progress columns (no JOINs, no
+ *  per-stage rows). The admin UI calls this every 5s while the run is
+ *  running. Once the run finishes the page stops polling and switches
+ *  to the regular detail view. */
+export async function getEtlRunProgress(
+  pool: mysql.Pool,
+  id: number,
+): Promise<{
+  status: "running" | "success" | "failed";
+  currentStage: EtlRun["currentStage"] | null;
+  downloadBytesDone: number;
+  downloadBytesTotal: number;
+  insertRowsDone: number;
+  insertRowsTotal: number;
+  progressUpdatedAt: Date | null;
+  errorMessage: string | null;
+} | null> {
+  const [rows] = await pool.query<mysql.RowDataPacket[]>(
+    `SELECT status, current_stage, download_bytes_done, download_bytes_total,
+            insert_rows_done, insert_rows_total, progress_updated_at, error_message
+       FROM etl_runs WHERE id = ?`,
+    [id],
+  );
+  if (rows.length === 0) return null;
+  const r = rows[0]!;
+  return {
+    status: r.status,
+    currentStage: r.current_stage ?? null,
+    downloadBytesDone: Number(r.download_bytes_done ?? 0),
+    downloadBytesTotal: Number(r.download_bytes_total ?? 0),
+    insertRowsDone: Number(r.insert_rows_done ?? 0),
+    insertRowsTotal: Number(r.insert_rows_total ?? 0),
+    progressUpdatedAt: r.progress_updated_at ?? null,
+    errorMessage: r.error_message ?? null,
+  };
 }
 
 export async function lastEtlRun(pool: mysql.Pool): Promise<EtlRun | null> {
-  const [rows] = await pool.query<mysql.RowDataPacket[]>(
-    `SELECT * FROM etl_runs ORDER BY id DESC LIMIT 1`,
-  );
+  const [rows] = await pool.query<mysql.RowDataPacket[]>(`SELECT * FROM etl_runs ORDER BY id DESC LIMIT 1`);
   if (rows.length === 0) return null;
   const r = rows[0]!;
   return etlRunFromRow(r);
 }
 
 export async function recentEtlRuns(pool: mysql.Pool, limit: number): Promise<EtlRun[]> {
-  const [rows] = await pool.query<mysql.RowDataPacket[]>(
-    `SELECT * FROM etl_runs ORDER BY id DESC LIMIT ?`,
-    [limit],
-  );
+  const [rows] = await pool.query<mysql.RowDataPacket[]>(`SELECT * FROM etl_runs ORDER BY id DESC LIMIT ?`, [
+    limit,
+  ]);
   return rows.map((r) => etlRunFromRow(r));
 }
 
 function etlRunFromRow(r: mysql.RowDataPacket): EtlRun {
   return {
-    id: Number(r.id), startedAt: r.started_at, finishedAt: r.finished_at,
+    id: Number(r.id),
+    startedAt: r.started_at,
+    finishedAt: r.finished_at,
     status: r.status,
-    maxmindRecords: r.maxmind_records, ip2regionRecords: r.ip2region_records,
-    dbipRecords: r.dbip_records, mergedRecords: r.merged_records,
+    maxmindRecords: r.maxmind_records,
+    ip2regionRecords: r.ip2region_records,
+    dbipRecords: r.dbip_records,
+    mergedRecords: r.merged_records,
     errorMessage: r.error_message,
-    maxmindBuiltAt: r.maxmind_built_at, ip2regionBuiltAt: r.ip2region_built_at,
+    maxmindBuiltAt: r.maxmind_built_at,
+    ip2regionBuiltAt: r.ip2region_built_at,
     dbipBuiltAt: r.dbip_built_at,
+    downloadBytesDone: r.download_bytes_done != null ? Number(r.download_bytes_done) : undefined,
+    downloadBytesTotal: r.download_bytes_total != null ? Number(r.download_bytes_total) : undefined,
+    insertRowsDone: r.insert_rows_done != null ? Number(r.insert_rows_done) : undefined,
+    insertRowsTotal: r.insert_rows_total != null ? Number(r.insert_rows_total) : undefined,
+    currentStage: r.current_stage ?? undefined,
+    progressUpdatedAt: r.progress_updated_at ?? undefined,
   };
 }
 
@@ -308,8 +501,8 @@ export async function lastSuccessfulEtl(pool: mysql.Pool): Promise<Date | null> 
 // page in PR 2. Snake-case column mapping is consistent with the rest
 // of this file; RowDataPacket coercion uses explicit String/Number/Date.
 
-export type EtlRunDownloadSource = 'dbip-city' | 'dbip-country' | 'dbip-asn';
-export type EtlRunDownloadStatus = 'success' | 'failed' | 'missing' | 'skipped';
+export type EtlRunDownloadSource = "dbip-city" | "dbip-country" | "dbip-asn";
+export type EtlRunDownloadStatus = "success" | "failed" | "missing" | "skipped";
 
 export interface EtlRunDownloadRow {
   runId: number;
@@ -343,10 +536,7 @@ function etlRunDownloadFromRow(r: mysql.RowDataPacket): EtlRunDownloadRow {
   };
 }
 
-export async function insertEtlRunDownload(
-  pool: mysql.Pool,
-  row: EtlRunDownloadRow,
-): Promise<void> {
+export async function insertEtlRunDownload(pool: mysql.Pool, row: EtlRunDownloadRow): Promise<void> {
   await pool.query(
     `INSERT INTO etl_run_downloads
        (run_id, source, dest_name, source_url, month, status, bytes,
@@ -369,10 +559,7 @@ export async function insertEtlRunDownload(
   );
 }
 
-export async function listEtlRunDownloads(
-  pool: mysql.Pool,
-  runId: number,
-): Promise<EtlRunDownloadRow[]> {
+export async function listEtlRunDownloads(pool: mysql.Pool, runId: number): Promise<EtlRunDownloadRow[]> {
   const [rows] = await pool.query<mysql.RowDataPacket[]>(
     `SELECT run_id, source, dest_name, source_url, month, status, bytes,
             duration_ms, retry_count, error_message, started_at, finished_at
@@ -420,10 +607,7 @@ function etlRunParseFromRow(r: mysql.RowDataPacket): EtlRunParseRow {
   };
 }
 
-export async function insertEtlRunParse(
-  pool: mysql.Pool,
-  row: EtlRunParseRow,
-): Promise<void> {
+export async function insertEtlRunParse(pool: mysql.Pool, row: EtlRunParseRow): Promise<void> {
   await pool.query(
     `INSERT INTO etl_run_parses
        (run_id, source, dest_name, rows_emitted,
@@ -432,18 +616,25 @@ export async function insertEtlRunParse(
         gunzip_errors, started_at, finished_at, duration_ms)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
-      row.runId, row.source, row.destName, row.rowsEmitted,
-      row.rowsSkippedShort, row.rowsSkippedHeader, row.rowsSkippedUnparseableIp,
-      row.rowsSkippedMissingCol, row.rowsSkippedNanAsn, row.rowsSkippedOther,
-      row.gunzipErrors, row.startedAt, row.finishedAt, row.durationMs,
+      row.runId,
+      row.source,
+      row.destName,
+      row.rowsEmitted,
+      row.rowsSkippedShort,
+      row.rowsSkippedHeader,
+      row.rowsSkippedUnparseableIp,
+      row.rowsSkippedMissingCol,
+      row.rowsSkippedNanAsn,
+      row.rowsSkippedOther,
+      row.gunzipErrors,
+      row.startedAt,
+      row.finishedAt,
+      row.durationMs,
     ],
   );
 }
 
-export async function listEtlRunParses(
-  pool: mysql.Pool,
-  runId: number,
-): Promise<EtlRunParseRow[]> {
+export async function listEtlRunParses(pool: mysql.Pool, runId: number): Promise<EtlRunParseRow[]> {
   const [rows] = await pool.query<mysql.RowDataPacket[]>(
     `SELECT run_id, source, dest_name, rows_emitted,
             rows_skipped_short, rows_skipped_header, rows_skipped_unparseable_ip,
@@ -485,27 +676,28 @@ function etlRunInsertFromRow(r: mysql.RowDataPacket): EtlRunInsertRow {
   };
 }
 
-export async function insertEtlRunInsert(
-  pool: mysql.Pool,
-  row: EtlRunInsertRow,
-): Promise<void> {
+export async function insertEtlRunInsert(pool: mysql.Pool, row: EtlRunInsertRow): Promise<void> {
   await pool.query(
     `INSERT INTO etl_run_inserts
        (run_id, source, dest_name, rows_attempted, rows_inserted,
         rows_duplicates, batch_count, duration_ms, started_at, finished_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
-      row.runId, row.source, row.destName,
-      row.rowsAttempted, row.rowsInserted, row.rowsDuplicates,
-      row.batchCount, row.durationMs, row.startedAt, row.finishedAt,
+      row.runId,
+      row.source,
+      row.destName,
+      row.rowsAttempted,
+      row.rowsInserted,
+      row.rowsDuplicates,
+      row.batchCount,
+      row.durationMs,
+      row.startedAt,
+      row.finishedAt,
     ],
   );
 }
 
-export async function listEtlRunInserts(
-  pool: mysql.Pool,
-  runId: number,
-): Promise<EtlRunInsertRow[]> {
+export async function listEtlRunInserts(pool: mysql.Pool, runId: number): Promise<EtlRunInsertRow[]> {
   const [rows] = await pool.query<mysql.RowDataPacket[]>(
     `SELECT run_id, source, dest_name, rows_attempted, rows_inserted,
             rows_duplicates, batch_count, duration_ms, started_at, finished_at
@@ -517,7 +709,7 @@ export async function listEtlRunInserts(
   return rows.map(etlRunInsertFromRow);
 }
 
-export type EtlRunSwapStatus = 'success' | 'failed';
+export type EtlRunSwapStatus = "success" | "failed";
 
 export interface EtlRunSwapRow {
   runId: number;
@@ -539,10 +731,7 @@ function etlRunSwapFromRow(r: mysql.RowDataPacket): EtlRunSwapRow {
   };
 }
 
-export async function upsertEtlRunSwap(
-  pool: mysql.Pool,
-  row: EtlRunSwapRow,
-): Promise<void> {
+export async function upsertEtlRunSwap(pool: mysql.Pool, row: EtlRunSwapRow): Promise<void> {
   await pool.query(
     `INSERT INTO etl_run_swaps
        (run_id, status, duration_ms, error_message, started_at, finished_at)
@@ -554,17 +743,17 @@ export async function upsertEtlRunSwap(
        started_at = VALUES(started_at),
        finished_at = VALUES(finished_at)`,
     [
-      row.runId, row.status, row.durationMs,
+      row.runId,
+      row.status,
+      row.durationMs,
       row.errorMessage ? row.errorMessage.slice(0, 512) : null,
-      row.startedAt, row.finishedAt,
+      row.startedAt,
+      row.finishedAt,
     ],
   );
 }
 
-export async function getEtlRunSwap(
-  pool: mysql.Pool,
-  runId: number,
-): Promise<EtlRunSwapRow | null> {
+export async function getEtlRunSwap(pool: mysql.Pool, runId: number): Promise<EtlRunSwapRow | null> {
   const [rows] = await pool.query<mysql.RowDataPacket[]>(
     `SELECT run_id, status, duration_ms, error_message, started_at, finished_at
        FROM etl_run_swaps
@@ -575,4 +764,4 @@ export async function getEtlRunSwap(
   return etlRunSwapFromRow(rows[0]!);
 }
 
-export { runMigrations, getAppliedVersions, migrationStatus } from './migrations/runner';
+export { runMigrations, getAppliedVersions, migrationStatus } from "./migrations/runner";

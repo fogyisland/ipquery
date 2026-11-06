@@ -29,6 +29,37 @@
   <span class="etl-run-duration">{{runDurationText}}</span>
   {{#if run.started_at}}<span>{{req.t 'admin.etl.runDetail.started'}} {{formatDate run.started_at}}</span>{{/if}}
 </div>
+
+{{!-- ── Live progress bars ── --}}
+{{!-- Two progress bars + a stage indicator. The container is polled at
+     2s via hx-get to /admin/etl/runs/:id/progress which returns the
+     JSON state. The inline script below updates the bar widths and
+     percentage labels. When the server returns 204 (run finished),
+     htmx replaces the inner HTML with nothing and polling stops. --}}
+<div id="etl-progress-bars"
+  {{#if (eq run.status 'running')}}
+  hx-get="/admin/etl/runs/{{run.id}}/progress"
+  hx-trigger="every 2s"
+  hx-swap="innerHTML"
+  {{/if}}
+  data-done="{{downloadBytesDone}}"
+  data-total="{{downloadBytesTotal}}"
+  data-rows-done="{{insertRowsDone}}"
+  data-rows-total="{{insertRowsTotal}}"
+  data-stage="{{currentStage}}">
+  <div class="etl-progress-row">
+    <div class="etl-progress-label">{{req.t 'admin.etl.stages.download'}}</div>
+    <div class="etl-progress-bar"><div class="etl-progress-bar-fill" id="etl-progress-download-fill"></div></div>
+    <div class="etl-progress-text" id="etl-progress-download-text">—</div>
+  </div>
+  <div class="etl-progress-row">
+    <div class="etl-progress-label">{{req.t 'admin.etl.stages.insert'}}</div>
+    <div class="etl-progress-bar"><div class="etl-progress-bar-fill" id="etl-progress-insert-fill"></div></div>
+    <div class="etl-progress-text" id="etl-progress-insert-text">—</div>
+  </div>
+  <div class="etl-progress-stage" id="etl-progress-stage"></div>
+</div>
+<script src="/assets/etl-progress.js" defer></script>
 {{/unless}}
 
 {{!-- ── 4-card stage grid ── --}}
