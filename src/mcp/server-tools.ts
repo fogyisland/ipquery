@@ -20,54 +20,69 @@ import {
 import { lastEtlRun } from "../storage/mysql";
 import { isValidIp } from "../ip";
 
-/** A handler takes raw tool arguments and returns a JSON string result. */
-export type ToolHandler = (args: unknown) => Promise<string>;
+/** A handler takes raw tool arguments and returns a typed result envelope. */
+export interface ToolResult {
+  isErrorHint?: boolean;
+  message?: string;
+  [key: string]: unknown;
+}
+
+export type ToolHandler = (args: unknown) => Promise<ToolResult>;
 
 export interface ToolRegistration {
   def: ToolDef;
   handler: ToolHandler;
 }
 
-/** Structured error text so AI clients see actionable messages. */
-function errorText(message: string): string {
-  return JSON.stringify({ isErrorHint: true, message }, null, 2);
+/** Structured error result so the server layer can flag isError without
+ *  sniffing serialized text. */
+function errorResult(message: string): ToolResult {
+  return { isErrorHint: true, message };
 }
 
-/** Wrap a tool call: thrown errors become structured text, never escapes. */
-async function safe(run: () => Promise<unknown>): Promise<string> {
+/** Wrap a tool call: thrown errors become structured results, never escapes.
+ *  Tool payloads are plain JSON objects; ToolResult's index signature accepts
+ *  them once widened through unknown. */
+async function safe(run: () => Promise<unknown>): Promise<ToolResult> {
   try {
-    return JSON.stringify(await run(), null, 2);
+    return (await run()) as ToolResult;
   } catch (e) {
-    return errorText(e instanceof Error ? e.message : String(e));
+    return errorResult(e instanceof Error ? e.message : String(e));
   }
 }
 
-async function statsHandler(deps: McpPool): Promise<unknown> {
-  const last = await lastEtlRun(deps.pool);
-  if (!last) return { lastRun: null };
+/** ISO-serialize the shared lastRun shape (used by ipquery_stats and the
+ *  etl-status tool so the two outputs cannot drift). */
+export function serializeLastRun(
+  last: NonNullable<Awaited<ReturnType<typeof lastEtlRun>>>,
+): ToolResult["lastRun"] {
   return {
-    lastRun: {
-      startedAt: last.startedAt?.toISOString() ?? null,
-      finishedAt: last.finishedAt?.toISOString() ?? null,
-      status: last.status,
-      mergedRecords: last.mergedRecords ?? 0,
-      sources: {
-        maxmind: { records: last.maxmindRecords ?? 0, builtAt: last.maxmindBuiltAt?.toISOString() ?? null },
-        ip2region: {
-          records: last.ip2regionRecords ?? 0,
-          builtAt: last.ip2regionBuiltAt?.toISOString() ?? null,
-        },
-        dbip: { records: last.dbipRecords ?? 0, builtAt: last.dbipBuiltAt?.toISOString() ?? null },
+    startedAt: last.startedAt?.toISOString() ?? null,
+    finishedAt: last.finishedAt?.toISOString() ?? null,
+    status: last.status,
+    mergedRecords: last.mergedRecords ?? 0,
+    sources: {
+      maxmind: { records: last.maxmindRecords ?? 0, builtAt: last.maxmindBuiltAt?.toISOString() ?? null },
+      ip2region: {
+        records: last.ip2regionRecords ?? 0,
+        builtAt: last.ip2regionBuiltAt?.toISOString() ?? null,
       },
+      dbip: { records: last.dbipRecords ?? 0, builtAt: last.dbipBuiltAt?.toISOString() ?? null },
     },
   };
+}
+
+async function statsHandler(deps: McpPool): Promise<ToolResult> {
+  const last = await lastEtlRun(deps.pool);
+  if (!last) return { lastRun: null };
+  return { lastRun: serializeLastRun(last) };
 }
 
 function lookupHandler(deps: McpPool): ToolHandler {
   return async (args) => {
     const ip = (args as { ip?: unknown }).ip;
     if (typeof ip !== "string" || !isValidIp(ip)) {
-      return errorText(`invalid ip: ${typeof ip === "string" ? ip : "(missing)"}`);
+      return errorResult(`invalid ip: ${typeof ip === "string" ? ip : "(missing)"}`);
     }
     return safe(() => mcpLookup(deps, ip));
   };
