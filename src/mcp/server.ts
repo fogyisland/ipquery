@@ -9,10 +9,7 @@ dotenvConfig({ path: `${resolveProjectRoot()}/.env`, quiet: true });
 
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import {
-  CallToolRequestSchema,
-  ListToolsRequestSchema,
-} from "@modelcontextprotocol/sdk/types.js";
+import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import mysql from "mysql2/promise";
 import { loadConfig } from "../config";
 import { buildToolRegistrations } from "./server-tools";
@@ -101,7 +98,9 @@ async function main(): Promise<void> {
 
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  console.error(`[ipquery-mcp] ${SERVER_INFO.name} v${SERVER_INFO.version} ready (${TOOL_NAMES.length} tools)`);
+  console.error(
+    `[ipquery-mcp] ${SERVER_INFO.name} v${SERVER_INFO.version} ready (${TOOL_NAMES.length} tools)`,
+  );
 }
 
 main().catch((e) => failFast("fatal error during startup", e));
