@@ -36,15 +36,15 @@ claude mcp add ipquery -- node E:\ToolDevelop\IPQuery\dist\mcp\server.js
 
 ## 工具一览（全部只读）
 
-| 工具 | 说明 | 参数 |
-|---|---|---|
-| `ipquery_lookup` | 查询 IPv4/IPv6 归属地（国家/城市/时区/ISP/ASN）；未知 IP 进入回填队列 | `ip`（必填） |
-| `ipquery_stats` | 库规模摘要：最近 ETL run + 各源记录数 | 无 |
-| `ipquery_etl_status` | 最近 ETL run 详情 + 队列概要 | 无 |
-| `ipquery_queue_stats` | unknown-IP 队列计数（pending/processed/totalQueries） | 无 |
-| `ipquery_queue_top` | 查询次数最高的未知 IP | `limit`（1-100，默认 20） |
-| `ipquery_queries_recent` | 最近查询日志（最新在前） | `limit`（1-50，默认 10）、`status`（hit/miss/invalid）、`includePrivate` |
-| `ipquery_queries_daily` | 按天查询量曲线 | `days`（1-90，默认 30） |
+| 工具                     | 说明                                                                  | 参数                                                                     |
+| ------------------------ | --------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| `ipquery_lookup`         | 查询 IPv4/IPv6 归属地（国家/城市/时区/ISP/ASN）；未知 IP 进入回填队列 | `ip`（必填）                                                             |
+| `ipquery_stats`          | 库规模摘要：最近 ETL run + 各源记录数                                 | 无                                                                       |
+| `ipquery_etl_status`     | 最近 ETL run 详情 + 队列概要                                          | 无                                                                       |
+| `ipquery_queue_stats`    | unknown-IP 队列计数（pending/processed/totalQueries）                 | 无                                                                       |
+| `ipquery_queue_top`      | 查询次数最高的未知 IP                                                 | `limit`（1-100，默认 20）                                                |
+| `ipquery_queries_recent` | 最近查询日志（最新在前）                                              | `limit`（1-50，默认 10）、`status`（hit/miss/invalid）、`includePrivate` |
+| `ipquery_queries_daily`  | 按天查询量曲线                                                        | `days`（1-90，默认 30）                                                  |
 
 ## 隐私
 

@@ -86,15 +86,13 @@ export function queueStatsToolDef(): ToolDef {
 }
 
 export interface EtlStatusResult {
-  lastRun:
-    | {
-        startedAt: string | null;
-        finishedAt: string | null;
-        status: string;
-        mergedRecords: number;
-        sources: Record<string, { records: number; builtAt: string | null }>;
-      }
-    | null;
+  lastRun: {
+    startedAt: string | null;
+    finishedAt: string | null;
+    status: string;
+    mergedRecords: number;
+    sources: Record<string, { records: number; builtAt: string | null }>;
+  } | null;
   queue: QueueStatsResult;
 }
 

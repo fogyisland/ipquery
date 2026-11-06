@@ -14,8 +14,6 @@ cp .env.example .env
 # Edit .env, set MAXMIND_LICENSE_KEY
 
 # 3. Run
-make docker-up           # mysql + app (optional)
-# OR
 make install build run    # local node + uses local MySQL
 ```
 
@@ -27,13 +25,17 @@ The first run downloads data sources and populates the database (~10 min). Subse
 - `GET /healthz` — liveness probe
 - `GET /stats` — last ETL run summary
 
+## MCP server
+
+AI tools (Claude Code, Cursor, Claude Desktop) can connect to IPQuery directly via MCP: `npm run build && npm run mcp`. See [`docs/mcp.md`](docs/mcp.md) for setup and the 7 read-only tools.
+
 ## Data sources & licenses
 
-| Source | License | Notes |
-|---|---|---|
+| Source                                                  | License                                 | Notes                                          |
+| ------------------------------------------------------- | --------------------------------------- | ---------------------------------------------- |
 | [MaxMind GeoLite2](https://www.maxmind.com/en/geolite2) | GeoLite2 EULA (free, no redistribution) | User registers and sets `MAXMIND_LICENSE_KEY`. |
-| [ip2region](https://github.com/lionsoul2014/ip2region) | Apache-2.0 | Attribution preserved in NOTICE. |
-| [DB-IP](https://db-ip.com/db/download/ip-to-city) | CC-BY 4.0 | Attribution required in derivative UI. |
+| [ip2region](https://github.com/lionsoul2014/ip2region)  | Apache-2.0                              | Attribution preserved in NOTICE.               |
+| [DB-IP](https://db-ip.com/db/download/ip-to-city)       | CC-BY 4.0                               | Attribution required in derivative UI.         |
 
 This repository contains **no data files**. You are responsible for downloading and complying with each source's license.
 
@@ -45,7 +47,7 @@ ETL pipeline → MySQL → Fastify. See [`docs/superpowers/specs/2026-08-13-ip-a
 
 ```bash
 make test-unit    # fast
-make test-int     # requires a reachable MySQL (DB_* env vars or `make docker-up`)
+make test-int     # requires a reachable MySQL (DB_* env vars)
 make lint
 ```
 
@@ -72,9 +74,9 @@ The UI follows a tool-style layout: a persistent left sidebar groups links by au
 
 ### First-deploy guide
 
-The web app and API share one Fastify process. You need a reachable MySQL — run it however you prefer (locally, in your own container, `make docker-up` for the bundled compose, etc.). The steps below are native and assume MySQL is already listening on the host.
+The web app and API share one Fastify process. You need a reachable MySQL — install it natively or via your distro's package manager. The steps below assume MySQL is already listening on the host.
 
-1. `cp .env.example .env` and set `SESSION_SECRET` (long random string), `WEB_BASE_URL` (defaults to `http://localhost:3100`), `DB_*` for your MySQL, and `MAXMIND_LICENSE_KEY`. Configure `SMTP_*` if you want real email delivery; otherwise verification/reset emails print to stdout.
+1. `cp .env.example .env` and set `SESSION_SECRET` (long random string), `WEB_BASE_URL` (defaults to `http://localhost:3100`), `DB_*` for your MySQL, and `MAXMIND_LICENSE_KEY`. Configure `SMTP_*` if you want real email delivery; otherwise verification/reset emails print to stdout. The deploy target is **native Node + MySQL on the host** — no Docker required.
 2. `make install` then `make build` (compile TypeScript + copy schema into `dist/`).
 3. Bootstrap the admin and the database. Fresh installs must be initialized before `/login` works; choose one of:
    - **Web wizard (default).** Run `make run` and open `http://localhost:3100/setup` in a browser. The wizard runs migrations, probes the DB connection, lets you set the site name, bootstrap the admin account, and optionally load seed data — a 6-step linear flow. Once `settings.initialized_at` is set, `/setup` returns 404 and every non-allowlisted route stops redirecting to it.
@@ -112,7 +114,6 @@ When `SMTP_HOST` is unset, emails are printed to stdout (dev mode). In productio
 
 ### Operator notes
 
-- `make docker-up` (optional) brings up MySQL + the app via `docker compose` if you have it installed; otherwise point `DB_*` env vars at any existing MySQL instance.
 - `make migrate-status` reports which migrations from `db/migrations/` are applied or pending.
 - `node dist/cli.js migrate` / `migrate:status` / `create-admin` are the same commands the Makefile targets wrap; call them directly when scripting.
 

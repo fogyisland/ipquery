@@ -53,7 +53,10 @@ async function statsHandler(deps: McpPool): Promise<unknown> {
       mergedRecords: last.mergedRecords ?? 0,
       sources: {
         maxmind: { records: last.maxmindRecords ?? 0, builtAt: last.maxmindBuiltAt?.toISOString() ?? null },
-        ip2region: { records: last.ip2regionRecords ?? 0, builtAt: last.ip2regionBuiltAt?.toISOString() ?? null },
+        ip2region: {
+          records: last.ip2regionRecords ?? 0,
+          builtAt: last.ip2regionBuiltAt?.toISOString() ?? null,
+        },
         dbip: { records: last.dbipRecords ?? 0, builtAt: last.dbipBuiltAt?.toISOString() ?? null },
       },
     },
@@ -89,7 +92,10 @@ export function buildToolRegistrations(deps: McpPool): ToolRegistration[] {
     },
     {
       def: queriesRecentToolDef(),
-      handler: (args) => safe(() => mcpQueriesRecent(deps, args as { limit?: unknown; status?: unknown; includePrivate?: unknown })),
+      handler: (args) =>
+        safe(() =>
+          mcpQueriesRecent(deps, args as { limit?: unknown; status?: unknown; includePrivate?: unknown }),
+        ),
     },
     {
       def: queriesDailyToolDef(),

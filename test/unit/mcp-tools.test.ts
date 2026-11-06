@@ -1,6 +1,22 @@
 // SPDX-License-Identifier: MIT
 import { describe, it, expect, vi } from "vitest";
-import { mcpLookup, lookupToolDef, clampInt, mcpQueueStats, mcpEtlStatus, queueStatsToolDef, etlStatusToolDef, queueTopToolDef, maskEmail, maskPrefix, sanitizeQueryRow, mcpQueriesRecent, queriesRecentToolDef, queriesDailyToolDef, type McpPool } from "../../src/mcp/tools";
+import {
+  mcpLookup,
+  lookupToolDef,
+  clampInt,
+  mcpQueueStats,
+  mcpEtlStatus,
+  queueStatsToolDef,
+  etlStatusToolDef,
+  queueTopToolDef,
+  maskEmail,
+  maskPrefix,
+  sanitizeQueryRow,
+  mcpQueriesRecent,
+  queriesRecentToolDef,
+  queriesDailyToolDef,
+  type McpPool,
+} from "../../src/mcp/tools";
 
 const noopLog = { warn: vi.fn(), error: vi.fn() };
 
@@ -139,10 +155,21 @@ describe("sanitizeQueryRow", () => {
 describe("mcpQueriesRecent", () => {
   it("redacts rows by default and clamps limit", async () => {
     const pool = {
-      query: vi.fn().mockResolvedValue([
-        [{ id: 1, ts: new Date(), ip_text: "1.2.3.4", status: "hit", user_email: "peng@example.com", api_key_prefix: "abcd1234" }],
-        [{ total: 1 }],
-      ]),
+      query: vi
+        .fn()
+        .mockResolvedValue([
+          [
+            {
+              id: 1,
+              ts: new Date(),
+              ip_text: "1.2.3.4",
+              status: "hit",
+              user_email: "peng@example.com",
+              api_key_prefix: "abcd1234",
+            },
+          ],
+          [{ total: 1 }],
+        ]),
     };
     const res = await mcpQueriesRecent(makeDeps(pool), { limit: 500 });
     const first = res.rows[0] as Record<string, unknown>;
