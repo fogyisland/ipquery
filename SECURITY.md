@@ -6,9 +6,9 @@ Only the latest minor release receives security fixes. Older versions are
 not patched.
 
 | Version | Supported |
-|---|---|
-| 0.1.x | yes |
-| < 0.1 | no |
+| ------- | --------- |
+| 0.1.x   | yes       |
+| < 0.1   | no        |
 
 ## Reporting a Vulnerability
 

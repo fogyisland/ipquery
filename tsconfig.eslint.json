@@ -1,0 +1,8 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true
+  },
+  "include": ["src/**/*", "test/**/*", "scripts/dev/**/*", "vitest.config.ts", "eslint.config.js"],
+  "exclude": ["node_modules", "dist", "coverage"]
+}

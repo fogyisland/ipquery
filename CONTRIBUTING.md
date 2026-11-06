@@ -24,15 +24,16 @@ make test-web       # web-only unit + integration
 make e2e            # end-to-end
 ```
 
-MySQL is required for integration and e2e tests. Bring up a local MySQL
-however you prefer — `make docker-up` uses `docker compose` if you have
-it installed, or point `DB_*` env vars at any existing MySQL instance.
+MySQL is required for integration and e2e tests. Install MySQL natively
+(via your distro's package manager, Homebrew, etc.) and point `DB_*`
+env vars at it. The project does **not** ship or require Docker.
 
 ## Pull Request Process
 
 1. Open a PR against `main`. Include a one-line summary and a short "why".
 2. Reference any issue this PR closes.
-3. Ensure CI is green: `npx tsc --noEmit && npm test`.
+3. Ensure CI is green: GitHub Actions runs `npm run lint`, `npm run build`,
+   and `npm run test:unit` on every PR. Local pre-push: `npm run lint && npm run test:unit`.
 4. Be patient with review. We may ask for a rename, a test, or a small
    refactor. Reviews are conversations, not gatekeeping.
 

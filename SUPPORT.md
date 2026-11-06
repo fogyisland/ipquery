@@ -15,10 +15,10 @@ contact **sales@example.com** for a quote.
 
 Available offerings:
 
-| Plan | Audience | Includes |
-|---|---|---|
-| **Community** | Hobbyists, side projects | GitHub issues, public roadmap |
-| **Standard** | Startups, single-team production | Email support, 1-business-day response, security advisories |
+| Plan           | Audience                            | Includes                                                                           |
+| -------------- | ----------------------------------- | ---------------------------------------------------------------------------------- |
+| **Community**  | Hobbyists, side projects            | GitHub issues, public roadmap                                                      |
+| **Standard**   | Startups, single-team production    | Email support, 1-business-day response, security advisories                        |
 | **Enterprise** | Regulated, multi-team, multi-region | Slack channel, 4-hour response, signed releases, custom SLA, on-call for incidents |
 
 All plans include access to the same MIT-licensed source code. The paid

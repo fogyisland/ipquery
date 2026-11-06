@@ -9,3 +9,9 @@ data/
 .env
 .env.local
 *.log
+
+# Dev-only helpers under scripts/dev/ — keep the .ts files (committed), ignore
+# their runtime artifacts (screenshots, traces, etc.).
+scripts/dev/*.png
+scripts/dev/*.trace.zip
+scripts/dev/*.zip

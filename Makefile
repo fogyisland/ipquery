@@ -1,4 +1,4 @@
-.PHONY: help install build test test-unit test-int test-web e2e lint run update serve status clean docker-up docker-down migrate migrate-status create-admin init
+.PHONY: help install build test test-unit test-int test-web e2e lint run update serve status clean migrate migrate-status create-admin init
 
 help:
 	@echo "make install        - npm install"
@@ -16,8 +16,6 @@ help:
 	@echo "make migrate-status - show applied/pending migrations"
 	@echo "make create-admin   - create admin user (reads ADMIN_EMAIL/ADMIN_PASSWORD/ADMIN_NAME from env)"
 	@echo "make init           - first-run bootstrap (reads ADMIN_EMAIL/ADMIN_PASSWORD/ADMIN_NAME/ADMIN_SEED from env)"
-	@echo "make docker-up      - bring up MySQL + app"
-	@echo "make docker-down"
 	@echo "make clean          - dist + coverage + data"
 
 install:; npm install
@@ -49,6 +47,4 @@ init:
 	else \
 		node dist/cli.js init --email "$$ADMIN_EMAIL" --password "$$ADMIN_PASSWORD" --name "$${ADMIN_NAME:-Admin}"; \
 	fi
-docker-up:; docker compose up -d
-docker-down:; docker compose down -v
 clean:; rm -rf dist coverage data
