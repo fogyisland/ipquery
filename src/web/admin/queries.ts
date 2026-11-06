@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: MIT
-import type { Pool, RowDataPacket } from 'mysql2/promise';
+import type { Pool, RowDataPacket } from "mysql2/promise";
 
 export interface QueryStats {
   range: { since: Date; until: Date };
   total: number;
   byStatus: { hit: number; miss: number; invalid: number };
-  topIps: Array<{ ip_text: string; n: number }>;          // 10
-  topUsers: Array<{ user_email: string; n: number }>;    // 10
-  hourly: number[];                                       // 24 buckets
+  topIps: Array<{ ip_text: string; n: number }>; // 10
+  topUsers: Array<{ user_email: string; n: number }>; // 10
+  hourly: number[]; // 24 buckets
 }
 
 /**
@@ -23,22 +23,28 @@ export interface QueryStats {
  * `<= now()` predicate would falsely exclude rows just written. The dashboard
  * uses the same open-ended pattern (`WHERE ts >= ?`).
  */
-export async function getQueryStats(pool: Pool, opts: {
-  since?: Date;
-  until?: Date;
-} = {}): Promise<QueryStats> {
+export async function getQueryStats(
+  pool: Pool,
+  opts: {
+    since?: Date;
+    until?: Date;
+  } = {},
+): Promise<QueryStats> {
   const until = opts.until ?? new Date();
   const since = opts.since ?? new Date(until.getTime() - 24 * 60 * 60 * 1000);
 
   // Single batched statement: byStatus counts. topIps / topUsers / hourly
   // use separate queries because their GROUP BY shapes differ.
-  const [agg] = await pool.query<RowDataPacket[]>(`
+  const [agg] = await pool.query<RowDataPacket[]>(
+    `
     SELECT
       (SELECT COUNT(*) FROM query_log WHERE ts >= ?) AS total,
       (SELECT COUNT(*) FROM query_log WHERE ts >= ? AND status = 'hit') AS hit,
       (SELECT COUNT(*) FROM query_log WHERE ts >= ? AND status = 'miss') AS miss,
       (SELECT COUNT(*) FROM query_log WHERE ts >= ? AND status = 'invalid') AS invalid
-  `, [since, since, since, since]);
+  `,
+    [since, since, since, since],
+  );
   const a = agg[0] as { total: number; hit: number; miss: number; invalid: number };
 
   const [topIpRows] = await pool.query<RowDataPacket[]>(

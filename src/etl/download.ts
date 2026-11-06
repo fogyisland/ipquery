@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT
-import * as fs from 'node:fs';
-import * as fsp from 'node:fs/promises';
-import * as path from 'node:path';
-import * as https from 'node:https';
-import { pipeline } from 'node:stream/promises';
+import * as fs from "node:fs";
+import * as fsp from "node:fs/promises";
+import * as path from "node:path";
+import * as https from "node:https";
+import { pipeline } from "node:stream/promises";
 
 // DB-IP distributes its free data as monthly gzipped CSVs at
 // https://download.db-ip.com/free/dbip-{city,country,asn}-lite-YYYY-MM.csv.gz.
@@ -16,21 +16,27 @@ import { pipeline } from 'node:stream/promises';
 
 export interface DownloadSpec {
   /** Logical source name — matches the filenames in src/etl/pipeline.ts. */
-  kind: 'city' | 'country' | 'asn';
+  kind: "city" | "country" | "asn";
   /** DB-IP URL stem, e.g. 'dbip-city-lite'. */
   urlStem: string;
   /** Destination filename inside outDir, e.g. 'dbip.csv.gz'. */
   destName: string;
 }
 
+/** Per-chunk hook fired while a single file is downloading. bytesTotal
+ *  is the Content-Length header value when known, or null when the
+ *  server didn't send one (chunked encoding, mirrors, etc.) — the
+ *  caller can still render an indeterminate progress bar in that case. */
+export type DownloadProgressFn = (bytesDone: number, bytesTotal: number | null) => void;
+
 export const DEFAULT_SPECS: ReadonlyArray<DownloadSpec> = [
-  { kind: 'city',    urlStem: 'dbip-city-lite',    destName: 'dbip.csv.gz' },
-  { kind: 'country', urlStem: 'dbip-country-lite', destName: 'dbip-country.csv.gz' },
-  { kind: 'asn',     urlStem: 'dbip-asn-lite',     destName: 'dbip-asn.csv.gz' },
+  { kind: "city", urlStem: "dbip-city-lite", destName: "dbip.csv.gz" },
+  { kind: "country", urlStem: "dbip-country-lite", destName: "dbip-country.csv.gz" },
+  { kind: "asn", urlStem: "dbip-asn-lite", destName: "dbip-asn.csv.gz" },
 ];
 
 export interface DownloadResult {
-  kind: DownloadSpec['kind'];
+  kind: DownloadSpec["kind"];
   destName: string;
   url: string;
   bytes: number;
@@ -39,7 +45,7 @@ export interface DownloadResult {
 }
 
 export interface DownloadFailure {
-  kind: DownloadSpec['kind'];
+  kind: DownloadSpec["kind"];
   url: string;
   message: string;
 }
@@ -55,7 +61,7 @@ export interface DownloadAttempt {
   spec: DownloadSpec;
   destName: string;
   url: string;
-  status: 'success' | 'failed' | 'missing';
+  status: "success" | "failed" | "missing";
   bytes: number | null;
   month: string | null;
   durationMs: number | null;
@@ -75,7 +81,7 @@ export function candidateMonths(now: Date, lookback: number): string[] {
     const total = m - i;
     const yr = y + Math.floor(total / 12);
     const mo = ((total % 12) + 12) % 12; // normalize negative modulo
-    out.push(`${yr}-${String(mo + 1).padStart(2, '0')}`);
+    out.push(`${yr}-${String(mo + 1).padStart(2, "0")}`);
   }
   return out;
 }
@@ -88,15 +94,24 @@ export function candidateMonths(now: Date, lookback: number): string[] {
  * gzipped — buffering it in a Buffer/string blows V8's old-string limit.
  * `pipeline()` ties the HTTPS response straight into fs.createWriteStream
  * with backpressure, so memory stays flat regardless of file size.
+ *
+ * `onProgress` (when provided) is called once per chunk with the running
+ * byte count and the Content-Length if the server provided one. We only
+ * resolve `bytesTotal` once (the redirect follow loses the original
+ * header), so the caller may receive null on subsequent chunks.
  */
-export function downloadToFile(url: string, destPath: string): Promise<number> {
+export function downloadToFile(
+  url: string,
+  destPath: string,
+  onProgress?: DownloadProgressFn,
+): Promise<number> {
   return new Promise((resolve, reject) => {
     const req = https.get(url, (res) => {
       const status = res.statusCode ?? 0;
       // Follow one redirect level (DB-IP occasionally moves CDN edges).
       if (status >= 300 && status < 400 && res.headers.location) {
         res.resume(); // drain
-        downloadToFile(res.headers.location, destPath).then(resolve, reject);
+        downloadToFile(res.headers.location, destPath, onProgress).then(resolve, reject);
         return;
       }
       if (status < 200 || status >= 300) {
@@ -106,14 +121,30 @@ export function downloadToFile(url: string, destPath: string): Promise<number> {
       }
       const out = fs.createWriteStream(destPath);
       let bytes = 0;
-      res.on('data', (chunk: Buffer) => { bytes += chunk.length; });
+      const lenHeader = res.headers["content-length"];
+      const bytesTotal = lenHeader ? Number(lenHeader) : null;
+      // Throttle progress callbacks: we get one 'data' event per chunk
+      // (typically 16-64 KB) which is too noisy for a UI poll endpoint
+      // running every 5s. Once per 64 KB is plenty smooth for a 100 MB
+      // file (1500 events over ~10s) without spamming writes.
+      const PROGRESS_GRANULARITY = 64 * 1024;
+      res.on("data", (chunk: Buffer) => {
+        bytes += chunk.length;
+        if (onProgress && (bytes < PROGRESS_GRANULARITY || bytes % PROGRESS_GRANULARITY === 0)) {
+          onProgress(bytes, bytesTotal);
+        }
+      });
       // pipeline() handles cleanup + error propagation across both sides.
       pipeline(res, out).then(
-        () => resolve(bytes),
+        () => {
+          // Final flush so the UI sees the exact total.
+          if (onProgress) onProgress(bytes, bytesTotal);
+          resolve(bytes);
+        },
         (err: Error) => reject(err),
       );
     });
-    req.on('error', reject);
+    req.on("error", reject);
     req.setTimeout(120_000, () => {
       req.destroy(new Error(`timeout after 120s for ${url}`));
     });
@@ -124,12 +155,18 @@ export function downloadToFile(url: string, destPath: string): Promise<number> {
  * Download a single spec, walking back through candidateMonths until one
  * returns 2xx. Returns the DownloadResult with the winning month, or
  * throws if every candidate 404s / errors.
+ *
+ * `onProgress` (when provided) is forwarded to the underlying
+ * downloadToFile so callers can drive a live progress bar. The bytes
+ * reported are per-file — callers tracking the sum across files should
+ * aggregate themselves.
  */
 export async function fetchOne(
   spec: DownloadSpec,
   outDir: string,
   now: Date,
   lookback = 6,
+  onProgress?: DownloadProgressFn,
 ): Promise<DownloadResult> {
   await fsp.mkdir(outDir, { recursive: true });
   const destPath = path.join(outDir, spec.destName);
@@ -138,7 +175,7 @@ export async function fetchOne(
   for (const month of months) {
     const url = `https://download.db-ip.com/free/${spec.urlStem}-${month}.csv.gz`;
     try {
-      const bytes = await downloadToFile(url, destPath);
+      const bytes = await downloadToFile(url, destPath, onProgress);
       return { kind: spec.kind, destName: spec.destName, url, bytes, month };
     } catch (err) {
       const msg = (err as Error).message;
@@ -149,7 +186,7 @@ export async function fetchOne(
     }
   }
   throw new Error(
-    `no ${spec.kind} file found in last ${lookback} months (tried ${months.join(', ')}; ${errors.join('; ')})`,
+    `no ${spec.kind} file found in last ${lookback} months (tried ${months.join(", ")}; ${errors.join("; ")})`,
   );
 }
 
@@ -171,6 +208,7 @@ export async function fetchOneWithAttempts(
   outDir: string,
   now: Date,
   lookback = 6,
+  onProgress?: DownloadProgressFn,
 ): Promise<DownloadResult> {
   await fsp.mkdir(outDir, { recursive: true });
   const destPath = path.join(outDir, spec.destName);
@@ -181,37 +219,47 @@ export async function fetchOneWithAttempts(
     const startedAt = new Date();
     const t0 = Date.now();
     try {
-      const bytes = await downloadToFile(url, destPath);
+      const bytes = await downloadToFile(url, destPath, onProgress);
       // Inline attempt recording keeps the original 'fetchOne' return
       // shape unchanged while emitting one success attempt. The
       // DownloadAttempt consumer (the pipeline) reads from the
       // accumulated attempts array below.
       downloadAttempts.push({
-        spec, destName: spec.destName, url,
-        status: 'success', bytes, month,
-        durationMs: Date.now() - t0, retryCount: 0,
+        spec,
+        destName: spec.destName,
+        url,
+        status: "success",
+        bytes,
+        month,
+        durationMs: Date.now() - t0,
+        retryCount: 0,
         errorMessage: null,
-        startedAt, finishedAt: new Date(),
+        startedAt,
+        finishedAt: new Date(),
       });
       return { kind: spec.kind, destName: spec.destName, url, bytes, month };
     } catch (err) {
       const msg = (err as Error).message;
       const is404 = /HTTP 404/.test(msg);
       downloadAttempts.push({
-        spec, destName: spec.destName, url,
-        status: 'failed',
-        bytes: null, month,
+        spec,
+        destName: spec.destName,
+        url,
+        status: "failed",
+        bytes: null,
+        month,
         durationMs: Date.now() - t0,
         retryCount: 0,
         errorMessage: msg,
-        startedAt, finishedAt: new Date(),
+        startedAt,
+        finishedAt: new Date(),
       });
       if (!is404) throw err; // network drop / 5xx — hard fail
       errors.push(`${month}: ${msg}`);
     }
   }
   throw new Error(
-    `no ${spec.kind} file found in last ${lookback} months (tried ${months.join(', ')}; ${errors.join('; ')})`,
+    `no ${spec.kind} file found in last ${lookback} months (tried ${months.join(", ")}; ${errors.join("; ")})`,
   );
 }
 
@@ -227,11 +275,18 @@ export function takeDownloadAttempts(): DownloadAttempt[] {
  * Top-level entry: fetch every requested spec, print one line per file,
  * and return a structured summary. Never throws on per-file failure —
  * the CLI command decides whether to fail the whole run.
+ *
+ * `onProgress` (when provided) is invoked with **cumulative** bytes
+ * across every spec the downloader has already finished plus the
+ * in-flight one, plus the **cumulative** expected bytes total. The UI
+ * uses this to render a single "download" bar even though three files
+ * are being fetched back-to-back.
  */
 export async function downloadAll(
   specs: ReadonlyArray<DownloadSpec>,
   outDir: string,
   now: Date = new Date(),
+  onProgress?: DownloadProgressFn,
 ): Promise<{
   results: DownloadResult[];
   failures: DownloadFailure[];
@@ -239,15 +294,37 @@ export async function downloadAll(
 }> {
   const results: DownloadResult[] = [];
   const failures: DownloadFailure[] = [];
+  // Aggregator: bytes done across all finished specs + the in-flight one.
+  // Total = sum of Content-Length (when known) + bytes-done-so-far when
+  // a file's total hasn't been reported yet.
+  let completedBytes = 0;
+  let completedTotal = 0;
   for (const spec of specs) {
+    let inFlightDone = 0;
+    let inFlightTotal: number | null = null;
     try {
-      const r = await fetchOneWithAttempts(spec, outDir, now);
+      const r = await fetchOneWithAttempts(spec, outDir, now, 6, (chunkDone, chunkTotal) => {
+        inFlightDone = chunkDone;
+        if (chunkTotal !== null) inFlightTotal = chunkTotal;
+        const cumDone = completedBytes + inFlightDone;
+        // If any in-flight total is unknown we can't render a percentage,
+        // so we pass null. Once the chunk reports Content-Length we lock
+        // it in (Content-Length doesn't change mid-stream).
+        const cumTotal = inFlightTotal !== null ? completedTotal + inFlightTotal : null;
+        if (onProgress) onProgress(cumDone, cumTotal);
+      });
       results.push(r);
+      // Roll the in-flight counters into the completed totals so the
+      // NEXT file's progress reports include this one's full size.
+      completedBytes += r.bytes;
+      completedTotal += inFlightTotal ?? r.bytes;
       const mb = (r.bytes / 1024 / 1024).toFixed(1);
-      console.log(`[download] ${spec.kind.padEnd(7)} ${r.month}  ${mb.padStart(7)} MB  → ${path.join(outDir, r.destName)}`);
+      console.log(
+        `[download] ${spec.kind.padEnd(7)} ${r.month}  ${mb.padStart(7)} MB  → ${path.join(outDir, r.destName)}`,
+      );
     } catch (err) {
       const msg = (err as Error).message;
-      failures.push({ kind: spec.kind, url: '(see message)', message: msg });
+      failures.push({ kind: spec.kind, url: "(see message)", message: msg });
       console.error(`[download] ${spec.kind.padEnd(7)} FAILED: ${msg}`);
     }
   }
@@ -268,7 +345,7 @@ export async function downloadAll(
   for (const spec of specs) {
     const list = bySpec.get(spec.destName) ?? [];
     if (list.length === 0) continue;
-    const anySuccess = list.some((a) => a.status === 'success');
+    const anySuccess = list.some((a) => a.status === "success");
     if (anySuccess) {
       attemptOut.push(...list);
     } else {
@@ -279,13 +356,13 @@ export async function downloadAll(
       attemptOut.push({
         spec: first.spec,
         destName: first.destName,
-        url: '(none)',
-        status: 'missing',
+        url: "(none)",
+        status: "missing",
         bytes: null,
         month: null,
         durationMs: list.reduce((s, a) => s + (a.durationMs ?? 0), 0),
         retryCount: list.length,
-        errorMessage: list.map((a) => a.month + ':' + (a.errorMessage ?? '')).join('; '),
+        errorMessage: list.map((a) => a.month + ":" + (a.errorMessage ?? "")).join("; "),
         startedAt: first.startedAt,
         finishedAt: last.finishedAt,
       });

@@ -22,13 +22,13 @@
 // This file deliberately does NOT touch unknown_ip_queue — random IPs
 // are NOT queue-bound; they're picked fresh on each click.
 
-import type { Pool } from 'mysql2/promise';
-import type { IpGeoProvider } from './providers/types';
-import type { ProviderConfigRow } from '../storage/ingestProviders';
-import { touchProviderError, updateProviderConfig } from '../storage/ingestProviders';
-import { processIp, disableRateLimitedProviders, type BackfillSummary } from './unknownIpBackfill';
-import { recordRandomProbe } from '../storage/randomProbeLog';
-import { randomUUID } from 'node:crypto';
+import type { Pool } from "mysql2/promise";
+import type { IpGeoProvider } from "./providers/types";
+import type { ProviderConfigRow } from "../storage/ingestProviders";
+import { touchProviderError, updateProviderConfig } from "../storage/ingestProviders";
+import { processIp, disableRateLimitedProviders, type BackfillSummary } from "./unknownIpBackfill";
+import { recordRandomProbe } from "../storage/randomProbeLog";
+import { randomUUID } from "node:crypto";
 
 export interface RandomGenerationOptions {
   /** How many random IPs to pick. Default 10 — the user asked for 10. */
@@ -39,7 +39,7 @@ export interface RandomGenerationOptions {
    *  Default 50 — should be plenty for 10 IPs in the full IPv4 space
    *  where ~95% of random IPs are already covered. */
   maxTriesPerIp?: number;
-  logger?: Pick<Console, 'log' | 'warn' | 'error'>;
+  logger?: Pick<Console, "log" | "warn" | "error">;
 }
 
 export interface RandomGenerationSummary {
@@ -108,11 +108,11 @@ export async function runRandomGeneration(
     alreadyCovered: 0,
     startedAt,
     finishedAt: 0,
-    providers: Object.fromEntries(providers.map((p) => [
-      p.name, { ok: 0, failed: 0, abstained: 0, rateLimited: 0 },
-    ])),
+    providers: Object.fromEntries(
+      providers.map((p) => [p.name, { ok: 0, failed: 0, abstained: 0, rateLimited: 0 }]),
+    ),
     providersDisabled: [],
-    mode: 'committed',
+    mode: "committed",
     previewRows: [],
   };
 
@@ -133,15 +133,23 @@ export async function runRandomGeneration(
   } else {
     // Step 2: serial fan-out per IP.
     for (const slot of picked.ips) {
-      const result = await processIp(pool, providers, slot.text, slot.buffer, perIpTimeout, workSummary, 'random');
+      const result = await processIp(
+        pool,
+        providers,
+        slot.text,
+        slot.buffer,
+        perIpTimeout,
+        workSummary,
+        "random",
+      );
       const outcome = result.outcome;
-      const consensus = outcome.kind === 'merged' ? outcome.record : null;
+      const consensus = outcome.kind === "merged" ? outcome.record : null;
       // Fire-and-forget the per-IP probe audit. Must NEVER poison the
       // run on a write failure — same defensive pattern as recordProviderError.
       recordRandomProbe(pool, {
         ipText: slot.text,
         ipBinary: slot.buffer,
-        mode: 'random',
+        mode: "random",
         outcome: outcome.kind,
         consensusCountry: consensus?.countryCode ?? null,
         consensusCity: consensus?.city ?? null,
@@ -149,12 +157,14 @@ export async function runRandomGeneration(
         mergedRunId: null, // random-gen doesn't write to etl_runs
         providers: result.perProvider,
         batchId,
-      }).catch(() => { /* swallow */ });
-      if (outcome.kind === 'merged') {
+      }).catch(() => {
+        /* swallow */
+      });
+      if (outcome.kind === "merged") {
         if (outcome.newlyInserted) workSummary.merged += 1;
         else duplicates += 1;
-      } else if (outcome.kind === 'no_consensus') workSummary.noConsensus += 1;
-      else if (outcome.kind === 'no_country') workSummary.noCountry += 1;
+      } else if (outcome.kind === "no_consensus") workSummary.noConsensus += 1;
+      else if (outcome.kind === "no_country") workSummary.noCountry += 1;
       else workSummary.allAbstained += 1;
     }
   }
@@ -166,7 +176,9 @@ export async function runRandomGeneration(
   }
 
   workSummary.finishedAt = Date.now();
-  log.log?.(`[random-gen] ${workSummary.merged}/${workSummary.considered} merged (${duplicates} duplicates) in ${workSummary.finishedAt - startedAt}ms; disabled=${workSummary.providersDisabled.join(',') || 'none'}; exhausted=${exhaustedRetries}`);
+  log.log?.(
+    `[random-gen] ${workSummary.merged}/${workSummary.considered} merged (${duplicates} duplicates) in ${workSummary.finishedAt - startedAt}ms; disabled=${workSummary.providersDisabled.join(",") || "none"}; exhausted=${exhaustedRetries}`,
+  );
 
   return {
     considered: workSummary.considered,
@@ -244,11 +256,11 @@ export async function pickRandomIpsNotInRanges(
  *  answers. See EXCLUDED_RANGES below for the keep-out list. */
 const RESERVED_RANGES: Array<[number, number]> = [
   // RFC 5737 documentation: TEST-NET-1, TEST-NET-2, TEST-NET-3
-  [ipToInt('192.0.2.0'),   ipToInt('192.0.2.255')],
-  [ipToInt('198.51.100.0'), ipToInt('198.51.100.255')],
-  [ipToInt('203.0.113.0'),  ipToInt('203.0.113.255')],
+  [ipToInt("192.0.2.0"), ipToInt("192.0.2.255")],
+  [ipToInt("198.51.100.0"), ipToInt("198.51.100.255")],
+  [ipToInt("203.0.113.0"), ipToInt("203.0.113.255")],
   // RFC 6890 benchmark testing: 198.18.0.0/15
-  [ipToInt('198.18.0.0'),   ipToInt('198.19.255.255')],
+  [ipToInt("198.18.0.0"), ipToInt("198.19.255.255")],
 ];
 
 /** Ranges we MUST NOT generate, even if they look "reserved" by IANA.
@@ -263,14 +275,14 @@ const RESERVED_RANGES: Array<[number, number]> = [
  *  - 224.0.0.0/4 — multicast
  *  - 240.0.0.0/4 — reserved (includes 255.255.255.255 broadcast) */
 const EXCLUDED_RANGES: Array<[number, number]> = [
-  [ipToInt('10.0.0.0'),     ipToInt('10.255.255.255')],
-  [ipToInt('100.64.0.0'),   ipToInt('100.127.255.255')],
-  [ipToInt('127.0.0.0'),    ipToInt('127.255.255.255')],
-  [ipToInt('169.254.0.0'),  ipToInt('169.254.255.255')],
-  [ipToInt('172.16.0.0'),   ipToInt('172.31.255.255')],
-  [ipToInt('192.168.0.0'),  ipToInt('192.168.255.255')],
-  [ipToInt('224.0.0.0'),    ipToInt('239.255.255.255')],
-  [ipToInt('240.0.0.0'),    ipToInt('255.255.255.255')],
+  [ipToInt("10.0.0.0"), ipToInt("10.255.255.255")],
+  [ipToInt("100.64.0.0"), ipToInt("100.127.255.255")],
+  [ipToInt("127.0.0.0"), ipToInt("127.255.255.255")],
+  [ipToInt("169.254.0.0"), ipToInt("169.254.255.255")],
+  [ipToInt("172.16.0.0"), ipToInt("172.31.255.255")],
+  [ipToInt("192.168.0.0"), ipToInt("192.168.255.255")],
+  [ipToInt("224.0.0.0"), ipToInt("239.255.255.255")],
+  [ipToInt("240.0.0.0"), ipToInt("255.255.255.255")],
 ];
 
 /** True iff `n` (a 32-bit unsigned integer form of an IPv4) falls in any
@@ -307,11 +319,11 @@ function randomReservedIpv4(): { text: string; buffer: Buffer } {
   // Should be unreachable given current RESERVED_RANGES (none overlap
   // EXCLUDED_RANGES). If a future change adds overlap, throw so the
   // problem is caught loudly rather than silently producing private IPs.
-  throw new Error('randomReservedIpv4: all picks fell in EXCLUDED_RANGES — RESERVED_RANGES needs review');
+  throw new Error("randomReservedIpv4: all picks fell in EXCLUDED_RANGES — RESERVED_RANGES needs review");
 }
 
 function ipToInt(s: string): number {
-  const parts = s.split('.').map(Number);
+  const parts = s.split(".").map(Number);
   const a = parts[0] ?? 0;
   const b = parts[1] ?? 0;
   const c = parts[2] ?? 0;

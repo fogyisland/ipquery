@@ -27,17 +27,17 @@
 // core. The random-IP generator imports it to drive its synthetic IPs
 // without needing unknown_ip_queue rows.
 
-import type { Pool } from 'mysql2/promise';
-import type { ResultSetHeader } from 'mysql2/promise';
-import { nextBatch, markProcessed, markAttempted, type UnknownIpRow } from '../storage/unknownIpQueue';
-import type { IpGeoProvider, IpGeoLookupResult, IpGeoRecord } from './providers/types';
-import type { ProviderConfigRow } from '../storage/ingestProviders';
-import { touchProviderError, touchProviderCalled, updateProviderConfig } from '../storage/ingestProviders';
-import { recordProviderError, getCircuitBreakerConfig } from '../storage/providerErrorLog';
-import { majorityVote } from './majority';
-import { parseIp } from '../ip';
-import { recordRandomProbe, type PerProviderDetail } from '../storage/randomProbeLog';
-import { randomUUID } from 'node:crypto';
+import type { Pool, RowDataPacket } from "mysql2/promise";
+import type { ResultSetHeader } from "mysql2/promise";
+import { nextBatch, markProcessed, markAttempted, type UnknownIpRow } from "../storage/unknownIpQueue";
+import type { IpGeoProvider, IpGeoLookupResult, IpGeoRecord } from "./providers/types";
+import type { ProviderConfigRow } from "../storage/ingestProviders";
+import { touchProviderError, touchProviderCalled, updateProviderConfig } from "../storage/ingestProviders";
+import { recordProviderError, getCircuitBreakerConfig } from "../storage/providerErrorLog";
+import { majorityVote } from "./majority";
+import { parseIp } from "../ip";
+import { recordRandomProbe, type PerProviderDetail } from "../storage/randomProbeLog";
+import { randomUUID } from "node:crypto";
 
 export interface BackfillOptions {
   /** How many IPs to pull per run. Each IP fans out to all providers so
@@ -48,13 +48,13 @@ export interface BackfillOptions {
   /** Which flow triggered this run. Recorded into provider_error_log so
    *  the Failure Logs tab can filter by trigger source. Defaults to
    *  'auto' (queue-driven backfill). */
-  mode?: 'auto' | 'manual' | 'random';
+  mode?: "auto" | "manual" | "random";
   /** When true, skip all writes (ip_ranges INSERT + queue mark
    *  processed/attempted). Used by the preview-before-commit admin flow
    *  so operators can review consensus results before any row lands in
    *  the main table. Defaults to false (existing behavior). */
   dryRun?: boolean;
-  logger?: Pick<Console, 'log' | 'warn' | 'error'>;
+  logger?: Pick<Console, "log" | "warn" | "error">;
 }
 
 /** One row of preview output — what would happen for this IP if the
@@ -67,7 +67,7 @@ export interface BackfillPreviewRow {
   city: string | null;
   asn: number | string | null;
   /** Final per-IP outcome from majorityVote / write path. */
-  outcome: 'merged' | 'no_consensus' | 'no_country' | 'all_abstained';
+  outcome: "merged" | "no_consensus" | "no_country" | "all_abstained";
   perProvider: Array<{ name: string; ok: boolean; country: string | null; errorCode: string | null }>;
 }
 
@@ -89,7 +89,7 @@ export interface BackfillSummary {
   /** 'preview' when dryRun=true (no writes happened). 'committed' on
    *  a normal run. Existing callers (random-gen, cron) always see
    *  'committed'. */
-  mode: 'preview' | 'committed';
+  mode: "preview" | "committed";
   /** Per-IP preview rows. Populated when mode === 'preview'; empty
    *  array on committed runs to keep the shape stable. */
   previewRows: BackfillPreviewRow[];
@@ -103,10 +103,10 @@ const DEFAULT_TIMEOUT = 8_000;
  *  duplicates-that-were-ignored. Backfill doesn't care about the
  *  distinction (queue rows are unique by construction). */
 export type IpOutcome =
-  | { kind: 'merged'; record: IpGeoRecord; newlyInserted: boolean }
-  | { kind: 'no_consensus' }
-  | { kind: 'no_country' }
-  | { kind: 'all_abstained' };
+  | { kind: "merged"; record: IpGeoRecord; newlyInserted: boolean }
+  | { kind: "no_consensus" }
+  | { kind: "no_country" }
+  | { kind: "all_abstained" };
 
 /** Returned by processIp alongside the outcome. Carries the per-provider
  *  detail so the caller (random-gen flow, manual-generate, backfill) can
@@ -137,16 +137,16 @@ export async function runBackfill(
     alreadyCovered: 0,
     startedAt,
     finishedAt: 0,
-    providers: Object.fromEntries(providers.map((p) => [
-      p.name, { ok: 0, failed: 0, abstained: 0, rateLimited: 0 },
-    ])),
+    providers: Object.fromEntries(
+      providers.map((p) => [p.name, { ok: 0, failed: 0, abstained: 0, rateLimited: 0 }]),
+    ),
     providersDisabled: [],
-    mode: dryRun ? 'preview' : 'committed',
+    mode: dryRun ? "preview" : "committed",
     previewRows: [],
   };
   // Mode is threaded through to processIp so failure rows carry the
   // right tag in provider_error_log. Defaults to 'auto' (queue backfill).
-  const runMode = opts.mode ?? 'auto';
+  const runMode = opts.mode ?? "auto";
 
   const queueRows = await nextBatch(pool, batchLimit);
   summary.considered = queueRows.length;
@@ -166,9 +166,18 @@ export async function runBackfill(
     const slice = queueRows.slice(i, i + CONCURRENCY);
     const sliceOutcomes = await Promise.all(
       slice.map(async (row) => {
-        const result = await processIp(pool, providers, row.ipText, row.ip, perIpTimeout, summary, runMode, dryRun);
+        const result = await processIp(
+          pool,
+          providers,
+          row.ipText,
+          row.ip,
+          perIpTimeout,
+          summary,
+          runMode,
+          dryRun,
+        );
         const outcome = result.outcome;
-        const consensus = outcome.kind === 'merged' ? outcome.record : null;
+        const consensus = outcome.kind === "merged" ? outcome.record : null;
         // Fire-and-forget probe audit. Same defensive pattern as
         // recordProviderError above — a write failure must never poison
         // the backfill loop.
@@ -180,10 +189,12 @@ export async function runBackfill(
           consensusCountry: consensus?.countryCode ?? null,
           consensusCity: consensus?.city ?? null,
           consensusAsn: consensus?.asn ?? null,
-          mergedRunId: outcome.kind === 'merged' ? null : null, // no etl_runs row for backfill
+          mergedRunId: outcome.kind === "merged" ? null : null, // no etl_runs row for backfill
           providers: result.perProvider,
           batchId,
-        }).catch(() => { /* swallow */ });
+        }).catch(() => {
+          /* swallow */
+        });
         // Preview rows: only populated when dryRun=true. We capture
         // per-IP detail for the admin to review before confirming.
         if (dryRun) {
@@ -200,7 +211,7 @@ export async function runBackfill(
               // network error sets ok=false.
               ok: p.countryCode !== null && !p.rateLimited && !p.errorCode,
               country: p.countryCode ?? null,
-              errorCode: p.errorCode ?? (p.rateLimited ? '429' : null),
+              errorCode: p.errorCode ?? (p.rateLimited ? "429" : null),
             })),
           });
         }
@@ -226,16 +237,18 @@ export async function runBackfill(
   // rows with their reason. Bulk keeps the DB round-trips predictable.
   const mergedIds: number[] = [];
   const attempted: { no_consensus: number[]; no_country: number[]; all_abstained: number[] } = {
-    no_consensus: [], no_country: [], all_abstained: [],
+    no_consensus: [],
+    no_country: [],
+    all_abstained: [],
   };
   for (const { row, outcome } of outcomes) {
-    if (outcome.kind === 'merged') {
+    if (outcome.kind === "merged") {
       mergedIds.push(row.id);
       summary.merged += 1;
     } else {
       attempted[outcome.kind].push(row.id);
-      if (outcome.kind === 'no_consensus') summary.noConsensus += 1;
-      else if (outcome.kind === 'no_country') summary.noCountry += 1;
+      if (outcome.kind === "no_consensus") summary.noConsensus += 1;
+      else if (outcome.kind === "no_country") summary.noCountry += 1;
       else summary.allAbstained += 1;
     }
   }
@@ -253,13 +266,16 @@ export async function runBackfill(
     if (!dryRun) await markProcessed(pool, mergedIds, 0);
   }
   if (!dryRun) {
-    if (attempted.no_consensus.length > 0) await markAttempted(pool, attempted.no_consensus, 'no_consensus');
-    if (attempted.no_country.length > 0) await markAttempted(pool, attempted.no_country, 'no_country');
-    if (attempted.all_abstained.length > 0) await markAttempted(pool, attempted.all_abstained, 'all_abstained');
+    if (attempted.no_consensus.length > 0) await markAttempted(pool, attempted.no_consensus, "no_consensus");
+    if (attempted.no_country.length > 0) await markAttempted(pool, attempted.no_country, "no_country");
+    if (attempted.all_abstained.length > 0)
+      await markAttempted(pool, attempted.all_abstained, "all_abstained");
   }
 
   summary.finishedAt = Date.now();
-  log.log?.(`[backfill] ${summary.merged}/${summary.considered} merged in ${summary.finishedAt - startedAt}ms; disabled=${summary.providersDisabled.join(',') || 'none'}${dryRun ? ' [DRY-RUN]' : ''}`);
+  log.log?.(
+    `[backfill] ${summary.merged}/${summary.considered} merged in ${summary.finishedAt - startedAt}ms; disabled=${summary.providersDisabled.join(",") || "none"}${dryRun ? " [DRY-RUN]" : ""}`,
+  );
   return summary;
 }
 
@@ -278,7 +294,7 @@ export async function processIp(
   ipBuffer: Buffer,
   _perIpTimeoutMs: number,
   summary: BackfillSummary,
-  mode: 'auto' | 'manual' | 'random' = 'auto',
+  mode: "auto" | "manual" | "random" = "auto",
   dryRun: boolean = false,
 ): Promise<ProcessIpResult> {
   // Collect per-provider detail for the probe log alongside the
@@ -296,7 +312,7 @@ export async function processIp(
           const stats = summary.providers[p.name];
           if (stats) stats.failed += 1;
           const msg = err instanceof Error ? err.message : String(err);
-          const code = msg.includes('timeout') || msg.includes('aborted') ? 'timeout' : 'network';
+          const code = msg.includes("timeout") || msg.includes("aborted") ? "timeout" : "network";
           // Fire-and-forget; logging failures shouldn't break the backfill.
           recordProviderError(pool, {
             providerName: p.name,
@@ -305,12 +321,15 @@ export async function processIp(
             errorCode: code,
             reason: `lookup() threw: ${msg.slice(0, 200)}`,
             rawResponse: null,
-          }).catch(() => { /* swallow */ });
+          }).catch(() => {
+            /* swallow */
+          });
           // Fire-and-forget the per-provider, per-UTC-day counter. Same
           // defensive .catch — a DB write failure must never poison the
           // fan-out loop.
-          touchProviderCalled(pool, p.name, { rateLimited: false, errorCode: code })
-            .catch(() => { /* swallow */ });
+          touchProviderCalled(pool, p.name, { rateLimited: false, errorCode: code }).catch(() => {
+            /* swallow */
+          });
           const elapsed = Date.now() - start;
           perProvider.push({
             provider: p.name,
@@ -341,15 +360,18 @@ export async function processIp(
         touchProviderCalled(pool, p.name, {
           rateLimited: result.rateLimited,
           errorCode: result.errorCode,
-        }).catch(() => { /* swallow */ });
+        }).catch(() => {
+          /* swallow */
+        });
         // Record every non-OK, non-abstain call (i.e. providers that returned
         // an explicit errorCode) into the failure log. We skip abstains
         // (provider returned no record, no errorCode) because they reflect
         // "this IP has no data" — not a provider fault.
         if (!result.rateLimited && !result.record && result.errorCode) {
-          const reason = result.errorCode === 'no_country'
-            ? `provider returned no country code for ${ipText}`
-            : `${result.errorCode}: ${(result.rawResponse ?? '').slice(0, 180) || '(no body)'}`;
+          const reason =
+            result.errorCode === "no_country"
+              ? `provider returned no country code for ${ipText}`
+              : `${result.errorCode}: ${(result.rawResponse ?? "").slice(0, 180) || "(no body)"}`;
           recordProviderError(pool, {
             providerName: p.name,
             ipText,
@@ -357,7 +379,9 @@ export async function processIp(
             errorCode: result.errorCode,
             reason: reason.slice(0, 255),
             rawResponse: result.rawResponse ?? null,
-          }).catch(() => { /* swallow */ });
+          }).catch(() => {
+            /* swallow */
+          });
         }
         perProvider.push({
           provider: p.name,
@@ -382,10 +406,10 @@ export async function processIp(
   // as if the row would be written. The caller can still render
   // summary.previewRows knowing each would-be-merged /32.
   if (dryRun) {
-    return { outcome: { kind: 'merged', record: vote.record, newlyInserted: true }, perProvider };
+    return { outcome: { kind: "merged", record: vote.record, newlyInserted: true }, perProvider };
   }
   const newlyInserted = await writeConsensusRange(pool, ipBuffer, vote.record);
-  return { outcome: { kind: 'merged', record: vote.record, newlyInserted }, perProvider };
+  return { outcome: { kind: "merged", record: vote.record, newlyInserted }, perProvider };
 }
 
 /** Disable any provider whose rateLimited counter > 0. Idempotent. Also
@@ -405,7 +429,7 @@ export async function disableRateLimitedProviders(
     if (!liveProviders.has(name)) continue;
     if (summary.providersDisabled.includes(name)) continue;
     let shouldDisable = false;
-    let reason = '';
+    let reason = "";
     if (stats.rateLimited > 0) {
       shouldDisable = true;
       reason = `429 rate limited (${stats.rateLimited}x in this run)`;
@@ -449,7 +473,9 @@ export async function disableRateLimitedProviders(
       // both stores lets the UI choose which surface to render.
       await touchProviderError(pool, name, reason);
       summary.providersDisabled.push(name);
-      console.warn?.(`[backfill] auto-disabled provider ${name}: ${reason} (re-enable in ${cb.cooldownMinutes}m)`);
+      console.warn?.(
+        `[backfill] auto-disabled provider ${name}: ${reason} (re-enable in ${cb.cooldownMinutes}m)`,
+      );
     } catch (err) {
       console.error?.(`[backfill] failed to disable ${name}:`, err);
     }
@@ -461,13 +487,19 @@ async function countProviderCallsInWindow(
   providerName: string,
   windowMinutes: number,
 ): Promise<number> {
-  const [rows] = await pool.query<ResultSetHeader & { total: number }[] & unknown>(
-    `SELECT COUNT(*) AS total FROM provider_error_log
-      WHERE provider_name = ? AND ts >= (NOW() - INTERVAL ? MINUTE)`,
-    [providerName, windowMinutes],
+  // Denominator for the circuit-breaker failure-rate calculation. Uses
+  // provider_call_counter (which records EVERY call — ok, 429, timeout,
+  // network, other) rather than provider_error_log (which only records
+  // errored calls). Reading total = error count previously caused the
+  // rate to compute as 100% whenever any error existed in the window.
+  const [rows] = await pool.query<RowDataPacket[]>(
+    `SELECT COALESCE(SUM(calls_total), 0) AS total
+       FROM provider_call_counter
+      WHERE provider_name = ?
+        AND day_utc >= (UTC_DATE() - INTERVAL ? DAY)`,
+    [providerName, Math.max(1, Math.ceil(windowMinutes / (24 * 60)))],
   );
-  const r = Array.isArray(rows) ? rows[0] as { total: number } | undefined : null;
-  return r?.total ?? 0;
+  return Number(rows[0]?.total ?? 0);
 }
 
 async function countProviderFailuresInWindow(
@@ -475,14 +507,20 @@ async function countProviderFailuresInWindow(
   providerName: string,
   windowMinutes: number,
 ): Promise<number> {
-  const [rows] = await pool.query<ResultSetHeader & { total: number }[] & unknown>(
-    `SELECT COUNT(*) AS total FROM provider_error_log
-      WHERE provider_name = ? AND ts >= (NOW() - INTERVAL ? MINUTE)
-        AND error_code NOT IN ('no_country')`,
-    [providerName, windowMinutes],
+  // Numerator for the circuit-breaker. Sums calls_429 + calls_timeout +
+  // calls_network_err + calls_other_err across the window. Note: abstains
+  // (e.g. 'no_country' which the provider returns as a 200 with no data)
+  // are NOT counted as failures — they're tracked separately in
+  // calls_other_err at the touchProviderCalled level but here we treat
+  // them as "did not produce a result, did not error" and exclude them.
+  const [rows] = await pool.query<RowDataPacket[]>(
+    `SELECT COALESCE(SUM(calls_429 + calls_timeout + calls_network_err), 0) AS total
+       FROM provider_call_counter
+      WHERE provider_name = ?
+        AND day_utc >= (UTC_DATE() - INTERVAL ? DAY)`,
+    [providerName, Math.max(1, Math.ceil(windowMinutes / (24 * 60)))],
   );
-  const r = Array.isArray(rows) ? rows[0] as { total: number } | undefined : null;
-  return r?.total ?? 0;
+  return Number(rows[0]?.total ?? 0);
 }
 
 /** Insert a /32 (IPv4) or /128 (IPv6) range covering exactly `ip`. Tagged
@@ -495,15 +533,11 @@ async function countProviderFailuresInWindow(
   // a NEW row was inserted, false if the unique index turned it into a
   // no-op (already existed). The random-gen flow tracks duplicates
   // separately from genuinely-new rows. */
-async function writeConsensusRange(
-  pool: Pool,
-  ip: Buffer,
-  rec: IpGeoRecord,
-): Promise<boolean> {
-  const startBig = BigInt('0x' + ip.toString('hex'));
+async function writeConsensusRange(pool: Pool, ip: Buffer, rec: IpGeoRecord): Promise<boolean> {
+  const startBig = BigInt("0x" + ip.toString("hex"));
   const endBig = startBig + 1n;
-  const endBuf = Buffer.from(endBig.toString(16).padStart(32, '0'), 'hex');
-  const startBuf = Buffer.from(startBig.toString(16).padStart(32, '0'), 'hex');
+  const endBuf = Buffer.from(endBig.toString(16).padStart(32, "0"), "hex");
+  const startBuf = Buffer.from(startBig.toString(16).padStart(32, "0"), "hex");
 
   const [res] = await pool.query<ResultSetHeader>(
     `INSERT IGNORE INTO ip_ranges
@@ -512,11 +546,18 @@ async function writeConsensusRange(
         country_source, city_source, isp_source, asn_source, geo_source)
      VALUES (?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'multi-provider', 'multi-provider', 'multi-provider', 'multi-provider', 'multi-provider')`,
     [
-      startBuf, endBuf,
-      rec.countryCode, rec.countryName,
-      rec.region, rec.city,
-      rec.latitude, rec.longitude, rec.timezone,
-      rec.isp, rec.asn, rec.asnOrg,
+      startBuf,
+      endBuf,
+      rec.countryCode,
+      rec.countryName,
+      rec.region,
+      rec.city,
+      rec.latitude,
+      rec.longitude,
+      rec.timezone,
+      rec.isp,
+      rec.asn,
+      rec.asnOrg,
     ],
   );
   return res.affectedRows === 1;
@@ -530,13 +571,14 @@ export function buildDefaultProviders(env: NodeJS.ProcessEnv = process.env): IpG
   // Lazy import so the providers' deps (which only fire when lookup() is
   // called) aren't loaded for callers that don't need backfill.
   // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { IpApiProvider, IpinfoProvider, IplocateProvider, FreeIpApiProvider, IpapiCoProvider } = require('./providers') as typeof import('./providers');
+  const { IpApiProvider, IpinfoProvider, IplocateProvider, FreeIpApiProvider, IpapiCoProvider } =
+    require("./providers") as typeof import("./providers");
   return [
     new IpApiProvider(), // no key required, 45/min HTTP
-    new IpinfoProvider({ token: env.IPINFO_TOKEN }),     // key optional, 50k/month HTTPS
+    new IpinfoProvider({ token: env.IPINFO_TOKEN }), // key optional, 50k/month HTTPS
     new IplocateProvider({ apiKey: env.IPLOCATE_API_KEY }), // key optional, 1k/day HTTPS
-    new FreeIpApiProvider(),  // no key, 60/min HTTPS
-    new IpapiCoProvider(),    // no key, 30k/month HTTPS
+    new FreeIpApiProvider(), // no key, 60/min HTTPS
+    new IpapiCoProvider(), // no key, 30k/month HTTPS
   ];
 }
 

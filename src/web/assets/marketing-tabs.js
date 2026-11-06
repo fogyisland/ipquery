@@ -12,31 +12,31 @@
 // partial swaps. Previously inlined in layouts/marketing.hbs but CSP
 // `script-src 'self'` blocked execution.
 (function () {
-  document.addEventListener('click', function (e) {
+  document.addEventListener("click", function (e) {
     if (!e.target || !e.target.closest) return;
 
     // 1. /try chip filler.
-    var chip = e.target.closest('.m-try-chip');
+    const chip = e.target.closest(".m-try-chip");
     if (chip) {
-      var input = document.querySelector('input[name="ip"]');
+      const input = document.querySelector('input[name="ip"]');
       if (input) {
-        input.value = chip.dataset.ip || (chip.textContent || '').trim();
+        input.value = chip.dataset.ip || (chip.textContent || "").trim();
         input.focus();
       }
       return;
     }
 
     // 2. Code-block tab switcher.
-    var tab = e.target.closest('.m-codeblock-tab');
+    const tab = e.target.closest(".m-codeblock-tab");
     if (tab) {
-      var block = tab.closest('.m-codeblock');
+      const block = tab.closest(".m-codeblock");
       if (!block) return;
-      var id = tab.dataset.tab;
-      block.querySelectorAll('.m-codeblock-tab').forEach(function (t) {
-        t.classList.toggle('active', t === tab);
+      const id = tab.dataset.tab;
+      block.querySelectorAll(".m-codeblock-tab").forEach(function (t) {
+        t.classList.toggle("active", t === tab);
       });
-      block.querySelectorAll('[data-pane]').forEach(function (p) {
-        p.style.display = p.dataset.pane === id ? '' : 'none';
+      block.querySelectorAll("[data-pane]").forEach(function (p) {
+        p.style.display = p.dataset.pane === id ? "" : "none";
       });
     }
   });

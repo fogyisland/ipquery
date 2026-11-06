@@ -25,6 +25,28 @@ CREATE TABLE IF NOT EXISTS provider_call_counter (
 -- reapProviders() helper in randomIpGeneratorRunner.ts flips it back
 -- to enabled=1 once auto_reenable_at <= NOW(). This finally makes
 -- cb_cooldown_minutes (previously dead code) a real runtime setting.
-ALTER TABLE ingest_providers
-  ADD COLUMN auto_reenable_at DATETIME(3) NULL AFTER last_error_reason,
-  ADD COLUMN auto_disabled_reason VARCHAR(255) NULL AFTER auto_reenable_at;
+-- Idempotent ALTER via INFORMATION_SCHEMA: if a prior partial run left
+-- these columns in place but the INSERT into schema_migrations rolled
+-- back, re-running is now a safe no-op. (MySQL 5.7 does not support
+-- `ADD COLUMN IF NOT EXISTS`, only 8.0.29+ does.)
+SET @col := (
+  SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+   WHERE TABLE_SCHEMA = DATABASE()
+     AND TABLE_NAME   = 'ingest_providers'
+     AND COLUMN_NAME  = 'auto_reenable_at'
+);
+SET @sql := IF(@col = 0,
+  'ALTER TABLE ingest_providers ADD COLUMN auto_reenable_at DATETIME(3) NULL AFTER last_error_reason',
+  'SELECT 1');
+PREPARE s FROM @sql; EXECUTE s; DEALLOCATE PREPARE s;
+
+SET @col := (
+  SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+   WHERE TABLE_SCHEMA = DATABASE()
+     AND TABLE_NAME   = 'ingest_providers'
+     AND COLUMN_NAME  = 'auto_disabled_reason'
+);
+SET @sql := IF(@col = 0,
+  'ALTER TABLE ingest_providers ADD COLUMN auto_disabled_reason VARCHAR(255) NULL AFTER auto_reenable_at',
+  'SELECT 1');
+PREPARE s FROM @sql; EXECUTE s; DEALLOCATE PREPARE s;

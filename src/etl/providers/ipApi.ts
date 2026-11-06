@@ -14,24 +14,29 @@
 // (the bucket's backoff will slow subsequent calls and the backfill job
 // retries next time).
 
-import type { IpGeoProvider, IpGeoLookupResult, IpGeoRecord } from './types';
+import type { IpGeoProvider, IpGeoLookupResult, IpGeoRecord } from "./types";
 
 export class IpApiProvider implements IpGeoProvider {
-  readonly name = 'ip-api';
+  readonly name = "ip-api";
 
   constructor(private readonly opts: { endpoint?: string } = {}) {}
 
   async lookup(ip: string): Promise<IpGeoLookupResult> {
-    const url = `${this.opts.endpoint ?? 'http://ip-api.com'}/json/${encodeURIComponent(ip)}?fields=status,country,countryCode,region,regionName,city,lat,lon,timezone,isp,org,as,query`;
+    const url = `${this.opts.endpoint ?? "http://ip-api.com"}/json/${encodeURIComponent(ip)}?fields=status,country,countryCode,region,regionName,city,lat,lon,timezone,isp,org,as,query`;
     try {
       const res = await fetch(url, { signal: AbortSignal.timeout(5_000) });
       if (res.status === 429) {
-        return { record: null, rateLimited: true, errorCode: '429', rawResponse: await safeBody(res) };
+        return { record: null, rateLimited: true, errorCode: "429", rawResponse: await safeBody(res) };
       }
       if (!res.ok) {
-        return { record: null, rateLimited: false, errorCode: String(res.status), rawResponse: await safeBody(res) };
+        return {
+          record: null,
+          rateLimited: false,
+          errorCode: String(res.status),
+          rawResponse: await safeBody(res),
+        };
       }
-      const data = await res.json() as {
+      const data = (await res.json()) as {
         status?: string;
         country?: string;
         countryCode?: string;
@@ -45,8 +50,13 @@ export class IpApiProvider implements IpGeoProvider {
         org?: string;
         as?: string;
       };
-      if (data.status !== 'success') {
-        return { record: null, rateLimited: false, errorCode: 'parse', rawResponse: JSON.stringify(data).slice(0, 240) };
+      if (data.status !== "success") {
+        return {
+          record: null,
+          rateLimited: false,
+          errorCode: "parse",
+          rawResponse: JSON.stringify(data).slice(0, 240),
+        };
       }
       return {
         record: {
@@ -54,8 +64,8 @@ export class IpApiProvider implements IpGeoProvider {
           countryName: data.country ?? null,
           region: data.regionName ?? null,
           city: data.city ?? null,
-          latitude: typeof data.lat === 'number' ? data.lat : null,
-          longitude: typeof data.lon === 'number' ? data.lon : null,
+          latitude: typeof data.lat === "number" ? data.lat : null,
+          longitude: typeof data.lon === "number" ? data.lon : null,
           timezone: data.timezone ?? null,
           isp: data.isp ?? null,
           asn: parseAsn(data.as ?? null),
@@ -65,7 +75,7 @@ export class IpApiProvider implements IpGeoProvider {
       };
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      const code = msg.includes('timeout') || msg.includes('aborted') ? 'timeout' : 'network';
+      const code = msg.includes("timeout") || msg.includes("aborted") ? "timeout" : "network";
       return { record: null, rateLimited: false, errorCode: code, rawResponse: msg.slice(0, 240) };
     }
   }
@@ -96,6 +106,6 @@ async function safeBody(res: Response): Promise<string | null> {
  *  the leading "ASxxxxx" pattern isn't there. */
 function extractOrgFromAs(raw: string | null): string | null {
   if (!raw) return null;
-  const trimmed = raw.replace(/^\s*AS\d+\s*/i, '').trim();
+  const trimmed = raw.replace(/^\s*AS\d+\s*/i, "").trim();
   return trimmed.length > 0 ? trimmed : null;
 }

@@ -9,22 +9,22 @@
 // loads twice.
 (function () {
   function bind() {
-    document.querySelectorAll('.secret-toggle').forEach(function (btn) {
-      if (btn.dataset.secretBound === '1') return;
-      btn.dataset.secretBound = '1';
-      btn.addEventListener('click', function () {
-        var wrap = btn.closest('.input-trailing');
+    document.querySelectorAll(".secret-toggle").forEach(function (btn) {
+      if (btn.dataset.secretBound === "1") return;
+      btn.dataset.secretBound = "1";
+      btn.addEventListener("click", function () {
+        const wrap = btn.closest(".input-trailing");
         if (!wrap) return;
-        var mask = wrap.querySelector('.secret-mask');
+        const mask = wrap.querySelector(".secret-mask");
         if (!mask) return;
-        var shown = mask.classList.toggle('is-shown');
-        mask.textContent = shown ? mask.dataset.secret : '••••••••••';
-        btn.setAttribute('aria-label', shown ? (btn.dataset.hideLabel || '') : (btn.dataset.showLabel || ''));
+        const shown = mask.classList.toggle("is-shown");
+        mask.textContent = shown ? mask.dataset.secret : "••••••••••";
+        btn.setAttribute("aria-label", shown ? btn.dataset.hideLabel || "" : btn.dataset.showLabel || "");
       });
     });
   }
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', bind);
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", bind);
   } else {
     bind();
   }

@@ -5,8 +5,8 @@
 // /admin/unknown-ips Overview tab "Recent Probes" table; written by the
 // call sites of processIp via recordRandomProbe(). See migration 018.
 
-import type { Pool, RowDataPacket } from 'mysql2/promise';
-import { getSetting, setSetting } from './settings';
+import type { Pool, RowDataPacket } from "mysql2/promise";
+import { getSetting, setSetting } from "./settings";
 
 // ─── Per-provider detail (one slice of providers_json) ────────────────
 
@@ -26,8 +26,8 @@ export interface PerProviderDetail {
 export interface RandomProbeRow {
   id: number;
   ipText: string;
-  mode: 'auto' | 'manual' | 'random';
-  outcome: 'merged' | 'no_consensus' | 'no_country' | 'all_abstained';
+  mode: "auto" | "manual" | "random";
+  outcome: "merged" | "no_consensus" | "no_country" | "all_abstained";
   consensusCountry: string | null;
   consensusCity: string | null;
   consensusAsn: number | null;
@@ -38,8 +38,8 @@ export interface RandomProbeRow {
 }
 
 export interface RandomProbeFilter {
-  mode?: 'auto' | 'manual' | 'random';
-  outcome?: 'merged' | 'no_consensus' | 'no_country' | 'all_abstained';
+  mode?: "auto" | "manual" | "random";
+  outcome?: "merged" | "no_consensus" | "no_country" | "all_abstained";
   limit?: number;
 }
 
@@ -48,8 +48,8 @@ export interface RandomProbeFilter {
 export interface RandomProbeInsert {
   ipText: string;
   ipBinary: Buffer;
-  mode: 'auto' | 'manual' | 'random';
-  outcome: 'merged' | 'no_consensus' | 'no_country' | 'all_abstained';
+  mode: "auto" | "manual" | "random";
+  outcome: "merged" | "no_consensus" | "no_country" | "all_abstained";
   consensusCountry: string | null;
   consensusCity: string | null;
   consensusAsn: number | null;
@@ -64,13 +64,15 @@ function rowToProbe(r: RowDataPacket): RandomProbeRow {
     try {
       const parsed = JSON.parse(String(r.providers_json));
       if (Array.isArray(parsed)) providers = parsed as PerProviderDetail[];
-    } catch { /* malformed JSON → empty array, surface the row anyway */ }
+    } catch {
+      /* malformed JSON → empty array, surface the row anyway */
+    }
   }
   return {
     id: Number(r.id),
     ipText: String(r.ip_text),
-    mode: String(r.mode) as RandomProbeRow['mode'],
-    outcome: String(r.outcome) as RandomProbeRow['outcome'],
+    mode: String(r.mode) as RandomProbeRow["mode"],
+    outcome: String(r.outcome) as RandomProbeRow["outcome"],
     consensusCountry: r.consensus_country == null ? null : String(r.consensus_country),
     consensusCity: r.consensus_city == null ? null : String(r.consensus_city),
     consensusAsn: r.consensus_asn == null ? null : Number(r.consensus_asn),
@@ -81,10 +83,7 @@ function rowToProbe(r: RowDataPacket): RandomProbeRow {
   };
 }
 
-export async function recordRandomProbe(
-  pool: Pool,
-  row: RandomProbeInsert,
-): Promise<void> {
+export async function recordRandomProbe(pool: Pool, row: RandomProbeInsert): Promise<void> {
   await pool.query(
     `INSERT INTO random_probe_log
        (ip_text, ip_binary, mode, outcome, consensus_country, consensus_city,
@@ -105,25 +104,22 @@ export async function recordRandomProbe(
   );
 }
 
-export async function recentProbes(
-  pool: Pool,
-  filter: RandomProbeFilter = {},
-): Promise<RandomProbeRow[]> {
+export async function recentProbes(pool: Pool, filter: RandomProbeFilter = {}): Promise<RandomProbeRow[]> {
   const whereArr: string[] = [];
   const args: unknown[] = [];
   if (filter.mode) {
-    whereArr.push('mode = ?');
+    whereArr.push("mode = ?");
     args.push(filter.mode);
   }
   if (filter.outcome) {
-    whereArr.push('outcome = ?');
+    whereArr.push("outcome = ?");
     args.push(filter.outcome);
   }
   const limit = Math.min(filter.limit ?? 20, 100);
   const sql = `SELECT id, ip_text, mode, outcome, consensus_country, consensus_city,
                       consensus_asn, merged_run_id, providers_json, batch_id, ts
                  FROM random_probe_log
-                ${whereArr.length ? 'WHERE ' + whereArr.join(' AND ') : ''}
+                ${whereArr.length ? "WHERE " + whereArr.join(" AND ") : ""}
                 ORDER BY ts DESC, id DESC
                 LIMIT ${limit}`;
   const [rows] = await pool.query<RowDataPacket[]>(sql, args);
@@ -152,7 +148,10 @@ export interface ProbeSummaryStats {
    *  counters reflect only the probes within the window, parsed from
    *  each row's providers_json. Used by the metrics row's per-provider
    *  badges. */
-  byProvider: Record<string, { ok: number; rateLimited: number; timeout: number; noCountry: number; error: number }>;
+  byProvider: Record<
+    string,
+    { ok: number; rateLimited: number; timeout: number; noCountry: number; error: number }
+  >;
 }
 
 /** Compute summary stats over the trailing `windowMs` window (default
@@ -183,22 +182,30 @@ export async function probeSummaryStats(
   };
   for (const r of rows) {
     const outcome = String(r.outcome);
-    if (outcome === 'merged') stats.merged += 1;
-    else if (outcome === 'no_consensus') stats.noConsensus += 1;
-    else if (outcome === 'no_country') stats.noCountry += 1;
-    else if (outcome === 'all_abstained') stats.allAbstained += 1;
+    if (outcome === "merged") stats.merged += 1;
+    else if (outcome === "no_consensus") stats.noConsensus += 1;
+    else if (outcome === "no_country") stats.noCountry += 1;
+    else if (outcome === "all_abstained") stats.allAbstained += 1;
     let providers: PerProviderDetail[] = [];
     if (r.providers_json) {
       try {
         const parsed = JSON.parse(String(r.providers_json));
         if (Array.isArray(parsed)) providers = parsed as PerProviderDetail[];
-      } catch { /* skip */ }
+      } catch {
+        /* skip */
+      }
     }
     for (const pp of providers) {
-      const slot = stats.byProvider[pp.provider] ?? { ok: 0, rateLimited: 0, timeout: 0, noCountry: 0, error: 0 };
+      const slot = stats.byProvider[pp.provider] ?? {
+        ok: 0,
+        rateLimited: 0,
+        timeout: 0,
+        noCountry: 0,
+        error: 0,
+      };
       if (pp.rateLimited) slot.rateLimited += 1;
-      else if (pp.errorCode === 'timeout') slot.timeout += 1;
-      else if (pp.errorCode === 'no_country') slot.noCountry += 1;
+      else if (pp.errorCode === "timeout") slot.timeout += 1;
+      else if (pp.errorCode === "no_country") slot.noCountry += 1;
       else if (pp.errorCode) slot.error += 1;
       else slot.ok += 1;
       stats.byProvider[pp.provider] = slot;
@@ -229,22 +236,25 @@ const DEFAULT_CONFIG: RandomGenConfig = {
 
 export async function loadRandomGenConfig(pool: Pool): Promise<RandomGenConfig> {
   const [intervalRaw, batchRaw, cooldownRaw, cbRaw] = await Promise.all([
-    getSetting(pool, 'random_gen_interval_sec'),
-    getSetting(pool, 'random_gen_batch_size'),
-    getSetting(pool, 'random_gen_cooldown_minutes'),
-    getSetting(pool, 'random_gen_cb_linkage'),
+    getSetting(pool, "random_gen_interval_sec"),
+    getSetting(pool, "random_gen_batch_size"),
+    getSetting(pool, "random_gen_cooldown_minutes"),
+    getSetting(pool, "random_gen_cb_linkage"),
   ]);
   return {
-    intervalSec: intervalRaw === null
-      ? DEFAULT_CONFIG.intervalSec
-      : Math.min(3600, Math.max(1, Number(intervalRaw) || DEFAULT_CONFIG.intervalSec)),
-    batchSize: batchRaw === null
-      ? DEFAULT_CONFIG.batchSize
-      : Math.min(100, Math.max(1, Number(batchRaw) || DEFAULT_CONFIG.batchSize)),
-    cooldownMinutes: cooldownRaw === null
-      ? DEFAULT_CONFIG.cooldownMinutes
-      : Math.min(1440, Math.max(0, Number(cooldownRaw) || DEFAULT_CONFIG.cooldownMinutes)),
-    cbLinkage: cbRaw === null ? DEFAULT_CONFIG.cbLinkage : cbRaw === '1',
+    intervalSec:
+      intervalRaw === null
+        ? DEFAULT_CONFIG.intervalSec
+        : Math.min(3600, Math.max(1, Number(intervalRaw) || DEFAULT_CONFIG.intervalSec)),
+    batchSize:
+      batchRaw === null
+        ? DEFAULT_CONFIG.batchSize
+        : Math.min(100, Math.max(1, Number(batchRaw) || DEFAULT_CONFIG.batchSize)),
+    cooldownMinutes:
+      cooldownRaw === null
+        ? DEFAULT_CONFIG.cooldownMinutes
+        : Math.min(1440, Math.max(0, Number(cooldownRaw) || DEFAULT_CONFIG.cooldownMinutes)),
+    cbLinkage: cbRaw === null ? DEFAULT_CONFIG.cbLinkage : cbRaw === "1",
   };
 }
 
@@ -255,23 +265,20 @@ export interface RandomGenConfigUpdate {
   cbLinkage?: boolean;
 }
 
-export async function saveRandomGenConfig(
-  pool: Pool,
-  patch: RandomGenConfigUpdate,
-): Promise<void> {
+export async function saveRandomGenConfig(pool: Pool, patch: RandomGenConfigUpdate): Promise<void> {
   if (patch.intervalSec !== undefined) {
     const clamped = Math.min(3600, Math.max(1, Math.round(patch.intervalSec)));
-    await setSetting(pool, 'random_gen_interval_sec', String(clamped));
+    await setSetting(pool, "random_gen_interval_sec", String(clamped));
   }
   if (patch.batchSize !== undefined) {
     const clamped = Math.min(100, Math.max(1, Math.round(patch.batchSize)));
-    await setSetting(pool, 'random_gen_batch_size', String(clamped));
+    await setSetting(pool, "random_gen_batch_size", String(clamped));
   }
   if (patch.cooldownMinutes !== undefined) {
     const clamped = Math.min(1440, Math.max(0, Math.round(patch.cooldownMinutes)));
-    await setSetting(pool, 'random_gen_cooldown_minutes', String(clamped));
+    await setSetting(pool, "random_gen_cooldown_minutes", String(clamped));
   }
   if (patch.cbLinkage !== undefined) {
-    await setSetting(pool, 'random_gen_cb_linkage', patch.cbLinkage ? '1' : '0');
+    await setSetting(pool, "random_gen_cb_linkage", patch.cbLinkage ? "1" : "0");
   }
 }

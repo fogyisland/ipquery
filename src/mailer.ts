@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
-import * as nodemailer from 'nodemailer';
-import type { AppConfig } from './config';
+import * as nodemailer from "nodemailer";
+import type { AppConfig } from "./config";
 
 export interface Mailer {
   send(opts: { to: string; subject: string; text: string; html: string }): Promise<void>;
@@ -10,9 +10,11 @@ export function createMailer(cfg: AppConfig): Mailer {
   if (!cfg.smtp.host) {
     return {
       async send(opts) {
-        const banner = '='.repeat(60);
+        const banner = "=".repeat(60);
         // eslint-disable-next-line no-console
-        console.log(`\n${banner}\n[email] to=${opts.to} subject="${opts.subject}"\n${banner}\n${opts.text}\n`);
+        console.log(
+          `\n${banner}\n[email] to=${opts.to} subject="${opts.subject}"\n${banner}\n${opts.text}\n`,
+        );
       },
     };
   }

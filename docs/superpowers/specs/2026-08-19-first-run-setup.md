@@ -34,14 +34,14 @@ For a first deploy, this is friction. The spec is for a web-based first-run wiza
 
 The wizard is a 5-step linear flow at `/setup`:
 
-| Step | URL | Purpose |
-|---|---|---|
-| 1 | `/setup` | Welcome + current state (DB reachable? migrations applied? admin exists?) |
-| 2 | `/setup/database` | Read-only view of DB config from `.env`; "Test connection" button |
-| 3 | `/setup/site` | Site name + tagline |
-| 4 | `/setup/admin` | Email + password + display name |
-| 5 | `/setup/seed` | Pick seed dataset (`yes` / `no`) |
-| 6 | `/setup/complete` | Success; marks `initialized_at`; redirects to `/login` |
+| Step | URL               | Purpose                                                                   |
+| ---- | ----------------- | ------------------------------------------------------------------------- |
+| 1    | `/setup`          | Welcome + current state (DB reachable? migrations applied? admin exists?) |
+| 2    | `/setup/database` | Read-only view of DB config from `.env`; "Test connection" button         |
+| 3    | `/setup/site`     | Site name + tagline                                                       |
+| 4    | `/setup/admin`    | Email + password + display name                                           |
+| 5    | `/setup/seed`     | Pick seed dataset (`yes` / `no`)                                          |
+| 6    | `/setup/complete` | Success; marks `initialized_at`; redirects to `/login`                    |
 
 A progress indicator at the top of every step. Each page renders the same layout (`layouts/setup.hbs`) — centered card, no sidebar.
 

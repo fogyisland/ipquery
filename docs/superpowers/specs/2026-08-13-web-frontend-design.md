@@ -54,22 +54,22 @@
 
 ## 3. 需求摘要
 
-| 维度 | 决策 |
-|---|---|
-| 页面渲染 | SSR(Fastify + Handlebars) |
-| 渐进增强 | htmx(无 SPA) |
-| 前端语言 | TypeScript + Handlebars 模板 + 原生 CSS |
-| 认证 | 邮箱 + 密码 + MySQL session cookie |
-| 密码哈希 | argon2id(`argon2` npm 包) |
-| Token 哈希 | SHA-256(`crypto` 内置) |
-| Cookie | `httpOnly`,`SameSite=Lax`,生产 `Secure` |
-| CSRF | per-session token + 隐藏域 + Origin/Referer 校验 |
-| 限流 | 登录 5 次/15 分钟锁;注册 5 次/IP/小时 |
-| 邮件 | nodemailer,开发 console transport,生产 SMTP |
-| 数据库 | MySQL 5.7 / 8.0 兼容 |
-| 迁移 | 自研轻量迁移器(顺序执行 `migrations/*.sql`) |
-| 国际化 | 自研 i18n,zh-CN 优先 + en-US 占位 |
-| 安全头部 | CSP, X-Content-Type-Options, X-Frame-Options, HSTS(prod) |
+| 维度       | 决策                                                     |
+| ---------- | -------------------------------------------------------- |
+| 页面渲染   | SSR(Fastify + Handlebars)                                |
+| 渐进增强   | htmx(无 SPA)                                             |
+| 前端语言   | TypeScript + Handlebars 模板 + 原生 CSS                  |
+| 认证       | 邮箱 + 密码 + MySQL session cookie                       |
+| 密码哈希   | argon2id(`argon2` npm 包)                                |
+| Token 哈希 | SHA-256(`crypto` 内置)                                   |
+| Cookie     | `httpOnly`,`SameSite=Lax`,生产 `Secure`                  |
+| CSRF       | per-session token + 隐藏域 + Origin/Referer 校验         |
+| 限流       | 登录 5 次/15 分钟锁;注册 5 次/IP/小时                    |
+| 邮件       | nodemailer,开发 console transport,生产 SMTP              |
+| 数据库     | MySQL 5.7 / 8.0 兼容                                     |
+| 迁移       | 自研轻量迁移器(顺序执行 `migrations/*.sql`)              |
+| 国际化     | 自研 i18n,zh-CN 优先 + en-US 占位                        |
+| 安全头部   | CSP, X-Content-Type-Options, X-Frame-Options, HSTS(prod) |
 
 ---
 
@@ -271,6 +271,7 @@ CREATE TABLE schema_migrations (
 ```
 
 执行流程:
+
 1. 读 `schema_migrations` 已应用版本集合
 2. 读 `migrations/*.sql` 文件名(字典序)
 3. 跳过已应用的,依次在单事务内执行未应用的
@@ -388,8 +389,8 @@ CREATE TABLE query_log (
 ### 5.8 TypeScript 类型
 
 ```ts
-export type Role = 'user' | 'admin';
-export type QueryStatus = 'hit' | 'miss' | 'invalid';
+export type Role = "user" | "admin";
+export type QueryStatus = "hit" | "miss" | "invalid";
 
 export interface User {
   id: number;
@@ -479,6 +480,7 @@ export interface QueryLogEntry {
 ```
 
 **校验规则**:
+
 - 邮箱:`/^[^\s@]+@[^\s@]+\.[^\s@]+$/`,转小写
 - 密码:≥ 10 字符,包含字母 + 数字
 - 重复邮箱:`email` 唯一键冲突 → 409 → 提示"该邮箱已注册,是否登录 / 找回密码"
@@ -509,12 +511,13 @@ export interface QueryLogEntry {
 ```
 
 **失败映射**:
-| 场景 | HTTP | 视图 |
-|---|---|---|
-| Token 不存在 | 401 | `verify-result.hbs` "链接无效" |
-| Token 已消费 | 410 | `verify-result.hbs` "链接已使用,请重新登录" |
-| Token 过期 | 410 | `verify-result.hbs` "链接已过期,请重新发送" |
-| 成功 | 302 → `/login?verified=1` | flash "邮箱已验证,请登录" |
+
+| 场景         | HTTP                      | 视图                                        |
+| ------------ | ------------------------- | ------------------------------------------- |
+| Token 不存在 | 401                       | `verify-result.hbs` "链接无效"              |
+| Token 已消费 | 410                       | `verify-result.hbs` "链接已使用,请重新登录" |
+| Token 过期   | 410                       | `verify-result.hbs` "链接已过期,请重新发送" |
+| 成功         | 302 → `/login?verified=1` | flash "邮箱已验证,请登录"                   |
 
 **重新发送**:登录页"未验证"提示 + 按钮 → POST `/verify/resend` → 60s 冷却 + 邮件。
 
@@ -543,12 +546,13 @@ export interface QueryLogEntry {
 ```
 
 **失败映射**:
-| 场景 | HTTP | 处理 |
-|---|---|---|
-| 邮箱不存在 | 401 | 通用提示"邮箱或密码错误"(防枚举) |
-| 密码错误 | 401 | 同上 + 计数失败 + 锁定判断 |
+
+| 场景       | HTTP                             | 处理                                                                      |
+| ---------- | -------------------------------- | ------------------------------------------------------------------------- |
+| 邮箱不存在 | 401                              | 通用提示"邮箱或密码错误"(防枚举)                                          |
+| 密码错误   | 401                              | 同上 + 计数失败 + 锁定判断                                                |
 | 未验证邮箱 | 302 → `/login?verify_required=1` | flash "请先验证邮箱";登录页显示"重发验证邮件"按钮 → POST `/verify/resend` |
-| 账号被禁用 | 302 → `/login?disabled=1` | flash "账号已禁用,请联系管理员" |
+| 账号被禁用 | 302 → `/login?disabled=1`        | flash "账号已禁用,请联系管理员"                                           |
 
 **限流**:同邮箱 5 次失败/15 分钟 → 锁定,期间返回 `LOGIN_LOCKOUT_MINUTES` 提示,实际继续尝试也计失败。锁定状态存在内存 `Map<email, lockUntil>`,进程重启清空(可接受;生产建议后续落 Redis)。
 
@@ -566,6 +570,7 @@ export interface QueryLogEntry {
 ```
 
 **安全**:
+
 - 邮件**总是显示"如果邮箱已注册"**,无论是否存在
 - Token 2 小时过期,一次性消费
 - 重置成功后**吊销该用户所有 session**,强制重新登录
@@ -580,7 +585,7 @@ POST /logout → 校验 csrf → DELETE sessions WHERE id=? → 清 cookie → 3
 
 ```ts
 // loadSession hook
-app.addHook('onRequest', async (req) => {
+app.addHook("onRequest", async (req) => {
   const sid = req.cookies.sid;
   if (!sid) return;
   const session = await loadSession(app.pool, sid);
@@ -590,17 +595,17 @@ app.addHook('onRequest', async (req) => {
 });
 
 // requireAuth hook(只挂在 /dashboard/*)
-app.addHook('onRequest', async (req, reply) => {
-  if (req.routeOptions.url?.startsWith('/dashboard')) {
-    if (!req.user) return reply.code(302).redirect('/login?next=' + encodeURIComponent(req.url));
+app.addHook("onRequest", async (req, reply) => {
+  if (req.routeOptions.url?.startsWith("/dashboard")) {
+    if (!req.user) return reply.code(302).redirect("/login?next=" + encodeURIComponent(req.url));
   }
 });
 
 // requireAdmin hook(只挂在 /admin/*)
-app.addHook('onRequest', async (req, reply) => {
-  if (req.routeOptions.url?.startsWith('/admin')) {
-    if (!req.user || req.user.role !== 'admin') return reply.code(403).view('errors/403.hbs');
-    if (req.user.isDisabled) return reply.code(403).redirect('/login?disabled=1');
+app.addHook("onRequest", async (req, reply) => {
+  if (req.routeOptions.url?.startsWith("/admin")) {
+    if (!req.user || req.user.role !== "admin") return reply.code(403).view("errors/403.hbs");
+    if (req.user.isDisabled) return reply.code(403).redirect("/login?disabled=1");
   }
 });
 ```
@@ -623,10 +628,10 @@ GET /lookup?ip=...&key=ipq_xxxxx
 
 ```ts
 // form plugin:生成与校验
-app.addHook('onRequest', async (req, reply) => {
+app.addHook("onRequest", async (req, reply) => {
   if (!req.session) return;
   if (!req.session.csrf) req.session.csrf = generateCsrf();
-  reply.setCookie('csrf', req.session.csrf, { httpOnly: false, sameSite: 'Lax' });
+  reply.setCookie("csrf", req.session.csrf, { httpOnly: false, sameSite: "Lax" });
 });
 
 // 校验中间件:仅对 POST/PUT/PATCH/DELETE,且 Content-Type=form
@@ -634,7 +639,7 @@ async function verifyCsrf(req, reply) {
   const cookie = req.cookies.csrf;
   const body = req.body?.csrf;
   if (!cookie || !body || cookie !== body) {
-    return reply.code(403).view('errors/csrf.hbs');
+    return reply.code(403).view("errors/csrf.hbs");
   }
 }
 ```
@@ -643,16 +648,16 @@ async function verifyCsrf(req, reply) {
 
 ### 6.9 速率限制(扩展现有 `@fastify/rate-limit`)
 
-| 路径 | 限制 | Key |
-|---|---|---|
-| `POST /signup` | 5 / hour | remote IP |
-| `POST /login` | 20 / hour | remote IP + email |
-| `POST /verify/resend` | 1 / minute | user_id |
-| `POST /forgot` | 5 / hour | remote IP |
-| `GET /try` (htmx 查询) | 30 / minute | remote IP |
-| `GET /lookup` (匿名) | 60 / minute | remote IP(已有) |
-| `GET /lookup` (认证) | 600 / minute | user_id |
-| `POST /dashboard/keys` | 10 / hour | user_id |
+| 路径                   | 限制         | Key               |
+| ---------------------- | ------------ | ----------------- |
+| `POST /signup`         | 5 / hour     | remote IP         |
+| `POST /login`          | 20 / hour    | remote IP + email |
+| `POST /verify/resend`  | 1 / minute   | user_id           |
+| `POST /forgot`         | 5 / hour     | remote IP         |
+| `GET /try` (htmx 查询) | 30 / minute  | remote IP         |
+| `GET /lookup` (匿名)   | 60 / minute  | remote IP(已有)   |
+| `GET /lookup` (认证)   | 600 / minute | user_id           |
+| `POST /dashboard/keys` | 10 / hour    | user_id           |
 
 ---
 
@@ -660,72 +665,72 @@ async function verifyCsrf(req, reply) {
 
 ### 7.1 公开(匿名)
 
-| Method | Path | 视图 | 说明 |
-|---|---|---|---|
-| GET | `/` | `marketing/home.hbs` | 首页:产品介绍 + CTA |
-| GET | `/about` | `marketing/about.hbs` | 关于 |
-| GET | `/docs` | `marketing/docs.hbs` | API 文档 |
-| GET | `/pricing` | `marketing/pricing.hbs` | 定价文案(无支付) |
-| GET | `/status` | `marketing/status.hbs` | 服务状态(读 etl_runs) |
-| GET | `/try` | `marketing/try.hbs` | 在线试查 + htmx |
-| POST | `/try` (htmx) | 片段 | 试查响应片段 |
+| Method | Path          | 视图                    | 说明                  |
+| ------ | ------------- | ----------------------- | --------------------- |
+| GET    | `/`           | `marketing/home.hbs`    | 首页:产品介绍 + CTA   |
+| GET    | `/about`      | `marketing/about.hbs`   | 关于                  |
+| GET    | `/docs`       | `marketing/docs.hbs`    | API 文档              |
+| GET    | `/pricing`    | `marketing/pricing.hbs` | 定价文案(无支付)      |
+| GET    | `/status`     | `marketing/status.hbs`  | 服务状态(读 etl_runs) |
+| GET    | `/try`        | `marketing/try.hbs`     | 在线试查 + htmx       |
+| POST   | `/try` (htmx) | 片段                    | 试查响应片段          |
 
 ### 7.2 认证流程
 
-| Method | Path | 视图 | 说明 |
-|---|---|---|---|
-| GET | `/signup` | `auth/signup.hbs` | 注册表单 |
-| POST | `/signup` | 重定向 | 注册逻辑 |
-| GET | `/login` | `auth/login.hbs` | 登录表单 |
-| POST | `/login` | 重定向 | 登录逻辑 |
-| POST | `/logout` | 重定向 `/` | 登出 |
-| GET | `/verify` | `auth/verify-result.hbs` | 处理 token |
-| POST | `/verify/resend` | 重定向 | 重发验证邮件 |
-| GET | `/forgot` | `auth/forgot.hbs` | 找回密码表单 |
-| POST | `/forgot` | 重定向 | 找回密码请求 |
-| GET | `/reset` | `auth/reset.hbs` | 重置密码表单(带 token) |
-| POST | `/reset` | 重定向 | 重置密码提交 |
+| Method | Path             | 视图                     | 说明                   |
+| ------ | ---------------- | ------------------------ | ---------------------- |
+| GET    | `/signup`        | `auth/signup.hbs`        | 注册表单               |
+| POST   | `/signup`        | 重定向                   | 注册逻辑               |
+| GET    | `/login`         | `auth/login.hbs`         | 登录表单               |
+| POST   | `/login`         | 重定向                   | 登录逻辑               |
+| POST   | `/logout`        | 重定向 `/`               | 登出                   |
+| GET    | `/verify`        | `auth/verify-result.hbs` | 处理 token             |
+| POST   | `/verify/resend` | 重定向                   | 重发验证邮件           |
+| GET    | `/forgot`        | `auth/forgot.hbs`        | 找回密码表单           |
+| POST   | `/forgot`        | 重定向                   | 找回密码请求           |
+| GET    | `/reset`         | `auth/reset.hbs`         | 重置密码表单(带 token) |
+| POST   | `/reset`         | 重定向                   | 重置密码提交           |
 
 ### 7.3 用户面板(`/dashboard/*`,需登录)
 
-| Method | Path | 视图 | 说明 |
-|---|---|---|---|
-| GET | `/dashboard` | `dashboard/index.hbs` | 概览(近 7 天查询统计) |
-| GET | `/dashboard/history` | `dashboard/history.hbs` | 查询历史(分页 + 筛选) |
-| GET | `/dashboard/keys` | `dashboard/keys.hbs` | API key 列表 |
-| POST | `/dashboard/keys` | 重定向 + flash | 创建新 key,flash 一次显示明文 |
-| POST | `/dashboard/keys/:id/revoke` | 重定向 | 吊销 key |
-| GET | `/dashboard/profile` | `dashboard/profile.hbs` | 个人资料 |
-| POST | `/dashboard/profile` | 重定向 | 修改 display_name / 密码 / 邮箱(后者重新验证) |
+| Method | Path                         | 视图                    | 说明                                          |
+| ------ | ---------------------------- | ----------------------- | --------------------------------------------- |
+| GET    | `/dashboard`                 | `dashboard/index.hbs`   | 概览(近 7 天查询统计)                         |
+| GET    | `/dashboard/history`         | `dashboard/history.hbs` | 查询历史(分页 + 筛选)                         |
+| GET    | `/dashboard/keys`            | `dashboard/keys.hbs`    | API key 列表                                  |
+| POST   | `/dashboard/keys`            | 重定向 + flash          | 创建新 key,flash 一次显示明文                 |
+| POST   | `/dashboard/keys/:id/revoke` | 重定向                  | 吊销 key                                      |
+| GET    | `/dashboard/profile`         | `dashboard/profile.hbs` | 个人资料                                      |
+| POST   | `/dashboard/profile`         | 重定向                  | 修改 display_name / 密码 / 邮箱(后者重新验证) |
 
 ### 7.4 管理员后台(`/admin/*`,需 admin)
 
-| Method | Path | 视图 | 说明 |
-|---|---|---|---|
-| GET | `/admin` | 重定向 `/admin/users` | 入口 |
-| GET | `/admin/users` | `admin/users.hbs` | 用户列表(分页 + 搜索 + 筛选) |
-| GET | `/admin/users/:id` | `admin/user-detail.hbs` | 用户详情 |
-| POST | `/admin/users/:id/enable` | 重定向 | 启用 |
-| POST | `/admin/users/:id/disable` | 重定向 | 禁用 |
-| POST | `/admin/users/:id/verify-email` | 重定向 | 手动标记邮箱已验证 |
-| POST | `/admin/users/:id/reset-password` | 重定向 | 强制重置密码(生成新临时密码) |
-| POST | `/admin/users/:id/delete` | 重定向 | 删除用户(级联) |
-| GET | `/admin/etl` | 重定向 `/admin/etl/runs` | ETL 入口 |
-| GET | `/admin/etl/runs` | `admin/etl-runs.hbs` | ETL 历史 |
-| GET | `/admin/etl/runs/:id` | `admin/etl-run-detail.hbs` | 单次 run 详情 |
-| POST | `/admin/etl/trigger` | 重定向 | 手动触发 ETL(异步) |
-| GET | `/admin/keys` | `admin/keys.hbs` | 全局 API key 列表 |
-| GET | `/admin/audit` | `admin/audit.hbs` | 全局查询审计(分页 + 多维筛选) |
-| GET | `/admin/audit.csv` | 流式 CSV | 审计导出 |
+| Method | Path                              | 视图                       | 说明                          |
+| ------ | --------------------------------- | -------------------------- | ----------------------------- |
+| GET    | `/admin`                          | 重定向 `/admin/users`      | 入口                          |
+| GET    | `/admin/users`                    | `admin/users.hbs`          | 用户列表(分页 + 搜索 + 筛选)  |
+| GET    | `/admin/users/:id`                | `admin/user-detail.hbs`    | 用户详情                      |
+| POST   | `/admin/users/:id/enable`         | 重定向                     | 启用                          |
+| POST   | `/admin/users/:id/disable`        | 重定向                     | 禁用                          |
+| POST   | `/admin/users/:id/verify-email`   | 重定向                     | 手动标记邮箱已验证            |
+| POST   | `/admin/users/:id/reset-password` | 重定向                     | 强制重置密码(生成新临时密码)  |
+| POST   | `/admin/users/:id/delete`         | 重定向                     | 删除用户(级联)                |
+| GET    | `/admin/etl`                      | 重定向 `/admin/etl/runs`   | ETL 入口                      |
+| GET    | `/admin/etl/runs`                 | `admin/etl-runs.hbs`       | ETL 历史                      |
+| GET    | `/admin/etl/runs/:id`             | `admin/etl-run-detail.hbs` | 单次 run 详情                 |
+| POST   | `/admin/etl/trigger`              | 重定向                     | 手动触发 ETL(异步)            |
+| GET    | `/admin/keys`                     | `admin/keys.hbs`           | 全局 API key 列表             |
+| GET    | `/admin/audit`                    | `admin/audit.hbs`          | 全局查询审计(分页 + 多维筛选) |
+| GET    | `/admin/audit.csv`                | 流式 CSV                   | 审计导出                      |
 
 ### 7.5 现有 API(扩展)
 
-| Method | Path | 变更 |
-|---|---|---|
-| GET | `/lookup` | 加 queryLog hook |
-| GET | `/lookup/:ip` | 加 queryLog hook + 支持 `?key=` |
-| GET | `/healthz` | 不变 |
-| GET | `/stats` | 不变 |
+| Method | Path          | 变更                            |
+| ------ | ------------- | ------------------------------- |
+| GET    | `/lookup`     | 加 queryLog hook                |
+| GET    | `/lookup/:ip` | 加 queryLog hook + 支持 `?key=` |
+| GET    | `/healthz`    | 不变                            |
+| GET    | `/stats`      | 不变                            |
 
 ### 7.6 中间件挂载顺序
 
@@ -758,14 +763,15 @@ app.register(statsRoute);                 // 现有
 
 ### 8.1 布局(4 个)
 
-| 文件 | 用途 | 关键 slot |
-|---|---|---|
-| `layouts/public.hbs` | 公开页(首页/文档/定价/状态/关于) | header / footer |
-| `layouts/auth.hbs` | 注册 / 登录 / 重置(简洁居中卡片) | 仅 flash |
-| `layouts/dashboard.hbs` | 用户面板 | sidebar(我的 / 历史 / keys / 资料) + main |
-| `layouts/admin.hbs` | 管理员后台 | sidebar(用户 / ETL / keys / 审计) + main |
+| 文件                    | 用途                             | 关键 slot                                 |
+| ----------------------- | -------------------------------- | ----------------------------------------- |
+| `layouts/public.hbs`    | 公开页(首页/文档/定价/状态/关于) | header / footer                           |
+| `layouts/auth.hbs`      | 注册 / 登录 / 重置(简洁居中卡片) | 仅 flash                                  |
+| `layouts/dashboard.hbs` | 用户面板                         | sidebar(我的 / 历史 / keys / 资料) + main |
+| `layouts/admin.hbs`     | 管理员后台                       | sidebar(用户 / ETL / keys / 审计) + main  |
 
 每个布局都有:
+
 - `<head>` 注入 CSP / X-Content-Type-Options / X-Frame-Options
 - 引入 `assets/css/base.css`
 - 注入当前语言 `<html lang="...">`
@@ -773,12 +779,12 @@ app.register(statsRoute);                 // 现有
 
 ### 8.2 局部组件(5 个)
 
-| 文件 | 用途 |
-|---|---|
-| `partials/nav.hbs` | 顶部导航(根据 `req.user` 切换显示登录/用户名下拉) |
-| `partials/footer.hbs` | 版权 + 链接 + 语言切换(zh-CN / en-US) |
-| `partials/flash.hbs` | flash 提示(成功/警告/错误,自动消失) |
-| `partials/pagination.hbs` | 分页器(上一页 / 页码 / 下一页) |
+| 文件                      | 用途                                                         |
+| ------------------------- | ------------------------------------------------------------ |
+| `partials/nav.hbs`        | 顶部导航(根据 `req.user` 切换显示登录/用户名下拉)            |
+| `partials/footer.hbs`     | 版权 + 链接 + 语言切换(zh-CN / en-US)                        |
+| `partials/flash.hbs`      | flash 提示(成功/警告/错误,自动消失)                          |
+| `partials/pagination.hbs` | 分页器(上一页 / 页码 / 下一页)                               |
 | `partials/form-field.hbs` | label + input + error 消息(支持 text/password/email/csrf 等) |
 
 ### 8.3 i18n
@@ -786,14 +792,14 @@ app.register(statsRoute);                 // 现有
 `src/web/i18n/index.ts`:
 
 ```ts
-import zhCN from './zh-CN.json';
+import zhCN from "./zh-CN.json";
 
-export type Locale = 'zh-CN' | 'en-US';
-const dictionaries: Record<Locale, Record<string, string>> = { 'zh-CN': zhCN, 'en-US': {} };
+export type Locale = "zh-CN" | "en-US";
+const dictionaries: Record<Locale, Record<string, string>> = { "zh-CN": zhCN, "en-US": {} };
 
 export function t(locale: Locale, key: string, vars?: Record<string, string | number>): string {
-  const dict = dictionaries[locale] ?? dictionaries['zh-CN'];
-  let s = dict[key] ?? dictionaries['zh-CN'][key] ?? key;
+  const dict = dictionaries[locale] ?? dictionaries["zh-CN"];
+  let s = dict[key] ?? dictionaries["zh-CN"][key] ?? key;
   if (vars) for (const [k, v] of Object.entries(vars)) s = s.replaceAll(`{${k}}`, String(v));
   return s;
 }
@@ -804,11 +810,11 @@ export function t(locale: Locale, key: string, vars?: Record<string, string | nu
 **视图助手**(Handlebars helper):
 
 ```ts
-app.view('t', (key, opts) => t(req.cookies.lang ?? 'zh-CN', key, opts.hash));
-app.view('eq', (a, b) => a === b);
-app.view('formatDate', (d: Date) => d?.toISOString().replace('T', ' ').slice(0, 19) ?? '');
-app.view('formatRelative', (d: Date) => relativeTime(d, new Date()));
-app.view('json', (v) => JSON.stringify(v));
+app.view("t", (key, opts) => t(req.cookies.lang ?? "zh-CN", key, opts.hash));
+app.view("eq", (a, b) => a === b);
+app.view("formatDate", (d: Date) => d?.toISOString().replace("T", " ").slice(0, 19) ?? "");
+app.view("formatRelative", (d: Date) => relativeTime(d, new Date()));
+app.view("json", (v) => JSON.stringify(v));
 ```
 
 ### 8.4 htmx 用法
@@ -831,20 +837,23 @@ app.view('json', (v) => JSON.stringify(v));
 ### 8.6 安全头部
 
 ```ts
-app.addHook('onSend', async (req, reply) => {
-  reply.header('X-Content-Type-Options', 'nosniff');
-  reply.header('X-Frame-Options', 'DENY');
-  reply.header('Referrer-Policy', 'strict-origin-when-cross-origin');
-  reply.header('Content-Security-Policy', [
-    "default-src 'self'",
-    "script-src 'self'",
-    "style-src 'self' 'unsafe-inline'",     // Handlebars style attr
-    "img-src 'self' data:",
-    "font-src 'self'",
-    "form-action 'self'",
-    "frame-ancestors 'none'",
-  ].join('; '));
-  if (cfg.web.cookieSecure) reply.header('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+app.addHook("onSend", async (req, reply) => {
+  reply.header("X-Content-Type-Options", "nosniff");
+  reply.header("X-Frame-Options", "DENY");
+  reply.header("Referrer-Policy", "strict-origin-when-cross-origin");
+  reply.header(
+    "Content-Security-Policy",
+    [
+      "default-src 'self'",
+      "script-src 'self'",
+      "style-src 'self' 'unsafe-inline'", // Handlebars style attr
+      "img-src 'self' data:",
+      "font-src 'self'",
+      "form-action 'self'",
+      "frame-ancestors 'none'",
+    ].join("; "),
+  );
+  if (cfg.web.cookieSecure) reply.header("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
 });
 ```
 
@@ -854,39 +863,40 @@ app.addHook('onSend', async (req, reply) => {
 
 ### 9.1 单元测试(`test/unit/`)
 
-| 文件 | 覆盖 |
-|---|---|
-| `web-i18n.test.ts` | `t()` 字典查找、回退链、变量插值 `{name}`、缺键返回 key |
-| `web-password.test.ts` | `hashPassword` / `verifyPassword` round-trip;wrong pw → false;argon2 参数 |
-| `web-tokens.test.ts` | `generateToken` 长度/字符集;`hashToken` SHA-256 确定性;不可逆 |
-| `web-session.test.ts` | `createSession` 写库 + cookie 格式;`loadSession` 过期剔除;`destroySession` |
-| `web-csrf.test.ts` | token 生成/校验;无 token → 拒绝;跨 session → 拒绝 |
-| `web-dictionaries.test.ts` | `zh-CN.json` 结构合法(无空值、无 undefined) |
+| 文件                       | 覆盖                                                                       |
+| -------------------------- | -------------------------------------------------------------------------- |
+| `web-i18n.test.ts`         | `t()` 字典查找、回退链、变量插值 `{name}`、缺键返回 key                    |
+| `web-password.test.ts`     | `hashPassword` / `verifyPassword` round-trip;wrong pw → false;argon2 参数  |
+| `web-tokens.test.ts`       | `generateToken` 长度/字符集;`hashToken` SHA-256 确定性;不可逆              |
+| `web-session.test.ts`      | `createSession` 写库 + cookie 格式;`loadSession` 过期剔除;`destroySession` |
+| `web-csrf.test.ts`         | token 生成/校验;无 token → 拒绝;跨 session → 拒绝                          |
+| `web-dictionaries.test.ts` | `zh-CN.json` 结构合法(无空值、无 undefined)                                |
 
 ### 9.2 集成测试(`test/integration/`)
 
 每个文件用独立数据库 `ipquery_web_int_<file>`,`singleFork: true` 串行。
 
-| 文件 | 覆盖 |
-|---|---|
-| `auth.signup.test.ts` | GET 200 表单;POST 校验失败;POST 成功 → 写 users(未验证)+ email_verifications;重复邮箱 → 409;限流触发 |
-| `auth.verify.test.ts` | token 有效 → email_verified=1;过期 → 410;已消费 → 410;错误 → 401;重发冷却 |
-| `auth.login.test.ts` | 正确凭据 → cookie;错误密码 → 401;未验证 → 403;被禁用 → 403;5 次失败 → 锁定 |
-| `auth.forgot.test.ts` | POST 不论邮箱是否存在均 200;邮件队列收到 reset 链接;GET /reset 渲染;POST 校验密码强度;成功后 token consumed + 所有 session 失效 |
-| `auth.logout.test.ts` | POST 清 cookie + 删 session;二次 logout 无副作用 |
-| `dashboard.test.ts` | 未登录 → /dashboard 重定向 /login;登录后看到自己历史;看不到他人 |
-| `dashboard.keys.test.ts` | 创建 key → 仅明文一次;列表显示 prefix;revoke 后立刻 401;删除复用 revoke |
-| `dashboard.profile.test.ts` | 改 display_name;改密码需旧密码;改邮箱触发重新验证 |
-| `admin.users.test.ts` | 非 admin → 403;admin 看列表(分页 + 搜索);启用/禁用;手动验证;重置密码 |
-| `admin.etl.test.ts` | 触发 ETL → runs 新增 status='running';完成后 success;失败 status='failed' + error_message |
-| `admin.keys.test.ts` | 全局 API key 列表;按 user 过滤;revoke;统计 |
-| `admin.audit.test.ts` | 多维筛选;CSV 导出(流式响应,内容正确) |
-| `query-log.test.ts` | 匿名 lookup → user_id=null;认证 → user_id + session_id;API key → api_key_id;invalid → status='invalid' |
-| `migrations.test.ts` | 从空库应用全套迁移;幂等(再次执行无变化);模拟"已有 001/002"升级 |
+| 文件                        | 覆盖                                                                                                                            |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `auth.signup.test.ts`       | GET 200 表单;POST 校验失败;POST 成功 → 写 users(未验证)+ email_verifications;重复邮箱 → 409;限流触发                            |
+| `auth.verify.test.ts`       | token 有效 → email_verified=1;过期 → 410;已消费 → 410;错误 → 401;重发冷却                                                       |
+| `auth.login.test.ts`        | 正确凭据 → cookie;错误密码 → 401;未验证 → 403;被禁用 → 403;5 次失败 → 锁定                                                      |
+| `auth.forgot.test.ts`       | POST 不论邮箱是否存在均 200;邮件队列收到 reset 链接;GET /reset 渲染;POST 校验密码强度;成功后 token consumed + 所有 session 失效 |
+| `auth.logout.test.ts`       | POST 清 cookie + 删 session;二次 logout 无副作用                                                                                |
+| `dashboard.test.ts`         | 未登录 → /dashboard 重定向 /login;登录后看到自己历史;看不到他人                                                                 |
+| `dashboard.keys.test.ts`    | 创建 key → 仅明文一次;列表显示 prefix;revoke 后立刻 401;删除复用 revoke                                                         |
+| `dashboard.profile.test.ts` | 改 display_name;改密码需旧密码;改邮箱触发重新验证                                                                               |
+| `admin.users.test.ts`       | 非 admin → 403;admin 看列表(分页 + 搜索);启用/禁用;手动验证;重置密码                                                            |
+| `admin.etl.test.ts`         | 触发 ETL → runs 新增 status='running';完成后 success;失败 status='failed' + error_message                                       |
+| `admin.keys.test.ts`        | 全局 API key 列表;按 user 过滤;revoke;统计                                                                                      |
+| `admin.audit.test.ts`       | 多维筛选;CSV 导出(流式响应,内容正确)                                                                                            |
+| `query-log.test.ts`         | 匿名 lookup → user_id=null;认证 → user_id + session_id;API key → api_key_id;invalid → status='invalid'                          |
+| `migrations.test.ts`        | 从空库应用全套迁移;幂等(再次执行无变化);模拟"已有 001/002"升级                                                                  |
 
 ### 9.3 E2E(`test/e2e/web-journey.test.ts`)
 
 完整用户旅程:
+
 1. GET `/` → 200,导航 + CTA
 2. `/try` 输入 8.8.8.8 → 看到结果(htmx 片段)
 3. `/signup` 提交 → inbox 收到验证链接
@@ -912,7 +922,9 @@ export async function loginAs(app: FastifyInstance, user: User): Promise<string>
 // test/helpers/email.ts
 export class MockMailer {
   public inbox: Array<{ to: string; subject: string; text: string; html: string }> = [];
-  async sendMail(opts) { this.inbox.push(opts); }
+  async sendMail(opts) {
+    this.inbox.push(opts);
+  }
 }
 export function installMockMailer(app: FastifyInstance): MockMailer;
 
@@ -941,14 +953,14 @@ test: {
 
 ### 9.6 覆盖率目标(非门禁)
 
-| 层级 | 行覆盖目标 |
-|---|---|
-| `src/web/auth/*` | ≥ 90% |
-| `src/web/plugins/*` | ≥ 80% |
-| `src/web/routes/auth/*` | ≥ 85% |
-| `src/web/routes/dashboard/*` | ≥ 75% |
-| `src/web/routes/admin/*` | ≥ 75% |
-| `src/web/routes/marketing.ts` | ≥ 50% |
+| 层级                          | 行覆盖目标 |
+| ----------------------------- | ---------- |
+| `src/web/auth/*`              | ≥ 90%      |
+| `src/web/plugins/*`           | ≥ 80%      |
+| `src/web/routes/auth/*`       | ≥ 85%      |
+| `src/web/routes/dashboard/*`  | ≥ 75%      |
+| `src/web/routes/admin/*`      | ≥ 75%      |
+| `src/web/routes/marketing.ts` | ≥ 50%      |
 
 ---
 
@@ -1113,18 +1125,19 @@ e2e:
 
 新增内容继承 `2026-08-13-ip-aggregator-design.md §11`:
 
-| 项 | 处理 |
-|---|---|
-| 用户密码 | 不写日志、不进 URL、邮件中不出现 |
-| 用户邮箱 | 仅管理员后台可见;不在查询日志中记录 |
-| 查询审计日志 | 仅管理员可读;CSV 导出受 admin 门禁保护 |
-| Session / Token | 全部哈希存储,DB 泄露不可逆 |
-| Argon2id 参数 | memoryCost=19MiB,timeCost=2,parallelism=1(OWASP 2023 推荐) |
-| Cookie | httpOnly + SameSite=Lax + 生产 Secure |
-| CSP | 严格限制脚本/样式/图片/表单来源,禁止 inline script |
-| 数据删除 | 管理员删除用户 → 级联清理 api_keys / sessions / email_verifications / password_resets / query_log |
+| 项              | 处理                                                                                              |
+| --------------- | ------------------------------------------------------------------------------------------------- |
+| 用户密码        | 不写日志、不进 URL、邮件中不出现                                                                  |
+| 用户邮箱        | 仅管理员后台可见;不在查询日志中记录                                                               |
+| 查询审计日志    | 仅管理员可读;CSV 导出受 admin 门禁保护                                                            |
+| Session / Token | 全部哈希存储,DB 泄露不可逆                                                                        |
+| Argon2id 参数   | memoryCost=19MiB,timeCost=2,parallelism=1(OWASP 2023 推荐)                                        |
+| Cookie          | httpOnly + SameSite=Lax + 生产 Secure                                                             |
+| CSP             | 严格限制脚本/样式/图片/表单来源,禁止 inline script                                                |
+| 数据删除        | 管理员删除用户 → 级联清理 api_keys / sessions / email_verifications / password_resets / query_log |
 
 README 新增:
+
 - 隐私声明:哪些数据被记录、保留多久、谁可访问
 - 管理员责任清单:不要泄露审计 CSV、定期清理过期 session
 

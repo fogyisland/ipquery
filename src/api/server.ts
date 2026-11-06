@@ -1,37 +1,37 @@
 // SPDX-License-Identifier: MIT
-import Fastify, { type FastifyInstance } from 'fastify';
-import compress from '@fastify/compress';
-import cors from '@fastify/cors';
-import rateLimit from '@fastify/rate-limit';
-import cookie from '@fastify/cookie';
-import formbody from '@fastify/formbody';
-import staticPlugin from '@fastify/static';
-import * as path from 'node:path';
-import type { AppConfig } from '../config';
-import { createPool } from '../storage/mysql';
-import { registerView } from '../web/plugins/view';
-import { registerI18n } from '../web/plugins/i18n';
-import { registerSecurityHeaders } from '../web/plugins/security';
-import { registerQueryLogWriter } from '../web/plugins/queryLog';
-import { registerSession } from '../web/plugins/session';
-import { registerAuthGuards } from '../web/plugins/auth';
-import { registerCsrf } from '../web/plugins/csrf';
-import { registerAuditLog } from '../web/plugins/auditLog';
-import { registerSetupGuard } from '../web/plugins/setupGuard';
-import { registerSessionPurger } from '../web/plugins/sessionPurger';
-import { registerRandomGenRunner } from '../web/plugins/randomIpGeneratorRunner';
-import { _resetForTests as resetLoginLimit } from '../web/plugins/loginRateLimit';
-import { createMailer } from '../mailer';
-import healthRoute from './routes/health';
-import lookupRoute from './routes/lookup';
-import statsRoute from './routes/stats';
-import marketingRoute from '../web/routes/marketing';
-import dashboardRoute from '../web/routes/dashboard';
-import adminRoute from '../web/routes/admin';
-import authRoute from '../web/routes/auth';
-import setupRoute from '../web/routes/setup';
+import Fastify, { type FastifyInstance } from "fastify";
+import compress from "@fastify/compress";
+import cors from "@fastify/cors";
+import rateLimit from "@fastify/rate-limit";
+import cookie from "@fastify/cookie";
+import formbody from "@fastify/formbody";
+import staticPlugin from "@fastify/static";
+import * as path from "node:path";
+import type { AppConfig } from "../config";
+import { createPool } from "../storage/mysql";
+import { registerView } from "../web/plugins/view";
+import { registerI18n } from "../web/plugins/i18n";
+import { registerSecurityHeaders } from "../web/plugins/security";
+import { registerQueryLogWriter } from "../web/plugins/queryLog";
+import { registerSession } from "../web/plugins/session";
+import { registerAuthGuards } from "../web/plugins/auth";
+import { registerCsrf } from "../web/plugins/csrf";
+import { registerAuditLog } from "../web/plugins/auditLog";
+import { registerSetupGuard } from "../web/plugins/setupGuard";
+import { registerSessionPurger } from "../web/plugins/sessionPurger";
+import { registerRandomGenRunner } from "../web/plugins/randomIpGeneratorRunner";
+import { _resetForTests as resetLoginLimit } from "../web/plugins/loginRateLimit";
+import { createMailer } from "../mailer";
+import healthRoute from "./routes/health";
+import lookupRoute from "./routes/lookup";
+import statsRoute from "./routes/stats";
+import marketingRoute from "../web/routes/marketing";
+import dashboardRoute from "../web/routes/dashboard";
+import adminRoute from "../web/routes/admin";
+import authRoute from "../web/routes/auth";
+import setupRoute from "../web/routes/setup";
 
-declare module 'fastify' {
+declare module "fastify" {
   interface FastifyInstance {
     cfg: AppConfig;
     pool: ReturnType<typeof createPool>;
@@ -42,23 +42,45 @@ declare module 'fastify' {
   }
 }
 
-export async function buildServer(cfg: AppConfig, opts?: { extraRoutes?: (app: FastifyInstance) => Promise<void> | void }): Promise<FastifyInstance> {
+export async function buildServer(
+  cfg: AppConfig,
+  opts?: { extraRoutes?: (app: FastifyInstance) => Promise<void> | void },
+): Promise<FastifyInstance> {
+  // Fail-fast on missing secrets in production. NODE_ENV=production
+  // (or any value other than "development"/"test"/unset) requires
+  // real CSRF_SECRET and SESSION_SECRET. In dev/test we fall back
+  // to a placeholder so first-run setup still works — the cookie
+  // plugin already uses a similar dev fallback.
+  const env = process.env.NODE_ENV ?? "development";
+  if (env === "production") {
+    const missing: string[] = [];
+    if (!cfg.web.csrfSecret) missing.push("CSRF_SECRET");
+    if (!cfg.web.sessionSecret) missing.push("SESSION_SECRET");
+    if (missing.length > 0) {
+      throw new Error(
+        `refusing to start in production: missing required env vars: ${missing.join(", ")}`,
+      );
+    }
+  }
+
   const app = Fastify({
-    logger: { level: process.env.LOG_LEVEL ?? 'info' },
+    logger: { level: process.env.LOG_LEVEL ?? "info" },
   });
 
   await app.register(cors, { origin: true });
   await app.register(compress);
-  await app.register(rateLimit, { max: cfg.api.rateLimit, timeWindow: '1 minute' });
+  await app.register(rateLimit, { max: cfg.api.rateLimit, timeWindow: "1 minute" });
 
-  app.decorate('cfg', cfg);
-  app.decorate('pool', createPool(cfg));
+  app.decorate("cfg", cfg);
+  app.decorate("pool", createPool(cfg));
 
   await registerSetupGuard(app);
 
-  await app.register(cookie, { secret: cfg.web.sessionSecret || cfg.web.csrfSecret || 'dev-only-secret-change-me' });
+  await app.register(cookie, {
+    secret: cfg.web.sessionSecret || cfg.web.csrfSecret || "dev-only-secret-change-me",
+  });
   await app.register(formbody);
-  await app.register(staticPlugin, { root: path.join(__dirname, '..', 'web', 'assets'), prefix: '/assets/' });
+  await app.register(staticPlugin, { root: path.join(__dirname, "..", "web", "assets"), prefix: "/assets/" });
   await registerView(app, { baseUrl: cfg.web.baseUrl });
   await registerI18n(app);
   await registerSecurityHeaders(app, { cookieSecure: cfg.web.cookieSecure });
@@ -68,14 +90,14 @@ export async function buildServer(cfg: AppConfig, opts?: { extraRoutes?: (app: F
   // Sync the timer against the persisted setting. Default is OFF so
   // no random generation happens until the admin opts in.
   await randomGenRunner.syncFromSettings();
-  app.decorate('randomGenRunner', randomGenRunner);
+  app.decorate("randomGenRunner", randomGenRunner);
   await registerAuthGuards(app);
   await registerCsrf(app);
-  app.decorate('resetLoginLimit', resetLoginLimit);
+  app.decorate("resetLoginLimit", resetLoginLimit);
 
-  app.decorate('mailer', createMailer(cfg));
+  app.decorate("mailer", createMailer(cfg));
   const queryLogWriter = registerQueryLogWriter(app, app.pool);
-  app.decorate('flushQueryLog', () => queryLogWriter.flush());
+  app.decorate("flushQueryLog", () => queryLogWriter.flush());
 
   await app.register(healthRoute);
   await app.register(lookupRoute);
@@ -91,12 +113,15 @@ export async function buildServer(cfg: AppConfig, opts?: { extraRoutes?: (app: F
     await opts.extraRoutes(app);
   }
 
-  app.addHook('onClose', async () => {
-    try { await app.pool.end(); } catch { /* ignore */ }
+  app.addHook("onClose", async () => {
+    try {
+      await app.pool.end();
+    } catch {
+      /* ignore */
+    }
   });
 
   await app.ready();
 
   return app;
-
 }

@@ -15,26 +15,40 @@
 // the <script src> tag means this runs after the DOM is parsed.
 
 (function () {
-  const VALID_TABS = new Set(['overview', 'providers', 'failure-logs', 'general', 'security', 'integrations', 'system']);
+  const VALID_TABS = new Set([
+    "overview",
+    "providers",
+    "failure-logs",
+    "general",
+    "security",
+    "integrations",
+    "system",
+  ]);
 
   function resolveTab() {
-    let hashTab = '';
-    try { hashTab = (location.hash || '').replace(/^#/, ''); } catch (_e) { /* legacy */ }
+    let hashTab = "";
+    try {
+      hashTab = (location.hash || "").replace(/^#/, "");
+    } catch {
+      /* legacy */
+    }
     if (VALID_TABS.has(hashTab)) return hashTab;
     try {
       const params = new URLSearchParams(location.search);
-      const qTab = params.get('tab');
+      const qTab = params.get("tab");
       if (qTab && VALID_TABS.has(qTab)) return qTab;
-    } catch (_e) { /* legacy */ }
-    return '';
+    } catch {
+      /* legacy */
+    }
+    return "";
   }
 
   function activate(tabId) {
-    document.querySelectorAll('.settings-tab-link').forEach(function (el) {
-      el.classList.toggle('is-active', el.dataset.tab === tabId);
+    document.querySelectorAll(".settings-tab-link").forEach(function (el) {
+      el.classList.toggle("is-active", el.dataset.tab === tabId);
     });
-    document.querySelectorAll('.settings-tab-pane').forEach(function (el) {
-      el.classList.toggle('is-active', el.dataset.tab === tabId);
+    document.querySelectorAll(".settings-tab-pane").forEach(function (el) {
+      el.classList.toggle("is-active", el.dataset.tab === tabId);
     });
   }
 
@@ -43,9 +57,11 @@
     if (tabId) activate(tabId);
   }
 
-  document.querySelectorAll('.settings-tab-link').forEach(function (el) {
-    el.addEventListener('click', function () { setTimeout(applyHash, 0); });
+  document.querySelectorAll(".settings-tab-link").forEach(function (el) {
+    el.addEventListener("click", function () {
+      setTimeout(applyHash, 0);
+    });
   });
-  window.addEventListener('hashchange', applyHash);
+  window.addEventListener("hashchange", applyHash);
   applyHash();
 })();

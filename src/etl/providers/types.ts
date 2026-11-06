@@ -10,16 +10,16 @@
 // and on normalized city/region lower-case equality. See majority.ts.
 
 export interface IpGeoRecord {
-  countryCode: string | null;   // ISO 3166-1 alpha-2, e.g. "US"
-  countryName: string | null;   // "United States", "美国" — display only
-  region: string | null;        // "California", "CA"
-  city: string | null;          // "Mountain View"
+  countryCode: string | null; // ISO 3166-1 alpha-2, e.g. "US"
+  countryName: string | null; // "United States", "美国" — display only
+  region: string | null; // "California", "CA"
+  city: string | null; // "Mountain View"
   latitude: number | null;
   longitude: number | null;
   timezone: string | null;
   isp: string | null;
-  asn: number | null;           // AS15169 -> 15169
-  asnOrg: string | null;        // "Google LLC"
+  asn: number | null; // AS15169 -> 15169
+  asnOrg: string | null; // "Google LLC"
 }
 
 /** Per-call provider outcome. `rateLimited` is true iff the provider

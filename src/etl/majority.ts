@@ -12,11 +12,20 @@
 //   agreement on country code, the whole row is treated as no_consensus
 //   and the queue row stays pending for a future attempt.
 
-import type { IpGeoRecord } from './providers/types';
+import type { IpGeoRecord } from "./providers/types";
 
 export type ConsensusField = keyof Pick<
   IpGeoRecord,
-  'countryCode' | 'countryName' | 'region' | 'city' | 'latitude' | 'longitude' | 'timezone' | 'isp' | 'asn' | 'asnOrg'
+  | "countryCode"
+  | "countryName"
+  | "region"
+  | "city"
+  | "latitude"
+  | "longitude"
+  | "timezone"
+  | "isp"
+  | "asn"
+  | "asnOrg"
 >;
 
 export type ConsensusResult =
@@ -28,14 +37,22 @@ export type ConsensusResult =
     }
   | {
       ok: false;
-      reason: 'no_consensus' | 'no_country' | 'all_abstained';
+      reason: "no_consensus" | "no_country" | "all_abstained";
       /** Per-provider contribution summary for debugging. */
       perProvider: Record<string, IpGeoRecord | null>;
     };
 
 const FIELDS: ConsensusField[] = [
-  'countryCode', 'countryName', 'region', 'city',
-  'latitude', 'longitude', 'timezone', 'isp', 'asn', 'asnOrg',
+  "countryCode",
+  "countryName",
+  "region",
+  "city",
+  "latitude",
+  "longitude",
+  "timezone",
+  "isp",
+  "asn",
+  "asnOrg",
 ];
 
 /** Run majority-vote on responses from the providers that actually
@@ -49,7 +66,7 @@ export function majorityVote(
   if (valid.length === 0) {
     return {
       ok: false,
-      reason: 'all_abstained',
+      reason: "all_abstained",
       perProvider: Object.fromEntries(responses.map((r) => [r.provider, r.record])),
     };
   }
@@ -59,7 +76,7 @@ export function majorityVote(
   // code + name (ip-api, iplocate); the latter is fine.
   const countryCodeVotes = valid
     .map((r) => r.record.countryCode)
-    .filter((c): c is string => typeof c === 'string' && c.length > 0);
+    .filter((c): c is string => typeof c === "string" && c.length > 0);
 
   if (countryCodeVotes.length < 2) {
     // 0-1 votes -> either all abstained (already handled above) or only
@@ -67,7 +84,7 @@ export function majorityVote(
     // Treat as no_country.
     return {
       ok: false,
-      reason: 'no_country',
+      reason: "no_country",
       perProvider: Object.fromEntries(responses.map((r) => [r.provider, r.record])),
     };
   }
@@ -76,7 +93,7 @@ export function majorityVote(
   if (!countryWinner) {
     return {
       ok: false,
-      reason: 'no_consensus',
+      reason: "no_consensus",
       perProvider: Object.fromEntries(responses.map((r) => [r.provider, r.record])),
     };
   }
@@ -98,10 +115,12 @@ export function majorityVote(
   const agreement: Partial<Record<ConsensusField, number>> = { countryCode: countryWinner.count };
 
   for (const field of FIELDS) {
-    if (field === 'countryCode') continue; // already handled
+    if (field === "countryCode") continue; // already handled
     const values = valid
       .map((r) => r.record[field])
-      .filter((v): v is NonNullable<IpGeoRecord[ConsensusField]> => v !== null && v !== undefined && v !== '');
+      .filter(
+        (v): v is NonNullable<IpGeoRecord[ConsensusField]> => v !== null && v !== undefined && v !== "",
+      );
     const pick = pickMajority(values);
     if (pick) {
       (merged[field] as unknown) = pick.value;

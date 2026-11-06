@@ -15,15 +15,15 @@
 //   4. Wire buildProvidersFromConfig() to map the catalog entry to the
 //      provider class with the configured api_key.
 
-import type { Pool, RowDataPacket } from 'mysql2/promise';
-import type { IpGeoProvider } from '../etl/providers/types';
-import { getSetting, setSetting } from './settings';
-import { IpApiProvider } from '../etl/providers/ipApi';
-import { IpinfoProvider } from '../etl/providers/ipinfo';
-import { IplocateProvider } from '../etl/providers/iplocate';
-import { FreeIpApiProvider } from '../etl/providers/freeipapi';
-import { IpapiCoProvider } from '../etl/providers/ipapiCo';
-import { GenericHttpProvider, type GenericProviderRow } from '../etl/genericHttpProvider';
+import type { Pool, RowDataPacket } from "mysql2/promise";
+import type { IpGeoProvider } from "../etl/providers/types";
+import { getSetting, setSetting } from "./settings";
+import { IpApiProvider } from "../etl/providers/ipApi";
+import { IpinfoProvider } from "../etl/providers/ipinfo";
+import { IplocateProvider } from "../etl/providers/iplocate";
+import { FreeIpApiProvider } from "../etl/providers/freeipapi";
+import { IpapiCoProvider } from "../etl/providers/ipapiCo";
+import { GenericHttpProvider, type GenericProviderRow } from "../etl/genericHttpProvider";
 
 export interface ProviderConfigRow {
   name: string;
@@ -41,9 +41,9 @@ export interface ProviderConfigRow {
   // runtime-registered providers via /admin/unknown-ips/providers/custom.
   isCustom: boolean;
   customUrlTemplate: string | null;
-  customMethod: 'GET' | 'POST';
+  customMethod: "GET" | "POST";
   customRequestBody: string | null;
-  customResponseFormat: 'json' | 'text';
+  customResponseFormat: "json" | "text";
   customCountryPath: string | null;
   customCityPath: string | null;
   customAsnPath: string | null;
@@ -56,15 +56,15 @@ export interface ProviderConfigRow {
  *  providerErrorLog can iterate the provider names without re-typing
  *  them. */
 export const PROVIDER_CATALOG: Record<string, { displayName: string; freeQuota: string }> = {
-  'ip-api':    { displayName: 'IP-API',       freeQuota: '45 req/min, no key (HTTP only)' },
-  'iplocate':  { displayName: 'IPLocate.io',  freeQuota: '1,000 req/day, key required (HTTPS)' },
-  'ipinfo':    { displayName: 'IPinfo.io',    freeQuota: '50,000 req/month, key required (HTTPS)' },
-  'freeipapi': { displayName: 'FreeIPAPI',    freeQuota: '60 req/min, no key (HTTPS)' },
-  'ipapi-co':  { displayName: 'ipapi.co',     freeQuota: '30,000 req/month, no key (HTTPS)' },
+  "ip-api": { displayName: "IP-API", freeQuota: "45 req/min, no key (HTTP only)" },
+  iplocate: { displayName: "IPLocate.io", freeQuota: "1,000 req/day, key required (HTTPS)" },
+  ipinfo: { displayName: "IPinfo.io", freeQuota: "50,000 req/month, key required (HTTPS)" },
+  freeipapi: { displayName: "FreeIPAPI", freeQuota: "60 req/min, no key (HTTPS)" },
+  "ipapi-co": { displayName: "ipapi.co", freeQuota: "30,000 req/month, no key (HTTPS)" },
 };
 
-export const PROVIDER_CATALOG_LIST: ProviderConfigRow[] = Object.entries(PROVIDER_CATALOG)
-  .map(([name, meta]) => ({
+export const PROVIDER_CATALOG_LIST: ProviderConfigRow[] = Object.entries(PROVIDER_CATALOG).map(
+  ([name, meta]) => ({
     name,
     displayName: meta.displayName,
     freeQuota: meta.freeQuota,
@@ -78,14 +78,15 @@ export const PROVIDER_CATALOG_LIST: ProviderConfigRow[] = Object.entries(PROVIDE
     autoDisabledReason: null,
     isCustom: false,
     customUrlTemplate: null,
-    customMethod: 'GET' as const,
+    customMethod: "GET" as const,
     customRequestBody: null,
-    customResponseFormat: 'json' as const,
+    customResponseFormat: "json" as const,
     customCountryPath: null,
     customCityPath: null,
     customAsnPath: null,
     customTimeoutMs: null,
-  }));
+  }),
+);
 
 export async function listProviderConfigs(pool: Pool): Promise<ProviderConfigRow[]> {
   const [rows] = await pool.query<RowDataPacket[]>(
@@ -116,9 +117,9 @@ function rowToConfig(r: RowDataPacket): ProviderConfigRow {
     autoDisabledReason: r.auto_disabled_reason == null ? null : String(r.auto_disabled_reason),
     isCustom: Boolean(r.is_custom),
     customUrlTemplate: r.custom_url_template == null ? null : String(r.custom_url_template),
-    customMethod: r.custom_method === 'POST' ? 'POST' : 'GET',
+    customMethod: r.custom_method === "POST" ? "POST" : "GET",
     customRequestBody: r.custom_request_body == null ? null : String(r.custom_request_body),
-    customResponseFormat: r.custom_response_format === 'text' ? 'text' : 'json',
+    customResponseFormat: r.custom_response_format === "text" ? "text" : "json",
     customCountryPath: r.custom_country_path == null ? null : String(r.custom_country_path),
     customCityPath: r.custom_city_path == null ? null : String(r.custom_city_path),
     customAsnPath: r.custom_asn_path == null ? null : String(r.custom_asn_path),
@@ -164,9 +165,9 @@ export interface ProviderConfigUpdate {
 export interface CustomProviderFields {
   displayName: string;
   urlTemplate: string;
-  method: 'GET' | 'POST';
+  method: "GET" | "POST";
   requestBody: string | null;
-  responseFormat: 'json' | 'text';
+  responseFormat: "json" | "text";
   countryPath: string;
   cityPath: string | null;
   asnPath: string | null;
@@ -180,11 +181,7 @@ export interface CustomProviderFields {
  *  updates refresh the custom_* columns in place. The api_key column is
  *  NOT touched here — it's rotated through updateProviderConfig like
  *  the built-in providers. */
-export async function upsertCustomProvider(
-  pool: Pool,
-  name: string,
-  f: CustomProviderFields,
-): Promise<void> {
+export async function upsertCustomProvider(pool: Pool, name: string, f: CustomProviderFields): Promise<void> {
   await pool.query(
     `INSERT INTO ingest_providers
        (name, display_name, free_quota, enabled, api_key,
@@ -226,7 +223,7 @@ export async function upsertCustomProvider(
  *  number of rows actually deleted (0 when name didn't exist or was a
  *  built-in). */
 export async function deleteCustomProvider(pool: Pool, name: string): Promise<number> {
-  const [res] = await pool.query<import('mysql2/promise').ResultSetHeader>(
+  const [res] = await pool.query<import("mysql2/promise").ResultSetHeader>(
     `DELETE FROM ingest_providers WHERE name = ? AND is_custom = 1`,
     [name],
   );
@@ -241,29 +238,28 @@ export async function updateProviderConfig(
   const sets: string[] = [];
   const args: unknown[] = [];
   if (patch.enabled !== undefined) {
-    sets.push('enabled = ?');
+    sets.push("enabled = ?");
     args.push(patch.enabled ? 1 : 0);
   }
   if (patch.apiKey !== undefined) {
-    sets.push('api_key = ?');
+    sets.push("api_key = ?");
     args.push(patch.apiKey && patch.apiKey.length > 0 ? patch.apiKey : null);
   }
   if (patch.autoReenableAt !== undefined) {
-    sets.push('auto_reenable_at = ?');
+    sets.push("auto_reenable_at = ?");
     args.push(patch.autoReenableAt);
   }
   if (patch.autoDisabledReason !== undefined) {
-    sets.push('auto_disabled_reason = ?');
-    args.push(patch.autoDisabledReason && patch.autoDisabledReason.length > 0
-      ? patch.autoDisabledReason.slice(0, 255)
-      : null);
+    sets.push("auto_disabled_reason = ?");
+    args.push(
+      patch.autoDisabledReason && patch.autoDisabledReason.length > 0
+        ? patch.autoDisabledReason.slice(0, 255)
+        : null,
+    );
   }
   if (sets.length === 0) return;
   args.push(name);
-  await pool.query(
-    `UPDATE ingest_providers SET ${sets.join(', ')} WHERE name = ?`,
-    args,
-  );
+  await pool.query(`UPDATE ingest_providers SET ${sets.join(", ")} WHERE name = ?`, args);
 }
 
 export async function touchProviderSuccess(pool: Pool, name: string): Promise<void> {
@@ -308,11 +304,12 @@ export async function touchProviderCalled(
   const rateLimited = outcome.rateLimited === true;
   const errorCode = outcome.errorCode ?? null;
   const is429 = rateLimited ? 1 : 0;
-  const isTimeout = errorCode === 'timeout' ? 1 : 0;
-  const isNetwork = errorCode === 'network' ? 1 : 0;
+  const isTimeout = errorCode === "timeout" ? 1 : 0;
+  const isNetwork = errorCode === "network" ? 1 : 0;
   // "other" = had an errorCode but it wasn't 429/timeout/network — e.g.
   // 'http_500', 'no_country', 'unauthorized'.
-  const isOther = !rateLimited && errorCode != null && errorCode !== 'timeout' && errorCode !== 'network' ? 1 : 0;
+  const isOther =
+    !rateLimited && errorCode != null && errorCode !== "timeout" && errorCode !== "network" ? 1 : 0;
   await pool.query(
     `INSERT INTO provider_call_counter
        (provider_name, day_utc, calls_total, calls_429, calls_timeout,
@@ -327,9 +324,16 @@ export async function touchProviderCalled(
        last_called_at     = NOW(3)`,
     [
       // INSERT VALUES (5 placeholders):
-      name, is429, isTimeout, isNetwork, isOther,
+      name,
+      is429,
+      isTimeout,
+      isNetwork,
+      isOther,
       // ON DUPLICATE KEY UPDATE (4 placeholders, in order):
-      is429, isTimeout, isNetwork, isOther,
+      is429,
+      isTimeout,
+      isNetwork,
+      isOther,
     ],
   );
 }
@@ -350,7 +354,9 @@ export function buildProvidersFromConfig(configs: ProviderConfigRow[]): IpGeoPro
     if (c.isCustom) {
       if (!c.customUrlTemplate || !c.customCountryPath) {
         // eslint-disable-next-line no-console
-        console.warn?.(`[ingestProviders] custom provider ${c.name} missing url_template or country_path; skipping`);
+        console.warn?.(
+          `[ingestProviders] custom provider ${c.name} missing url_template or country_path; skipping`,
+        );
         continue;
       }
       const row: GenericProviderRow = {
@@ -369,21 +375,21 @@ export function buildProvidersFromConfig(configs: ProviderConfigRow[]): IpGeoPro
       continue;
     }
     switch (c.name) {
-      case 'ip-api':
+      case "ip-api":
         out.push(new IpApiProvider());
         break;
-      case 'iplocate':
+      case "iplocate":
         // Provider abstains on its own if apiKey is null — but skipping
         // here avoids the per-call null check.
         if (c.apiKey) out.push(new IplocateProvider({ apiKey: c.apiKey }));
         break;
-      case 'ipinfo':
+      case "ipinfo":
         if (c.apiKey) out.push(new IpinfoProvider({ token: c.apiKey }));
         break;
-      case 'freeipapi':
+      case "freeipapi":
         out.push(new FreeIpApiProvider());
         break;
-      case 'ipapi-co':
+      case "ipapi-co":
         out.push(new IpapiCoProvider());
         break;
       default:
@@ -403,7 +409,7 @@ export function buildProvidersFromConfig(configs: ProviderConfigRow[]): IpGeoPro
 // so the unknown-ips dashboard can show "this provider failed N times in
 // the last run" across sessions — without a DB migration.
 
-const LAST_BACKFILL_KEY = 'last_backfill_provider_stats';
+const LAST_BACKFILL_KEY = "last_backfill_provider_stats";
 
 export interface LastBackfillProviderEntry {
   ok: number;
@@ -421,7 +427,7 @@ interface LastBackfillEnvelope {
 
 export async function saveLastBackfillProviderStats(
   pool: Pool,
-  providers: BackfillSummary['providers'],
+  providers: BackfillSummary["providers"],
   runAt: Date,
 ): Promise<void> {
   const env: LastBackfillEnvelope = {
@@ -438,7 +444,7 @@ export async function loadLastBackfillProviderStats(
   if (!raw) return { runAt: null, providers: {} };
   try {
     const parsed = JSON.parse(raw) as Partial<LastBackfillEnvelope>;
-    if (!parsed || typeof parsed !== 'object' || !parsed.providers) {
+    if (!parsed || typeof parsed !== "object" || !parsed.providers) {
       return { runAt: null, providers: {} };
     }
     return {

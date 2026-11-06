@@ -11,30 +11,35 @@
 // 401 (no/bad token) -> record=null, NOT rateLimited (won't recover).
 // 429 -> record=null, rateLimited=true (backfill disables us).
 
-import type { IpGeoProvider, IpGeoLookupResult } from './types';
+import type { IpGeoProvider, IpGeoLookupResult } from "./types";
 
 export class IpinfoProvider implements IpGeoProvider {
-  readonly name = 'ipinfo';
+  readonly name = "ipinfo";
 
   constructor(private readonly opts: { token?: string; endpoint?: string } = {}) {}
 
   async lookup(ip: string): Promise<IpGeoLookupResult> {
     if (!this.opts.token) return { record: null, rateLimited: false }; // token missing -> abstain
-    const url = `${this.opts.endpoint ?? 'https://ipinfo.io'}/${encodeURIComponent(ip)}/json?token=${encodeURIComponent(this.opts.token)}`;
+    const url = `${this.opts.endpoint ?? "https://ipinfo.io"}/${encodeURIComponent(ip)}/json?token=${encodeURIComponent(this.opts.token)}`;
     try {
       const res = await fetch(url, { signal: AbortSignal.timeout(5_000) });
       if (res.status === 429) {
-        return { record: null, rateLimited: true, errorCode: '429', rawResponse: await safeBody(res) };
+        return { record: null, rateLimited: true, errorCode: "429", rawResponse: await safeBody(res) };
       }
       if (!res.ok) {
-        return { record: null, rateLimited: false, errorCode: String(res.status), rawResponse: await safeBody(res) };
+        return {
+          record: null,
+          rateLimited: false,
+          errorCode: String(res.status),
+          rawResponse: await safeBody(res),
+        };
       }
-      const data = await res.json() as {
+      const data = (await res.json()) as {
         city?: string;
         region?: string;
         country?: string;
-        loc?: string;       // "lat,lon"
-        org?: string;       // "AS15169 Google LLC"
+        loc?: string; // "lat,lon"
+        org?: string; // "AS15169 Google LLC"
         timezone?: string;
       };
       const [lat, lon] = parseLoc(data.loc ?? null);
@@ -48,7 +53,7 @@ export class IpinfoProvider implements IpGeoProvider {
           latitude: lat,
           longitude: lon,
           timezone: data.timezone ?? null,
-          isp: null,          // ipinfo collapses ISP into `org`
+          isp: null, // ipinfo collapses ISP into `org`
           asn,
           asnOrg: extractOrgFromOrg(data.org ?? null),
         },
@@ -56,7 +61,7 @@ export class IpinfoProvider implements IpGeoProvider {
       };
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      const code = msg.includes('timeout') || msg.includes('aborted') ? 'timeout' : 'network';
+      const code = msg.includes("timeout") || msg.includes("aborted") ? "timeout" : "network";
       return { record: null, rateLimited: false, errorCode: code, rawResponse: msg.slice(0, 240) };
     }
   }
@@ -73,13 +78,10 @@ async function safeBody(res: Response): Promise<string | null> {
 
 function parseLoc(raw: string | null): [number | null, number | null] {
   if (!raw) return [null, null];
-  const [a, b] = raw.split(',');
+  const [a, b] = raw.split(",");
   const lat = a == null ? null : Number(a);
   const lon = b == null ? null : Number(b);
-  return [
-    Number.isFinite(lat) ? (lat as number) : null,
-    Number.isFinite(lon) ? (lon as number) : null,
-  ];
+  return [Number.isFinite(lat) ? (lat as number) : null, Number.isFinite(lon) ? (lon as number) : null];
 }
 
 function parseAsn(raw: string | null): number | null {
@@ -92,6 +94,6 @@ function parseAsn(raw: string | null): number | null {
 
 function extractOrgFromOrg(raw: string | null): string | null {
   if (!raw) return null;
-  const trimmed = raw.replace(/^\s*AS\d+\s*/i, '').trim();
+  const trimmed = raw.replace(/^\s*AS\d+\s*/i, "").trim();
   return trimmed.length > 0 ? trimmed : null;
 }

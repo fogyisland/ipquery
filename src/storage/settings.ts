@@ -1,10 +1,8 @@
 // SPDX-License-Identifier: MIT
-import type { Pool, ResultSetHeader, RowDataPacket } from 'mysql2/promise';
+import type { Pool, ResultSetHeader, RowDataPacket } from "mysql2/promise";
 
 export async function getSetting(pool: Pool, key: string): Promise<string | null> {
-  const [rows] = await pool.query<RowDataPacket[]>(
-    `SELECT v FROM settings WHERE k = ?`, [key],
-  );
+  const [rows] = await pool.query<RowDataPacket[]>(`SELECT v FROM settings WHERE k = ?`, [key]);
   const r = rows[0] as { v: string } | undefined;
   return r ? r.v : null;
 }
@@ -25,5 +23,5 @@ export async function isInitialized(pool: Pool): Promise<boolean> {
 }
 
 export async function markInitialized(pool: Pool): Promise<void> {
-  await setSetting(pool, 'initialized_at', new Date().toISOString());
+  await setSetting(pool, "initialized_at", new Date().toISOString());
 }

@@ -12,28 +12,33 @@
 // rateLimited=false (bad key, won't fix itself). 429 -> rateLimited=true
 // (backfill disables us for this admin session).
 
-import type { IpGeoProvider, IpGeoLookupResult } from './types';
+import type { IpGeoProvider, IpGeoLookupResult } from "./types";
 
 export class IplocateProvider implements IpGeoProvider {
-  readonly name = 'iplocate';
+  readonly name = "iplocate";
 
   constructor(private readonly opts: { apiKey?: string; endpoint?: string } = {}) {}
 
   async lookup(ip: string): Promise<IpGeoLookupResult> {
     if (!this.opts.apiKey) return { record: null, rateLimited: false }; // key missing -> abstain
-    const url = `${this.opts.endpoint ?? 'https://www.iplocate.io'}/api/v2/lookup/${encodeURIComponent(ip)}`;
+    const url = `${this.opts.endpoint ?? "https://www.iplocate.io"}/api/v2/lookup/${encodeURIComponent(ip)}`;
     try {
       const res = await fetch(url, {
-        headers: { 'x-api-key': this.opts.apiKey },
+        headers: { "x-api-key": this.opts.apiKey },
         signal: AbortSignal.timeout(5_000),
       });
       if (res.status === 429) {
-        return { record: null, rateLimited: true, errorCode: '429', rawResponse: await safeBody(res) };
+        return { record: null, rateLimited: true, errorCode: "429", rawResponse: await safeBody(res) };
       }
       if (!res.ok) {
-        return { record: null, rateLimited: false, errorCode: String(res.status), rawResponse: await safeBody(res) };
+        return {
+          record: null,
+          rateLimited: false,
+          errorCode: String(res.status),
+          rawResponse: await safeBody(res),
+        };
       }
-      const data = await res.json() as {
+      const data = (await res.json()) as {
         country_code?: string;
         country_name?: string;
         city?: string;
@@ -51,18 +56,19 @@ export class IplocateProvider implements IpGeoProvider {
           countryName: data.country_name ?? null,
           region: data.region ?? null,
           city: data.city ?? null,
-          latitude: typeof data.latitude === 'number' ? data.latitude : null,
-          longitude: typeof data.longitude === 'number' ? data.longitude : null,
+          latitude: typeof data.latitude === "number" ? data.latitude : null,
+          longitude: typeof data.longitude === "number" ? data.longitude : null,
           timezone: data.timezone ?? null,
           isp: data.isp ?? null,
-          asn: typeof data.asn === 'number' ? data.asn : (typeof data.asn === 'string' ? Number(data.asn) : null),
+          asn:
+            typeof data.asn === "number" ? data.asn : typeof data.asn === "string" ? Number(data.asn) : null,
           asnOrg: data.asn_org ?? null,
         },
         rateLimited: false,
       };
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      const code = msg.includes('timeout') || msg.includes('aborted') ? 'timeout' : 'network';
+      const code = msg.includes("timeout") || msg.includes("aborted") ? "timeout" : "network";
       return { record: null, rateLimited: false, errorCode: code, rawResponse: msg.slice(0, 240) };
     }
   }

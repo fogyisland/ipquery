@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
-import type { Pool, ResultSetHeader, RowDataPacket } from 'mysql2/promise';
-import type { ApiKey } from '../types';
+import type { Pool, ResultSetHeader, RowDataPacket } from "mysql2/promise";
+import type { ApiKey } from "../types";
 
 function mapRow(r: RowDataPacket): ApiKey {
   return {
@@ -14,13 +14,19 @@ function mapRow(r: RowDataPacket): ApiKey {
   };
 }
 
-export async function createApiKey(pool: Pool, userId: number, label: string, keyHash: string, keyPrefix: string): Promise<ApiKey> {
+export async function createApiKey(
+  pool: Pool,
+  userId: number,
+  label: string,
+  keyHash: string,
+  keyPrefix: string,
+): Promise<ApiKey> {
   const [res] = await pool.query<ResultSetHeader>(
     `INSERT INTO api_keys (user_id, label, key_hash, key_prefix) VALUES (?, ?, ?, ?)`,
     [userId, label, keyHash, keyPrefix],
   );
   const k = await findApiKeyById(pool, res.insertId);
-  if (!k) throw new Error('api key vanished');
+  if (!k) throw new Error("api key vanished");
   return k;
 }
 
@@ -31,7 +37,8 @@ export async function findApiKeyById(pool: Pool, id: number): Promise<ApiKey | n
 
 export async function findActiveApiKeyByHash(pool: Pool, keyHash: string): Promise<ApiKey | null> {
   const [rows] = await pool.query<RowDataPacket[]>(
-    `SELECT * FROM api_keys WHERE key_hash = ? AND revoked_at IS NULL`, [keyHash],
+    `SELECT * FROM api_keys WHERE key_hash = ? AND revoked_at IS NULL`,
+    [keyHash],
   );
   return rows[0] ? mapRow(rows[0]) : null;
 }
@@ -60,24 +67,34 @@ export async function revokeApiKeysBulk(pool: Pool, ids: number[]): Promise<numb
 
 export async function listApiKeysForUser(pool: Pool, userId: number): Promise<ApiKey[]> {
   const [rows] = await pool.query<RowDataPacket[]>(
-    `SELECT * FROM api_keys WHERE user_id = ? ORDER BY id DESC`, [userId],
+    `SELECT * FROM api_keys WHERE user_id = ? ORDER BY id DESC`,
+    [userId],
   );
   return rows.map(mapRow);
 }
 
-export async function listAllApiKeys(pool: Pool, opts: {
-  offset: number; limit: number; userId?: number;
-}): Promise<{ rows: (ApiKey & { ownerEmail: string })[]; total: number }> {
+export async function listAllApiKeys(
+  pool: Pool,
+  opts: {
+    offset: number;
+    limit: number;
+    userId?: number;
+  },
+): Promise<{ rows: (ApiKey & { ownerEmail: string })[]; total: number }> {
   const where: string[] = [];
   const params: unknown[] = [];
-  if (opts.userId) { where.push('k.user_id = ?'); params.push(opts.userId); }
-  const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
+  if (opts.userId) {
+    where.push("k.user_id = ?");
+    params.push(opts.userId);
+  }
+  const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
   const [rows] = await pool.query<RowDataPacket[]>(
     `SELECT k.*, u.email AS owner_email FROM api_keys k JOIN users u ON u.id = k.user_id ${whereSql} ORDER BY k.id DESC LIMIT ? OFFSET ?`,
     [...params, opts.limit, opts.offset],
   );
   const [totalRows] = await pool.query<RowDataPacket[]>(
-    `SELECT COUNT(*) AS c FROM api_keys k ${whereSql}`, params,
+    `SELECT COUNT(*) AS c FROM api_keys k ${whereSql}`,
+    params,
   );
   return {
     rows: rows.map((r) => ({ ...mapRow(r), ownerEmail: r.owner_email as string })),

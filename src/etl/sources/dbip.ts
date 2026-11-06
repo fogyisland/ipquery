@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT
-import * as fs from 'node:fs';
-import * as zlib from 'node:zlib';
-import * as readline from 'node:readline';
-import { parseIp } from '../../ip';
-import type { NormalizedRecord } from '../../types';
+import * as fs from "node:fs";
+import * as zlib from "node:zlib";
+import * as readline from "node:readline";
+import { parseIp } from "../../ip";
+import type { NormalizedRecord } from "../../types";
 
 // DB-IP distributes its free data as separate CSV.gz files, one per
 // information slice. All three cover the same IP ranges (a row in the
@@ -24,13 +24,13 @@ import type { NormalizedRecord } from '../../types';
 // can route rows straight into the new table without keeping the array
 // resident.
 function parseInt10(s: string | undefined): number | undefined {
-  if (s === undefined || s === '') return undefined;
+  if (s === undefined || s === "") return undefined;
   const n = Number(s);
   return Number.isFinite(n) ? n : undefined;
 }
 
 function parseDec(s: string | undefined): number | undefined {
-  if (s === undefined || s === '') return undefined;
+  if (s === undefined || s === "") return undefined;
   const n = Number(s);
   return Number.isFinite(n) ? n : undefined;
 }
@@ -42,21 +42,31 @@ function parseCsvLine(line: string): string[] {
   const out: string[] = [];
   let i = 0;
   while (i <= line.length) {
-    if (i === line.length) { out.push(''); break; }
+    if (i === line.length) {
+      out.push("");
+      break;
+    }
     if (line[i] === '"') {
-      let buf = '';
+      let buf = "";
       i++;
       while (i < line.length) {
-        if (line[i] === '"' && line[i + 1] === '"') { buf += '"'; i += 2; continue; }
-        if (line[i] === '"') { i++; break; }
+        if (line[i] === '"' && line[i + 1] === '"') {
+          buf += '"';
+          i += 2;
+          continue;
+        }
+        if (line[i] === '"') {
+          i++;
+          break;
+        }
         buf += line[i]!;
         i++;
       }
       out.push(buf);
-      if (i < line.length && line[i] === ',') i++;
+      if (i < line.length && line[i] === ",") i++;
     } else {
       let j = i;
-      while (j < line.length && line[j] !== ',') j++;
+      while (j < line.length && line[j] !== ",") j++;
       out.push(line.slice(i, j));
       i = j + 1;
     }
@@ -64,22 +74,23 @@ function parseCsvLine(line: string): string[] {
   return out;
 }
 
-async function* streamGzippedCsv(
-  gzPath: string, header: boolean,
-): AsyncIterable<string[]> {
+async function* streamGzippedCsv(gzPath: string, header: boolean): AsyncIterable<string[]> {
   const gunzip = zlib.createGunzip();
   const fileStream = fs.createReadStream(gzPath);
   const lines = readline.createInterface({ input: fileStream.pipe(gunzip), crlfDelay: Infinity });
   let isFirst = true;
   for await (const line of lines) {
     if (!line) continue;
-    if (isFirst) { isFirst = false; if (header) continue; }
+    if (isFirst) {
+      isFirst = false;
+      if (header) continue;
+    }
     yield parseCsvLine(line);
   }
 }
 
 function isHeaderRow(cols: string[]): boolean {
-  return cols[0] === 'ip_start' || cols[0] === 'start_ip';
+  return cols[0] === "ip_start" || cols[0] === "start_ip";
 }
 
 // Skip-counter buckets returned by the *WithStats parsers below. Mirrors
@@ -113,16 +124,23 @@ function newStats(): ParseStats {
   };
 }
 
-async function* parseDbipCityLines(
-  gzPath: string, stats: ParseStats,
-): AsyncIterable<NormalizedRecord> {
+async function* parseDbipCityLines(gzPath: string, stats: ParseStats): AsyncIterable<NormalizedRecord> {
   for await (const cols of streamGzippedCsv(gzPath, true)) {
-    if (cols.length < 5) { stats.skipped.shortLine++; continue; }
-    if (isHeaderRow(cols)) { stats.skipped.headerRow++; continue; }
+    if (cols.length < 5) {
+      stats.skipped.shortLine++;
+      continue;
+    }
+    if (isHeaderRow(cols)) {
+      stats.skipped.headerRow++;
+      continue;
+    }
     const start = parseIp(cols[0]!);
     const end = parseIp(cols[1]!);
-    if (!start || !end) { stats.skipped.unparseableIp++; continue; }
-    const rec: NormalizedRecord = { startIp: start, endIp: end, source: 'dbip' };
+    if (!start || !end) {
+      stats.skipped.unparseableIp++;
+      continue;
+    }
+    const rec: NormalizedRecord = { startIp: start, endIp: end, source: "dbip" };
     // cols[3] is the ISO country code; cols[2] is the continent code we ignore.
     if (cols[3]) rec.countryCode = cols[3];
     if (cols[4]) rec.region = cols[4];
@@ -136,32 +154,46 @@ async function* parseDbipCityLines(
   }
 }
 
-async function* parseDbipCountryLines(
-  gzPath: string, stats: ParseStats,
-): AsyncIterable<NormalizedRecord> {
+async function* parseDbipCountryLines(gzPath: string, stats: ParseStats): AsyncIterable<NormalizedRecord> {
   for await (const cols of streamGzippedCsv(gzPath, true)) {
-    if (cols.length < 3) { stats.skipped.shortLine++; continue; }
-    if (isHeaderRow(cols)) { stats.skipped.headerRow++; continue; }
+    if (cols.length < 3) {
+      stats.skipped.shortLine++;
+      continue;
+    }
+    if (isHeaderRow(cols)) {
+      stats.skipped.headerRow++;
+      continue;
+    }
     const start = parseIp(cols[0]!);
     const end = parseIp(cols[1]!);
-    if (!start || !end) { stats.skipped.unparseableIp++; continue; }
-    const rec: NormalizedRecord = { startIp: start, endIp: end, source: 'dbip' };
+    if (!start || !end) {
+      stats.skipped.unparseableIp++;
+      continue;
+    }
+    const rec: NormalizedRecord = { startIp: start, endIp: end, source: "dbip" };
     if (cols[2]) rec.countryCode = cols[2];
     stats.rowsEmitted++;
     yield rec;
   }
 }
 
-async function* parseDbipAsnLines(
-  gzPath: string, stats: ParseStats,
-): AsyncIterable<NormalizedRecord> {
+async function* parseDbipAsnLines(gzPath: string, stats: ParseStats): AsyncIterable<NormalizedRecord> {
   for await (const cols of streamGzippedCsv(gzPath, true)) {
-    if (cols.length < 4) { stats.skipped.shortLine++; continue; }
-    if (isHeaderRow(cols)) { stats.skipped.headerRow++; continue; }
+    if (cols.length < 4) {
+      stats.skipped.shortLine++;
+      continue;
+    }
+    if (isHeaderRow(cols)) {
+      stats.skipped.headerRow++;
+      continue;
+    }
     const start = parseIp(cols[0]!);
     const end = parseIp(cols[1]!);
-    if (!start || !end) { stats.skipped.unparseableIp++; continue; }
-    const rec: NormalizedRecord = { startIp: start, endIp: end, source: 'dbip' };
+    if (!start || !end) {
+      stats.skipped.unparseableIp++;
+      continue;
+    }
+    const rec: NormalizedRecord = { startIp: start, endIp: end, source: "dbip" };
     const asn = parseInt10(cols[2]);
     if (asn !== undefined) {
       rec.asn = asn;

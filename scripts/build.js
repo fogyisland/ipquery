@@ -10,18 +10,18 @@
 // template. Cleaning dist/ before each build prevents that whole class of
 // stale-file regressions.
 
-const { execSync } = require('node:child_process');
-const { rmSync, existsSync } = require('node:fs');
-const path = require('node:path');
+const { execSync } = require("node:child_process");
+const { rmSync, existsSync } = require("node:fs");
+const path = require("node:path");
 
-const root = path.resolve(__dirname, '..');
-const dist = path.join(root, 'dist');
+const root = path.resolve(__dirname, "..");
+const dist = path.join(root, "dist");
 
 if (existsSync(dist)) {
   rmSync(dist, { recursive: true, force: true });
-  console.log('[build] cleaned dist/');
+  console.log("[build] cleaned dist/");
 }
 
-execSync('npx tsc -p tsconfig.json', { stdio: 'inherit', cwd: root });
-execSync('node scripts/copy-schema.js', { stdio: 'inherit', cwd: root });
-console.log('[build] OK');
+execSync("npx tsc -p tsconfig.json", { stdio: "inherit", cwd: root });
+execSync("node scripts/copy-schema.js", { stdio: "inherit", cwd: root });
+console.log("[build] OK");

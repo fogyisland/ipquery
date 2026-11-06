@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
-import * as fs from 'node:fs';
-import * as maxmind from 'maxmind';
-import { parseIp } from '../../ip';
-import type { NormalizedRecord } from '../../types';
+import * as fs from "node:fs";
+import * as maxmind from "maxmind";
+import { parseIp } from "../../ip";
+import type { NormalizedRecord } from "../../types";
 
 interface MmdbReader {
   get(ip: string): unknown;
@@ -28,7 +28,10 @@ function reader(path: string): MmdbReader {
  * For production scale we use maxmind's open iterator over the mmdb tree;
  * here we keep a simpler implementation that works with the public API.
  */
-export async function parseMaxmindMmdb(mmdbPath: string, edition: 'city' | 'asn'): Promise<NormalizedRecord[]> {
+export async function parseMaxmindMmdb(
+  mmdbPath: string,
+  edition: "city" | "asn",
+): Promise<NormalizedRecord[]> {
   const r = reader(mmdbPath);
   const records: NormalizedRecord[] = [];
 
@@ -42,7 +45,7 @@ export async function parseMaxmindMmdb(mmdbPath: string, edition: 'city' | 'asn'
         const data = r.get(ip) as Record<string, unknown> | null;
         if (!data) continue;
         const buf = parseIp(ip)!;
-        const rec: NormalizedRecord = { startIp: buf, endIp: buf, source: 'maxmind' };
+        const rec: NormalizedRecord = { startIp: buf, endIp: buf, source: "maxmind" };
         applyCityFields(rec, data);
         records.push(rec);
       }
