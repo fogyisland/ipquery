@@ -22,7 +22,8 @@ async function getCsrf(): Promise<{ cookie: string; token: string }> {
   const r = await request(app.server).get("/try");
   const setCookie = (r.headers["set-cookie"] as string[]).find((c) => c.startsWith("csrf="))!;
   const issuedSetCookie = (r.headers["set-cookie"] as string[]).find((c) => c.startsWith("csrf_issued="))!;
-  const cookie = `${setCookie.split(";")[0]!}; ${issuedSetCookie.split(";")[0]!}`;
+  const bindSetCookie = (r.headers["set-cookie"] as string[]).find((c) => c.startsWith("csrf_bind="))!;
+  const cookie = `${setCookie.split(";")[0]!}; ${issuedSetCookie.split(";")[0]!}; ${bindSetCookie.split(";")[0]!}`;
   const tokenMatch = /csrf=([a-f0-9]+)/.exec(setCookie);
   const token = tokenMatch ? tokenMatch[1]! : "";
   return { cookie, token };

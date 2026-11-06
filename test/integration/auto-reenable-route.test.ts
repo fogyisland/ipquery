@@ -53,8 +53,9 @@ async function csrfPair(): Promise<{ cookie: string; token: string }> {
   const cookies = r.headers["set-cookie"] as string[];
   const csrfLine = cookies.find((c) => c.startsWith("csrf="))!.split(";")[0]!;
   const issuedLine = cookies.find((c) => c.startsWith("csrf_issued="))!.split(";")[0]!;
+  const bindLine = cookies.find((c) => c.startsWith("csrf_bind="))!.split(";")[0]!;
   const tokenMatch = /csrf=([a-f0-9]+)/.exec(csrfLine)!;
-  return { cookie: `${csrfLine}; ${issuedLine}`, token: tokenMatch[1]! };
+  return { cookie: `${csrfLine}; ${issuedLine}; ${bindLine}`, token: tokenMatch[1]! };
 }
 
 describe("POST /admin/providers/:name — manual toggle wins over reaper", () => {

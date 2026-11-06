@@ -68,9 +68,12 @@ describe("admin settings", () => {
     const csrfIssued = csrfIssuedCookie
       ? decodeURIComponent(csrfIssuedCookie.split(";")[0].split("=")[1])
       : "";
+    // The CSRF binding check also needs the httpOnly HMAC cookie.
+    const csrfBindCookie = getRes.headers["set-cookie"]?.find((c) => c.startsWith("csrf_bind="));
+    const csrfBind = csrfBindCookie ? csrfBindCookie.split(";")[0].split("=")[1] : "";
     const post = await request(app.server)
       .post("/admin/settings/etl-restart")
-      .set("Cookie", `sid=${adminSid}; csrf=${csrfValue}; csrf_issued=${csrfIssued}`)
+      .set("Cookie", `sid=${adminSid}; csrf=${csrfValue}; csrf_issued=${csrfIssued}; csrf_bind=${csrfBind}`)
       .type("form")
       .send({ csrf: csrfValue });
     // Success: redirect to /admin/settings (302). Brief says "works" so we
@@ -78,6 +81,8 @@ describe("admin settings", () => {
     expect(post.status).not.toBe(404);
     expect(post.status).not.toBe(500);
     expect(post.status).toBe(302);
-    expect(post.headers.location).toBe("/admin/settings");
+    // The tabbed settings redesign anchors the ETL controls on the
+    // Integrations pane, so the handler redirects to that hash.
+    expect(post.headers.location).toBe("/admin/settings#integrations");
   });
 });

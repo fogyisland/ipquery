@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 import type { FastifyInstance } from "fastify";
 import type { RowDataPacket } from "mysql2";
+import { redactSecret } from "../../config";
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import {
   findUserById,
@@ -682,9 +683,7 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
       req.log.error({ err }, "etl.trigger: recordEtlStart failed");
       return reply.code(503).view("errors/csrf.hbs", { layout: "layouts/public", req });
     }
-    void runPipeline({ cfg: app.cfg, runId }).catch((err) =>
-      app.log.error({ err }, "manual ETL failed"),
-    );
+    void runPipeline({ cfg: app.cfg, runId }).catch((err) => app.log.error({ err }, "manual ETL failed"));
     return reply.redirect(`/admin/etl/runs/${runId}?live=1`);
   });
 
@@ -1018,19 +1017,12 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
   app.get("/admin/settings", async (req, reply) => {
     const cfg = app.cfg;
     // Secrets (db.password, web.sessionSecret, web.csrfSecret, smtp.pass,
-    // maxmind.licenseKey) are passed RAW to the template so the eye-icon
-    // reveal can swap them client-side from the data-secret attribute.
-    // Security model: this page is gated by the admin auth guard; only an
-    // authenticated admin session reaches this handler, and the page is
-    // served over the same HTTPS-else-cookieSecure-locked connection that
-    // already protects the rest of the admin console. If you're worried
-    // about DOM-level exposure (e.g. a logged-in admin walks away from an
-    // unlocked machine) the data-secret attribute still masks the value
-    // until the admin explicitly clicks the eye — it's not plaintext
-    // innerText by default. The previous version of this code used
-    // redactSecret() which kept secrets out of the DOM entirely but
-    // didn't allow reveal at all; the trade-off was discussed and the
-    // reveal UX was preferred.
+    // maxmind.licenseKey) are redactSecret()-ed BEFORE they reach the
+    // template. The eye-icon reveal toggles between the bullet mask and
+    // the redacted form (first4…last4) — never the raw value. Raw secrets
+    // must not exist anywhere in the rendered DOM: anything that can read
+    // HTML source (DevTools, view-source, a cached page, a proxy log, or
+    // an XSS in this page) would otherwise lift the live secrets.
     const display = {
       db: {
         host: cfg.db.host,
@@ -1038,7 +1030,7 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
         database: cfg.db.database,
         user: cfg.db.user,
         poolSize: cfg.db.poolSize,
-        password: cfg.db.password || "",
+        password: cfg.db.password ? redactSecret(cfg.db.password) : "",
       },
       api: { port: cfg.api.port, rateLimit: cfg.api.rateLimit },
       etl: { schedule: cfg.etl.schedule, timezone: cfg.etl.timezone, dataDir: cfg.etl.dataDir },
@@ -1047,20 +1039,20 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
         cookieDomain: cfg.web.cookieDomain,
         cookieSecure: cfg.web.cookieSecure,
         sessionTtlHours: cfg.web.sessionTtlHours,
-        sessionSecret: cfg.web.sessionSecret || "",
-        csrfSecret: cfg.web.csrfSecret || "",
+        sessionSecret: cfg.web.sessionSecret ? redactSecret(cfg.web.sessionSecret) : "",
+        csrfSecret: cfg.web.csrfSecret ? redactSecret(cfg.web.csrfSecret) : "",
       },
       smtp: {
         host: cfg.smtp.host || "(console)",
         port: cfg.smtp.port,
         secure: cfg.smtp.secure,
         user: cfg.smtp.user,
-        pass: cfg.smtp.pass || "",
+        pass: cfg.smtp.pass ? redactSecret(cfg.smtp.pass) : "",
         from: cfg.smtp.from,
       },
       security: { ...cfg.security },
       maxmind: {
-        licenseKey: cfg.maxmind.licenseKey || "",
+        licenseKey: cfg.maxmind.licenseKey ? redactSecret(cfg.maxmind.licenseKey) : "",
         editions: cfg.maxmind.editions,
       },
     };
