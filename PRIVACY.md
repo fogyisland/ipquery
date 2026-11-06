@@ -11,14 +11,14 @@ below happens on infrastructure you control.
 When you operate your own IPQuery instance, the following data is stored in
 your MySQL database:
 
-| Category | What | Purpose | Retention |
-|---|---|---|---|
-| Account | Email, display name, hashed password (Argon2id) | Authentication | Until you delete the account |
-| Sessions | Session ID, IP, user agent, expiry | Persisted login | 7 days rolling (configurable via `SESSION_TTL_HOURS`) |
-| API keys | Label, prefix, hashed secret, last-used timestamp | Authenticated API access | Until revoked |
-| Query log | Source IP, timestamp, status (hit/miss/invalid), user/API key (if applicable) | Analytics, troubleshooting | Until you delete it |
-| Admin audit log | Admin user, action, target, IP, timestamp | Compliance | Until you delete it |
-| ETL runs | Source, status, merge counts, timestamps | Operational history | Until you delete it |
+| Category        | What                                                                          | Purpose                    | Retention                                             |
+| --------------- | ----------------------------------------------------------------------------- | -------------------------- | ----------------------------------------------------- |
+| Account         | Email, display name, hashed password (Argon2id)                               | Authentication             | Until you delete the account                          |
+| Sessions        | Session ID, IP, user agent, expiry                                            | Persisted login            | 7 days rolling (configurable via `SESSION_TTL_HOURS`) |
+| API keys        | Label, prefix, hashed secret, last-used timestamp                             | Authenticated API access   | Until revoked                                         |
+| Query log       | Source IP, timestamp, status (hit/miss/invalid), user/API key (if applicable) | Analytics, troubleshooting | Until you delete it                                   |
+| Admin audit log | Admin user, action, target, IP, timestamp                                     | Compliance                 | Until you delete it                                   |
+| ETL runs        | Source, status, merge counts, timestamps                                      | Operational history        | Until you delete it                                   |
 
 You, as the operator, are the data controller for this data. You are
 responsible for posting your own privacy notice to your end users and
@@ -41,11 +41,11 @@ No telemetry, analytics, or crash reporting is sent anywhere by default.
 
 IPQuery sets the following cookies on your users' browsers:
 
-| Cookie | Purpose | HttpOnly | SameSite |
-|---|---|---|---|
-| `sid` | Session identifier | yes | Lax |
-| `csrf` | Double-submit CSRF token | no | Lax |
-| `lang` | UI language preference (`zh-CN` / `en-US`) | no | Lax |
+| Cookie | Purpose                                    | HttpOnly | SameSite |
+| ------ | ------------------------------------------ | -------- | -------- |
+| `sid`  | Session identifier                         | yes      | Lax      |
+| `csrf` | Double-submit CSRF token                   | no       | Lax      |
+| `lang` | UI language preference (`zh-CN` / `en-US`) | no       | Lax      |
 
 ## 4. Subprocessors
 
