@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 import { describe, it, expect, vi } from "vitest";
-import { mcpLookup, lookupToolDef, clampInt, mcpQueueStats, mcpEtlStatus, queueStatsToolDef, etlStatusToolDef, queueTopToolDef, type McpPool } from "../../src/mcp/tools";
+import { mcpLookup, lookupToolDef, clampInt, mcpQueueStats, mcpEtlStatus, queueStatsToolDef, etlStatusToolDef, queueTopToolDef, maskEmail, maskPrefix, sanitizeQueryRow, mcpQueriesRecent, queriesRecentToolDef, queriesDailyToolDef, type McpPool } from "../../src/mcp/tools";
 
 const noopLog = { warn: vi.fn(), error: vi.fn() };
 
@@ -95,5 +95,78 @@ describe("tool defs", () => {
     expect(queueTopToolDef().name).toBe("ipquery_queue_top");
     expect(etlStatusToolDef().name).toBe("ipquery_etl_status");
     expect(queueTopToolDef().inputSchema.properties).toHaveProperty("limit");
+  });
+});
+
+describe("masking", () => {
+  it("masks email and api-key prefix", () => {
+    expect(maskEmail("peng@example.com")).toBe("p***@e***.com");
+    expect(maskEmail(null)).toBeNull();
+    expect(maskPrefix("abcd1234")).toBe("abcd***");
+    expect(maskPrefix(null)).toBeNull();
+  });
+  it("handles short inputs without crashing", () => {
+    expect(maskEmail("a@b.c")).toBe("a***@b***.c");
+    expect(maskPrefix("ab")).toBe("ab***");
+    expect(maskEmail("")).toBeNull();
+    expect(maskPrefix("")).toBeNull();
+  });
+});
+
+describe("sanitizeQueryRow", () => {
+  const row = {
+    id: 1,
+    ts: new Date("2026-11-05T00:00:00Z"),
+    ipText: "1.2.3.4",
+    status: "hit",
+    userEmail: "peng@example.com",
+    apiKeyPrefix: "abcd1234",
+    userAgent: "curl/8",
+  } as never;
+  it("redacts by default", () => {
+    const r = sanitizeQueryRow(row, false) as Record<string, unknown>;
+    expect(r.userEmail).toBe("p***@e***.com");
+    expect(r.apiKeyPrefix).toBe("abcd***");
+    expect(r.ipText).toBe("1.2.3.4");
+  });
+  it("reveals originals with includePrivate", () => {
+    const r = sanitizeQueryRow(row, true) as Record<string, unknown>;
+    expect(r.userEmail).toBe("peng@example.com");
+    expect(r.apiKeyPrefix).toBe("abcd1234");
+  });
+});
+
+describe("mcpQueriesRecent", () => {
+  it("redacts rows by default and clamps limit", async () => {
+    const pool = {
+      query: vi.fn().mockResolvedValue([
+        [{ id: 1, ts: new Date(), ip_text: "1.2.3.4", status: "hit", user_email: "peng@example.com", api_key_prefix: "abcd1234" }],
+        [{ total: 1 }],
+      ]),
+    };
+    const res = await mcpQueriesRecent(makeDeps(pool), { limit: 500 });
+    const first = res.rows[0] as Record<string, unknown>;
+    expect(first.userEmail).toBe("p***@e***.com");
+    expect(first.apiKeyPrefix).toBe("abcd***");
+    expect(pool.query).toHaveBeenCalledWith(expect.anything(), [50, 0]);
+  });
+  it("passes status filter through", async () => {
+    const pool = {
+      query: vi
+        .fn()
+        .mockResolvedValueOnce([[], []])
+        .mockResolvedValueOnce([[{ c: 0 }], []]),
+    };
+    await mcpQueriesRecent(makeDeps(pool), { status: "miss" });
+    expect(pool.query).toHaveBeenCalledWith(expect.stringContaining("status = ?"), expect.anything());
+  });
+});
+
+describe("query-log tool defs", () => {
+  it("expose names and enum-restricted status", () => {
+    expect(queriesRecentToolDef().name).toBe("ipquery_queries_recent");
+    expect(queriesDailyToolDef().name).toBe("ipquery_queries_daily");
+    const props = queriesRecentToolDef().inputSchema.properties as Record<string, { enum?: string[] }>;
+    expect(props.status?.enum).toEqual(["hit", "miss", "invalid"]);
   });
 });

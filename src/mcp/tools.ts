@@ -5,6 +5,8 @@ import type { Pool } from "mysql2/promise";
 import { doLookupCore } from "../lookup-core";
 import { lastEtlRun } from "../storage/mysql";
 import { queueStats, topByQueryCount } from "../storage/unknownIpQueue";
+import { listQueryLogs, countQueriesByDay } from "../storage/queryLog";
+import type { QueryLogRow } from "../storage/queryLog";
 import type { LookupResult } from "../types";
 
 /** Minimal dependency injection surface every MCP tool handler receives. */
@@ -167,4 +169,116 @@ export async function mcpQueueTop(deps: McpPool, limit?: unknown): Promise<Queue
     deps.log.error({ err: e }, "mcpQueueTop failed");
     throw new Error(`queue top failed: ${e instanceof Error ? e.message : String(e)}`);
   }
+}
+
+// ─── Query-log tools + redaction ──────────────────────────────────────
+
+/** Mask an email as p***@e***.com; null/empty → null. */
+export function maskEmail(email: string | null | undefined): string | null {
+  if (!email) return null;
+  const at = email.indexOf("@");
+  if (at <= 0) return "***";
+  const local = email.slice(0, at);
+  const domain = email.slice(at + 1);
+  if (!domain) return `${local[0]}***@***`;
+  const dot = domain.indexOf(".");
+  const tld = dot > 0 ? domain.slice(dot) : "";
+  return `${local[0]}***@${domain[0]}***${tld}`;
+}
+
+/** Keep the first 4 chars of an API-key prefix; null/empty → null. */
+export function maskPrefix(prefix: string | null | undefined): string | null {
+  if (!prefix) return null;
+  return `${prefix.slice(0, 4)}***`;
+}
+
+/**
+ * Serialize a query-log row for MCP output. includePrivate=false (the
+ * default from the tool layer) redacts userEmail and apiKeyPrefix; remote
+ * address and IP text stay visible — they are the lookup subject, not a
+ * secret. Dates are ISO-serialized.
+ */
+export function sanitizeQueryRow(row: QueryLogRow, includePrivate: boolean): Record<string, unknown> {
+  return {
+    id: row.id,
+    ts: iso(row.ts ?? null),
+    ipText: row.ipText,
+    status: row.status,
+    userId: row.userId,
+    userAgent: row.userAgent ?? null,
+    userEmail: includePrivate ? (row.userEmail ?? null) : maskEmail(row.userEmail),
+    apiKeyPrefix: includePrivate ? (row.apiKeyPrefix ?? null) : maskPrefix(row.apiKeyPrefix),
+  };
+}
+
+export interface QueriesRecentArgs {
+  limit?: unknown;
+  status?: unknown;
+  includePrivate?: unknown;
+}
+
+const VALID_STATUSES = ["hit", "miss", "invalid"] as const;
+type QueryStatus = (typeof VALID_STATUSES)[number];
+
+export async function mcpQueriesRecent(
+  deps: McpPool,
+  args: QueriesRecentArgs = {},
+): Promise<{ rows: Array<Record<string, unknown>>; total: number }> {
+  const limit = clampInt(args.limit, 1, 50, 10);
+  const status =
+    typeof args.status === "string" && (VALID_STATUSES as readonly string[]).includes(args.status)
+      ? (args.status as QueryStatus)
+      : undefined;
+  const includePrivate = args.includePrivate === true;
+  try {
+    const { rows, total } = await listQueryLogs(deps.pool, { offset: 0, limit, status });
+    return { rows: rows.map((r) => sanitizeQueryRow(r, includePrivate)), total };
+  } catch (e) {
+    deps.log.error({ err: e }, "mcpQueriesRecent failed");
+    throw new Error(`recent queries failed: ${e instanceof Error ? e.message : String(e)}`);
+  }
+}
+
+export function queriesRecentToolDef(): ToolDef {
+  return {
+    name: "ipquery_queries_recent",
+    description:
+      "Recent lookup queries from the query log, newest first. userEmail and apiKeyPrefix are redacted unless includePrivate is true.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        limit: { type: "number", description: "Rows to return (1-50, default 10)" },
+        status: { type: "string", enum: ["hit", "miss", "invalid"], description: "Filter by result status" },
+        includePrivate: {
+          type: "boolean",
+          description: "Return unredacted userEmail/apiKeyPrefix (default false)",
+        },
+      },
+    },
+  };
+}
+
+export async function mcpQueriesDaily(
+  deps: McpPool,
+  args: { days?: unknown } = {},
+): Promise<Array<{ day: string; count: number }>> {
+  const days = clampInt(args.days, 1, 90, 30);
+  try {
+    const buckets = await countQueriesByDay(deps.pool, days);
+    return buckets.map((b) => ({ day: b.date, count: Number(b.total) }));
+  } catch (e) {
+    deps.log.error({ err: e }, "mcpQueriesDaily failed");
+    throw new Error(`daily queries failed: ${e instanceof Error ? e.message : String(e)}`);
+  }
+}
+
+export function queriesDailyToolDef(): ToolDef {
+  return {
+    name: "ipquery_queries_daily",
+    description: "Lookup query volume per day over the last N days (1-90, default 30).",
+    inputSchema: {
+      type: "object",
+      properties: { days: { type: "number", description: "Window size in days (1-90, default 30)" } },
+    },
+  };
 }
