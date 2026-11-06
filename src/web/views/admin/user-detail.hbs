@@ -1,36 +1,36 @@
-{{!-- SPDX-License-Identifier: MIT --}}
-<h1>{{req.t 'admin.users.detail.title' id=user.id email=user.email}}</h1>
+{{! SPDX-License-Identifier: MIT }}
+<h1>{{req.t "admin.users.detail.title" id=user.id email=user.email}}</h1>
 <dl>
-  <dt>{{req.t 'admin.users.col.role'}}</dt><dd>{{user.role}}</dd>
-  <dt>{{req.t 'admin.users.col.verified'}}</dt><dd>{{#if user.emailVerified}}&#10003;{{else}}&#10007;{{/if}}</dd>
-  <dt>{{req.t 'admin.users.col.disabled'}}</dt><dd>{{#if user.isDisabled}}&#10003;{{else}}&mdash;{{/if}}</dd>
-  <dt>{{req.t 'admin.users.col.created'}}</dt><dd>{{formatDate user.createdAt}}</dd>
-  <dt>{{req.t 'admin.users.col.lastLogin'}}</dt><dd>{{formatRelative user.lastLoginAt}}</dd>
+  <dt>{{req.t "admin.users.col.role"}}</dt><dd>{{user.role}}</dd>
+  <dt>{{req.t "admin.users.col.verified"}}</dt><dd>{{#if user.emailVerified}}&#10003;{{else}}&#10007;{{/if}}</dd>
+  <dt>{{req.t "admin.users.col.disabled"}}</dt><dd>{{#if user.isDisabled}}&#10003;{{else}}&mdash;{{/if}}</dd>
+  <dt>{{req.t "admin.users.col.created"}}</dt><dd>{{formatDate user.createdAt}}</dd>
+  <dt>{{req.t "admin.users.col.lastLogin"}}</dt><dd>{{formatRelative user.lastLoginAt}}</dd>
 </dl>
 {{#if flash.success}}<div class="flash flash-success">{{flash.success}}</div>{{/if}}
 
 {{#if tempPassword}}
-<div class="flash flash-warning" id="temp-password-banner">
-  <strong>{{req.t 'admin.users.resetPassword.tempNotice'}}</strong>
-  <code id="temp-password-value">{{tempPassword}}</code>
-  <small>{{req.t 'admin.users.resetPassword.tempWarn'}}</small>
-</div>
+  <div class="flash flash-warning" id="temp-password-banner">
+    <strong>{{req.t "admin.users.resetPassword.tempNotice"}}</strong>
+    <code id="temp-password-value">{{tempPassword}}</code>
+    <small>{{req.t "admin.users.resetPassword.tempWarn"}}</small>
+  </div>
 {{/if}}
 
 <form method="POST" action="/admin/users/{{user.id}}/enable" style="display:inline">
-  <input type="hidden" name="csrf" value="{{req.csrfToken}}">
-  <button type="submit">{{req.t 'admin.users.action.enable'}}</button>
+  <input type="hidden" name="csrf" value="{{req.csrfToken}}" />
+  <button type="submit">{{req.t "admin.users.action.enable"}}</button>
 </form>
 <form method="POST" action="/admin/users/{{user.id}}/disable" style="display:inline">
-  <input type="hidden" name="csrf" value="{{req.csrfToken}}">
-  <button type="submit">{{req.t 'admin.users.action.disable'}}</button>
+  <input type="hidden" name="csrf" value="{{req.csrfToken}}" />
+  <button type="submit">{{req.t "admin.users.action.disable"}}</button>
 </form>
 <form method="POST" action="/admin/users/{{user.id}}/verify-email" style="display:inline">
-  <input type="hidden" name="csrf" value="{{req.csrfToken}}">
-  <button type="submit">{{req.t 'admin.users.action.verify'}}</button>
+  <input type="hidden" name="csrf" value="{{req.csrfToken}}" />
+  <button type="submit">{{req.t "admin.users.action.verify"}}</button>
 </form>
 <form method="POST" action="/admin/users/{{user.id}}/reset-password" style="display:inline">
-  <input type="hidden" name="csrf" value="{{req.csrfToken}}">
-  <button type="submit">{{req.t 'admin.users.action.resetPassword'}}</button>
+  <input type="hidden" name="csrf" value="{{req.csrfToken}}" />
+  <button type="submit">{{req.t "admin.users.action.resetPassword"}}</button>
 </form>
-<a href="/admin/users/{{user.id}}/delete/confirm" style="display:inline">{{req.t 'admin.users.action.delete'}}</a>
+<a href="/admin/users/{{user.id}}/delete/confirm" style="display:inline">{{req.t "admin.users.action.delete"}}</a>

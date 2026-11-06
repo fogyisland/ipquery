@@ -1,11 +1,11 @@
-{{!-- SPDX-License-Identifier: MIT --}}
+{{! SPDX-License-Identifier: MIT }}
 {{#if success}}
-  <h1>{{req.t 'verify.success'}}</h1>
-  <p><a href="/login">{{req.t 'common.login'}}</a></p>
+  <h1>{{req.t "verify.success"}}</h1>
+  <p><a href="/login">{{req.t "common.login"}}</a></p>
 {{else}}
-  <h1>{{req.t 'verify.title'}}</h1>
+  <h1>{{req.t "verify.title"}}</h1>
   <p>{{message}}</p>
-  {{#if (eq reason 'expired')}}
-    <p><a href="/login">{{req.t 'auth.verify.resend'}}</a></p>
+  {{#if (eq reason "expired")}}
+    <p><a href="/login">{{req.t "auth.verify.resend"}}</a></p>
   {{/if}}
 {{/if}}
