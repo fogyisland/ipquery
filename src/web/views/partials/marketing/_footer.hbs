@@ -1,4 +1,4 @@
-{{!-- SPDX-License-Identifier: MIT --}}
+{{! SPDX-License-Identifier: MIT }}
 <footer class="m-footer">
   <div class="m-footer-inner">
     <div>
@@ -6,36 +6,36 @@
         <span class="m-topnav-brand-mark">ip</span>
         IPQuery
       </div>
-      <p class="m-footer-tagline">{{req.t 'home.heroSubtitle'}}</p>
+      <p class="m-footer-tagline">{{req.t "home.heroSubtitle"}}</p>
     </div>
     <div class="m-footer-col">
-      <h4>{{req.t 'home.footer.product'}}</h4>
+      <h4>{{req.t "home.footer.product"}}</h4>
       <ul>
-        <li><a href="/docs">{{req.t 'nav.docs'}}</a></li>
-        <li><a href="/try">{{req.t 'nav.try'}}</a></li>
-        <li><a href="/status">{{req.t 'nav.status'}}</a></li>
+        <li><a href="/docs">{{req.t "nav.docs"}}</a></li>
+        <li><a href="/try">{{req.t "nav.try"}}</a></li>
+        <li><a href="/status">{{req.t "nav.status"}}</a></li>
       </ul>
     </div>
     <div class="m-footer-col">
-      <h4>{{req.t 'home.footer.account'}}</h4>
+      <h4>{{req.t "home.footer.account"}}</h4>
       <ul>
         {{#if req.user}}
-          <li><a href="/dashboard">{{req.t 'nav.dashboard'}}</a></li>
+          <li><a href="/dashboard">{{req.t "nav.dashboard"}}</a></li>
         {{else}}
-          <li><a href="/login">{{req.t 'nav.login'}}</a></li>
-          <li><a href="/signup">{{req.t 'common.signup'}}</a></li>
+          <li><a href="/login">{{req.t "nav.login"}}</a></li>
+          <li><a href="/signup">{{req.t "common.signup"}}</a></li>
         {{/if}}
       </ul>
     </div>
     <div class="m-footer-col">
-      <h4>{{req.t 'home.footer.company'}}</h4>
+      <h4>{{req.t "home.footer.company"}}</h4>
       <ul>
-        <li><a href="/about">{{req.t 'nav.about'}}</a></li>
+        <li><a href="/about">{{req.t "nav.about"}}</a></li>
       </ul>
     </div>
   </div>
   <div class="m-footer-bottom">
-    <span>© {{year}} IPQuery · {{req.t 'footer.license'}}</span>
+    <span>© {{year}} IPQuery · {{req.t "footer.license"}}</span>
     <span>v0.1.0</span>
   </div>
 </footer>

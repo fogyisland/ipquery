@@ -1,90 +1,90 @@
-{{!-- SPDX-License-Identifier: MIT --}}
-{{!-- User dashboard. Per-account view: only this user's queries count, so
+{{! SPDX-License-Identifier: MIT }}
+{{! User dashboard. Per-account view: only this user's queries count, so
      hit rate and the per-status counts never leak across users. The
      signature element is the ip-hero — the user's last queried IP rendered
      as oversized mono glyphs with its resolved country / ASN as secondary
-     mono text. This is the visual identity of the product. --}}
+     mono text. This is the visual identity of the product. }}
 
 <header class="dash-welcome">
   <div>
-    <h2>{{req.t 'dashboard.title'}}</h2>
-    <p class="dash-welcome-sub">{{req.t 'dashboard.welcome' name=req.user.displayName}}</p>
+    <h2>{{req.t "dashboard.title"}}</h2>
+    <p class="dash-welcome-sub">{{req.t "dashboard.welcome" name=req.user.displayName}}</p>
   </div>
   <div class="dash-welcome-actions">
-    <a class="button" href="/dashboard/history">{{req.t 'dashboard.history.title'}}</a>
-    <a class="btn-primary" href="/dashboard/keys">{{req.t 'dashboard.keys.title'}}</a>
+    <a class="button" href="/dashboard/history">{{req.t "dashboard.history.title"}}</a>
+    <a class="btn-primary" href="/dashboard/keys">{{req.t "dashboard.keys.title"}}</a>
   </div>
 </header>
 
-{{!-- IP hero — the signature element. Shows the user's most recent lookup
-     with oversized mono typography; empty state nudges toward /try. --}}
+{{! IP hero — the signature element. Shows the user's most recent lookup
+     with oversized mono typography; empty state nudges toward /try. }}
 <section class="card ip-hero-card">
   <header class="chart-card-head">
-    <h3 class="card-title">{{req.t 'dashboard.lastQuery.title'}}</h3>
-    {{#if lastQuery}}<a class="dash-link" href="/dashboard/history">{{req.t 'admin.dashboard.viewAll'}}</a>{{/if}}
+    <h3 class="card-title">{{req.t "dashboard.lastQuery.title"}}</h3>
+    {{#if lastQuery}}<a class="dash-link" href="/dashboard/history">{{req.t "admin.dashboard.viewAll"}}</a>{{/if}}
   </header>
   {{#if lastQuery}}
     <p class="ip-hero">{{lastQuery.ipText}}</p>
     <p class="ip-hero-meta">
-      {{#if (eq lastQuery.status 'hit')}}
-        <span class="ip-status ip-status--hit">● {{req.t 'admin.dashboard.hit'}}</span>
-        {{#if lastQuery.countryCode}}<span>{{req.t 'dashboard.lastQuery.country'}}: {{lastQuery.countryCode}}{{#if lastQuery.countryName}} — {{lastQuery.countryName}}{{/if}}</span>{{/if}}
-        {{#if lastQuery.asnOrg}}<span>{{req.t 'dashboard.lastQuery.asn'}}: {{lastQuery.asnOrg}}</span>{{/if}}
-      {{else if (eq lastQuery.status 'miss')}}
-        <span class="ip-status ip-status--miss">● {{req.t 'dashboard.lastQuery.miss'}}</span>
+      {{#if (eq lastQuery.status "hit")}}
+        <span class="ip-status ip-status--hit">● {{req.t "admin.dashboard.hit"}}</span>
+        {{#if lastQuery.countryCode}}<span>{{req.t "dashboard.lastQuery.country"}}: {{lastQuery.countryCode}}{{#if lastQuery.countryName}} — {{lastQuery.countryName}}{{/if}}</span>{{/if}}
+        {{#if lastQuery.asnOrg}}<span>{{req.t "dashboard.lastQuery.asn"}}: {{lastQuery.asnOrg}}</span>{{/if}}
+      {{else if (eq lastQuery.status "miss")}}
+        <span class="ip-status ip-status--miss">● {{req.t "dashboard.lastQuery.miss"}}</span>
       {{else}}
-        <span class="ip-status ip-status--invalid">● {{req.t 'dashboard.lastQuery.invalid'}}</span>
+        <span class="ip-status ip-status--invalid">● {{req.t "dashboard.lastQuery.invalid"}}</span>
       {{/if}}
-      <span>{{req.t 'dashboard.lastQuery.at'}}: {{formatRelative lastQuery.ts}}</span>
+      <span>{{req.t "dashboard.lastQuery.at"}}: {{formatRelative lastQuery.ts}}</span>
     </p>
   {{else}}
     <p class="ip-hero ip-hero--empty">— — — —</p>
     <p class="ip-hero-meta">
-      <span>{{req.t 'dashboard.lastQuery.empty'}}</span>
+      <span>{{req.t "dashboard.lastQuery.empty"}}</span>
     </p>
-    <p style="margin-top: 16px;"><a class="btn-primary" href="/try">{{req.t 'dashboard.lastQuery.cta'}}</a></p>
+    <p style="margin-top: 16px;"><a class="btn-primary" href="/try">{{req.t "dashboard.lastQuery.cta"}}</a></p>
   {{/if}}
 </section>
 
-<h3 class="dash-section-title">{{req.t 'dashboard.section.queries7d'}}</h3>
+<h3 class="dash-section-title">{{req.t "dashboard.section.queries7d"}}</h3>
 <div class="dashboard-grid dashboard-grid--three">
   <div class="card stat-card stat-card--hit">
-    <p class="card-title">{{req.t 'dashboard.hit'}}</p>
+    <p class="card-title">{{req.t "dashboard.hit"}}</p>
     <p class="card-value">{{counts.hit}}</p>
-    <p class="card-sub">{{req.t 'dashboard.last7d'}}</p>
+    <p class="card-sub">{{req.t "dashboard.last7d"}}</p>
   </div>
   <div class="card stat-card stat-card--miss">
-    <p class="card-title">{{req.t 'dashboard.miss'}}</p>
+    <p class="card-title">{{req.t "dashboard.miss"}}</p>
     <p class="card-value">{{counts.miss}}</p>
-    <p class="card-sub">{{req.t 'dashboard.last7d'}}</p>
+    <p class="card-sub">{{req.t "dashboard.last7d"}}</p>
   </div>
   <div class="card stat-card stat-card--invalid">
-    <p class="card-title">{{req.t 'dashboard.invalid'}}</p>
+    <p class="card-title">{{req.t "dashboard.invalid"}}</p>
     <p class="card-value">{{counts.invalid}}</p>
-    <p class="card-sub">{{req.t 'dashboard.last7d'}}</p>
+    <p class="card-sub">{{req.t "dashboard.last7d"}}</p>
   </div>
 </div>
 
 <div class="card">
   <header class="chart-card-head">
-    <h3 class="card-title">{{req.t 'dashboard.account.title'}}</h3>
-    <a class="dash-link" href="/dashboard/profile">{{req.t 'dashboard.profile.title' }} &rarr;</a>
+    <h3 class="card-title">{{req.t "dashboard.account.title"}}</h3>
+    <a class="dash-link" href="/dashboard/profile">{{req.t "dashboard.profile.title"}} &rarr;</a>
   </header>
   <dl class="settings-dl">
-    <dt>{{req.t 'dashboard.profile.email'}}</dt><dd>{{req.user.email}}</dd>
-    <dt>{{req.t 'dashboard.profile.displayName'}}</dt><dd>{{req.user.displayName}}</dd>
-    <dt>{{req.t 'dashboard.joined'}}</dt><dd>{{formatDate req.user.createdAt}}</dd>
+    <dt>{{req.t "dashboard.profile.email"}}</dt><dd>{{req.user.email}}</dd>
+    <dt>{{req.t "dashboard.profile.displayName"}}</dt><dd>{{req.user.displayName}}</dd>
+    <dt>{{req.t "dashboard.joined"}}</dt><dd>{{formatDate req.user.createdAt}}</dd>
   </dl>
 </div>
 
 <div class="card">
   <header class="chart-card-head">
-    <h3 class="card-title">{{req.t 'dashboard.shortcuts.title'}}</h3>
+    <h3 class="card-title">{{req.t "dashboard.shortcuts.title"}}</h3>
   </header>
   <div class="dash-quick">
-    <a class="button" href="/dashboard/history">{{req.t 'dashboard.history.title'}}</a>
-    <a class="button" href="/dashboard/keys">{{req.t 'dashboard.keys.title'}}</a>
-    <a class="button" href="/dashboard/profile">{{req.t 'dashboard.profile.title'}}</a>
-    <a class="button" href="/try">{{req.t 'nav.try'}}</a>
+    <a class="button" href="/dashboard/history">{{req.t "dashboard.history.title"}}</a>
+    <a class="button" href="/dashboard/keys">{{req.t "dashboard.keys.title"}}</a>
+    <a class="button" href="/dashboard/profile">{{req.t "dashboard.profile.title"}}</a>
+    <a class="button" href="/try">{{req.t "nav.try"}}</a>
   </div>
 </div>

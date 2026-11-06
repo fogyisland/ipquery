@@ -1,34 +1,34 @@
-{{!-- SPDX-License-Identifier: MIT --}}
-{{!-- Hero: thesis + IP query + 32-bit anatomy signature.
+{{! SPDX-License-Identifier: MIT }}
+{{! Hero: thesis + IP query + 32-bit anatomy signature.
      Centered single column. The bit-grid (4 bytes × 8 bits of 8.8.8.8)
      is the one memorable thing — it's what makes this page not look
      like a generic SaaS landing. Demo is static (renders without JS);
-     the form below the thesis is what the visitor actually submits. --}}
+     the form below the thesis is what the visitor actually submits. }}
 <section class="m-hero">
   <div class="m-hero-inner">
-    <span class="m-eyebrow m-hero-eyebrow">{{req.t 'home.heroEyebrow'}}</span>
-    <h1 class="m-hero-title">{{{req.t 'home.heroTitleAccent'}}}</h1>
-    <p class="m-hero-sub">{{req.t 'home.heroSubLong'}}</p>
+    <span class="m-eyebrow m-hero-eyebrow">{{req.t "home.heroEyebrow"}}</span>
+    <h1 class="m-hero-title">{{{req.t "home.heroTitleAccent"}}}</h1>
+    <p class="m-hero-sub">{{req.t "home.heroSubLong"}}</p>
 
     <form class="m-hero-query" method="POST" action="/try">
-      <input type="hidden" name="csrf" value="{{req.csrfToken}}">
-      <input type="text" name="ip" placeholder="{{req.t 'lookup.input.placeholder'}}" required autocomplete="off" autofocus spellcheck="false" inputmode="decimal">
-      <button type="submit">{{req.t 'lookup.submit'}}</button>
+      <input type="hidden" name="csrf" value="{{req.csrfToken}}" />
+      <input type="text" name="ip" placeholder="{{req.t 'lookup.input.placeholder'}}" required autocomplete="off" autofocus spellcheck="false" inputmode="decimal" />
+      <button type="submit">{{req.t "lookup.submit"}}</button>
     </form>
 
     <div class="m-hero-meta">
-      <span><b>{{ipCount}}</b> {{req.t 'home.ipRanges'}}</span>
-      <span><b>3</b> {{req.t 'home.metaSources'}}</span>
-      <span><b>&lt;100ms</b> {{req.t 'home.metaLatency'}}</span>
+      <span><b>{{ipCount}}</b> {{req.t "home.ipRanges"}}</span>
+      <span><b>3</b> {{req.t "home.metaSources"}}</span>
+      <span><b>&lt;100ms</b> {{req.t "home.metaLatency"}}</span>
     </div>
 
     <div class="m-bits" aria-label="8.8.8.8 — 32-bit anatomy">
       <div class="m-bits-head">
-        <span>{{req.t 'home.ipgrid.demoLabel'}}</span>
+        <span>{{req.t "home.ipgrid.demoLabel"}}</span>
         <span class="m-bits-target">8.8.8.8</span>
       </div>
       <div class="m-bits-rows">
-        {{!-- 4 bytes of 8.8.8.8 = 00001000 00001000 00001000 00001000 --}}
+        {{! 4 bytes of 8.8.8.8 = 00001000 00001000 00001000 00001000 }}
         <div class="m-bits-row">
           <span>byte 1</span>
           <div class="m-bits-byte">

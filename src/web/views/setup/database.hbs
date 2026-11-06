@@ -1,18 +1,18 @@
-{{!-- SPDX-License-Identifier: MIT --}}
+{{! SPDX-License-Identifier: MIT }}
 <section class="setup-step">
-  <h1>{{req.t 'setup.database.title'}}</h1>
-  <p>{{req.t 'setup.database.intro'}}</p>
+  <h1>{{req.t "setup.database.title"}}</h1>
+  <p>{{req.t "setup.database.intro"}}</p>
   <ul class="setup-db-info">
-    <li><strong>{{req.t 'setup.database.hostLabel'}}:</strong> {{db.host}}</li>
-    <li><strong>{{req.t 'setup.database.portLabel'}}:</strong> {{db.port}}</li>
-    <li><strong>{{req.t 'setup.database.userLabel'}}:</strong> {{db.user}}</li>
-    <li><strong>{{req.t 'setup.database.dbLabel'}}:</strong> {{db.database}}</li>
+    <li><strong>{{req.t "setup.database.hostLabel"}}:</strong> {{db.host}}</li>
+    <li><strong>{{req.t "setup.database.portLabel"}}:</strong> {{db.port}}</li>
+    <li><strong>{{req.t "setup.database.userLabel"}}:</strong> {{db.user}}</li>
+    <li><strong>{{req.t "setup.database.dbLabel"}}:</strong> {{db.database}}</li>
   </ul>
-  <p class="form-help">{{req.t 'setup.database.envHint'}}</p>
+  <p class="form-help">{{req.t "setup.database.envHint"}}</p>
   {{#if error}}<p class="form-error">{{error}}</p>{{/if}}
   <form method="POST" action="/setup/database">
-    <input type="hidden" name="csrf" value="{{csrfToken}}">
-    <button type="submit" class="btn-primary">{{req.t 'setup.database.test'}}</button>
+    <input type="hidden" name="csrf" value="{{csrfToken}}" />
+    <button type="submit" class="btn-primary">{{req.t "setup.database.test"}}</button>
   </form>
-  <p><a href="/setup">{{req.t 'common.back'}}</a></p>
+  <p><a href="/setup">{{req.t "common.back"}}</a></p>
 </section>
