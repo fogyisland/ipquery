@@ -8,10 +8,11 @@
   at the bottom boots the hashchange handler.
 
   Secrets (db.password, web.sessionSecret, web.csrfSecret, smtp.pass,
-  maxmind.licenseKey) ship via data-secret on a .secret-mask <code>;
-  the .secret-toggle button swaps innerText between "••••••••••" and the
-  raw value. Admin-only page, session-gated — the security trade-off is
-  documented in src/web/routes/admin.ts.
+  maxmind.licenseKey) are REDACTED server-side before reaching this
+  template (first4…last4). They ship via data-secret on a .secret-mask
+  <code>; the .secret-toggle button swaps innerText between
+  "••••••••••" and the redacted form — never the raw value. Raw secrets
+  must not exist in the rendered DOM (see src/web/routes/admin.ts).
 --}}
 
 <h2>{{req.t 'admin.settings.title'}}</h2>

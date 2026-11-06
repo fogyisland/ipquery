@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from "vitest";
 import { createTestDb, dropTestDb, type TestDb } from "../helpers/db";
+import { csrfTripleFrom } from "../helpers/csrf";
 import { loadConfig } from "../../src/config";
 import { buildServer } from "../../src/api/server";
 import { createUser, markEmailVerified } from "../../src/storage/users";
@@ -15,18 +16,15 @@ async function freshApp(): Promise<Awaited<ReturnType<typeof buildServer>>> {
   return buildServer(cfg);
 }
 
-// FIX (Task 15): CSRF plugin requires BOTH `csrf` and `csrf_issued` cookies
-// (see src/web/plugins/csrf.ts). The brief's helper only sent `csrf`, so every
-// POST returned 403. We extract both cookies and return them as a paired header.
+// FIX (Task 15 + CSRF binding): the CSRF plugin requires the `csrf`,
+// `csrf_issued` AND `csrf_bind` cookies (see src/web/plugins/csrf.ts —
+// the bind cookie is HMAC(secret, nonce) and verifyCsrfRequest checks
+// it on every POST). We extract all three and return them as one header.
 async function getCsrfCookieAndToken(
   app: Awaited<ReturnType<typeof buildServer>>,
 ): Promise<{ cookie: string; token: string }> {
   const r = await request(app.server).get("/login");
-  const cookies = r.headers["set-cookie"] as string[];
-  const csrfCookie = cookies.find((c) => c.startsWith("csrf="))!.split(";")[0]!;
-  const issuedCookie = cookies.find((c) => c.startsWith("csrf_issued="))!.split(";")[0]!;
-  const tokenMatch = /csrf=([a-f0-9]+)/.exec(csrfCookie)!;
-  return { cookie: `${csrfCookie}; ${issuedCookie}`, token: tokenMatch[1]! };
+  return csrfTripleFrom(r.headers["set-cookie"] as string[]);
 }
 
 async function seedUser(
@@ -84,7 +82,7 @@ describe("login", () => {
     expect((r.headers["set-cookie"] as string[]).some((c) => c.startsWith("sid="))).toBe(true);
   });
 
-  it("admin login → /admin (not /dashboard)", async () => {
+  it("admin login → /dashboard, then the admin guard admits them to /admin", async () => {
     // seedUser above uses role='user'; create an admin explicitly.
     const hash = await hashPassword("AdminPass1234");
     await createUser(app.pool, {
@@ -101,7 +99,13 @@ describe("login", () => {
       .type("form")
       .send({ email: "admin@x.com", password: "AdminPass1234", csrf: token });
     expect(r.status).toBe(302);
-    expect(r.headers.location).toBe("/admin");
+    // Deliberate product behavior (src/web/routes/auth.ts): everyone lands
+    // on /dashboard after login; admins reach /admin via the sidebar CTA.
+    expect(r.headers.location).toBe("/dashboard");
+    // Prove the admin role does grant access rather than bouncing to 403.
+    const sidCookie = (r.headers["set-cookie"] as string[]).find((c) => c.startsWith("sid="))!;
+    const adminPage = await request(app.server).get("/admin").set("Cookie", sidCookie.split(";")[0]!);
+    expect(adminPage.status).toBe(200);
   });
 
   it("admin login honors ?next= override (e.g. ?next=/admin/ingest)", async () => {

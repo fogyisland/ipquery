@@ -89,8 +89,9 @@ function extractCsrfPair(headers: Record<string, unknown>): { cookie: string; to
   if (!raw) throw new Error("no set-cookie header in response");
   const csrfCookie = raw.find((c) => c.startsWith("csrf="))!.split(";")[0]!;
   const issuedCookie = raw.find((c) => c.startsWith("csrf_issued="))!.split(";")[0]!;
+  const bindCookie = raw.find((c) => c.startsWith("csrf_bind="))!.split(";")[0]!;
   const tokenMatch = /csrf=([a-f0-9]+)/.exec(csrfCookie)!;
-  return { cookie: `${csrfCookie}; ${issuedCookie}`, token: tokenMatch[1]! };
+  return { cookie: `${csrfCookie}; ${issuedCookie}; ${bindCookie}`, token: tokenMatch[1]! };
 }
 
 // POST /setup/<step> with CSRF, threaded through supertest agent so cookies

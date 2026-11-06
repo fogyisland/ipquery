@@ -24,10 +24,12 @@ async function getCsrfPair(): Promise<{ cookie: string; token: string }> {
     const setCookie = r.headers["set-cookie"] as string[];
     const csrfLine = setCookie.find((c) => c.startsWith("csrf="))!;
     const issuedLine = setCookie.find((c) => c.startsWith("csrf_issued="))!;
+    const bindLine = setCookie.find((c) => c.startsWith("csrf_bind="))!;
     const csrf = csrfLine.split(";")[0]!;
     const issued = issuedLine.split(";")[0]!;
+    const bind = bindLine.split(";")[0]!;
     const tokenMatch = /csrf=([a-f0-9]+)/.exec(csrf)!;
-    return { cookie: `${csrf}; ${issued}`, token: tokenMatch[1]! };
+    return { cookie: `${csrf}; ${issued}; ${bind}`, token: tokenMatch[1]! };
   } finally {
     await app.close();
   }
