@@ -19,14 +19,14 @@ describe("buildToolRegistrations", () => {
     expect(stats).toBeDefined();
   });
 
-  it("handler errors become structured text, not throws", async () => {
+  it("handler errors become structured results, not throws", async () => {
     const deps = {
       pool: { query: vi.fn().mockRejectedValue(new Error("boom")) },
       log: noopLog,
     } as never;
     const tools = buildToolRegistrations(deps);
     const etl = tools.find((t) => t.def.name === "ipquery_etl_status")!;
-    const res = JSON.parse(await etl.handler({}));
+    const res = await etl.handler({});
     expect(res.isErrorHint).toBe(true);
     expect(res.message).toContain("etl status failed");
   });
@@ -34,7 +34,7 @@ describe("buildToolRegistrations", () => {
   it("lookup rejects an invalid ip with structured output", async () => {
     const tools = buildToolRegistrations({ pool: { query: vi.fn() }, log: noopLog } as never);
     const lookup = tools.find((t) => t.def.name === "ipquery_lookup")!;
-    const res = JSON.parse(await lookup.handler({ ip: "999.9.9.9" }));
+    const res = await lookup.handler({ ip: "999.9.9.9" });
     expect(res.isErrorHint).toBe(true);
     expect(res.message).toContain("invalid ip");
   });
@@ -43,5 +43,23 @@ describe("buildToolRegistrations", () => {
     const tools = buildToolRegistrations({ pool: {}, log: noopLog } as never);
     const bad = tools.find((t) => t.def.name === "ipquery_no_such_tool");
     expect(bad).toBeUndefined();
+  });
+});
+
+describe("handler error typing", () => {
+  it("flags tool failures via a typed isErrorHint field, not string matching", async () => {
+    const deps = {
+      pool: { query: vi.fn().mockRejectedValue(new Error("boom")) },
+      log: noopLog,
+    } as never;
+    const tools = buildToolRegistrations(deps);
+    const etl = tools.find((t) => t.def.name === "ipquery_etl_status")!;
+    // The handler result itself must carry the typed flag; the server layer
+    // must not sniff serialized text to detect errors. Guard: the flag stays
+    // detectable no matter how the JSON is formatted.
+    const result = await etl.handler({});
+    expect(result.isErrorHint).toBe(true);
+    expect(typeof result.message).toBe("string");
+    expect(JSON.stringify(result).replace(/\s+/g, "")).toContain('"isErrorHint":true');
   });
 });

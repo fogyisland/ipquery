@@ -73,15 +73,24 @@ async function main(): Promise<void> {
     const reg = byName.get(name);
     if (!reg) {
       return {
-        content: [{ type: "text", text: `Unknown tool: ${name}. Available: ${TOOL_NAMES.join(", ")}` }],
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify(
+              { isErrorHint: true, message: `Unknown tool: ${name}. Available: ${TOOL_NAMES.join(", ")}` },
+              null,
+              2,
+            ),
+          },
+        ],
         isError: true,
       };
     }
-    const text = await reg.handler(request.params.arguments ?? {});
-    // Handlers already wrap failures in {"isErrorHint":true,...} JSON; pass
-    // that through as a tool error so clients render it as a failure.
-    const isError = text.includes('"isErrorHint": true');
-    return { content: [{ type: "text", text }], isError };
+    const result = await reg.handler(request.params.arguments ?? {});
+    // The typed isErrorHint flag travels on the result object itself — no
+    // sniffing of serialized text, so JSON formatting changes stay safe.
+    const text = JSON.stringify(result, null, 2);
+    return { content: [{ type: "text", text }], isError: result.isErrorHint === true };
   });
 
   const shutdown = async (signal: string): Promise<void> => {
