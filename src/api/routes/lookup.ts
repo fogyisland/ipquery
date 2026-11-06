@@ -1,75 +1,42 @@
 // SPDX-License-Identifier: MIT
-import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
-import { parseIp, isValidIp } from '../../ip';
-import { findRange, lastSuccessfulEtl } from '../../storage/mysql';
-import { findActiveApiKeyByHash, touchApiKey } from '../../storage/apiKeys';
-import { hashToken } from '../../web/auth/tokens';
-import { insertOrIncrement } from '../../storage/unknownIpQueue';
-import type { LookupResult } from '../../types';
+import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
+import { parseIp, isValidIp } from "../../ip";
+import { findActiveApiKeyByHash, touchApiKey } from "../../storage/apiKeys";
+import { hashToken } from "../../web/auth/tokens";
+import { doLookupCore } from "../../lookup-core";
+import type { LookupResult } from "../../types";
 
-declare module 'fastify' {
+declare module "fastify" {
   interface FastifyRequest {
     apiKey?: { keyId: number; userId: number; prefix: string };
   }
 }
 
 async function doLookup(app: FastifyInstance, ip: string): Promise<LookupResult> {
-  const buf = parseIp(ip);
-  if (!buf) {
-    const err = new Error(`invalid ip: ${ip}`);
-    (err as any).statusCode = 400;
-    (err as any).code = 'invalid_ip';
-    throw err;
-  }
-  const row = await findRange(app.pool, buf);
-  if (!row) {
-    // Queue this miss for the backfill job. The DB write is fire-and-forget
-    // at the *response* level: any failure here must NOT mask the 404 the
-    // caller asked for. If insertOrIncrement throws (e.g. pool exhausted),
-    // we log and still throw the not_found err below.
-    try {
-      await insertOrIncrement(app.pool, buf, ip);
-    } catch (e) {
-      app.log.warn({ err: e, ip }, 'unknown_ip_queue insert failed; responding 404 anyway');
-    }
-    const err = new Error(`not found: ${ip}`);
-    (err as any).statusCode = 404;
-    (err as any).code = 'not_found';
-    (err as any).ip = ip;
-    throw err;
-  }
-  const lastRun = await lastSuccessfulEtl(app.pool);
-  const etag = lastRun ? lastRun.toISOString() : 'never';
-  return {
-    ip,
-    country: { code: row.countryCode, name: row.countryName, source: row.countrySource ?? 'maxmind' },
-    region: row.region,
-    city: row.city ? { name: row.city, source: row.citySource ?? 'maxmind' } : undefined,
-    postalCode: row.postalCode,
-    location: row.latitude !== undefined && row.longitude !== undefined
-      ? { lat: row.latitude, lon: row.longitude, source: row.geoSource ?? 'maxmind' }
-      : undefined,
-    timezone: row.timezone,
-    isp: row.isp ? { name: row.isp, source: row.ispSource ?? 'maxmind' } : undefined,
-    asn: row.asn !== undefined ? { number: row.asn, org: row.asnOrg, source: row.asnSource ?? 'maxmind' } : undefined,
-    etag,
-  };
+  return doLookupCore(app.pool, app.log, ip);
 }
 
-export function lookupErrorHandler(err: unknown, _req: unknown, reply: { code: (n: number) => { send: (b: unknown) => unknown }; send: (b: unknown) => unknown }): unknown {
+export function lookupErrorHandler(
+  err: unknown,
+  _req: unknown,
+  reply: { code: (n: number) => { send: (b: unknown) => unknown }; send: (b: unknown) => unknown },
+): unknown {
   const statusCode = (err as any).statusCode ?? 500;
   const code = (err as any).code;
-  if (code === 'invalid_ip' || code === 'not_found' || code === 'invalid_api_key') {
+  if (code === "invalid_ip" || code === "not_found" || code === "invalid_api_key") {
     return reply.code(statusCode).send({ error: code });
   }
-  return reply.code(statusCode).send({ error: 'internal_error' });
+  return reply.code(statusCode).send({ error: "internal_error" });
 }
 
-function extractKey(req: { query: unknown; headers: Record<string, string | string[] | undefined> }): string | null {
+function extractKey(req: {
+  query: unknown;
+  headers: Record<string, string | string[] | undefined>;
+}): string | null {
   const q = (req.query as Record<string, unknown> | undefined)?.key;
-  if (typeof q === 'string' && q.length > 0) return q;
-  const h = req.headers['authorization'];
-  if (typeof h === 'string' && h.startsWith('Bearer ')) return h.slice(7);
+  if (typeof q === "string" && q.length > 0) return q;
+  const h = req.headers["authorization"];
+  if (typeof h === "string" && h.startsWith("Bearer ")) return h.slice(7);
   return null;
 }
 
@@ -89,9 +56,9 @@ export default async function lookupRoute(app: FastifyInstance): Promise<void> {
     if (!raw) return;
     const found = await findActiveApiKeyByHash(app.pool, hashToken(raw));
     if (!found) {
-      const err = new Error('invalid api key') as Error & { statusCode: number; code: string };
+      const err = new Error("invalid api key") as Error & { statusCode: number; code: string };
       err.statusCode = 401;
-      err.code = 'invalid_api_key';
+      err.code = "invalid_api_key";
       throw err;
     }
     req.apiKey = { keyId: found.id, userId: found.userId, prefix: found.keyPrefix };
@@ -116,13 +83,13 @@ export default async function lookupRoute(app: FastifyInstance): Promise<void> {
     // Detect status from reply.statusCode + request context (which IP was asked).
     const statusCode = reply.statusCode;
     const ipText = ipFromReq(req);
-    let status: 'hit' | 'miss' | 'invalid';
+    let status: "hit" | "miss" | "invalid";
     if (statusCode === 200) {
-      status = 'hit';
+      status = "hit";
     } else if (statusCode === 404) {
-      status = 'miss';
+      status = "miss";
     } else if (statusCode === 400) {
-      status = 'invalid';
+      status = "invalid";
     } else {
       // 401 invalid_api_key or other auth failures → don't log
       return payload;
@@ -142,19 +109,23 @@ export default async function lookupRoute(app: FastifyInstance): Promise<void> {
       apiKeyId: req.apiKey?.keyId ?? null,
       sessionId: req.apiKey ? null : (req.session?.id ?? null),
       remoteAddr: remoteBuf,
-      userAgent: (req.headers['user-agent'] as string | undefined) ?? null,
+      userAgent: (req.headers["user-agent"] as string | undefined) ?? null,
     };
     return payload;
   };
 
-  app.get('/lookup', { preHandler, onSend: logOnSend }, async (req, reply) => {
+  app.get("/lookup", { preHandler, onSend: logOnSend }, async (req, reply) => {
     const ip = (req.query as { ip?: string }).ip;
-    if (!ip || !isValidIp(ip)) return reply.code(400).send({ error: 'invalid_ip', message: ip ?? 'missing' });
+    if (!ip || !isValidIp(ip)) return reply.code(400).send({ error: "invalid_ip", message: ip ?? "missing" });
     return doLookup(app, ip);
   });
-  app.get<{ Params: { ip: string } }>('/lookup/:ip', { preHandler, onSend: logOnSend }, async (req, reply) => {
-    const ip = req.params.ip;
-    if (!isValidIp(ip)) return reply.code(400).send({ error: 'invalid_ip', message: ip });
-    return doLookup(app, ip);
-  });
+  app.get<{ Params: { ip: string } }>(
+    "/lookup/:ip",
+    { preHandler, onSend: logOnSend },
+    async (req, reply) => {
+      const ip = req.params.ip;
+      if (!isValidIp(ip)) return reply.code(400).send({ error: "invalid_ip", message: ip });
+      return doLookup(app, ip);
+    },
+  );
 }
