@@ -150,7 +150,7 @@
 
     <div class="custom-provider-actions">
       <form method="POST" action="/admin/unknown-ips/providers/custom/{{this.name}}/delete" style="display:inline"
-            onsubmit="return confirm('{{@root.req.t 'admin.unknownIps.customProviders.deleteConfirm' name=this.name}}')">
+            data-confirm="{{@root.req.t 'admin.unknownIps.customProviders.deleteConfirm' name=this.name}}">
         <input type="hidden" name="csrf" value="{{@root.csrfToken}}">
         <button type="submit" class="button">{{@root.req.t 'admin.unknownIps.customProviders.delete'}}</button>
       </form>

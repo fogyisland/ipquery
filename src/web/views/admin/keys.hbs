@@ -13,7 +13,7 @@
      at least one row is checked; the inline script wires it up. --}}
 <div class="keys-bulk-bar">
   <form id="keys-bulk-form" method="POST" action="/admin/keys/revoke-bulk"
-        onsubmit="return confirm('{{@root.req.t 'admin.keys.bulkRevokeConfirm'}}')">
+        data-confirm="{{@root.req.t 'admin.keys.bulkRevokeConfirm'}}">
     <input type="hidden" name="csrf" value="{{csrfToken}}">
     <button type="submit" class="btn-secondary" id="keys-bulk-btn" disabled>
       {{@root.req.t 'admin.keys.bulkRevoke'}} (<span id="keys-bulk-count">0</span>)
