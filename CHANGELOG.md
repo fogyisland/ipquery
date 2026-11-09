@@ -64,6 +64,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   导致 `migrations.test.ts`、`migrations.legacy.test.ts`、`cli.migrate.test.ts` 失败，现已同步
 - **首页断言过期**: `home.test.ts` 仍断言改版前的 `m-ipgrid` class，而字节网格组件已重命名为
   `m-bits`，现同步断言
+- **审计写入失败被静默吞掉**: Provider 扇出路径上的 7 处 fire-and-forget 写入
+  （`provider_error_log`、`random_probe_log`、`provider_call_counter`、ETL 阶段失败标记、
+  连接池关闭）捕获异常后直接丢弃。控制流本身是对的（审计写入失败不该中断正常运行的批次），
+  但静默有实际代价：`provider_error_log` 是熔断器唯一的输入，写丢失则熔断器永远看不到失败、
+  也就永不熔断；`random_probe_log` 是各 Provider 响应的唯一记录，丢行与“Provider 从未被调用”
+  无法区分；ETL 阶段失败标记写丢失则该运行在管理界面永远显示为 `running`。
+  现全部改为记录告警（附 IP／Provider 与底层错误），行为不变——写入依旧非致命，批次依旧完成
 
 ### Security
 
