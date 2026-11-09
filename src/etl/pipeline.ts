@@ -29,6 +29,7 @@ import {
   type ParseStreamResult,
 } from "./sources/dbip";
 import { DEFAULT_SPECS, downloadAll } from "./download";
+import { acquireEtlRunLock, EtlRunLockedError } from "./runGuard";
 import type { AppConfig } from "../config";
 import type { Source, NormalizedRecord, IpRangeRow, EtlStage } from "../types";
 
@@ -421,6 +422,14 @@ async function runSwapStage(pool: mysql.Pool, runId: number): Promise<EtlRunSwap
   };
   await upsertEtlRunSwap(pool, row);
   console.log(`[etl] swap: ${result.status} duration=${result.durationMs}ms`);
+  // A failed swap means the new data never went live — ip_ranges still
+  // holds the previous table. That is a failed run, not a successful
+  // one: reporting "success" would make lastSuccessfulEtl() treat the
+  // library as fresh and show "imported N records" in the admin UI,
+  // hiding the failure until someone opens the run-detail page.
+  if (result.status !== "success") {
+    throw new Error(`atomic swap failed: ${result.errorMessage ?? "unknown error"}`);
+  }
   return row;
 }
 
@@ -475,6 +484,34 @@ async function markStageFailed(pool: mysql.Pool, runId: number, errorMsg: string
 export async function runPipeline(opts: { cfg: AppConfig; runId?: number }): Promise<PipelineResult> {
   const { cfg } = opts;
   const pool = await ensurePool(cfg);
+  // Cross-process exclusion. Two concurrent ETL runs would race on
+  // truncateNew + atomicSwapRanges, and the surviving ip_ranges table
+  // would be whichever RENAME landed last — silently half-populated.
+  // The lock is held on a dedicated connection for the whole run and
+  // released with it, so a crash releases it too.
+  const guard = await acquireEtlRunLock(pool, { excludeRunId: opts.runId });
+  if (!guard.acquired || !guard.lock) {
+    await pool.end();
+    throw new EtlRunLockedError(
+      guard.reason ?? "an ETL run is already in progress",
+    );
+  }
+  const releaseLock = guard.lock.release;
+  try {
+    return await runPipelineLocked(pool, opts);
+  } finally {
+    await releaseLock();
+    await pool.end();
+  }
+}
+
+/** The pipeline body. `runPipeline` owns the pool lifecycle and the
+ *  ETL run lock; this function owns the stages. */
+async function runPipelineLocked(
+  pool: mysql.Pool,
+  opts: { cfg: AppConfig; runId?: number },
+): Promise<PipelineResult> {
+  const { cfg } = opts;
   // If the caller already created a row via recordEtlStart (e.g. the setup
   // wizard needs the runId for its progress page BEFORE the pipeline spins
   // up), reuse that id instead of inserting a new one. Saves a few hundred ms
@@ -558,10 +595,33 @@ export async function runPipeline(opts: { cfg: AppConfig; runId?: number }): Pro
 
     // 3) Insert stage: truncate + per-file streamFileToDb with UpsertCount
     //    aggregation.
+    //
+    //    Guard: never truncate and swap an empty table.
+    //
+    //    Two ways a run can end up with nothing to load:
+    //
+    //      a) Every download failed and no file was left on disk.
+    //         `present` is empty.
+    //
+    //      b) Every download failed but the downloader had already
+    //         created the destination file (fs.createWriteStream creates
+    //         the file before the first byte arrives), so the file
+    //         EXISTS but is zero-length or truncated. `present` is
+    //         non-empty, the parser reads no valid rows out of it, and
+    //         the insert stage writes nothing.
+    //
+    //    In both cases the swap would replace the live ip_ranges
+    //    (millions of rows) with an empty table. A failed download must
+    //    leave the current data in place.
+    if (present.length === 0) {
+      throw new Error(
+        "no source files available — every download failed; refusing to swap an empty table over the live data",
+      );
+    }
     sink.setStage("insert");
     await sink.flush();
     await truncateNew(pool);
-    await runInsertStage(
+    const insertRows = await runInsertStage(
       pool,
       runId,
       rawDir,
@@ -575,6 +635,16 @@ export async function runPipeline(opts: { cfg: AppConfig; runId?: number }): Pro
       sink,
     );
     await sink.flush();
+
+    // Second half of the guard: the files existed, but did they carry
+    // any usable rows? A truncated or empty download parses to zero
+    // rows, which would still swap an empty table live.
+    const insertedRows = insertRows.reduce((sum, r) => sum + r.rowsInserted, 0);
+    if (insertedRows === 0) {
+      throw new Error(
+        "the source files contained no usable records — refusing to swap an empty table over the live data",
+      );
+    }
 
     // 4) Swap stage: atomic RENAME, persisted to etl_run_swaps.
     sink.setStage("swap");
@@ -625,7 +695,5 @@ export async function runPipeline(opts: { cfg: AppConfig; runId?: number }): Pro
     await recordEtlFinish(pool, runId, "failed", { errorMessage: msg });
     console.error(`[etl] failed run=${runId}:`, msg);
     throw err;
-  } finally {
-    await pool.end();
   }
 }

@@ -7,6 +7,7 @@ import { setSetting, getSetting, markInitialized } from "../../storage/settings"
 import { bootstrapAdmin } from "../admin/bootstrap";
 import { runMigrations } from "../../storage/migrations/runner";
 import { runPipeline } from "../../etl/pipeline";
+import { findRunningEtlRun } from "../../etl/runGuard";
 import { recordEtlStart } from "../../storage/mysql";
 import { downloadAll, DEFAULT_SPECS } from "../../etl/download";
 
@@ -80,10 +81,12 @@ async function readLatestRun(pool: import("mysql2/promise").Pool): Promise<EtlRu
 // row with status='running'). Without this guard, double-clicking submit
 // would spawn two pipelines that race on truncateNew + atomicSwapRanges.
 async function startBackgroundEtl(app: FastifyInstance): Promise<{ runId: number } | { busy: true }> {
-  const [running] = await app.pool.query<RowDataPacket[]>(
-    `SELECT id FROM etl_runs WHERE status = 'running' LIMIT 1`,
-  );
-  if (running.length > 0) return { busy: true };
+  // Shared guard: refuses to start if another ETL is already in progress
+  // (an etl_runs row with status='running'). Without this guard,
+  // double-clicking submit would spawn two pipelines that race on
+  // truncateNew + atomicSwapRanges.
+  const runningRunId = await findRunningEtlRun(app.pool);
+  if (runningRunId !== null) return { busy: true };
 
   // Pre-create the run row so the progress page can find it the instant the
   // client lands on /setup/seed after the redirect.
