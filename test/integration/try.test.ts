@@ -52,11 +52,16 @@ describe("/try", () => {
 
   it("POST valid IP with no record returns notfound on the same page", async () => {
     const { cookie, token } = await getCsrf();
+    // 8.8.8.8 used to be used here, but it is one of the seeded
+    // addresses — it was "not found" only because the seed rows were
+    // stored in the wrong byte order (see migration 023). Now that they
+    // are findable, use an address from a documentation range that the
+    // seed data genuinely does not cover.
     const r = await request(app.server)
       .post("/try")
       .set("Cookie", cookie)
       .type("form")
-      .send({ ip: "8.8.8.8", csrf: token });
+      .send({ ip: "203.0.113.1", csrf: token });
     expect(r.status).toBe(200);
     expect(r.text).toContain("未找到记录");
   });
