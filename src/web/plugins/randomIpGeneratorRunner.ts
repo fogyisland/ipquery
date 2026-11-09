@@ -177,6 +177,14 @@ export function registerRandomGenRunner(
           error: (msg) => app.log.error({ msg }, "random-gen-runner"),
         },
       });
+      // Another ingest path held the provider mutex — this tick made no
+      // provider calls. Do NOT overwrite lastRunAt/lastSummary with an
+      // all-zero summary (that would read as "ran, merged 0" in the UI);
+      // the next tick will run normally.
+      if (summary.skippedLockBusy) {
+        app.log.info("random-gen-runner tick skipped (provider mutex busy)");
+        return;
+      }
       const now = new Date().toISOString();
       lastRunAtMs = Date.now();
       // Track the first disabled provider from this run so the next

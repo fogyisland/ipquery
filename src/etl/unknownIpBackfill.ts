@@ -37,6 +37,7 @@ import { recordProviderError, getCircuitBreakerConfig } from "../storage/provide
 import { majorityVote } from "./majority";
 import { parseIp } from "../ip";
 import { recordRandomProbe, type PerProviderDetail } from "../storage/randomProbeLog";
+import { providerFanoutLock, type ProviderLock } from "./providerLock";
 import { randomUUID } from "node:crypto";
 
 export interface BackfillOptions {
@@ -54,6 +55,11 @@ export interface BackfillOptions {
    *  so operators can review consensus results before any row lands in
    *  the main table. Defaults to false (existing behavior). */
   dryRun?: boolean;
+  /** The provider-fan-out mutex to use. Defaults to the shared
+   *  instance so the backfill route, the manual-generate button and
+   *  the continuous runner can't all hammer the same free-tier quota at
+   *  once. Tests can pass their own lock to stay isolated. */
+  lock?: ProviderLock;
   logger?: Pick<Console, "log" | "warn" | "error">;
 }
 
@@ -93,6 +99,12 @@ export interface BackfillSummary {
   /** Per-IP preview rows. Populated when mode === 'preview'; empty
    *  array on committed runs to keep the shape stable. */
   previewRows: BackfillPreviewRow[];
+  /** True when the run was skipped because another provider fan-out was
+   *  already in flight (the shared provider mutex was busy). The run
+   *  performed NO provider calls and NO writes — every counter stays
+   *  at zero and `startedAt === finishedAt`. The admin UI surfaces this
+   *  as "another ingest run was already in progress". */
+  skippedLockBusy?: boolean;
 }
 
 const DEFAULT_BATCH = 100;
@@ -155,9 +167,67 @@ export async function runBackfill(
     return summary;
   }
 
-  const outcomes: Array<{ row: UnknownIpRow; outcome: IpOutcome }> = [];
   // One batchId per run groups every probe from this tick for the admin UI.
   const batchId = randomUUID();
+
+  // Take the shared provider-fan-out mutex. If another ingest path is
+  // already calling the external providers, skip this run entirely —
+  // no provider calls, no writes. Running concurrently would double the
+  // request rate against a shared free-tier quota.
+  const lock = opts.lock ?? providerFanoutLock;
+  const attempt = lock.tryAcquire();
+  if (!attempt.acquired) {
+    summary.finishedAt = Date.now();
+    summary.skippedLockBusy = true;
+    // The queue rows were read before we took the lock, but this run
+    // considered nothing — reset the counter so the UI doesn't report
+    // "1 candidate" for a run that made zero provider calls. The rows
+    // are untouched (not marked processed/attempted), so the next run
+    // picks them up again.
+    summary.considered = 0;
+    log.warn?.(
+      "[backfill] skipped — another provider fan-out is already in flight; " + "no provider calls were made",
+    );
+    return summary;
+  }
+
+  try {
+    return await runBackfillLocked(
+      pool,
+      providers,
+      queueRows,
+      summary,
+      opts,
+      runMode,
+      dryRun,
+      perIpTimeout,
+      batchId,
+      log,
+    );
+  } finally {
+    lock.release();
+  }
+}
+
+/** The provider-calling body of runBackfill. Runs with the shared
+ *  provider mutex already held by the caller. Split out so the lock's
+ *  acquire/release pair wraps exactly the fan-out + write section and
+ *  the queue read stays outside it. */
+async function runBackfillLocked(
+  pool: Pool,
+  providers: IpGeoProvider[],
+  queueRows: UnknownIpRow[],
+  summary: BackfillSummary,
+  opts: BackfillOptions,
+  runMode: "auto" | "manual" | "random",
+  dryRun: boolean,
+  perIpTimeout: number,
+  batchId: string,
+  log: Pick<Console, "log" | "warn" | "error">,
+): Promise<BackfillSummary> {
+  const startedAt = summary.startedAt;
+
+  const outcomes: Array<{ row: UnknownIpRow; outcome: IpOutcome }> = [];
 
   // Fan out all IPs concurrently, but cap concurrency at 16 to avoid
   // hammering the providers (and our own DB connection pool) in one go.

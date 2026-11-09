@@ -34,6 +34,26 @@
 
   {{!-- Banners: backfill / generate / failure logs / queue flash --}}
   {{#if flash.backfillSummary}}
+    {{#if (eq flash.backfillSummary.kind "lock_busy")}}
+  <div class="admin-alert admin-alert--info">
+    <strong>{{@root.req.t 'admin.unknownIps.backfill.lockBusy'}}</strong>
+  </div>
+    {{else}}
+      {{#if (eq flash.backfillSummary.kind "preview_lock_busy")}}
+  <div class="admin-alert admin-alert--info">
+    <strong>{{@root.req.t 'admin.unknownIps.backfill.previewLockBusy'}}</strong>
+  </div>
+      {{else}}
+        {{#if (eq flash.backfillSummary.kind "preview_missing")}}
+  <div class="admin-alert admin-alert--info">
+    <strong>{{@root.req.t 'admin.unknownIps.backfill.previewMissing'}}</strong>
+  </div>
+        {{else}}
+          {{#if (eq flash.backfillSummary.kind "preview_expired")}}
+  <div class="admin-alert admin-alert--info">
+    <strong>{{@root.req.t 'admin.unknownIps.backfill.previewExpired'}}</strong>
+  </div>
+          {{else}}
   <div class="admin-alert admin-alert--success">
     <strong>{{@root.req.t 'admin.unknownIps.backfill.summary'}}</strong>
     <ul class="admin-summary-list">
@@ -44,9 +64,18 @@
       <li>{{@root.req.t 'admin.unknownIps.backfill.allAbstained'}}: {{flash.backfillSummary.allAbstained}}</li>
     </ul>
   </div>
+          {{/if}}
+        {{/if}}
+      {{/if}}
+    {{/if}}
   {{/if}}
 
   {{#if flash.generateSummary}}
+    {{#if (eq flash.generateSummary.kind "lock_busy")}}
+  <div class="admin-alert admin-alert--info">
+    <strong>{{@root.req.t 'admin.unknownIps.generate.lockBusy'}}</strong>
+  </div>
+    {{else}}
   <div class="admin-alert admin-alert--info">
     <strong>{{@root.req.t 'admin.unknownIps.generate.summary'}}</strong>
     <ul class="admin-summary-list">
@@ -71,6 +100,7 @@
       {{/if}}
     </ul>
   </div>
+    {{/if}}
   {{/if}}
 
   {{!-- Runner Status card. Combines the 3 stats + backfill/generate
@@ -180,6 +210,11 @@
         <label>
           <span>{{@root.req.t 'admin.unknownIps.scheduler.config.cooldown'}}</span>
           <input type="number" name="cooldownMinutes" min="0" max="1440" value="{{randomGenConfig.cooldownMinutes}}">
+        </label>
+        <label>
+          <span>{{@root.req.t 'admin.unknownIps.scheduler.config.retentionDays'}}</span>
+          <input type="number" name="retentionDays" min="0" max="3650" value="{{retentionDays}}">
+          <span class="form-field-hint">{{@root.req.t 'admin.unknownIps.scheduler.config.retentionDaysHint'}}</span>
         </label>
         <label class="scheduler-toggle">
           <input type="checkbox" name="cbLinkage" value="on" {{#if randomGenConfig.cbLinkage}}checked{{/if}}>

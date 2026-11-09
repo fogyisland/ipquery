@@ -19,6 +19,7 @@ import { registerCsrf } from "../web/plugins/csrf";
 import { registerAuditLog } from "../web/plugins/auditLog";
 import { registerSetupGuard } from "../web/plugins/setupGuard";
 import { registerSessionPurger } from "../web/plugins/sessionPurger";
+import { registerProbeRetention } from "../web/plugins/probeRetention";
 import { registerRandomGenRunner } from "../web/plugins/randomIpGeneratorRunner";
 import { _resetForTests as resetLoginLimit } from "../web/plugins/loginRateLimit";
 import { createMailer } from "../mailer";
@@ -57,9 +58,7 @@ export async function buildServer(
     if (!cfg.web.csrfSecret) missing.push("CSRF_SECRET");
     if (!cfg.web.sessionSecret) missing.push("SESSION_SECRET");
     if (missing.length > 0) {
-      throw new Error(
-        `refusing to start in production: missing required env vars: ${missing.join(", ")}`,
-      );
+      throw new Error(`refusing to start in production: missing required env vars: ${missing.join(", ")}`);
     }
   }
 
@@ -86,6 +85,11 @@ export async function buildServer(
   await registerSecurityHeaders(app, { cookieSecure: cfg.web.cookieSecure });
   await registerSession(app);
   registerSessionPurger(app, app.pool);
+  // Sweep the per-IP probe audit trail so random_probe_log doesn't grow
+  // without bound. Retention window defaults to 30 days and is
+  // configurable via the `random_probe_retention_days` setting (0 = keep
+  // forever).
+  registerProbeRetention(app, app.pool);
   const randomGenRunner = registerRandomGenRunner(app, app.pool);
   // Sync the timer against the persisted setting. Default is OFF so
   // no random generation happens until the admin opts in.

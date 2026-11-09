@@ -504,7 +504,11 @@
         "confirm": {
           "title": "Confirm backfill",
           "body": "Each pending IP will be queried against 3 external APIs in parallel and merged via majority vote. IPs already in ip_ranges are auto-skipped."
-        }
+        },
+        "lockBusy": "Another ingest run is already in progress — this run was skipped (no provider calls were made)",
+        "previewLockBusy": "Another ingest run is already in progress — the preview was skipped (no provider calls were made)",
+        "previewMissing": "Preview is no longer valid — please start a new preview",
+        "previewExpired": "Preview expired — please start a new preview"
       },
       "generate": {
         "button": "Generate 10 random IPs",
@@ -517,7 +521,8 @@
         "allAbstained": "all abstained",
         "exhaustedRetries": "exhausted retries",
         "providersDisabled": "auto-disabled providers (429)",
-        "ipList": "generated IPs"
+        "ipList": "generated IPs",
+        "lockBusy": "Another ingest run is already in progress — this run was skipped (no provider calls were made)"
       },
       "continuous": {
         "title": "Continuous random ingest",
@@ -548,7 +553,9 @@
           "targetRange": "Target range",
           "cooldown": "Cooldown (min)",
           "cbLinkage": "Auto-pause on 429",
-          "save": "Save scheduler"
+          "save": "Save scheduler",
+          "retentionDays": "Probe log retention (days)",
+          "retentionDaysHint": "0 keeps the probe log forever"
         },
         "intervalOptions": {
           "30s": "30 seconds",
