@@ -77,6 +77,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   左对齐形式排在右对齐形式之下，任何查询都匹配不上——50 条种子数据全部是死的，
   8.8.8.8 明明在种子数据里，`/lookup` 仍返回“未找到”。
   已就地修正 migration 012（全新安装），并新增 migration 023 修复已执行过旧版 012 的库
+- **种子数据遮蔽真实 ETL 数据**: `findRange()` 取覆盖区间中 `range_size` 最小者，而
+  `range_size = 0` 表示“单地址”——种子行全是单地址，因此排在所有真实 ETL 段之前，
+  一旦 ETL 数据也覆盖同一地址，其更精细的字段（城市、ISP、坐标）会被种子的粗略值盖掉。
+  现改为按来源优先：真实数据恒胜过种子数据，同类之间仍取最小区间；无真实数据时种子行兜底
+- **range_size 精度丢失**: `range_size` 是 `BIGINT UNSIGNED`，mysql2 以 JavaScript number
+  返回，超过 2^53 即丢精度——IPv6 catchall 行存的恰是 2^64-1，取回来却变成 2^64。
+  现改为在 SELECT 中 `CAST(range_size AS CHAR)`，保留精确十进制再由 `BigInt()` 解析
 
 ### Security
 
