@@ -25,28 +25,33 @@ CREATE TABLE IF NOT EXISTS provider_call_counter (
 -- reapProviders() helper in randomIpGeneratorRunner.ts flips it back
 -- to enabled=1 once auto_reenable_at <= NOW(). This finally makes
 -- cb_cooldown_minutes (previously dead code) a real runtime setting.
--- Idempotent ALTER via INFORMATION_SCHEMA: if a prior partial run left
--- these columns in place but the INSERT into schema_migrations rolled
--- back, re-running is now a safe no-op. (MySQL 5.7 does not support
--- `ADD COLUMN IF NOT EXISTS`, only 8.0.29+ does.)
-SET @col := (
-  SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
-   WHERE TABLE_SCHEMA = DATABASE()
-     AND TABLE_NAME   = 'ingest_providers'
-     AND COLUMN_NAME  = 'auto_reenable_at'
+--
+-- Both columns are added by ONE ALTER TABLE. Every ALTER TABLE is an
+-- implicit commit on the server and the metadata write is durable,
+-- which costs about a second per statement on a slow disk. Two
+-- statements meant two seconds; one statement means one.
+--
+-- The ALTER is idempotent via INFORMATION_SCHEMA: if a prior partial run
+-- left these columns in place but the INSERT into schema_migrations rolled
+-- back, re-running adds exactly the columns that are still missing and
+-- no-ops on the rest. (MySQL 5.7 does not support `ADD COLUMN IF NOT
+-- EXISTS`, only 8.0.29+ does, so the column list is assembled as text
+-- and run through a prepared statement.)
+SET @parts := CONCAT_WS(', ',
+  IF(EXISTS(
+      SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS
+       WHERE TABLE_SCHEMA = DATABASE()
+         AND TABLE_NAME   = 'ingest_providers'
+         AND COLUMN_NAME  = 'auto_reenable_at'),
+     NULL,
+     'ADD COLUMN auto_reenable_at DATETIME(3) NULL AFTER last_error_reason'),
+  IF(EXISTS(
+      SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS
+       WHERE TABLE_SCHEMA = DATABASE()
+         AND TABLE_NAME   = 'ingest_providers'
+         AND COLUMN_NAME  = 'auto_disabled_reason'),
+     NULL,
+     'ADD COLUMN auto_disabled_reason VARCHAR(255) NULL AFTER auto_reenable_at')
 );
-SET @sql := IF(@col = 0,
-  'ALTER TABLE ingest_providers ADD COLUMN auto_reenable_at DATETIME(3) NULL AFTER last_error_reason',
-  'SELECT 1');
-PREPARE s FROM @sql; EXECUTE s; DEALLOCATE PREPARE s;
-
-SET @col := (
-  SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
-   WHERE TABLE_SCHEMA = DATABASE()
-     AND TABLE_NAME   = 'ingest_providers'
-     AND COLUMN_NAME  = 'auto_disabled_reason'
-);
-SET @sql := IF(@col = 0,
-  'ALTER TABLE ingest_providers ADD COLUMN auto_disabled_reason VARCHAR(255) NULL AFTER auto_reenable_at',
-  'SELECT 1');
+SET @sql := IF(@parts = '', 'SELECT 1', CONCAT('ALTER TABLE ingest_providers ', @parts));
 PREPARE s FROM @sql; EXECUTE s; DEALLOCATE PREPARE s;

@@ -56,7 +56,7 @@ beforeAll(async () => {
   await markInitialized(postPool);
   await postPool.end();
   app = await buildServer(cfg);
-}, 60_000);
+});
 
 afterAll(async () => {
   await app.close();
