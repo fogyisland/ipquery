@@ -22,14 +22,17 @@ afterAll(async () => {
 describe("home (marketing landing)", () => {
   // Marketing redesign: home renders inside layouts/marketing — top nav +
   // hero + footer, no sidebar. The hero carries the IP query form (plain
-  // POST, CSP-compliant) plus signature 16x16 byte grid.
+  // POST, CSP-compliant) plus the 32-bit byte grid.
   it("GET / returns 200 with marketing chrome, hero form, and IP byte grid", async () => {
     const r = await request(app.server).get("/");
     expect(r.status).toBe(200);
     expect(r.text).not.toMatch(/<aside class="sidebar">/);
     expect(r.text).toMatch(/class="m-topnav"/);
     expect(r.text).toMatch(/class="m-hero"/);
-    expect(r.text).toMatch(/class="m-ipgrid"/);
+    // The byte grid is rendered by the m-bits component (the former
+    // m-ipgrid class was dropped when the grid was redesigned).
+    expect(r.text).toMatch(/class="m-bits"/);
+    expect(r.text).toMatch(/class="m-bits-cell/);
     // Query form: POST to /try (plain form — no JS, CSP compliant).
     expect(r.text).toMatch(/<form[^>]*method="POST"[^>]*action="\/try"/);
     expect(r.text).toMatch(/name="ip"/);

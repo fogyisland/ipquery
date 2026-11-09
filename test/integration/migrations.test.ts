@@ -58,6 +58,8 @@ describe("migrations", () => {
       "018",
       "019",
       "020",
+      "021",
+      "022",
     ]);
   });
 
@@ -84,6 +86,8 @@ describe("migrations", () => {
       "018",
       "019",
       "020",
+      "021",
+      "022",
     ]);
   });
 
@@ -105,7 +109,7 @@ describe("migrations", () => {
     const before = await getAppliedVersions(pool);
     expect(before.has("003")).toBe(true);
     const r = await runMigrations(pool);
-    expect(r.skipped.length).toBe(19);
+    expect(r.skipped.length).toBe(21);
   });
 
   it("records apply timestamps", async () => {
