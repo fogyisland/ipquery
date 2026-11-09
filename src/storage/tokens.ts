@@ -60,14 +60,6 @@ export async function consumeVerification(pool: Pool, id: number): Promise<void>
   );
 }
 
-export async function lastVerificationForUser(pool: Pool, userId: number): Promise<EmailVerification | null> {
-  const [rows] = await pool.query<RowDataPacket[]>(
-    `SELECT * FROM email_verifications WHERE user_id = ? ORDER BY id DESC LIMIT 1`,
-    [userId],
-  );
-  return rows[0] ? mapVerRow(rows[0]) : null;
-}
-
 export async function createPasswordReset(
   pool: Pool,
   userId: number,

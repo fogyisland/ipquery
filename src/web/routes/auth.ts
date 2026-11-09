@@ -14,7 +14,6 @@ import {
   createVerification,
   findVerificationByHash,
   consumeVerification,
-  lastVerificationForUser,
   createPasswordReset,
   findPasswordResetByHash,
   consumePasswordReset,
@@ -24,6 +23,7 @@ import { generateToken, hashToken } from "../auth/tokens";
 import { verifyCsrfRequest } from "../plugins/csrf";
 import { setSessionCookie, clearSessionCookie } from "../plugins/auth";
 import { recordLoginFailure, recordLoginSuccess, isLocked } from "../plugins/loginRateLimit";
+import { isResendOnCooldown, startResendCooldown } from "../plugins/verifyResendCooldown";
 import { createSession, destroySession, destroyAllForUser } from "../../storage/sessions";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
@@ -173,29 +173,61 @@ export default async function authRoutes(app: FastifyInstance): Promise<void> {
   });
 
   // POST /verify/resend
-  app.post<{ Params: { userId: string } }>("/verify/resend/:userId", async (req, reply) => {
-    if (!verifyCsrfRequest(req))
-      return reply.code(403).view("errors/csrf.hbs", { layout: "layouts/public", req });
-    const userId = Number(req.params.userId);
-    const last = await lastVerificationForUser(app.pool, userId);
-    if (last && last.createdAt.getTime() + app.cfg.security.verifyResendCooldownSeconds * 1000 > Date.now()) {
-      return reply.code(429).redirect("/login?cooldown=1");
-    }
-    const u = await findUserById(app.pool, userId);
-    if (!u) return reply.code(404).redirect("/login");
-    const token = generateToken();
-    const tokenHash = hashToken(token);
-    await createVerification(app.pool, userId, tokenHash, new Date(Date.now() + 86_400_000));
-    const verifyUrl = `${app.cfg.web.baseUrl}/verify?token=${encodeURIComponent(token)}`;
-    const html = await (await getVerifyEmailTpl())({ verifyUrl });
-    await app.mailer.send({
-      to: u.email,
-      subject: "IPQuery 邮箱验证",
-      text: `请访问以下链接验证邮箱:\n${verifyUrl}`,
-      html,
-    });
-    return reply.code(302).redirect("/login?resent=1");
-  });
+  //
+  // Two protections, both needed:
+  //
+  //  - A route-level rate limit. The global limit is 60/minute, which
+  //    is far too generous for an endpoint that sends an email per
+  //    call. A tight per-IP limit is the outer bound.
+  //
+  //  - A per-requester cooldown, keyed on the requester's IP rather
+  //    than on the target userId. The cooldown used to be keyed on the
+  //    target, which only stopped repeated sends to the SAME user —
+  //    an attacker walking `userId` 1..N would send one email to every
+  //    user and be blocked by nothing.
+  app.post<{ Params: { userId: string } }>(
+    "/verify/resend/:userId",
+    {
+      config: {
+        rateLimit: {
+          max: 10,
+          timeWindow: "1 hour",
+          // Key on the requester's IP, not on the target userId, so a
+          // single caller cannot spread requests across many ids.
+          keyGenerator: (req) => req.ip,
+        },
+      },
+    },
+    async (req, reply) => {
+      if (!verifyCsrfRequest(req))
+        return reply.code(403).view("errors/csrf.hbs", { layout: "layouts/public", req });
+      const userId = Number(req.params.userId);
+      if (!Number.isInteger(userId) || userId <= 0) {
+        return reply.code(404).redirect("/login");
+      }
+      // Per-requester cooldown: one verification email per IP per
+      // cooldown window, whatever user is being targeted.
+      const cooldownMs = app.cfg.security.verifyResendCooldownSeconds * 1000;
+      if (isResendOnCooldown(req.ip, cooldownMs)) {
+        return reply.code(429).redirect("/login?cooldown=1");
+      }
+      const u = await findUserById(app.pool, userId);
+      if (!u) return reply.code(404).redirect("/login");
+      const token = generateToken();
+      const tokenHash = hashToken(token);
+      await createVerification(app.pool, userId, tokenHash, new Date(Date.now() + 86_400_000));
+      startResendCooldown(req.ip, cooldownMs);
+      const verifyUrl = `${app.cfg.web.baseUrl}/verify?token=${encodeURIComponent(token)}`;
+      const html = await (await getVerifyEmailTpl())({ verifyUrl });
+      await app.mailer.send({
+        to: u.email,
+        subject: "IPQuery 邮箱验证",
+        text: `请访问以下链接验证邮箱:\n${verifyUrl}`,
+        html,
+      });
+      return reply.code(302).redirect("/login?resent=1");
+    },
+  );
 
   // GET /login
   app.get("/login", async (req, reply) => {
