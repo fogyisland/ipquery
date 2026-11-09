@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import type { RowDataPacket } from "mysql2";
 import { redactSecret } from "../../config";
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
@@ -58,7 +58,9 @@ import {
   listEtlRunParses,
   listEtlRunInserts,
   getEtlRunSwap,
+  recordEtlFinish,
 } from "../../storage/mysql";
+import { findRunningEtlRun } from "../../etl/runGuard";
 import type { EtlRun } from "../../types";
 import { assertSafeHttpUrl } from "../../storage/ssrf";
 import { GenericHttpProvider } from "../../etl/genericHttpProvider";
@@ -100,6 +102,40 @@ const BACKFILL_PREVIEW_COOKIE = "backfill_preview";
 const BACKFILL_PREVIEW_MAX_AGE_MS = 60 * 1000;
 const BACKFILL_PREVIEW_COOKIE_PATH = "/admin/ingest/backfill";
 const HMAC_KEY = process.env.SESSION_SECRET || process.env.CSRF_SECRET || "dev-fallback-backfill-preview";
+
+// Short-lived cookie carrying the outcome of an ETL trigger attempt
+// across the redirect. The cookie is HTTP-only, single-use (consumed and
+// cleared on the next admin page render) and carries only a fixed
+// "kind" — never free text — so a tampered cookie can at worst make the
+// page show the wrong canned message, not inject markup.
+const ETL_FLASH_COOKIE = "etl_flash";
+
+/**
+ * Read and clear the ETL flash cookie, turning it into the shape the
+ * `flash` partial expects ({ success } / { error } / ...).
+ *
+ * Returns undefined when there is no flash to show.
+ */
+function consumeEtlFlash(
+  req: FastifyRequest,
+  reply: FastifyReply,
+  t: (key: string) => string,
+): { success?: string; error?: string } | undefined {
+  const raw = req.cookies[ETL_FLASH_COOKIE];
+  if (!raw) return undefined;
+  reply.clearCookie(ETL_FLASH_COOKIE, { path: "/admin" });
+  let kind: unknown;
+  try {
+    kind = (JSON.parse(raw) as { kind?: unknown }).kind;
+  } catch {
+    // A malformed cookie is not worth an error page — just drop it.
+    return undefined;
+  }
+  if (kind === "alreadyRunning") {
+    return { error: t("admin.etl.alreadyRunning") };
+  }
+  return undefined;
+}
 
 function hmacSign(payloadJson: string): string {
   return createHmac("sha256", HMAC_KEY).update(payloadJson).digest("hex");
@@ -412,6 +448,7 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
       totalPages: Math.max(1, Math.ceil(total / q.limit)),
       filters: q.filters,
       sort: q.sort,
+      flash: consumeEtlFlash(req, reply, req.t),
       req,
       csrfToken: req.csrfToken,
     });
@@ -671,6 +708,21 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
     if (!verifyCsrfRequest(req))
       return reply.code(403).view("errors/csrf.hbs", { layout: "layouts/public", req });
     req.auditAction = { action: "etl.trigger", targetType: "etl_run" };
+    // Refuse early if an ETL is already running. The pipeline takes the
+    // same lock itself (that is the cross-process guarantee), but by
+    // then it would already have a 'running' etl_runs row to fail and
+    // clean up. Checking here lets us tell the admin *why* nothing
+    // happened instead of leaving a half-started run behind.
+    const runningRunId = await findRunningEtlRun(app.pool);
+    if (runningRunId !== null) {
+      reply.setCookie("etl_flash", JSON.stringify({ kind: "alreadyRunning" }), {
+        path: "/admin",
+        maxAge: 30,
+        httpOnly: true,
+        sameSite: "lax",
+      });
+      return reply.redirect(`/admin/etl/runs/${runningRunId}?live=1`);
+    }
     // Insert the etl_runs row up-front so we can redirect to the live
     // detail page (which auto-polls /live every 5s). runPipeline() reuses
     // the runId when one is passed in, so the row created here is the
@@ -685,7 +737,17 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
       req.log.error({ err }, "etl.trigger: recordEtlStart failed");
       return reply.code(503).view("errors/csrf.hbs", { layout: "layouts/public", req });
     }
-    void runPipeline({ cfg: app.cfg, runId }).catch((err) => app.log.error({ err }, "manual ETL failed"));
+    void runPipeline({ cfg: app.cfg, runId }).catch((err) => {
+      req.log.error({ err }, "manual ETL failed");
+      // The pipeline refused to start (another process holds the lock).
+      // The run row we created above stays at status='running' forever
+      // unless we close it out, so mark it failed here.
+      void recordEtlFinish(app.pool, runId, "failed", {
+        errorMessage: err instanceof Error ? err.message : String(err),
+      }).catch((finishErr) => {
+        req.log.error({ err: finishErr }, "etl.trigger: failed to close out the run row");
+      });
+    });
     return reply.redirect(`/admin/etl/runs/${runId}?live=1`);
   });
 
@@ -822,6 +884,9 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
     const status = q.filters.status as "hit" | "miss" | "invalid" | undefined;
     const limit = q.limit;
     const offset = (q.page - 1) * limit;
+    // The `sort` whitelist above ("id", "ts") is the same set the
+    // storage layer accepts, so no cast is needed — and listQueryLogs
+    // re-checks the column before interpolating it into ORDER BY.
     const sort = q.sort ? { col: q.sort.col as "id" | "ts", dir: q.sort.dir } : undefined;
     const { rows, total } = await listQueryLogs(app.pool, {
       offset,
@@ -1107,6 +1172,7 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
       etlLastRun,
       etlStatusKind,
       etlStatusText,
+      flash: consumeEtlFlash(req, reply, req.t),
       req,
       csrfToken: req.csrfToken,
     });
@@ -1116,7 +1182,20 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
     if (!verifyCsrfRequest(req))
       return reply.code(403).view("errors/csrf.hbs", { layout: "layouts/public", req });
     req.auditAction = { action: "etl.restart", targetType: "etl_run" };
-    void runPipeline({ cfg: app.cfg }).catch((err) => app.log.error({ err }, "manual ETL restart failed"));
+    // Same guard as /admin/etl/trigger: a second concurrent run would
+    // race on truncateNew + atomicSwapRanges and leave a half-populated
+    // ip_ranges behind.
+    const runningRunId = await findRunningEtlRun(app.pool);
+    if (runningRunId !== null) {
+      reply.setCookie("etl_flash", JSON.stringify({ kind: "alreadyRunning" }), {
+        path: "/admin",
+        maxAge: 30,
+        httpOnly: true,
+        sameSite: "lax",
+      });
+      return reply.redirect("/admin/settings#integrations");
+    }
+    void runPipeline({ cfg: app.cfg }).catch((err) => req.log.error({ err }, "manual ETL restart failed"));
     // Redirect back to the Integrations tab so the admin sees the
     // refreshed "last run" pill after the redirect.
     return reply.redirect("/admin/settings#integrations");

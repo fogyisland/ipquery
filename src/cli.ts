@@ -4,6 +4,7 @@ import { Command } from "commander";
 import * as cron from "node-cron";
 import { loadConfig, configSummary } from "./config";
 import { runPipeline } from "./etl/pipeline";
+import { EtlRunLockedError } from "./etl/runGuard";
 import { buildServer } from "./api/server";
 import { createPool, lastEtlRun } from "./storage/mysql";
 import { runMigrations, migrationStatus, listMigrationFiles } from "./storage/migrations/runner";
@@ -21,7 +22,18 @@ program
   .action(async () => {
     const cfg = loadConfig();
     console.log(configSummary(cfg));
-    await runPipeline({ cfg });
+    try {
+      await runPipeline({ cfg });
+    } catch (e) {
+      // A lock refusal means another ETL is already running. Exit 0 —
+      // this is not a failure of the command, and a cron-style caller
+      // should not treat it as one.
+      if (e instanceof EtlRunLockedError) {
+        console.log(`[update] ETL skipped: ${e.message}`);
+        return;
+      }
+      throw e;
+    }
   });
 
 program
@@ -45,7 +57,14 @@ program
         try {
           await runPipeline({ cfg });
         } catch (e) {
-          console.error("[cron] ETL failed:", e);
+          // A lock refusal is expected, not an error: the previous run is
+          // simply still going. Say so, rather than logging it as a
+          // failure that an operator has to investigate.
+          if (e instanceof EtlRunLockedError) {
+            console.log(`[cron] ETL skipped: ${e.message}`);
+          } else {
+            console.error("[cron] ETL failed:", e);
+          }
         }
       },
       { timezone: cfg.etl.timezone },

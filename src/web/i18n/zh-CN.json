@@ -303,7 +303,8 @@
       },
       "detail": {
         "title": "ETL Run #{id}"
-      }
+      },
+      "alreadyRunning": "已有 ETL 运行正在进行中"
     },
     "keys": {
       "title": "API Keys 全局",

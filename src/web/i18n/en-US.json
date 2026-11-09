@@ -302,7 +302,8 @@
       },
       "detail": {
         "title": "ETL Run #{id}"
-      }
+      },
+      "alreadyRunning": "An ETL run is already in progress"
     },
     "keys": {
       "title": "API Keys (global)",
