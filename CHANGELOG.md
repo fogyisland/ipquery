@@ -84,6 +84,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **range_size 精度丢失**: `range_size` 是 `BIGINT UNSIGNED`，mysql2 以 JavaScript number
   返回，超过 2^53 即丢精度——IPv6 catchall 行存的恰是 2^64-1，取回来却变成 2^64。
   现改为在 SELECT 中 `CAST(range_size AS CHAR)`，保留精确十进制再由 `BigInt()` 解析
+- **关停时连接池先于插件关闭**: Fastify 的 `onClose` 钩子按注册的**逆序**执行，而关池的钩子
+  注册在 `buildServer()` 末尾 → 它**最先**执行。于是 session 清理器的最后一次 sweep 和
+  query-log 写入器的最后一批 flush 都撞上已关闭的池：前者每次关停都记一条
+  `Pool is closed.` 错误日志，后者的 flush 捕获异常后只记日志，**缓冲里未落盘的查询日志被静默丢弃**。
+  现把关池钩子移到连接池创建之后（插件注册之前），逆序下它最后执行，各插件的收尾 flush 都能拿到打开的池。
+  新增 `shutdown-order.test.ts` 固化该顺序
+- **migration 022/020 的 DDL 次数**: 每条 `ALTER TABLE` 都是一次隐式提交 + 落盘，在慢磁盘上约 1 秒/条。
+  022 的 6 条 ALTER 合成 1 条（9477ms → 1757ms），020 的 2 条合成 1 条（5198ms → 3230ms），
+  全新库建 schema 的成本因此下降约 10 秒。幂等性保持不变（仍按 INFORMATION_SCHEMA 逐列判断缺失，
+  只补缺的那几列）——MySQL 5.7 不支持 `ADD COLUMN IF NOT EXISTS`
 
 ### Security
 
