@@ -43,6 +43,19 @@ export interface QueryLogQuery {
   sort?: { col: "id" | "ts"; dir: "asc" | "desc" };
 }
 
+/** The only columns `listQueryLogs` may order by. `col` and `dir` are
+ *  interpolated into the ORDER BY clause, so the set is enforced here
+ *  as well as in the TypeScript type — a caller that passes an
+ *  unvalidated string must not be able to inject SQL. */
+const SORT_COLUMNS = new Set(["id", "ts"]);
+
+function resolveSortColumn(col: string): string {
+  if (!SORT_COLUMNS.has(col)) {
+    throw new Error(`listQueryLogs: unsupported sort column ${JSON.stringify(col)}`);
+  }
+  return col;
+}
+
 export interface QueryLogRow extends QueryLogEntry {
   id: number;
   userEmail?: string | null;
@@ -93,7 +106,7 @@ export async function listQueryLogs(
     params.push(q.endTime);
   }
   const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
-  const orderCol = q.sort?.col ?? "id";
+  const orderCol = q.sort ? resolveSortColumn(q.sort.col) : "id";
   const orderDir = q.sort?.dir === "asc" ? "ASC" : "DESC";
 
   const [rows] = await pool.query(
