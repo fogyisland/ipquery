@@ -13,10 +13,11 @@ afterAll(async () => {
 });
 
 // Helper: read the row whose start_ip matches the given 4-byte packed IPv4
-// hex string. The column is BINARY(16) so we compare via HEX() — MySQL's
-// BINARY = BINARY equality does not auto-pad the 4-byte literal to 16 bytes.
+// hex string, zero-padded on the LEFT (twelve 00 bytes, address last) —
+// the encoding migration 023 standardized. The column is BINARY(16) so we
+// compare via HEX() — MySQL's BINARY = BINARY equality does not auto-pad.
 async function findSeedByIp(startIpHex4: string) {
-  const padded = (startIpHex4 + "000000000000000000000000").toUpperCase();
+  const padded = ("000000000000000000000000" + startIpHex4).toUpperCase();
   const [rows] = await td.pool.query<mysql.RowDataPacket[]>(
     `SELECT HEX(start_ip) AS start_hex, HEX(end_ip) AS end_hex,
             country_code, country_name, region, city, isp, asn, asn_org,
@@ -40,8 +41,8 @@ describe("seed ip_ranges migration (012)", () => {
   it("Google Public DNS 8.8.8.8 → US, Mountain View, Google", async () => {
     const row = await findSeedByIp("08080808");
     expect(row).toBeDefined();
-    expect(row.start_hex).toBe("08080808000000000000000000000000");
-    expect(row.end_hex).toBe("08080808000000000000000000000000");
+    expect(row.start_hex).toBe("00000000000000000000000008080808");
+    expect(row.end_hex).toBe("00000000000000000000000008080808");
     expect(row.country_code).toBe("US");
     expect(row.city).toBe("Mountain View");
     expect(row.isp).toBe("Google Public DNS");
@@ -59,8 +60,8 @@ describe("seed ip_ranges migration (012)", () => {
   it("RFC 1918 192.168.0.0/24 has country_code NULL and reserved country_name", async () => {
     const row = await findSeedByIp("C0A80000");
     expect(row).toBeDefined();
-    expect(row.start_hex).toBe("C0A80000000000000000000000000000");
-    expect(row.end_hex).toBe("C0A800FF000000000000000000000000");
+    expect(row.start_hex).toBe("000000000000000000000000C0A80000");
+    expect(row.end_hex).toBe("000000000000000000000000C0A800FF");
     expect(row.country_code).toBeNull();
     expect(row.country_name).toBe("Reserved (RFC 1918)");
   });

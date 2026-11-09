@@ -6,7 +6,7 @@ import { loadConfig } from "../../src/config";
 import { buildServer } from "../../src/api/server";
 import { truncateNew, insertIntoNew, atomicSwapRanges } from "../../src/storage/mysql";
 import { createUser } from "../../src/storage/users";
-import { createApiKey, findApiKeyById } from "../../src/storage/apiKeys";
+import { createApiKey, findApiKeyById, _resetApiKeyTouchThrottle } from "../../src/storage/apiKeys";
 import { generateApiKey, hashToken } from "../../src/web/auth/tokens";
 
 let td: TestDb;
@@ -91,6 +91,9 @@ describe("GET /lookup API key auth", () => {
     // /dashboard/keys therefore showed "Last used: never" for every key.
     // Earlier tests in this suite already exercised rawKey and stamped the
     // column, so reset to NULL here to make the post-call assertion checkable.
+    // last_used_at writes are throttled per key (60s in-process), so the
+    // throttle map must also be cleared or this call is skipped as a no-op.
+    _resetApiKeyTouchThrottle();
     await app.pool.query(`UPDATE api_keys SET last_used_at = NULL WHERE id = ?`, [keyId]);
     const before = await findApiKeyById(app.pool, keyId);
     expect(before?.lastUsedAt).toBeNull();
