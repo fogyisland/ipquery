@@ -1,13 +1,31 @@
 // SPDX-License-Identifier: MIT
+
+/**
+ * The longest textual form of an IP address.
+ *
+ * An IPv4 address is at most 15 characters ("255.255.255.255"). An
+ * IPv6 address in its longest (fully expanded, non-compressed) form is
+ * 39 characters: 8 groups of 4 hex digits separated by 7 colons. The
+ * zone-id and IPv4-mapped forms we reject would be longer, but they
+ * are rejected by the parser anyway.
+ *
+ * The cap exists so `isValidIp` does not have to run its regex and
+ * tokeniser over an arbitrarily long input. The regex is linear and
+ * the parser bails out early, so there is no ReDoS risk — but the
+ * contract is clearer with an explicit bound, and it keeps the cost of
+ * a rejected input flat.
+ */
+const MAX_IP_LENGTH = 45;
+
 export function isValidIp(s: string): boolean {
-  if (typeof s !== "string" || s.length === 0) return false;
+  if (typeof s !== "string" || s.length === 0 || s.length > MAX_IP_LENGTH) return false;
   // Cheap pre-check: only contains digits, dots, colons, a-f, A-F
   if (!/^[0-9a-fA-F:.]+$/.test(s)) return false;
   return parseIp(s) !== null;
 }
 
 export function parseIp(s: string): Buffer | null {
-  if (typeof s !== "string" || s.length === 0) return null;
+  if (typeof s !== "string" || s.length === 0 || s.length > MAX_IP_LENGTH) return null;
   if (s.includes(":")) return parseV6(s);
   if (s.includes(".")) return parseV4(s);
   return null;
