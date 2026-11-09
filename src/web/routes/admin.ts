@@ -111,6 +111,38 @@ const HMAC_KEY = process.env.SESSION_SECRET || process.env.CSRF_SECRET || "dev-f
 const ETL_FLASH_COOKIE = "etl_flash";
 
 /**
+ * Rate limit for the admin polling endpoints.
+ *
+ * The admin UI polls four endpoints on a timer: the ETL run-detail
+ * page polls /live every 5s and /progress every 2s, and the dashboard
+ * and query-log pages poll every 30s. Together the ETL page alone
+ * spends 42 requests per minute.
+ *
+ * The global limit is 60/minute, shared with the public API by source
+ * IP. An admin with the ETL page open would use 70% of the global
+ * budget on polling alone, and a few ordinary page loads would push
+ * the IP over — after which every poll returns 429. htmx keeps
+ * polling on a 429 (it only stops on a non-2xx that isn't 429 in some
+ * configurations, and a 429 body is not a 204 "no content"), so the
+ * progress bar freezes while the page keeps hammering.
+ *
+ * A route-level `config.rateLimit` object REPLACES the global setting
+ * and gets its own counter (see @fastify/rate-limit's `onRoute` hook:
+ * a route with a custom config gets `store.child(...)` and the global
+ * hook is not attached to it). So these routes stop consuming the
+ * public API's budget at all.
+ *
+ * The limit is still finite: 120/minute is twice the worst-case poll
+ * rate (60/min for the two ETL endpoints together) with headroom for
+ * a couple of open tabs, and it bounds what a hijacked admin session
+ * can spend.
+ */
+const ADMIN_POLL_RATE_LIMIT = {
+  max: 120,
+  timeWindow: "1 minute",
+} as const;
+
+/**
  * Read and clear the ETL flash cookie, turning it into the shape the
  * `flash` partial expects ({ success } / { error } / ...).
  *
@@ -196,7 +228,7 @@ function verifyBackfillPreview(cookie: string | undefined): VerifyResult {
 }
 
 export default async function adminRoutes(app: FastifyInstance): Promise<void> {
-  app.get("/admin", async (req, reply) => {
+  app.get("/admin", { config: { rateLimit: ADMIN_POLL_RATE_LIMIT } }, async (req, reply) => {
     const overview = await getOverview(app.pool);
     return reply.view("admin/dashboard.hbs", {
       layout: "layouts/admin",
@@ -660,49 +692,57 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
   // just that wrapper for outerHTML swap; because the swapped-in section
   // carries no hx-get/hx-trigger attribute of its own, polling terminates
   // naturally. When the run has finished we return 204 as a no-op.
-  app.get<{ Params: { id: string } }>("/admin/etl/runs/:id/live", async (req, reply) => {
-    const id = Number(req.params.id);
-    const [rows] = await app.pool.query<RowDataPacket[]>("SELECT * FROM etl_runs WHERE id = ?", [id]);
-    const run = rows[0];
-    if (!run) return reply.code(204).send();
-    if (run.status !== "running") return reply.code(204).send();
-    const ctx = await buildRunDetailCtx(
-      run,
-      req as unknown as { t: (k: string, v?: Record<string, string | number>) => string },
-      true,
-    );
-    return reply.view("admin/etl-run-detail.hbs", {
-      ...ctx,
-      title: req.t("admin.etl.detail.title", { id: run.id }),
-    });
-  });
+  app.get<{ Params: { id: string } }>(
+    "/admin/etl/runs/:id/live",
+    { config: { rateLimit: ADMIN_POLL_RATE_LIMIT } },
+    async (req, reply) => {
+      const id = Number(req.params.id);
+      const [rows] = await app.pool.query<RowDataPacket[]>("SELECT * FROM etl_runs WHERE id = ?", [id]);
+      const run = rows[0];
+      if (!run) return reply.code(204).send();
+      if (run.status !== "running") return reply.code(204).send();
+      const ctx = await buildRunDetailCtx(
+        run,
+        req as unknown as { t: (k: string, v?: Record<string, string | number>) => string },
+        true,
+      );
+      return reply.view("admin/etl-run-detail.hbs", {
+        ...ctx,
+        title: req.t("admin.etl.detail.title", { id: run.id }),
+      });
+    },
+  );
 
   // Lightweight JSON endpoint backing the new progress bars on the
   // run-detail page. Returns only the four numeric counters + stage so
   // the client can update the bars without re-rendering the whole page.
   // When the run finishes the page stops polling; the server returns
   // 204 in that case so htmx interprets it as "no swap".
-  app.get<{ Params: { id: string } }>("/admin/etl/runs/:id/progress", async (req, reply) => {
-    const id = Number(req.params.id);
-    if (!Number.isFinite(id) || id <= 0) return reply.code(400).send();
-    const progress = await getEtlRunProgress(app.pool, id);
-    if (!progress) return reply.code(404).send();
-    if (progress.status !== "running") return reply.code(204).send();
-    return reply.send({
-      runId: id,
-      status: progress.status,
-      currentStage: progress.currentStage,
-      downloadBytesDone: progress.downloadBytesDone,
-      downloadBytesTotal: progress.downloadBytesTotal,
-      insertRowsDone: progress.insertRowsDone,
-      insertRowsTotal: progress.insertRowsTotal,
-      progressUpdatedAt:
-        progress.progressUpdatedAt instanceof Date
-          ? progress.progressUpdatedAt.toISOString()
-          : progress.progressUpdatedAt,
-      errorMessage: progress.errorMessage,
-    });
-  });
+  app.get<{ Params: { id: string } }>(
+    "/admin/etl/runs/:id/progress",
+    { config: { rateLimit: ADMIN_POLL_RATE_LIMIT } },
+    async (req, reply) => {
+      const id = Number(req.params.id);
+      if (!Number.isFinite(id) || id <= 0) return reply.code(400).send();
+      const progress = await getEtlRunProgress(app.pool, id);
+      if (!progress) return reply.code(404).send();
+      if (progress.status !== "running") return reply.code(204).send();
+      return reply.send({
+        runId: id,
+        status: progress.status,
+        currentStage: progress.currentStage,
+        downloadBytesDone: progress.downloadBytesDone,
+        downloadBytesTotal: progress.downloadBytesTotal,
+        insertRowsDone: progress.insertRowsDone,
+        insertRowsTotal: progress.insertRowsTotal,
+        progressUpdatedAt:
+          progress.progressUpdatedAt instanceof Date
+            ? progress.progressUpdatedAt.toISOString()
+            : progress.progressUpdatedAt,
+        errorMessage: progress.errorMessage,
+      });
+    },
+  );
 
   app.post("/admin/etl/trigger", async (req, reply) => {
     if (!verifyCsrfRequest(req))
@@ -1018,7 +1058,7 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
     return csv;
   });
 
-  app.get("/admin/queries", async (req, reply) => {
+  app.get("/admin/queries", { config: { rateLimit: ADMIN_POLL_RATE_LIMIT } }, async (req, reply) => {
     const q = parseListQuery(req.url.split("?")[1] ?? "", {
       filters: ["since", "until"],
       sort: [],
