@@ -23,6 +23,18 @@
 -- behind them — exactly the buggy left-aligned encoding. ETL and
 -- backfill rows are written by parseIp() and are never in that form,
 -- and they are excluded by the country_source filter regardless.
+--
+-- The seed rows' range_size is left alone. findRange() now ranks a
+-- real ETL row above a seed row explicitly (see the country_source
+-- check in src/storage/mysql.ts), because range_size alone cannot
+-- express the priority: a seed row is a single address (range_size 0)
+-- and would otherwise beat every real range covering it.
+--
+-- A sentinel range_size was tried and rejected — 2^64-1 is the widest
+-- value a BIGINT UNSIGNED holds, and mysql2 returns BIGINTs as
+-- JavaScript numbers, so it comes back as 1.8446744073709552e19 and
+-- BigInt() of that is 2^64 rather than 2^64-1. Ranking by source
+-- avoids depending on a value that cannot survive the round trip.
 
 SET SESSION tmp_table_size = 1024 * 1024 * 256;
 SET SESSION max_heap_table_size = 1024 * 1024 * 256;
