@@ -10,8 +10,8 @@ dotenvConfig({ path: `${resolveProjectRoot()}/.env`, quiet: true });
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
-import mysql from "mysql2/promise";
 import { loadConfig } from "../config";
+import { createPool } from "../storage/mysql";
 import { buildToolRegistrations } from "./server-tools";
 import { TOOL_NAMES } from "./tool-names";
 import type { McpPool } from "./tools";
@@ -31,14 +31,11 @@ async function main(): Promise<void> {
     failFast("config load failed — is .env present in the project root?", e);
   }
 
-  const pool = mysql.createPool({
-    host: cfg.db.host,
-    port: cfg.db.port,
-    user: cfg.db.user,
-    password: cfg.db.password,
-    database: cfg.db.database,
-    connectionLimit: 2,
-  });
+  // Reuse the shared pool factory so the MCP server picks up the same
+  // driver settings as the web/API server — notably `timezone: "Z"`,
+  // without which mysql2 renders DATETIME values in the process's local
+  // timezone and every ISO-serialized timestamp drifts by the offset.
+  const pool = createPool({ ...cfg, db: { ...cfg.db, poolSize: 2 } });
 
   // Fail fast if the DB is unreachable instead of failing per-tool later.
   try {
@@ -89,8 +86,13 @@ async function main(): Promise<void> {
     const result = await reg.handler(request.params.arguments ?? {});
     // The typed isErrorHint flag travels on the result object itself — no
     // sniffing of serialized text, so JSON formatting changes stay safe.
+    // A `not_found` lookup is a successful tool call with an empty answer
+    // (the errorResult text describes the miss), so it must NOT set the
+    // protocol-level isError flag — that would make clients treat a
+    // legitimate "unknown IP" as a tool failure.
+    const isNotFound = (result as { code?: string }).code === "not_found";
     const text = JSON.stringify(result, null, 2);
-    return { content: [{ type: "text", text }], isError: result.isErrorHint === true };
+    return { content: [{ type: "text", text }], isError: result.isErrorHint === true && !isNotFound };
   });
 
   const shutdown = async (signal: string): Promise<void> => {

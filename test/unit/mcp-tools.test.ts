@@ -13,6 +13,7 @@ import {
   maskPrefix,
   sanitizeQueryRow,
   mcpQueriesRecent,
+  mcpQueriesDaily,
   queriesRecentToolDef,
   queriesDailyToolDef,
   type McpPool,
@@ -127,6 +128,13 @@ describe("masking", () => {
     expect(maskEmail("")).toBeNull();
     expect(maskPrefix("")).toBeNull();
   });
+  it("does not leak subdomains — only the TLD survives", () => {
+    // Regression: the mask used to split on the FIRST dot, so a
+    // subdomain address rendered as a***@m***.example.com — leaking the
+    // full registrable domain. Only the TLD may survive.
+    expect(maskEmail("a@mail.example.com")).toBe("a***@m***.com");
+    expect(maskEmail("peng@dept.corp.example.co.uk")).toBe("p***@d***.uk");
+  });
 });
 
 describe("sanitizeQueryRow", () => {
@@ -195,5 +203,39 @@ describe("query-log tool defs", () => {
     expect(queriesDailyToolDef().name).toBe("ipquery_queries_daily");
     const props = queriesRecentToolDef().inputSchema.properties as Record<string, { enum?: string[] }>;
     expect(props.status?.enum).toEqual(["hit", "miss", "invalid"]);
+  });
+});
+
+describe("mcpQueriesDaily", () => {
+  it("sums each day's buckets into a single count", async () => {
+    const pool = {
+      query: vi.fn().mockResolvedValue([
+        [
+          { d: "2026-11-08", status: "hit", c: 3 },
+          { d: "2026-11-08", status: "miss", c: 1 },
+          { d: "2026-11-09", status: "invalid", c: 2 },
+        ],
+        [],
+      ]),
+    };
+    const res = await mcpQueriesDaily(makeDeps(pool), { days: 2 });
+    expect(res).toEqual([
+      { day: "2026-11-08", count: 4 },
+      { day: "2026-11-09", count: 2 },
+    ]);
+    // The `since` bound and every day key are UTC — the SQL buckets on a
+    // converted-to-UTC DATE, and the WHERE bound is a UTC midnight.
+    const [sql, params] = (pool.query as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(sql).toContain("CONVERT_TZ");
+    expect((params[0] as Date).toISOString()).toMatch(/T00:00:00\.000Z$/);
+  });
+  it("clamps days and emits exactly that many buckets", async () => {
+    const pool = { query: vi.fn().mockResolvedValue([[], []]) };
+    const res = await mcpQueriesDaily(makeDeps(pool), { days: 500 });
+    expect(res).toHaveLength(90);
+  });
+  it("maps a pool failure to a typed error", async () => {
+    const pool = { query: vi.fn().mockRejectedValue(new Error("boom")) };
+    await expect(mcpQueriesDaily(makeDeps(pool), {})).rejects.toThrow("daily queries failed: boom");
   });
 });
