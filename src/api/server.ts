@@ -73,6 +73,29 @@ export async function buildServer(
   app.decorate("cfg", cfg);
   app.decorate("pool", createPool(cfg));
 
+  // Close the database pool LAST.
+  //
+  // Fastify runs `onClose` hooks in REVERSE registration order, so a
+  // hook added here — before any plugin registers its own — is the last
+  // one to run. That matters: the plugins below flush buffered state on
+  // shutdown (the session purger's final sweep, the query-log writer's
+  // final batch, the probe-retention sweep). They all need the pool to
+  // still be open. When this hook was registered at the end of
+  // buildServer(), the pool was closed FIRST and every one of those
+  // flushes failed with "Pool is closed." — the query-log writer
+  // silently dropped the last buffered rows, and the session purger
+  // logged a spurious error on every shutdown.
+  app.addHook("onClose", async () => {
+    try {
+      await app.pool.end();
+    } catch (err) {
+      // Shutdown is best-effort — a pool that won't close leaks a
+      // connection, but the process is exiting either way. Logged so a
+      // repeated close failure is visible rather than silent.
+      app.log.warn({ err }, "failed to close the database pool");
+    }
+  });
+
   await registerSetupGuard(app);
 
   await app.register(cookie, {
@@ -116,17 +139,6 @@ export async function buildServer(
   if (opts?.extraRoutes) {
     await opts.extraRoutes(app);
   }
-
-  app.addHook("onClose", async () => {
-    try {
-      await app.pool.end();
-    } catch (err) {
-      // Shutdown is best-effort — a pool that won't close leaks a
-      // connection, but the process is exiting either way. Logged so a
-      // repeated close failure is visible rather than silent.
-      app.log.warn({ err }, "failed to close the database pool");
-    }
-  });
 
   await app.ready();
 
