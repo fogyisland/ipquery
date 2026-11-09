@@ -94,6 +94,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   022 的 6 条 ALTER 合成 1 条（9477ms → 1757ms），020 的 2 条合成 1 条（5198ms → 3230ms），
   全新库建 schema 的成本因此下降约 10 秒。幂等性保持不变（仍按 INFORMATION_SCHEMA 逐列判断缺失，
   只补缺的那几列）——MySQL 5.7 不支持 `ADD COLUMN IF NOT EXISTS`
+- **API 限流文档缺失**: `/docs` 新增 Rate limits 一节（匿名／API Key／管理后台三档），
+  公布的数字取自服务端配置而非硬编码，不会与实际设置漂移；同时说明路由级限流
+  （登录、重发验证邮件等）是**替换**而非叠加全局限额
+- **管理轮询挤占公共限流额度**: `/admin`、ETL `/live` 与 `/progress`、`/admin/queries`
+  每秒轮询一次，与公共 API 共享 60/分钟的全局限流——轮询本身就能把额度吃光，
+  之后整个 IP 的所有管理页面全部 429。现给轮询路由独立的 120/分钟额度
+- **验证邮件重发的冷却键错位**: 重发冷却原按**目标** userId 记，挡住了对同一用户的重复发送，
+  却挡不住枚举攻击——脚本遍历 userId 1..N 可给每个已注册用户发一封邮件而毫无阻拦。
+  现改为按**请求者**（IP）冷却，并加 10/小时 的路由级限流；未知或畸形 userId 返回 404
+- **API Key last_used_at 每请求写库**: 仪表盘对"3 秒前用过"和"30 秒前用过"无感知差异，
+  但每次请求写一行是纯开销（一次 DB 往返 + 行锁）。现每 key 至多 60 秒落一次盘，
+  写失败时清掉节流标记以便下个请求重试
+- **错误响应泄漏数据库内部信息**: 全局错误处理器曾把底层错误消息原样返回给客户端
+  （表名、SQL 片段等）；`isValidIp`／`parseIp` 对超长输入未设上限；400 响应回显原始输入。
+  现统一由全局 handler 输出通用错误文案，输入长度上限 45 字符，400 不再回显
+- **MCP maskEmail 子域泄漏**: 邮箱脱敏按**第一个**点截断域名，
+  `a@mail.example.com` 输出 `a***@m***.example.com`——本应隐藏的注册域整段暴露。
+  现只保留 TLD：`a***@m***.com`
+- **MCP 连接池时区漂移**: stdio 服务器自建 `mysql.createPool`，未带共享工厂的 `timezone: "Z"`，
+  所有 ISO 时间戳随进程时区偏移。现复用 `createPool(cfg)`
+- **查询按天统计的时区错位**: `countQueriesByDay` 以**本地**零点定窗口、却按 UTC ISO 日期分桶，
+  每天的总量随服务器时区偏移错位（管理端概览与 `ipquery_queries_daily` 同时受影响）。
+  现窗口与分桶全 UTC，SQL 侧 `DATE(CONVERT_TZ(ts, ... '+00:00'))`
+- **MCP not_found 误报为工具失败**: 查询未命中是正确的空答案，却置了 MCP 协议级 `isError`，
+  客户端会把"未知 IP"当成工具故障。现降级为正常响应
+- **两个集成测试滞后于已提交行为**: `lookup.auth` 未清 last_used_at 的进程内写节流表
+  （60 秒节流把断言的写入吞掉）；`seed-data` 的 helper 仍按 migration 023 修复**前**的
+  字节序（右填充）断言。均已对齐
 
 ### Security
 
