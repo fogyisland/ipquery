@@ -1811,7 +1811,15 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
     req.auditAction = {
       action: "unknown_ips.scheduler.update",
       targetType: "settings",
-      metadata: { intervalSec, batchSize, cooldownMinutes, cbLinkage, retentionDays },
+      metadata: {
+        intervalSec,
+        batchSize,
+        cooldownMinutes,
+        cbLinkage,
+        // NaN when the field was absent — record null rather than a
+        // NaN that would render as "NaN" in the audit log.
+        retentionDays: Number.isFinite(retentionDays) ? retentionDays : null,
+      },
     };
     await saveRandomGenConfig(app.pool, {
       intervalSec: Number.isFinite(intervalSec) ? intervalSec : undefined,
