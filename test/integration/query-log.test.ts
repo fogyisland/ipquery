@@ -129,4 +129,25 @@ describe("query_log", () => {
     const r = await listQueryLogs(td.pool, { offset: 0, limit: 1000 });
     expect(r.total).toBeGreaterThanOrEqual(250);
   });
+
+  it("rejects a sort column outside the allow-list", async () => {
+    // `col` is interpolated into the ORDER BY clause, so the storage
+    // layer validates it even though the TypeScript type already
+    // restricts it. This guards against a future caller passing an
+    // unvalidated string.
+    await expect(
+      listQueryLogs(td.pool, {
+        offset: 0,
+        limit: 10,
+        sort: { col: "id; DROP TABLE query_log" as "id", dir: "asc" },
+      }),
+    ).rejects.toThrow(/unsupported sort column/);
+  });
+
+  it("accepts both allow-listed sort columns", async () => {
+    const byId = await listQueryLogs(td.pool, { offset: 0, limit: 5, sort: { col: "id", dir: "desc" } });
+    const byTs = await listQueryLogs(td.pool, { offset: 0, limit: 5, sort: { col: "ts", dir: "asc" } });
+    expect(byId.total).toBeGreaterThan(0);
+    expect(byTs.total).toBeGreaterThan(0);
+  });
 });
