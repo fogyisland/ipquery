@@ -119,9 +119,10 @@ describe("migration 023 repairs the seed encoding", () => {
     }
   });
 
-  it("is a no-op when the rows are already correct", async () => {
+  it("does not disturb bytes that are already correct", async () => {
     // Fresh installs get the right bytes from migration 012, so 023 must
-    // not disturb them.
+    // not shuffle them again. (The range_size demotion below is a
+    // separate, deliberate change — this checks the byte columns.)
     const [before] = await pool.query<Array<{ start_hex: string; end_hex: string }>>(
       `SELECT HEX(start_ip) AS start_hex, HEX(end_ip) AS end_hex
          FROM ip_ranges WHERE country_source = 'seed'`,
@@ -134,6 +135,47 @@ describe("migration 023 repairs the seed encoding", () => {
          FROM ip_ranges WHERE country_source = 'seed'`,
     );
     expect(after).toEqual(before);
+  });
+
+  it("leaves the seed rows' range_size alone", async () => {
+    // The seed rows keep range_size = 0. findRange() ranks a real ETL
+    // row above a seed row by source, not by range_size — a sentinel
+    // value cannot be used because mysql2 returns BIGINT UNSIGNED as a
+    // JavaScript number and 2^64-1 does not survive the round trip.
+    await runFixMigration();
+
+    const [rows] = await pool.query<Array<{ range_size: string | number }>>(
+      `SELECT range_size FROM ip_ranges WHERE country_source = 'seed'`,
+    );
+    expect(rows.length).toBeGreaterThan(0);
+    for (const row of rows) {
+      expect(BigInt(row.range_size)).toBe(0n);
+    }
+  });
+
+  it("prefers a real ETL range over the seed row for the same address", async () => {
+    await runFixMigration();
+
+    // A /24 from the ETL loader covering the seeded 8.8.8.8.
+    await pool.query(
+      `INSERT INTO ip_ranges
+         (start_ip, end_ip, range_size, country_code, country_name, city, isp,
+          country_source, city_source, isp_source, geo_source)
+       VALUES (UNHEX('00000000000000000000000008080800'),
+               UNHEX('000000000000000000000000080808FF'),
+               255, 'US', 'United States', 'Real ETL City', 'Real ETL ISP',
+               'dbip', 'dbip', 'dbip', 'dbip')`,
+    );
+    try {
+      const found = await findRange(pool, parseIp("8.8.8.8")!);
+      expect(found).not.toBeNull();
+      // The ETL row carries the finer-grained fields; the seed row must
+      // not shadow it.
+      expect(found!.city).toBe("Real ETL City");
+      expect(found!.isp).toBe("Real ETL ISP");
+    } finally {
+      await pool.query(`DELETE FROM ip_ranges WHERE country_source = 'dbip'`);
+    }
   });
 
   it("leaves ETL-sourced rows untouched", async () => {

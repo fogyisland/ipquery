@@ -258,7 +258,7 @@ export async function findRange(pool: mysql.Pool, ipBuf: Buffer): Promise<IpRang
     `SELECT start_ip, end_ip, country_code, country_name, region, city, postal_code,
             latitude, longitude, timezone, isp, asn, asn_org,
             country_source, city_source, isp_source, asn_source, geo_source,
-            range_size
+            CAST(range_size AS CHAR) AS range_size
        FROM ip_ranges USE INDEX (uniq_start_end)
        WHERE start_ip <= ?
        ORDER BY start_ip DESC
@@ -266,14 +266,37 @@ export async function findRange(pool: mysql.Pool, ipBuf: Buffer): Promise<IpRang
     [ipBuf],
   );
   // Filter to rows that actually cover the target, then pick the smallest
-  // range_size among them. range_size is stored as a decimal string in MySQL
-  // (BIGINT UNSIGNED) — parse it back to bigint for an exact sort.
-  let best: { row: mysql.RowDataPacket; size: bigint } | null = null;
+  // range_size among them.
+  //
+  // range_size is a BIGINT UNSIGNED. mysql2 returns BIGINTs as JavaScript
+  // numbers, which silently lose precision above 2^53 — and the IPv6
+  // catchall rows carry exactly 2^64-1, so BigInt(number) would come back
+  // as 2^64 rather than 2^64-1. CAST(... AS CHAR) in the SELECT keeps the
+  // exact decimal, and BigInt() parses it without loss.
+  //
+  // The seed rows are also demoted below the real ETL data. They exist
+  // to answer /lookup before the first ETL run; once the real library is
+  // loaded its rows carry finer fields (city, ISP, coordinates) and must
+  // win. range_size alone cannot express that — a seed row is a single
+  // address (range_size 0) and would beat every real range covering it.
+  let best: { row: mysql.RowDataPacket; size: bigint; isSeed: boolean } | null = null;
   for (const r of rows) {
     const endIp = r.end_ip as Buffer;
     if (compareBuffers(endIp, ipBuf) < 0) continue;
-    const size = BigInt(r.range_size as string | number);
-    if (best === null || size < best.size) best = { row: r, size };
+    const size = BigInt(r.range_size as string);
+    const isSeed = r.country_source === "seed";
+    if (best === null) {
+      best = { row: r, size, isSeed };
+      continue;
+    }
+    // Real data beats seed data outright. Between two rows of the same
+    // kind, the smaller range is the more precise one.
+    if (isSeed !== best.isSeed) {
+      if (isSeed) continue; // a seed row never displaces a real one
+    } else if (size >= best.size) {
+      continue;
+    }
+    best = { row: r, size, isSeed };
   }
   if (best === null) return null;
   const r = best.row;

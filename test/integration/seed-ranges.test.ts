@@ -114,4 +114,76 @@ describe("seeded ranges are reachable", () => {
     const found = await findRange(pool, parseIp("203.0.113.77")!);
     expect(found).toBeNull();
   });
+
+  it("prefers a real ETL range over the seed row for the same address", async () => {
+    // The seed rows exist to answer /lookup before the first ETL run.
+    // Once the real library is loaded its rows carry finer fields, and
+    // they have to win.
+    //
+    // range_size alone cannot express this: a seed row is a single
+    // address (range_size 0) and would beat every real range covering
+    // it, because findRange() picks the SMALLEST covering range. The
+    // priority is by source instead.
+    await pool.query(
+      `INSERT INTO ip_ranges
+         (start_ip, end_ip, range_size, country_code, country_name, city, isp,
+          country_source, city_source, isp_source, geo_source)
+       VALUES (UNHEX('00000000000000000000000008080800'),
+               UNHEX('000000000000000000000000080808FF'),
+               255, 'US', 'United States', 'Real ETL City', 'Real ETL ISP',
+               'dbip', 'dbip', 'dbip', 'dbip')`,
+    );
+    try {
+      const found = await findRange(pool, parseIp("8.8.8.8")!);
+      expect(found).not.toBeNull();
+      expect(found!.city).toBe("Real ETL City");
+      expect(found!.isp).toBe("Real ETL ISP");
+      expect(found!.citySource).toBe("dbip");
+    } finally {
+      await pool.query(`DELETE FROM ip_ranges WHERE country_source = 'dbip'`);
+    }
+  });
+
+  it("still falls back to the seed row when no ETL data covers the address", async () => {
+    // The other half of the priority rule: the seed data is a
+    // fallback, so it must still answer when there is nothing else.
+    const found = await findRange(pool, parseIp("8.8.8.8")!);
+    expect(found).not.toBeNull();
+    expect(found!.countrySource).toBe("seed");
+  });
+
+  it("reads range_size exactly, without float precision loss", async () => {
+    // range_size is BIGINT UNSIGNED. mysql2 returns BIGINTs as
+    // JavaScript numbers, so a value above 2^53 comes back rounded and
+    // BigInt() of it is a different number. findRange() casts the
+    // column to CHAR to keep the exact decimal — this checks that a
+    // row with the widest possible range_size is still compared
+    // correctly against a smaller one.
+    await pool.query(
+      `INSERT INTO ip_ranges
+         (start_ip, end_ip, range_size, country_code, country_source,
+          city_source, isp_source, geo_source)
+       VALUES (UNHEX('000000000000000000000000C0A80100'),
+               UNHEX('000000000000000000000000C0A801FF'),
+               18446744073709551615, 'XX', 'dbip', 'dbip', 'dbip', 'dbip')`,
+    );
+    await pool.query(
+      `INSERT INTO ip_ranges
+         (start_ip, end_ip, range_size, country_code, country_name, city,
+          country_source, city_source, isp_source, geo_source)
+       VALUES (UNHEX('000000000000000000000000C0A80200'),
+               UNHEX('000000000000000000000000C0A802FF'),
+               255, 'US', 'United States', 'Precise City',
+               'dbip', 'dbip', 'dbip', 'dbip')`,
+    );
+    try {
+      // The /24 row (range_size 255) is the more precise one and must
+      // win over the widest possible range_size.
+      const found = await findRange(pool, parseIp("192.168.2.5")!);
+      expect(found).not.toBeNull();
+      expect(found!.city).toBe("Precise City");
+    } finally {
+      await pool.query(`DELETE FROM ip_ranges WHERE country_source = 'dbip'`);
+    }
+  });
 });
