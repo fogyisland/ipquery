@@ -998,7 +998,22 @@
     },
     "cta": {
       "try": "在线试查"
-    }
+    },
+    "authQueryNote": "?key= 形式仍可用,但 URL 中的密钥会进入服务器日志、代理日志和浏览器历史。推荐使用 Authorization 请求头 —— 它不会出现在任何日志中。使用 ?key= 的请求会收到 Deprecation 响应头。",
+    "tocRateLimits": "速率限制",
+    "rateLimitsTitle": "速率限制",
+    "rateLimitsBody": "所有请求都按来源 IP 计数限速。未携带密钥的请求与携带密钥的请求使用各自独立的计数桶，因此使用 API 密钥不会占用匿名请求的额度。",
+    "colScope": "适用范围",
+    "colLimit": "额度",
+    "rateLimits": {
+      "publicScope": "匿名请求",
+      "publicDesc": "未携带 API 密钥的请求，即上面 curl 示例所使用的额度。",
+      "keyedScope": "API 密钥",
+      "keyedDesc": "携带 API 密钥的请求（Authorization: Bearer 或 ?key=）。",
+      "adminScope": "管理后台",
+      "adminDesc": "管理后台需要轮询 ETL 实时进度，因此使用独立且更大的额度，不会占用公开 API 的额度。"
+    },
+    "rateLimitsScopeNote": "各范围使用相互独立的计数器。路由级限速会替换该路由的全局限速，而不是与之叠加；管理后台的轮询路由与公开 API 分开计费。"
   },
   "footer": {
     "copyright": "© {year} IPQuery",
