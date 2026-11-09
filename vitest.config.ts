@@ -8,7 +8,14 @@ export default defineConfig({
   test: {
     include: ["test/**/*.test.ts"],
     testTimeout: 90_000,
-    hookTimeout: 90_000,
+    // A fresh test database runs every migration from scratch, and each
+    // CREATE/ALTER TABLE is an implicit commit whose metadata write is
+    // durable. On a machine with a slow disk that is roughly a second
+    // per statement, so building the schema from empty costs ~40s and
+    // the E2E setup hook (which also runs the ETL pipeline) can take
+    // over a minute. 180s leaves room for a few more migrations without
+    // the hook silently failing on a slow disk.
+    hookTimeout: 180_000,
     fileParallelism: false,
     passWithNoTests: true,
     coverage: {
