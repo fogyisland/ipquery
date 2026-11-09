@@ -101,7 +101,7 @@ describe("seeded ranges are reachable", () => {
       `SELECT HEX(start_ip) AS start_hex, HEX(end_ip) AS end_hex
          FROM ip_ranges WHERE country_source = 'seed'`,
     );
-    expect(rows.length).toBeGreaterThan(0);
+    expect(rows.length).toBe(50);
     for (const row of rows) {
       expect(row.start_hex.length, `start_ip ${row.start_hex}`).toBe(32);
       expect(row.end_hex.length, `end_ip ${row.end_hex}`).toBe(32);
