@@ -43,6 +43,30 @@ This repository contains **no data files**. You are responsible for downloading 
 
 ETL pipeline → MySQL → Fastify. See [`docs/superpowers/specs/2026-08-13-ip-aggregator-design.md`](docs/superpowers/specs/2026-08-13-ip-aggregator-design.md) for the full design.
 
+## Ingest operations
+
+Three admin surfaces fan out to the external IP-geo providers (ip-api, ipinfo,
+iplocate), which share free-tier quotas. They are guarded against each other:
+
+| Guard                  | Behavior                                                                                                                   |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| Provider-fan-out mutex | One fan-out at a time per process. A second request is skipped outright — no provider calls, no writes.                    |
+| Per-route rate limit   | Backfill preview/confirm: 5/hour. Manual generate: 10/hour. Custom-provider test: 20/hour. On top of the global API limit. |
+| Circuit breaker        | A provider that returns HTTP 429 is auto-disabled, then re-enabled after its cooldown expires.                             |
+| Probe-log retention    | `random_probe_log` is swept every 6h, keeping a trailing window. Default 30 days.                                          |
+
+Retention is configurable at `/admin/ingest` (scheduler form) or directly in the
+`settings` table:
+
+```sql
+-- 0 = keep forever; otherwise the number of days to keep
+INSERT INTO settings (k, v) VALUES ('random_probe_retention_days', '30')
+  ON DUPLICATE KEY UPDATE v = VALUES(v);
+```
+
+The mutex is in-process. A multi-instance deployment gets one lock per instance,
+so the guarantee degrades to "per instance" there.
+
 ## Development
 
 ```bash
