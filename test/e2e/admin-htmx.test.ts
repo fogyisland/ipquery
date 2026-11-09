@@ -118,10 +118,33 @@ describe("admin layout loads htmx", () => {
       const wired = await page.evaluate(() => {
         const form = document.querySelector<HTMLFormElement>("form[data-confirm]");
         if (!form) return { found: false, bound: false };
-        return { found: true, bound: (form as unknown as { __confirmFormWired?: boolean }).__confirmFormWired === true };
+        return {
+          found: true,
+          bound: (form as unknown as { __confirmFormWired?: boolean }).__confirmFormWired === true,
+        };
       });
       expect(wired.found).toBe(true);
       expect(wired.bound).toBe(true);
+    } finally {
+      await page.context().close();
+    }
+  });
+
+  it("renders the ingest page with the retention field", async () => {
+    const page = await adminPage();
+    try {
+      await page.goto(`${baseUrl}/admin/ingest`, { waitUntil: "domcontentloaded" });
+
+      // The retention window is configured on the ingest page (the
+      // random_probe_log subsystem lives there, not on /admin/settings).
+      const retention = await page
+        .locator('input[name="retentionDays"]')
+        .evaluate((el) => (el as HTMLInputElement).value);
+      expect(retention).toBe("30");
+
+      // The generate / clear forms still carry their confirm dialogs.
+      const confirmCount = await page.locator("form[data-confirm]").count();
+      expect(confirmCount).toBeGreaterThan(0);
     } finally {
       await page.context().close();
     }
