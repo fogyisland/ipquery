@@ -43,13 +43,10 @@ export function registerProbeRetention(
   timer.unref();
 
   app.addHook("onClose", async () => {
-    // Only stop the timer — deliberately no final tick. The pool is
-    // closed by an onClose hook registered earlier (src/api/server.ts),
-    // and Fastify runs onClose hooks in registration order, so by the
-    // time this one runs the pool is already gone and a final sweep
-    // would only log "Pool is closed". Skipping it is harmless: the
-    // probe log is pure audit data and the next sweep picks up
-    // whatever this one would have deleted.
+    // Only stop the timer — deliberately no final tick. The probe log is
+    // pure audit data; the next sweep picks up whatever a final sweep
+    // would have deleted, and skipping it keeps shutdown independent of
+    // the pool's remaining lifetime.
     if (timer) clearInterval(timer);
   });
 
