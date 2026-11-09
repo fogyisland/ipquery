@@ -71,6 +71,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   也就永不熔断；`random_probe_log` 是各 Provider 响应的唯一记录，丢行与“Provider 从未被调用”
   无法区分；ETL 阶段失败标记写丢失则该运行在管理界面永远显示为 `running`。
   现全部改为记录告警（附 IP／Provider 与底层错误），行为不变——写入依旧非致命，批次依旧完成
+- **种子 IP 完全查不到**: migration 012 把种子地址写成 `UNHEX('08080808')`（4 字节左对齐），
+  而 `start_ip`／`end_ip` 是 `BINARY(16)`，所有运行时路径（`parseIp()`、DB-IP 与 MaxMind
+  解析器、`findRange()` 的查询参数）统一用 16 字节右对齐形式存储。MySQL 按补零后的值比较，
+  左对齐形式排在右对齐形式之下，任何查询都匹配不上——50 条种子数据全部是死的，
+  8.8.8.8 明明在种子数据里，`/lookup` 仍返回“未找到”。
+  已就地修正 migration 012（全新安装），并新增 migration 023 修复已执行过旧版 012 的库
 
 ### Security
 
