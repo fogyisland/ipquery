@@ -5,7 +5,7 @@
 // /admin/unknown-ips Overview tab "Recent Probes" table; written by the
 // call sites of processIp via recordRandomProbe(). See migration 018.
 
-import type { Pool, RowDataPacket } from "mysql2/promise";
+import type { Pool, ResultSetHeader, RowDataPacket } from "mysql2/promise";
 import { getSetting, setSetting } from "./settings";
 
 // ─── Per-provider detail (one slice of providers_json) ────────────────
@@ -281,4 +281,50 @@ export async function saveRandomGenConfig(pool: Pool, patch: RandomGenConfigUpda
   if (patch.cbLinkage !== undefined) {
     await setSetting(pool, "random_gen_cb_linkage", patch.cbLinkage ? "1" : "0");
   }
+}
+
+// ─── Retention ─────────────────────────────────────────────────────────
+//
+// random_probe_log grows ~20k rows/day at worst case (see migration 018's
+// volume note). Without a sweep the table grows unbounded — at 20k/day
+// that's 7.3M rows/year, and the table stores a providers_json blob per
+// row, so it grows faster than the row count suggests.
+//
+// The sweep keeps a trailing window (default 30 days) and deletes
+// anything older. It is a single indexed DELETE by ts — the table has a
+// ts index (migration 018) so this stays cheap even at millions of rows.
+//
+// The window is configurable via the `random_probe_retention_days`
+// setting so an operator with a compliance requirement to keep probe
+// history longer can raise it without a code change. A value of 0 means
+// "keep forever" and disables the sweep.
+
+export const DEFAULT_RETENTION_DAYS = 30;
+
+export async function loadRetentionDays(pool: Pool): Promise<number> {
+  const raw = await getSetting(pool, "random_probe_retention_days");
+  if (raw === null) return DEFAULT_RETENTION_DAYS;
+  const days = Number(raw);
+  if (!Number.isFinite(days) || days < 0) return DEFAULT_RETENTION_DAYS;
+  return Math.floor(days);
+}
+
+/** Delete probe rows older than `retentionDays`. Returns the number of
+ *  rows removed. `retentionDays <= 0` means "keep forever" and is a
+ *  no-op returning 0. */
+export async function purgeOldProbes(pool: Pool, retentionDays: number): Promise<number> {
+  if (retentionDays <= 0) return 0;
+  const cutoffMs = Date.now() - retentionDays * 24 * 60 * 60 * 1000;
+  const [result] = await pool.query<ResultSetHeader>(
+    `DELETE FROM random_probe_log WHERE ts < FROM_UNIXTIME(? / 1000)`,
+    [cutoffMs],
+  );
+  return result.affectedRows;
+}
+
+/** Persist the retention window. Clamped to 0..3650 days — 0 means
+ *  "keep forever" (the sweep is disabled), 3650 = 10 years. */
+export async function saveRetentionDays(pool: Pool, days: number): Promise<void> {
+  const clamped = Math.min(3650, Math.max(0, Math.round(days)));
+  await setSetting(pool, "random_probe_retention_days", String(clamped));
 }

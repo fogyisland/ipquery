@@ -28,6 +28,7 @@ import type { ProviderConfigRow } from "../storage/ingestProviders";
 import { touchProviderError, updateProviderConfig } from "../storage/ingestProviders";
 import { processIp, disableRateLimitedProviders, type BackfillSummary } from "./unknownIpBackfill";
 import { recordRandomProbe } from "../storage/randomProbeLog";
+import { providerFanoutLock, type ProviderLock } from "./providerLock";
 import { randomUUID } from "node:crypto";
 
 export interface RandomGenerationOptions {
@@ -39,6 +40,11 @@ export interface RandomGenerationOptions {
    *  Default 50 — should be plenty for 10 IPs in the full IPv4 space
    *  where ~95% of random IPs are already covered. */
   maxTriesPerIp?: number;
+  /** The provider-fan-out mutex to use. Defaults to the shared
+   *  instance so this flow can't double the request rate against the
+   *  providers' free-tier quotas while a backfill run is in flight.
+   *  Tests can pass their own lock to stay isolated. */
+  lock?: ProviderLock;
   logger?: Pick<Console, "log" | "warn" | "error">;
 }
 
@@ -74,6 +80,10 @@ export interface RandomGenerationSummary {
   providers: Record<string, { ok: number; failed: number; abstained: number; rateLimited: number }>;
   /** Provider names auto-disabled during this run. */
   providersDisabled: string[];
+  /** True when the run was skipped because another provider fan-out was
+   *  already in flight (the shared provider mutex was busy). No provider
+   *  calls were made and no IPs were picked. */
+  skippedLockBusy?: boolean;
 }
 
 const DEFAULT_COUNT = 10;
@@ -128,45 +138,79 @@ export async function runRandomGeneration(
   // 2026-08-29 12:34:56 UTC" as a logical batch.
   const batchId = randomUUID();
 
-  if (picked.ips.length === 0) {
+  // Take the shared provider-fan-out mutex. If a backfill run or the
+  // manual-generate button is already calling the external providers,
+  // skip this tick entirely — the 60s runner will try again next tick.
+  const lock = opts.lock ?? providerFanoutLock;
+  const attempt = lock.tryAcquire();
+  if (!attempt.acquired) {
     workSummary.finishedAt = Date.now();
-  } else {
-    // Step 2: serial fan-out per IP.
-    for (const slot of picked.ips) {
-      const result = await processIp(
-        pool,
-        providers,
-        slot.text,
-        slot.buffer,
-        perIpTimeout,
-        workSummary,
-        "random",
-      );
-      const outcome = result.outcome;
-      const consensus = outcome.kind === "merged" ? outcome.record : null;
-      // Fire-and-forget the per-IP probe audit. Must NEVER poison the
-      // run on a write failure — same defensive pattern as recordProviderError.
-      recordRandomProbe(pool, {
-        ipText: slot.text,
-        ipBinary: slot.buffer,
-        mode: "random",
-        outcome: outcome.kind,
-        consensusCountry: consensus?.countryCode ?? null,
-        consensusCity: consensus?.city ?? null,
-        consensusAsn: consensus?.asn ?? null,
-        mergedRunId: null, // random-gen doesn't write to etl_runs
-        providers: result.perProvider,
-        batchId,
-      }).catch(() => {
-        /* swallow */
-      });
-      if (outcome.kind === "merged") {
-        if (outcome.newlyInserted) workSummary.merged += 1;
-        else duplicates += 1;
-      } else if (outcome.kind === "no_consensus") workSummary.noConsensus += 1;
-      else if (outcome.kind === "no_country") workSummary.noCountry += 1;
-      else workSummary.allAbstained += 1;
+    workSummary.skippedLockBusy = true;
+    log.warn?.(
+      "[random-gen] skipped — another provider fan-out is already in flight; " +
+        "no provider calls were made",
+    );
+    return {
+      considered: 0,
+      merged: 0,
+      duplicates: 0,
+      noConsensus: 0,
+      noCountry: 0,
+      allAbstained: 0,
+      alreadyCovered: 0,
+      exhaustedRetries: 0,
+      generatedIps: [],
+      startedAt: workSummary.startedAt,
+      finishedAt: workSummary.finishedAt,
+      providers: workSummary.providers,
+      providersDisabled: [],
+      skippedLockBusy: true,
+    };
+  }
+
+  try {
+    if (picked.ips.length === 0) {
+      workSummary.finishedAt = Date.now();
+    } else {
+      // Step 2: serial fan-out per IP.
+      for (const slot of picked.ips) {
+        const result = await processIp(
+          pool,
+          providers,
+          slot.text,
+          slot.buffer,
+          perIpTimeout,
+          workSummary,
+          "random",
+        );
+        const outcome = result.outcome;
+        const consensus = outcome.kind === "merged" ? outcome.record : null;
+        // Fire-and-forget the per-IP probe audit. Must NEVER poison the
+        // run on a write failure — same defensive pattern as recordProviderError.
+        recordRandomProbe(pool, {
+          ipText: slot.text,
+          ipBinary: slot.buffer,
+          mode: "random",
+          outcome: outcome.kind,
+          consensusCountry: consensus?.countryCode ?? null,
+          consensusCity: consensus?.city ?? null,
+          consensusAsn: consensus?.asn ?? null,
+          mergedRunId: null, // random-gen doesn't write to etl_runs
+          providers: result.perProvider,
+          batchId,
+        }).catch(() => {
+          /* swallow */
+        });
+        if (outcome.kind === "merged") {
+          if (outcome.newlyInserted) workSummary.merged += 1;
+          else duplicates += 1;
+        } else if (outcome.kind === "no_consensus") workSummary.noConsensus += 1;
+        else if (outcome.kind === "no_country") workSummary.noCountry += 1;
+        else workSummary.allAbstained += 1;
+      }
     }
+  } finally {
+    lock.release();
   }
 
   // Step 3: auto-disable any provider that hit 429.

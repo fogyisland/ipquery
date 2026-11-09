@@ -505,7 +505,11 @@
         "confirm": {
           "title": "确认触发回灌",
           "body": "将对队列里每个待回灌 IP 并行查询 3 个外部 API,按多数票合并到主表。已收录 IP 会自动跳过。"
-        }
+        },
+        "lockBusy": "另一个回灌任务正在进行,本次已跳过(未调用外部 API)",
+        "previewLockBusy": "另一个回灌任务正在进行,预览已跳过(未调用外部 API)",
+        "previewMissing": "预览已失效,请重新发起预览",
+        "previewExpired": "预览已过期,请重新发起预览"
       },
       "generate": {
         "button": "随机生成 10 个 IP 并入库",
@@ -518,7 +522,8 @@
         "allAbstained": "全部失败",
         "exhaustedRetries": "未找到未收录 IP",
         "providersDisabled": "已自动停用数据源(429)",
-        "ipList": "本次随机生成的 IP"
+        "ipList": "本次随机生成的 IP",
+        "lockBusy": "另一个回灌任务正在进行,本次已跳过(未调用外部 API)"
       },
       "continuous": {
         "title": "连续随机入库",
@@ -549,7 +554,9 @@
           "targetRange": "目标地址段",
           "cooldown": "限流冷却(分钟)",
           "cbLinkage": "429 自动暂停冷却",
-          "save": "保存调度配置"
+          "save": "保存调度配置",
+          "retentionDays": "探测日志保留天数",
+          "retentionDaysHint": "0 表示永久保留"
         },
         "intervalOptions": {
           "30s": "30 秒",

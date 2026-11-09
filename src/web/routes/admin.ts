@@ -34,6 +34,8 @@ import {
   saveRandomGenConfig,
   recentProbes,
   probeSummaryStats,
+  loadRetentionDays,
+  saveRetentionDays,
 } from "../../storage/randomProbeLog";
 import { clearPending, exportPendingCsv } from "../../storage/unknownIpQueue";
 import {
@@ -1177,6 +1179,7 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
       health24hAll,
       health7dAll,
       last429Rows,
+      retentionDays,
     ] = await Promise.all([
       topByQueryCount(app.pool, limit),
       queueStats(app.pool),
@@ -1206,6 +1209,10 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
       // few). Ordered ts DESC so the FIRST row per provider is the
       // newest; we pick the first occurrence below.
       queryProviderErrors(app.pool, { errorCode: "429", limit: 50 }),
+      // Retention window for the per-IP probe audit trail (0 = keep
+      // forever). Read here so the ingest page can show the current
+      // value in the scheduler form.
+      loadRetentionDays(app.pool),
     ]);
     const { readRandomGenState } = await import("../../web/plugins/randomIpGeneratorRunner");
     const randomGenState = await readRandomGenState(app.pool);
@@ -1375,6 +1382,7 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
       flash,
       randomGenState,
       randomGenConfig,
+      retentionDays,
       recentProbes: recentProbeRows,
       probeSummaryStats: probeSummary,
       errors,
@@ -1524,46 +1532,70 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
   // would-be rows in a signed cookie (60s TTL), redirect to the preview
   // page. The confirm handler reads this cookie + the matching form token
   // before doing any writes.
-  app.post("/admin/ingest/backfill/preview", async (req, reply) => {
-    if (!verifyCsrfRequest(req))
-      return reply.code(403).view("errors/csrf.hbs", { layout: "layouts/public", req });
-    req.auditAction = { action: "unknown_ips.backfill.preview", targetType: "unknown_ip_queue" };
+  app.post(
+    "/admin/ingest/backfill/preview",
+    {
+      // Each preview fans out to every provider for up to `batchLimit`
+      // IPs. Rate-limit the route so a repeated click (or a stuck
+      // client retrying) can't burn the providers' free-tier quota.
+      config: { rateLimit: { max: 5, timeWindow: "1 hour" } },
+    },
+    async (req, reply) => {
+      if (!verifyCsrfRequest(req))
+        return reply.code(403).view("errors/csrf.hbs", { layout: "layouts/public", req });
+      req.auditAction = { action: "unknown_ips.backfill.preview", targetType: "unknown_ip_queue" };
 
-    const batchLimit = Math.min(
-      Math.max(Number((req.body as { batchLimit?: number }).batchLimit ?? 100) || 100, 1),
-      1000,
-    );
-    const configs = await listProviderConfigs(app.pool);
-    const providers = buildProvidersFromConfig(configs);
-    const result = await runBackfill(app.pool, providers, {
-      batchLimit,
-      mode: "auto",
-      dryRun: true,
-      logger: {
-        log: () => {},
-        warn: (msg) => app.log.warn({ msg }, "backfill-preview"),
-        error: (msg) => app.log.error({ msg }, "backfill-preview"),
-      },
-    });
+      const batchLimit = Math.min(
+        Math.max(Number((req.body as { batchLimit?: number }).batchLimit ?? 100) || 100, 1),
+        1000,
+      );
+      const configs = await listProviderConfigs(app.pool);
+      const providers = buildProvidersFromConfig(configs);
+      const result = await runBackfill(app.pool, providers, {
+        batchLimit,
+        mode: "auto",
+        dryRun: true,
+        logger: {
+          log: () => {},
+          warn: (msg) => app.log.warn({ msg }, "backfill-preview"),
+          error: (msg) => app.log.error({ msg }, "backfill-preview"),
+        },
+      });
 
-    const token = randomBytes(16).toString("hex");
-    const cookie = signBackfillPreview({
-      runAt: Date.now(),
-      rows: result.previewRows,
-      batchLimit,
-      token,
-    });
-    reply.setCookie(BACKFILL_PREVIEW_COOKIE, cookie, {
-      path: BACKFILL_PREVIEW_COOKIE_PATH,
-      httpOnly: true,
-      sameSite: "lax",
-      maxAge: Math.floor(BACKFILL_PREVIEW_MAX_AGE_MS / 1000),
-      // We sign ourselves (HMAC-SHA256 above); Fastify's built-in signed
-      // cookie helper would re-encode our JSON and break verification.
-      signed: false,
-    });
-    return reply.redirect("/admin/ingest/backfill/preview", 302);
-  });
+      // Another ingest path held the provider mutex — this run made no
+      // provider calls. Bounce to /admin/ingest with a notice rather
+      // than rendering an empty preview table.
+      if (result.skippedLockBusy) {
+        reply.clearCookie(BACKFILL_PREVIEW_COOKIE, { path: BACKFILL_PREVIEW_COOKIE_PATH });
+        reply.setCookie("backfill_summary", JSON.stringify({ kind: "preview_lock_busy" }), {
+          path: "/admin/ingest",
+          maxAge: 30,
+          httpOnly: false,
+          sameSite: "lax",
+          signed: false,
+        });
+        return reply.redirect("/admin/ingest", 302);
+      }
+
+      const token = randomBytes(16).toString("hex");
+      const cookie = signBackfillPreview({
+        runAt: Date.now(),
+        rows: result.previewRows,
+        batchLimit,
+        token,
+      });
+      reply.setCookie(BACKFILL_PREVIEW_COOKIE, cookie, {
+        path: BACKFILL_PREVIEW_COOKIE_PATH,
+        httpOnly: true,
+        sameSite: "lax",
+        maxAge: Math.floor(BACKFILL_PREVIEW_MAX_AGE_MS / 1000),
+        // We sign ourselves (HMAC-SHA256 above); Fastify's built-in signed
+        // cookie helper would re-encode our JSON and break verification.
+        signed: false,
+      });
+      return reply.redirect("/admin/ingest/backfill/preview", 302);
+    },
+  );
 
   // GET /admin/ingest/backfill/preview — render the preview table. If the
   // cookie is missing/expired/tampered, flash a message and bounce to
@@ -1598,98 +1630,140 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
   // POST /admin/ingest/backfill/confirm — verify cookie + token, then
   // re-run the fan-out for real (no dryRun). On success clear the cookie
   // and flash a backfill_summary so /admin/ingest shows the run stats.
-  app.post("/admin/ingest/backfill/confirm", async (req, reply) => {
-    if (!verifyCsrfRequest(req))
-      return reply.code(403).view("errors/csrf.hbs", { layout: "layouts/public", req });
-    req.auditAction = { action: "unknown_ips.backfill", targetType: "unknown_ip_queue" };
+  app.post(
+    "/admin/ingest/backfill/confirm",
+    {
+      // This route performs the REAL provider fan-out and writes to
+      // ip_ranges. Rate-limit it hard — 5/hour is generous for an
+      // interactive admin action and protects the free-tier quota.
+      config: { rateLimit: { max: 5, timeWindow: "1 hour" } },
+    },
+    async (req, reply) => {
+      if (!verifyCsrfRequest(req))
+        return reply.code(403).view("errors/csrf.hbs", { layout: "layouts/public", req });
+      req.auditAction = { action: "unknown_ips.backfill", targetType: "unknown_ip_queue" };
 
-    const cookie = req.cookies[BACKFILL_PREVIEW_COOKIE];
-    const v = cookie ? verifyBackfillPreview(cookie) : { ok: false as const, reason: "missing" };
-    const body = req.body as { token?: string; batchLimit?: number };
-    if (!v.ok) {
+      const cookie = req.cookies[BACKFILL_PREVIEW_COOKIE];
+      const v = cookie ? verifyBackfillPreview(cookie) : { ok: false as const, reason: "missing" };
+      const body = req.body as { token?: string; batchLimit?: number };
+      if (!v.ok) {
+        reply.clearCookie(BACKFILL_PREVIEW_COOKIE, { path: BACKFILL_PREVIEW_COOKIE_PATH });
+        reply.setCookie("backfill_summary", JSON.stringify({ kind: "preview_" + v.reason }), {
+          path: "/admin/ingest",
+          maxAge: 30,
+          httpOnly: false,
+          sameSite: "lax",
+          signed: false,
+        });
+        return reply.redirect("/admin/ingest", 302);
+      }
+      if (!body.token || body.token !== v.payload.token) {
+        // Token mismatch: replay/tamper. Clear cookie + redirect (no
+        // detailed error to avoid leaking probe details).
+        reply.clearCookie(BACKFILL_PREVIEW_COOKIE, { path: BACKFILL_PREVIEW_COOKIE_PATH });
+        return reply.redirect("/admin/ingest", 302);
+      }
+      const batchLimit = v.payload.batchLimit;
+      const configs = await listProviderConfigs(app.pool);
+      const providers = buildProvidersFromConfig(configs);
+      const summary = await runBackfill(app.pool, providers, {
+        batchLimit,
+        mode: "auto",
+        // dryRun defaults to false — this is the real write path.
+        logger: {
+          log: () => {},
+          warn: (msg) => app.log.warn({ msg }, "backfill"),
+          error: (msg) => app.log.error({ msg }, "backfill"),
+        },
+      });
+      // Another ingest path held the provider mutex — this run made no
+      // provider calls and wrote nothing. Report it instead of showing
+      // an all-zero "success" summary.
+      if (summary.skippedLockBusy) {
+        reply.clearCookie(BACKFILL_PREVIEW_COOKIE, { path: BACKFILL_PREVIEW_COOKIE_PATH });
+        reply.setCookie("backfill_summary", JSON.stringify({ kind: "lock_busy" }), {
+          path: "/admin/ingest",
+          maxAge: 30,
+          httpOnly: false,
+          sameSite: "lax",
+          signed: false,
+        });
+        return reply.redirect("/admin/ingest", 302);
+      }
+      // Persist per-provider counts so the ingest dashboard can show
+      // last-run stats across page refreshes (the flash cookie is gone
+      // after one render). Same shape as BackfillSummary.providers.
+      await saveLastBackfillProviderStats(app.pool, summary.providers, new Date());
+      // Clear the preview cookie once we've committed — a refresh of the
+      // preview page should land on /admin/ingest, not re-render stale rows.
       reply.clearCookie(BACKFILL_PREVIEW_COOKIE, { path: BACKFILL_PREVIEW_COOKIE_PATH });
-      reply.setCookie("backfill_summary", JSON.stringify({ kind: "preview_" + v.reason }), {
+      // Redirect back with summary in flash cookie. Cookie is HTTP-only and
+      // max-age=30s — admin refreshes the page and sees the banner once.
+      reply.setCookie("backfill_summary", JSON.stringify(summary), {
         path: "/admin/ingest",
         maxAge: 30,
-        httpOnly: false,
+        httpOnly: true,
         sameSite: "lax",
-        signed: false,
       });
-      return reply.redirect("/admin/ingest", 302);
-    }
-    if (!body.token || body.token !== v.payload.token) {
-      // Token mismatch: replay/tamper. Clear cookie + redirect (no
-      // detailed error to avoid leaking probe details).
-      reply.clearCookie(BACKFILL_PREVIEW_COOKIE, { path: BACKFILL_PREVIEW_COOKIE_PATH });
-      return reply.redirect("/admin/ingest", 302);
-    }
-    const batchLimit = v.payload.batchLimit;
-    const configs = await listProviderConfigs(app.pool);
-    const providers = buildProvidersFromConfig(configs);
-    const summary = await runBackfill(app.pool, providers, {
-      batchLimit,
-      mode: "auto",
-      // dryRun defaults to false — this is the real write path.
-      logger: {
-        log: () => {},
-        warn: (msg) => app.log.warn({ msg }, "backfill"),
-        error: (msg) => app.log.error({ msg }, "backfill"),
-      },
-    });
-    // Persist per-provider counts so the ingest dashboard can show
-    // last-run stats across page refreshes (the flash cookie is gone
-    // after one render). Same shape as BackfillSummary.providers.
-    await saveLastBackfillProviderStats(app.pool, summary.providers, new Date());
-    // Clear the preview cookie once we've committed — a refresh of the
-    // preview page should land on /admin/ingest, not re-render stale rows.
-    reply.clearCookie(BACKFILL_PREVIEW_COOKIE, { path: BACKFILL_PREVIEW_COOKIE_PATH });
-    // Redirect back with summary in flash cookie. Cookie is HTTP-only and
-    // max-age=30s — admin refreshes the page and sees the banner once.
-    reply.setCookie("backfill_summary", JSON.stringify(summary), {
-      path: "/admin/ingest",
-      maxAge: 30,
-      httpOnly: true,
-      sameSite: "lax",
-    });
-    return reply.redirect("/admin/ingest#overview", 302);
-  });
+      return reply.redirect("/admin/ingest#overview", 302);
+    },
+  );
 
   // "Generate 10 random IPs and ingest them". Used to validate the
   // ingest pipeline end-to-end without waiting for real /lookup misses
   // to trickle in. Auto-disables providers that return HTTP 429 during
   // the run so we don't keep hammering a throttled provider. Target:
   // 10 IPs in 10 minutes (per-IP fan-out ~8s serial = ~80s for 10).
-  app.post("/admin/ingest/generate", async (req, reply) => {
-    if (!verifyCsrfRequest(req))
-      return reply.code(403).view("errors/csrf.hbs", { layout: "layouts/public", req });
-    req.auditAction = { action: "unknown_ips.generate", targetType: "unknown_ip_queue" };
+  app.post(
+    "/admin/ingest/generate",
+    {
+      // Manual generate fans out to every provider for up to 50 IPs.
+      // Same reasoning as the backfill routes — protect the quota.
+      config: { rateLimit: { max: 10, timeWindow: "1 hour" } },
+    },
+    async (req, reply) => {
+      if (!verifyCsrfRequest(req))
+        return reply.code(403).view("errors/csrf.hbs", { layout: "layouts/public", req });
+      req.auditAction = { action: "unknown_ips.generate", targetType: "unknown_ip_queue" };
 
-    const body = req.body as { count?: number };
-    const count = Math.min(Math.max(Number(body.count) || 10, 1), 50);
-    const configs = await listProviderConfigs(app.pool);
-    const providers = buildProvidersFromConfig(configs);
-    const summary = await runRandomGeneration(app.pool, providers, {
-      count,
-      logger: {
-        log: () => {},
-        warn: (msg) => app.log.warn({ msg }, "random-gen"),
-        error: (msg) => app.log.error({ msg }, "random-gen"),
-      },
-    });
-    // Note: runRandomGeneration currently records probes with mode='random'.
-    // Distinguishing continuous vs one-shot would require threading a mode
-    // parameter through runRandomGeneration; deferred to a follow-up.
-    // Random-gen also produces per-provider counts — persist so the
-    // dashboard reflects this run even after the flash cookie expires.
-    await saveLastBackfillProviderStats(app.pool, summary.providers, new Date());
-    reply.setCookie("generate_summary", JSON.stringify(summary), {
-      path: "/admin/ingest",
-      maxAge: 60,
-      httpOnly: true,
-      sameSite: "lax",
-    });
-    return reply.redirect("/admin/ingest#overview");
-  });
+      const body = req.body as { count?: number };
+      const count = Math.min(Math.max(Number(body.count) || 10, 1), 50);
+      const configs = await listProviderConfigs(app.pool);
+      const providers = buildProvidersFromConfig(configs);
+      const summary = await runRandomGeneration(app.pool, providers, {
+        count,
+        logger: {
+          log: () => {},
+          warn: (msg) => app.log.warn({ msg }, "random-gen"),
+          error: (msg) => app.log.error({ msg }, "random-gen"),
+        },
+      });
+      // Another ingest path held the provider mutex — no provider calls
+      // were made. Report the skip instead of an all-zero "success".
+      if (summary.skippedLockBusy) {
+        reply.setCookie("generate_summary", JSON.stringify({ kind: "lock_busy" }), {
+          path: "/admin/ingest",
+          maxAge: 60,
+          httpOnly: false,
+          sameSite: "lax",
+        });
+        return reply.redirect("/admin/ingest#overview");
+      }
+      // Note: runRandomGeneration currently records probes with mode='random'.
+      // Distinguishing continuous vs one-shot would require threading a mode
+      // parameter through runRandomGeneration; deferred to a follow-up.
+      // Random-gen also produces per-provider counts — persist so the
+      // dashboard reflects this run even after the flash cookie expires.
+      await saveLastBackfillProviderStats(app.pool, summary.providers, new Date());
+      reply.setCookie("generate_summary", JSON.stringify(summary), {
+        path: "/admin/ingest",
+        maxAge: 60,
+        httpOnly: true,
+        sameSite: "lax",
+      });
+      return reply.redirect("/admin/ingest#overview");
+    },
+  );
 
   // Continuous runner toggle + manual kick. The runner is a separate
   // setInterval-based plugin (see registerRandomGenRunner) that fires
@@ -1727,15 +1801,17 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
       batchSize?: string;
       cooldownMinutes?: string;
       cbLinkage?: string;
+      retentionDays?: string;
     };
     const intervalSec = Number(body.intervalSec);
     const batchSize = Number(body.batchSize);
     const cooldownMinutes = Number(body.cooldownMinutes);
     const cbLinkage = body.cbLinkage === "on";
+    const retentionDays = Number(body.retentionDays);
     req.auditAction = {
       action: "unknown_ips.scheduler.update",
       targetType: "settings",
-      metadata: { intervalSec, batchSize, cooldownMinutes, cbLinkage },
+      metadata: { intervalSec, batchSize, cooldownMinutes, cbLinkage, retentionDays },
     };
     await saveRandomGenConfig(app.pool, {
       intervalSec: Number.isFinite(intervalSec) ? intervalSec : undefined,
@@ -1743,6 +1819,13 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
       cooldownMinutes: Number.isFinite(cooldownMinutes) ? cooldownMinutes : undefined,
       cbLinkage,
     });
+    // Retention window for the per-IP probe audit trail. Only written
+    // when the field is present and parses as a number — an absent
+    // field leaves the stored value untouched (so a form that predates
+    // this input can't silently reset it to 0 = keep forever).
+    if (body.retentionDays !== undefined && Number.isFinite(retentionDays)) {
+      await saveRetentionDays(app.pool, retentionDays);
+    }
     await app.randomGenRunner.syncFromSettings();
     return reply.redirect("/admin/ingest#overview");
   });
@@ -2072,60 +2155,72 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
     return reply.redirect("/admin/providers");
   });
 
-  app.post<{ Params: { name: string } }>("/admin/providers/custom/:name/test", async (req, reply) => {
-    if (!verifyCsrfRequest(req))
-      return reply.code(403).view("errors/csrf.hbs", { layout: "layouts/public", req });
-    const name = req.params.name;
-    const body = req.body as { ip?: string };
-    const ipText = String(body.ip ?? "").trim();
-    if (!ipText) return reply.code(400).send({ ok: false, error: "ip_required" });
-    const cfg = await getProviderConfig(app.pool, name);
-    if (!cfg || !cfg.isCustom) {
-      return reply.code(404).send({ ok: false, error: "not_found" });
-    }
-    req.auditAction = {
-      action: "unknown_ips.custom_providers.test",
-      targetType: "ingest_provider",
-      targetId: name,
-      metadata: { ip: ipText },
-    };
-    const provider = new GenericHttpProvider({
-      name: cfg.name,
-      urlTemplate: cfg.customUrlTemplate ?? "",
-      method: cfg.customMethod,
-      requestBody: cfg.customRequestBody,
-      responseFormat: cfg.customResponseFormat,
-      countryPath: cfg.customCountryPath,
-      cityPath: cfg.customCityPath,
-      asnPath: cfg.customAsnPath,
-      timeoutMs: cfg.customTimeoutMs,
-      apiKey: cfg.apiKey,
-    });
-    try {
-      const { parseIp } = await import("../../ip");
-      const buf = parseIp(ipText);
-      if (!buf) return reply.code(400).send({ ok: false, error: "invalid_ip" });
-      const result = await provider.lookup(buf);
-      if (result.record) {
-        return reply.send({
-          ok: true,
-          record: {
-            countryCode: result.record.countryCode,
-            city: result.record.city,
-            asn: result.record.asn,
-          },
-        });
+  app.post<{ Params: { name: string } }>(
+    "/admin/providers/custom/:name/test",
+    {
+      // Each call hits the provider's real API. This is NOT part of the
+      // provider fan-out mutex (it is a single, immediate, user-facing
+      // probe of one provider — holding the mutex would block it behind
+      // a long batch run), so it gets its own rate limit instead:
+      // 20/hour is generous for config testing but still stops a stuck
+      // client from burning the provider's free tier.
+      config: { rateLimit: { max: 20, timeWindow: "1 hour" } },
+    },
+    async (req, reply) => {
+      if (!verifyCsrfRequest(req))
+        return reply.code(403).view("errors/csrf.hbs", { layout: "layouts/public", req });
+      const name = req.params.name;
+      const body = req.body as { ip?: string };
+      const ipText = String(body.ip ?? "").trim();
+      if (!ipText) return reply.code(400).send({ ok: false, error: "ip_required" });
+      const cfg = await getProviderConfig(app.pool, name);
+      if (!cfg || !cfg.isCustom) {
+        return reply.code(404).send({ ok: false, error: "not_found" });
       }
-      return reply.send({
-        ok: false,
-        error: result.errorCode ?? "no_record",
-        raw: result.rawResponse ?? null,
+      req.auditAction = {
+        action: "unknown_ips.custom_providers.test",
+        targetType: "ingest_provider",
+        targetId: name,
+        metadata: { ip: ipText },
+      };
+      const provider = new GenericHttpProvider({
+        name: cfg.name,
+        urlTemplate: cfg.customUrlTemplate ?? "",
+        method: cfg.customMethod,
+        requestBody: cfg.customRequestBody,
+        responseFormat: cfg.customResponseFormat,
+        countryPath: cfg.customCountryPath,
+        cityPath: cfg.customCityPath,
+        asnPath: cfg.customAsnPath,
+        timeoutMs: cfg.customTimeoutMs,
+        apiKey: cfg.apiKey,
       });
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      return reply.code(500).send({ ok: false, error: "lookup_threw", raw: msg });
-    }
-  });
+      try {
+        const { parseIp } = await import("../../ip");
+        const buf = parseIp(ipText);
+        if (!buf) return reply.code(400).send({ ok: false, error: "invalid_ip" });
+        const result = await provider.lookup(buf);
+        if (result.record) {
+          return reply.send({
+            ok: true,
+            record: {
+              countryCode: result.record.countryCode,
+              city: result.record.city,
+              asn: result.record.asn,
+            },
+          });
+        }
+        return reply.send({
+          ok: false,
+          error: result.errorCode ?? "no_record",
+          raw: result.rawResponse ?? null,
+        });
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        return reply.code(500).send({ ok: false, error: "lookup_threw", raw: msg });
+      }
+    },
+  );
 
   // ─── Back-compat redirects (PR2) ──────────────────────────────────────
   // The /admin/unknown-ips URL tree moved to /admin/ingest/* (Strategy
