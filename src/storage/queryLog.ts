@@ -205,13 +205,18 @@ export async function getLastUserQuery(pool: Pool, userId: number): Promise<Last
   };
 }
 export async function countQueriesByDay(pool: Pool, days: number): Promise<DailyBucket[]> {
-  const since = new Date(Date.now() - (days - 1) * 86_400_000);
-  since.setHours(0, 0, 0, 0);
+  // Bucket in UTC end to end. query_log.ts is written with the pool's
+  // timezone: "Z" (UTC), so both the `since` bound and the day keys must
+  // be UTC too — mixing local-midnight bounds with ISO (UTC) keys shifted
+  // every bucket by the server's UTC offset.
+  const since = new Date();
+  since.setUTCHours(0, 0, 0, 0);
+  since.setUTCDate(since.getUTCDate() - (days - 1));
   const [rows] = await pool.query(
-    `SELECT DATE(ts) AS d, status, COUNT(*) AS c
+    `SELECT DATE(CONVERT_TZ(ts, @@session.time_zone, '+00:00')) AS d, status, COUNT(*) AS c
        FROM query_log
        WHERE ts >= ?
-       GROUP BY DATE(ts), status
+       GROUP BY d, status
        ORDER BY d ASC`,
     [since],
   );

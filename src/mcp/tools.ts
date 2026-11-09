@@ -171,7 +171,10 @@ export async function mcpQueueTop(deps: McpPool, limit?: unknown): Promise<Queue
 
 // ─── Query-log tools + redaction ──────────────────────────────────────
 
-/** Mask an email as p***@e***.com; null/empty → null. */
+/** Mask an email as p***@e***.com; null/empty → null.
+ *  Only the TLD survives (last dot, not first): a first-dot split would
+ *  leak the whole registrable domain of a subdomain address —
+ *  a@mail.example.com must come out as a***@m***.com, not a***@m***.example.com. */
 export function maskEmail(email: string | null | undefined): string | null {
   if (!email) return null;
   const at = email.indexOf("@");
@@ -179,7 +182,7 @@ export function maskEmail(email: string | null | undefined): string | null {
   const local = email.slice(0, at);
   const domain = email.slice(at + 1);
   if (!domain) return `${local[0]}***@***`;
-  const dot = domain.indexOf(".");
+  const dot = domain.lastIndexOf(".");
   const tld = dot > 0 ? domain.slice(dot) : "";
   return `${local[0]}***@${domain[0]}***${tld}`;
 }

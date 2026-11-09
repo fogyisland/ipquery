@@ -36,18 +36,21 @@ export interface ToolRegistration {
 
 /** Structured error result so the server layer can flag isError without
  *  sniffing serialized text. */
-function errorResult(message: string): ToolResult {
-  return { isErrorHint: true, message };
+function errorResult(message: string, code?: string): ToolResult {
+  return code ? { isErrorHint: true, code, message } : { isErrorHint: true, message };
 }
 
 /** Wrap a tool call: thrown errors become structured results, never escapes.
  *  Tool payloads are plain JSON objects; ToolResult's index signature accepts
- *  them once widened through unknown. */
+ *  them once widened through unknown. Typed business codes (e.g. the lookup
+ *  `not_found` miss) travel alongside so the server layer can downgrade
+ *  them to a normal result — a miss is an answer, not a tool failure. */
 async function safe(run: () => Promise<unknown>): Promise<ToolResult> {
   try {
     return (await run()) as ToolResult;
   } catch (e) {
-    return errorResult(e instanceof Error ? e.message : String(e));
+    const code = (e as { code?: unknown }).code;
+    return errorResult(e instanceof Error ? e.message : String(e), typeof code === "string" ? code : undefined);
   }
 }
 
