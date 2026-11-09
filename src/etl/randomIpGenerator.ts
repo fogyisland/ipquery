@@ -182,6 +182,8 @@ export async function runRandomGeneration(
           perIpTimeout,
           workSummary,
           "random",
+          false,
+          log,
         );
         const outcome = result.outcome;
         const consensus = outcome.kind === "merged" ? outcome.record : null;
@@ -198,8 +200,17 @@ export async function runRandomGeneration(
           mergedRunId: null, // random-gen doesn't write to etl_runs
           providers: result.perProvider,
           batchId,
-        }).catch(() => {
-          /* swallow */
+        }).catch((err: unknown) => {
+          // The audit write is fire-and-forget: it must never poison the
+          // run. But it is the only record of what each provider said, so
+          // a write failure is logged rather than swallowed silently —
+          // otherwise the probe log silently under-reports and there is
+          // no way to tell a missing row from a failed insert.
+          log.warn?.("random_probe_log write failed", {
+            ip: slot.text,
+            mode: "random",
+            error: err instanceof Error ? err.message : String(err),
+          });
         });
         if (outcome.kind === "merged") {
           if (outcome.newlyInserted) workSummary.merged += 1;

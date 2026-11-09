@@ -120,8 +120,11 @@ export async function buildServer(
   app.addHook("onClose", async () => {
     try {
       await app.pool.end();
-    } catch {
-      /* ignore */
+    } catch (err) {
+      // Shutdown is best-effort — a pool that won't close leaks a
+      // connection, but the process is exiting either way. Logged so a
+      // repeated close failure is visible rather than silent.
+      app.log.warn({ err }, "failed to close the database pool");
     }
   });
 
