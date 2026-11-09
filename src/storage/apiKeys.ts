@@ -43,8 +43,45 @@ export async function findActiveApiKeyByHash(pool: Pool, keyHash: string): Promi
   return rows[0] ? mapRow(rows[0]) : null;
 }
 
+/**
+ * Throttle for `touchApiKey`.
+ *
+ * `last_used_at` exists so the dashboard can show when each key was
+ * last exercised. Writing it on every request costs a DB round-trip
+ * and a row lock per request, which is pure overhead: nobody can
+ * perceive the difference between "used 3 seconds ago" and "used 30
+ * seconds ago" on a dashboard.
+ *
+ * Each key is therefore stamped at most once per interval. The stamp
+ * is written on the FIRST request after the interval expires, so the
+ * value is never more than one interval stale.
+ */
+const TOUCH_THROTTLE_MS = 60_000;
+
+/** keyId → the timestamp (epoch ms) of the last stamp we wrote. */
+const lastTouched = new Map<number, number>();
+
 export async function touchApiKey(pool: Pool, id: number): Promise<void> {
-  await pool.query(`UPDATE api_keys SET last_used_at = NOW(3) WHERE id = ?`, [id]);
+  const now = Date.now();
+  const last = lastTouched.get(id);
+  if (last !== undefined && now - last < TOUCH_THROTTLE_MS) return;
+  // Record the intent BEFORE the write. If the write fails, the next
+  // request retries rather than waiting out the interval — a failed
+  // stamp must not suppress the next one.
+  lastTouched.set(id, now);
+  try {
+    await pool.query(`UPDATE api_keys SET last_used_at = NOW(3) WHERE id = ?`, [id]);
+  } catch (err) {
+    lastTouched.delete(id);
+    throw err;
+  }
+}
+
+/**
+ * Clear the throttle state. Test-only.
+ */
+export function _resetApiKeyTouchThrottle(): void {
+  lastTouched.clear();
 }
 
 export async function revokeApiKey(pool: Pool, id: number): Promise<void> {
