@@ -245,6 +245,7 @@ async function runBackfillLocked(
           summary,
           runMode,
           dryRun,
+          log,
         );
         const outcome = result.outcome;
         const consensus = outcome.kind === "merged" ? outcome.record : null;
@@ -262,8 +263,17 @@ async function runBackfillLocked(
           mergedRunId: outcome.kind === "merged" ? null : null, // no etl_runs row for backfill
           providers: result.perProvider,
           batchId,
-        }).catch(() => {
-          /* swallow */
+        }).catch((err: unknown) => {
+          // Fire-and-forget: a write failure must never poison the
+          // backfill loop. Logged rather than swallowed silently — the
+          // probe log is the only record of what each provider said, so
+          // a dropped row is indistinguishable from a provider that was
+          // never called.
+          log.warn?.("random_probe_log write failed", {
+            ip: row.ipText,
+            mode: runMode,
+            error: err instanceof Error ? err.message : String(err),
+          });
         });
         // Preview rows: only populated when dryRun=true. We capture
         // per-IP detail for the admin to review before confirming.
@@ -366,6 +376,7 @@ export async function processIp(
   summary: BackfillSummary,
   mode: "auto" | "manual" | "random" = "auto",
   dryRun: boolean = false,
+  logger: Pick<Console, "log" | "warn" | "error"> = console,
 ): Promise<ProcessIpResult> {
   // Collect per-provider detail for the probe log alongside the
   // vote-shape we feed into majorityVote. The two arrays share the same
@@ -391,15 +402,30 @@ export async function processIp(
             errorCode: code,
             reason: `lookup() threw: ${msg.slice(0, 200)}`,
             rawResponse: null,
-          }).catch(() => {
-            /* swallow */
+          }).catch((err: unknown) => {
+            // Fire-and-forget: a logging failure must not break the
+            // backfill. But provider_error_log is what the circuit
+            // breaker reads — if this write is lost silently the breaker
+            // never sees the failure and never trips.
+            logger.warn?.("provider_error_log write failed", {
+              provider: p.name,
+              ip: ipText,
+              error: err instanceof Error ? err.message : String(err),
+            });
           });
           // Fire-and-forget the per-provider, per-UTC-day counter. Same
           // defensive .catch — a DB write failure must never poison the
-          // fan-out loop.
-          touchProviderCalled(pool, p.name, { rateLimited: false, errorCode: code }).catch(() => {
-            /* swallow */
-          });
+          // fan-out loop. Logged so a silently-broken counter (which
+          // would under-report daily quota usage) is visible.
+          touchProviderCalled(pool, p.name, { rateLimited: false, errorCode: code }).catch(
+            (err: unknown) => {
+              logger.warn?.("provider_called_counter write failed", {
+                provider: p.name,
+                ip: ipText,
+                error: err instanceof Error ? err.message : String(err),
+              });
+            },
+          );
           const elapsed = Date.now() - start;
           perProvider.push({
             provider: p.name,
@@ -430,8 +456,12 @@ export async function processIp(
         touchProviderCalled(pool, p.name, {
           rateLimited: result.rateLimited,
           errorCode: result.errorCode,
-        }).catch(() => {
-          /* swallow */
+        }).catch((err: unknown) => {
+          logger.warn?.("provider_called_counter write failed", {
+            provider: p.name,
+            ip: ipText,
+            error: err instanceof Error ? err.message : String(err),
+          });
         });
         // Record every non-OK, non-abstain call (i.e. providers that returned
         // an explicit errorCode) into the failure log. We skip abstains
@@ -449,8 +479,16 @@ export async function processIp(
             errorCode: result.errorCode,
             reason: reason.slice(0, 255),
             rawResponse: result.rawResponse ?? null,
-          }).catch(() => {
-            /* swallow */
+          }).catch((err: unknown) => {
+            // Same reasoning as the lookup() path: provider_error_log
+            // feeds the circuit breaker, so a dropped row is not a
+            // harmless loss.
+            logger.warn?.("provider_error_log write failed", {
+              provider: p.name,
+              ip: ipText,
+              errorCode: result.errorCode,
+              error: err instanceof Error ? err.message : String(err),
+            });
           });
         }
         perProvider.push({

@@ -158,7 +158,18 @@ export class EtlProgressSink {
   async flush(): Promise<void> {
     if (this.pendingFlush) {
       // Wait for the in-flight flush, then issue our own with current state.
-      try { await this.pendingFlush; } catch { /* ignore */ }
+      try {
+        await this.pendingFlush;
+      } catch (err) {
+        // The in-flight write failed but the flush below re-writes the
+        // current state, so the run continues. Logged so a repeatedly
+        // failing progress write is visible.
+        console.warn(
+          `[etl] pending progress flush failed for run ${this.runId}: ${
+            err instanceof Error ? err.message : String(err)
+          }`,
+        );
+      }
     }
     const write = updateEtlRunProgress(this.pool, this.runId, {
       downloadBytesDone: this.state.downloadBytesDone,
@@ -428,8 +439,15 @@ async function markStageFailed(pool: mysql.Pool, runId: number, errorMsg: string
       [truncated, runId],
     );
     void res;
-  } catch {
-    /* swallow — best-effort */
+  } catch (err) {
+    // Best-effort cleanup of the in-progress rows. Logged rather than
+    // swallowed: if this write is lost the run stays 'running' forever
+    // in the admin UI, with no way to tell it apart from a live run.
+    console.warn(
+      `[etl] failed to mark downloads as failed for run ${runId}: ${
+        err instanceof Error ? err.message : String(err)
+      }`,
+    );
   }
   try {
     const [res] = await pool.query<ResultSetHeader>(
@@ -440,8 +458,12 @@ async function markStageFailed(pool: mysql.Pool, runId: number, errorMsg: string
       [truncated, runId],
     );
     void res;
-  } catch {
-    /* swallow */
+  } catch (err) {
+    console.warn(
+      `[etl] failed to mark swaps as failed for run ${runId}: ${
+        err instanceof Error ? err.message : String(err)
+      }`,
+    );
   }
 }
 
@@ -589,7 +611,17 @@ export async function runPipeline(opts: { cfg: AppConfig; runId?: number }): Pro
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     await markStageFailed(pool, runId, msg);
-    try { await sink.flush(); } catch { /* ignore */ }
+    try {
+      await sink.flush();
+    } catch (flushErr) {
+      // The run failure itself is already reported below; this only
+      // means the last progress-bar update didn't land.
+      console.warn(
+        `[etl] final progress flush failed for run ${runId}: ${
+          flushErr instanceof Error ? flushErr.message : String(flushErr)
+        }`,
+      );
+    }
     await recordEtlFinish(pool, runId, "failed", { errorMessage: msg });
     console.error(`[etl] failed run=${runId}:`, msg);
     throw err;

@@ -204,12 +204,12 @@ export function registerRandomGenRunner(
           app.log.warn({ err }, "random-gen-runner persist lastSummary"),
         ),
         // Clear any prior skip — this tick actually ran.
-        setSetting(pool, LAST_SKIPPED_AT_KEY, "").catch(() => {
-          /* ignore */
-        }),
-        setSetting(pool, LAST_SKIP_REASON_KEY, "").catch(() => {
-          /* ignore */
-        }),
+        setSetting(pool, LAST_SKIPPED_AT_KEY, "").catch((err) =>
+          app.log.warn({ err }, "random-gen-runner clear lastSkippedAt"),
+        ),
+        setSetting(pool, LAST_SKIP_REASON_KEY, "").catch((err) =>
+          app.log.warn({ err }, "random-gen-runner clear lastSkipReason"),
+        ),
       ]);
       app.log.info(
         {
