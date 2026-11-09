@@ -49,6 +49,9 @@ export default async function marketingRoutes(app: FastifyInstance): Promise<voi
       viewBaseUrl: app.viewBaseUrl,
       isDocs: true,
       showCodeTabs: true,
+      // The published rate limit, so the docs page never quotes a
+      // number that has drifted from the server's actual setting.
+      publicRateLimit: app.cfg.api.rateLimit,
     });
   });
 

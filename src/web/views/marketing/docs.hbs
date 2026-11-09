@@ -15,6 +15,7 @@
           <li><a href="#examples">{{req.t "docs.tocExamples"}}</a></li>
           <li><a href="#auth">{{req.t "docs.tocAuth"}}</a></li>
           <li><a href="#response">{{req.t "docs.tocResponse"}}</a></li>
+          <li><a href="#ratelimits">{{req.t "docs.tocRateLimits"}}</a></li>
           <li><a href="#errors">{{req.t "docs.tocErrors"}}</a></li>
         </ul>
       </aside>
@@ -91,6 +92,10 @@
 
         <h2 id="auth" class="m-section-h">{{req.t "docs.authTitle"}}</h2>
         <p style="color: var(--m-ink-2); line-height: 1.6;">{{req.t "docs.authBody"}}</p>
+        <pre class="m-pre"><code><span class="tok-key">curl</span> -H <span class="tok-str">"Authorization: Bearer ipq_xxxxxxxxxxxx"</span> <span class="tok-str">"{{viewBaseUrl}}/lookup?ip=8.8.8.8"</span></code></pre>
+        <p style="color: var(--m-ink-2); line-height: 1.6;">
+          {{req.t "docs.authQueryNote"}}
+        </p>
         <pre class="m-pre"><code><span class="tok-key">curl</span> <span class="tok-str">"{{viewBaseUrl}}/lookup?ip=8.8.8.8&amp;key=ipq_xxxxxxxxxxxx"</span></code></pre>
 
         <h2 id="response" class="m-section-h">{{req.t "docs.responseTitle"}}</h2>
@@ -133,6 +138,22 @@
             <span class="tok-str">"maxmind"</span>
             <span class="tok-brace">}</span>
             <span class="tok-brace">}</span></code></pre>
+
+        <h2 id="ratelimits" class="m-section-h">{{req.t "docs.rateLimitsTitle"}}</h2>
+        <p style="color: var(--m-ink-2); line-height: 1.6;">{{req.t "docs.rateLimitsBody"}}</p>
+        <table class="m-docs-table">
+          <thead>
+            <tr><th>{{req.t "docs.colScope"}}</th><th>{{req.t "docs.colLimit"}}</th><th>{{req.t "docs.colDescription"}}</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><code>{{req.t "docs.rateLimits.publicScope"}}</code></td><td><code>{{publicRateLimit}}/min</code></td><td>{{req.t "docs.rateLimits.publicDesc"}}</td></tr>
+            <tr><td><code>{{req.t "docs.rateLimits.keyedScope"}}</code></td><td><code>{{publicRateLimit}}/min</code></td><td>{{req.t "docs.rateLimits.keyedDesc"}}</td></tr>
+            <tr><td><code>{{req.t "docs.rateLimits.adminScope"}}</code></td><td><code>120/min</code></td><td>{{req.t "docs.rateLimits.adminDesc"}}</td></tr>
+          </tbody>
+        </table>
+        <p style="color: var(--m-ink-2); line-height: 1.6; margin-top: 16px;">
+          {{req.t "docs.rateLimitsScopeNote"}}
+        </p>
 
         <h2 id="errors" class="m-section-h">{{req.t "docs.errorsTitle"}}</h2>
         <table class="m-docs-table">

@@ -36,4 +36,31 @@ describe("/docs API reference", () => {
     // At least one curl example block
     expect(r.text).toMatch(/data-pane="curl"/);
   });
+
+  it("GET /docs documents the rate limits and quotes the server's own limit", async () => {
+    // The locale comes from the `lang` cookie (default zh-CN), so the
+    // test pins it explicitly rather than depending on the default.
+    const r = await request(app.server).get("/docs").set("cookie", "lang=en-US");
+    expect(r.status).toBe(200);
+    // The rate-limits section and its table-of-contents entry.
+    expect(r.text).toContain('id="ratelimits"');
+    expect(r.text).toContain('href="#ratelimits"');
+    // The three scopes.
+    expect(r.text).toContain("Anonymous");
+    expect(r.text).toContain("API key");
+    expect(r.text).toContain("Admin panel");
+    // The number comes from the server's config, not a hardcoded string —
+    // the default is 60/min, and the test config leaves it there.
+    expect(r.text).toContain("<code>60/min</code>");
+    // The note about route-level limits replacing rather than stacking.
+    expect(r.text).toContain("replaces the global limit");
+  });
+
+  it("GET /docs renders the rate-limits section in zh-CN too", async () => {
+    const r = await request(app.server).get("/docs").set("cookie", "lang=zh-CN");
+    expect(r.status).toBe(200);
+    expect(r.text).toContain('id="ratelimits"');
+    expect(r.text).toContain("匿名请求");
+    expect(r.text).toContain("管理后台");
+  });
 });

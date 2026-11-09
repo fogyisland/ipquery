@@ -28,10 +28,6 @@ import { loadConfig } from "../../src/config";
 import { createPool, runMigrations } from "../../src/storage/mysql";
 
 const TEST_DB = "ipquery_test_mig_consolidation";
-const MIGRATIONS = [
-  "020_provider_call_counter.sql",
-  "022_etl_run_progress.sql",
-];
 
 describe("consolidated ALTER migrations", () => {
   let pool: mysql.Pool;
