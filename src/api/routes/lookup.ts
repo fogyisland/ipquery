@@ -29,15 +29,31 @@ export function lookupErrorHandler(
   return reply.code(statusCode).send({ error: "internal_error" });
 }
 
+/**
+ * Extract the API key from the request.
+ *
+ * The `Authorization: Bearer` header is the preferred form. The
+ * `?key=` query parameter is still accepted for backwards
+ * compatibility, but it is the leaky form: the key lands in the
+ * access log, in proxy logs, in browser history and in Referer
+ * headers. Callers using it get a `Deprecation` header pointing at the
+ * header form.
+ */
 function extractKey(req: {
   query: unknown;
   headers: Record<string, string | string[] | undefined>;
-}): string | null {
-  const q = (req.query as Record<string, unknown> | undefined)?.key;
-  if (typeof q === "string" && q.length > 0) return q;
+}): { key: string | null; fromQuery: boolean } {
   const h = req.headers["authorization"];
-  if (typeof h === "string" && h.startsWith("Bearer ")) return h.slice(7);
-  return null;
+  if (typeof h === "string" && h.startsWith("Bearer ")) {
+    return { key: h.slice(7), fromQuery: false };
+  }
+  const xh = req.headers["x-api-key"];
+  if (typeof xh === "string" && xh.length > 0) {
+    return { key: xh, fromQuery: false };
+  }
+  const q = (req.query as Record<string, unknown> | undefined)?.key;
+  if (typeof q === "string" && q.length > 0) return { key: q, fromQuery: true };
+  return { key: null, fromQuery: false };
 }
 
 function ipFromReq(req: FastifyRequest): string | undefined {
@@ -51,9 +67,17 @@ function ipFromReq(req: FastifyRequest): string | undefined {
 export default async function lookupRoute(app: FastifyInstance): Promise<void> {
   app.setErrorHandler(lookupErrorHandler);
 
-  const preHandler = async (req: FastifyRequest, _reply: FastifyReply): Promise<void> => {
-    const raw = extractKey(req);
+  const preHandler = async (req: FastifyRequest, reply: FastifyReply): Promise<void> => {
+    const { key: raw, fromQuery } = extractKey(req);
     if (!raw) return;
+    if (fromQuery) {
+      // Nudge clients off the leaky form without breaking them.
+      reply.header("Deprecation", "true");
+      reply.header(
+        "Link",
+        '</lookup>; rel="successor-version"; documentation="use the Authorization: Bearer header instead of the key query parameter"',
+      );
+    }
     const found = await findActiveApiKeyByHash(app.pool, hashToken(raw));
     if (!found) {
       const err = new Error("invalid api key") as Error & { statusCode: number; code: string };
@@ -63,9 +87,9 @@ export default async function lookupRoute(app: FastifyInstance): Promise<void> {
     }
     req.apiKey = { keyId: found.id, userId: found.userId, prefix: found.keyPrefix };
     // Stamp last_used_at so /dashboard/keys shows when each key was last
-    // exercised. UPDATE on PK is microseconds; await it so the timestamp is
-    // durable before we return (fire-and-forget risks losing the stamp if
-    // the request is the last thing the process services).
+    // exercised. The storage layer throttles this to at most one write
+    // per key per minute — the exact timestamp nobody can perceive is
+    // not worth a DB round-trip on every request.
     await touchApiKey(app.pool, found.id);
   };
 
@@ -116,7 +140,12 @@ export default async function lookupRoute(app: FastifyInstance): Promise<void> {
 
   app.get("/lookup", { preHandler, onSend: logOnSend }, async (req, reply) => {
     const ip = (req.query as { ip?: string }).ip;
-    if (!ip || !isValidIp(ip)) return reply.code(400).send({ error: "invalid_ip", message: ip ?? "missing" });
+    // The error code carries everything the caller needs. The rejected
+    // input is NOT echoed back: it is unbounded in length (isValidIp
+    // has no size cap) and reflecting it into a response is a
+    // content-reflection pattern that becomes a real injection the
+    // moment any downstream consumer renders this body as HTML.
+    if (!ip || !isValidIp(ip)) return reply.code(400).send({ error: "invalid_ip" });
     return doLookup(app, ip);
   });
   app.get<{ Params: { ip: string } }>(
@@ -124,7 +153,7 @@ export default async function lookupRoute(app: FastifyInstance): Promise<void> {
     { preHandler, onSend: logOnSend },
     async (req, reply) => {
       const ip = req.params.ip;
-      if (!isValidIp(ip)) return reply.code(400).send({ error: "invalid_ip", message: ip });
+      if (!isValidIp(ip)) return reply.code(400).send({ error: "invalid_ip" });
       return doLookup(app, ip);
     },
   );

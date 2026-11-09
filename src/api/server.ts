@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-import Fastify, { type FastifyInstance } from "fastify";
+import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from "fastify";
 import compress from "@fastify/compress";
 import cors from "@fastify/cors";
 import rateLimit from "@fastify/rate-limit";
@@ -24,6 +24,7 @@ import { registerRandomGenRunner } from "../web/plugins/randomIpGeneratorRunner"
 import { _resetForTests as resetLoginLimit } from "../web/plugins/loginRateLimit";
 import { createMailer } from "../mailer";
 import healthRoute from "./routes/health";
+import { createGlobalErrorHandler, createNotFoundHandler } from "./errorHandler";
 import lookupRoute from "./routes/lookup";
 import statsRoute from "./routes/stats";
 import marketingRoute from "../web/routes/marketing";
@@ -41,6 +42,24 @@ declare module "fastify" {
     flushQueryLog: () => Promise<void>;
     randomGenRunner: { tickNow: () => Promise<void>; syncFromSettings: () => Promise<boolean> };
   }
+}
+
+/**
+ * Strip the `key` query parameter from a URL before it is logged.
+ *
+ * `/lookup` accepts an API key as a query parameter for backwards
+ * compatibility, but a key in the URL lands in the access log, in any
+ * reverse proxy's log, in browser history and in the Referer header of
+ * every outbound link from the page. A key in the log is a key in
+ * someone's hands.
+ *
+ * The query-parameter form is kept working (removing it would break
+ * existing API clients) but it is scrubbed on the way into the log, so
+ * the operator's logs hold the path without the secret.
+ */
+export function redactKeyParam(url: string): string {
+  if (!url.includes("key=")) return url;
+  return url.replace(/([?&])key=[^&]*/gi, "$1key=REDACTED");
 }
 
 export async function buildServer(
@@ -63,8 +82,39 @@ export async function buildServer(
   }
 
   const app = Fastify({
-    logger: { level: process.env.LOG_LEVEL ?? "info" },
+    logger: {
+      level: process.env.LOG_LEVEL ?? "info",
+      serializers: {
+        req: (req: {
+          method: string;
+          url: string;
+          headers?: Record<string, unknown>;
+          hostname?: string;
+          ip?: string;
+          socket?: { remotePort?: number };
+        }) => ({
+          method: req.method,
+          url: redactKeyParam(req.url),
+          version:
+            req.headers && typeof req.headers["accept-version"] === "string"
+              ? req.headers["accept-version"]
+              : undefined,
+          hostname: req.hostname,
+          remoteAddress: req.ip,
+          remotePort: req.socket ? req.socket.remotePort : undefined,
+        }),
+      },
+    },
   });
+
+  // Global error handler. Fastify's fallback serialises error.message
+  // into the response body, and for a driver error that message is the
+  // raw MySQL text — table names, column names, the database name and
+  // the server version, delivered to whoever triggered the error.
+  // `/lookup` installs its own narrower handler (plugin encapsulation
+  // makes the narrower scope win); this one covers every other route.
+  app.setErrorHandler(createGlobalErrorHandler());
+  app.setNotFoundHandler(createNotFoundHandler());
 
   await app.register(cors, { origin: true });
   await app.register(compress);
