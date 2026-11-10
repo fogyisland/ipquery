@@ -22,27 +22,29 @@
   <a class="button button-secondary" href="/admin/etl/runs.csv?{{#if filters.status}}status={{filters.status}}&{{/if}}{{#if filters.since}}since={{filters.since}}&{{/if}}{{#if filters.until}}until={{filters.until}}&{{/if}}{{#if sort}}sort={{#if (eq sort.dir 'desc')}}-{{/if}}{{sort.col}}{{/if}}">{{req.t 'common.exportCsv'}}</a>
 </form>
 
-<table class="table">
-  <thead>
-    <tr>
-      <th><a href="?sort={{ternary (eq sort.col 'id') (ternary (eq sort.dir 'asc') '-id' 'id') (ternary (eq sort.dir 'asc') 'id' '-id')}}">ID</a></th>
-      <th><a href="?sort={{ternary (eq sort.col 'started_at') (ternary (eq sort.dir 'asc') '-started_at' 'started_at') (ternary (eq sort.dir 'asc') 'started_at' '-started_at')}}">{{req.t 'admin.etl.col.started'}}</a></th>
-      <th>{{req.t 'admin.etl.col.status'}}</th>
-      <th>{{req.t 'admin.etl.col.merged'}}</th>
-      <th>{{req.t 'admin.etl.col.finished'}}</th>
-    </tr>
-  </thead>
-  <tbody>
-    {{#each runs}}
-    <tr>
-      <td class="table-num"><a href="/admin/etl/runs/{{this.id}}">{{this.id}}</a></td>
-      <td class="table-num">{{formatDate this.started_at}}</td>
-      <td>{{> pill kind=(ternary (eq this.status 'success') 'success' (ternary (eq this.status 'failed') 'danger' 'warning')) text=this.status}}</td>
-      <td class="table-num">{{this.merged_records}}</td>
-      <td class="table-num">{{formatDate this.finished_at}}</td>
-    </tr>
-    {{/each}}
-  </tbody>
-</table>
+<div class="table-scroll">
+  <table class="table">
+    <thead>
+      <tr>
+        <th><a href="?sort={{ternary (eq sort.col 'id') (ternary (eq sort.dir 'asc') '-id' 'id') (ternary (eq sort.dir 'asc') 'id' '-id')}}">ID</a></th>
+        <th><a href="?sort={{ternary (eq sort.col 'started_at') (ternary (eq sort.dir 'asc') '-started_at' 'started_at') (ternary (eq sort.dir 'asc') 'started_at' '-started_at')}}">{{req.t 'admin.etl.col.started'}}</a></th>
+        <th>{{req.t 'admin.etl.col.status'}}</th>
+        <th>{{req.t 'admin.etl.col.merged'}}</th>
+        <th>{{req.t 'admin.etl.col.finished'}}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {{#each runs}}
+      <tr>
+        <td class="table-num"><a href="/admin/etl/runs/{{this.id}}">{{this.id}}</a></td>
+        <td class="table-num">{{formatDate this.started_at}}</td>
+        <td>{{> pill kind=(ternary (eq this.status 'success') 'success' (ternary (eq this.status 'failed') 'danger' 'warning')) text=this.status}}</td>
+        <td class="table-num">{{this.merged_records}}</td>
+        <td class="table-num">{{formatDate this.finished_at}}</td>
+      </tr>
+      {{/each}}
+    </tbody>
+  </table>
+</div>
 
 {{> pagination baseUrl="/admin/etl/runs" page=page totalPages=totalPages queryString="" }}

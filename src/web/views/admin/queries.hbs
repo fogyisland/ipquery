@@ -25,19 +25,21 @@
 <div class="dashboard-grid">
   <div class="card">
     <h3 class="card-title">{{@root.req.t 'admin.queries.topIps'}}</h3>
-    <table class="table">
-      <thead><tr><th>IP</th><th class="table-num">n</th></tr></thead>
-      <tbody>
-        {{#each stats.topIps}}
-        <tr>
-          <td><code>{{this.ip_text}}</code></td>
-          <td class="table-num">{{this.n}}</td>
-        </tr>
-        {{else}}
-        <tr><td colspan="2">&mdash;</td></tr>
-        {{/each}}
-      </tbody>
-    </table>
+    <div class="table-scroll">
+      <table class="table">
+        <thead><tr><th>IP</th><th class="table-num">n</th></tr></thead>
+        <tbody>
+          {{#each stats.topIps}}
+          <tr>
+            <td><code>{{this.ip_text}}</code></td>
+            <td class="table-num">{{this.n}}</td>
+          </tr>
+          {{else}}
+          <tr><td colspan="2">&mdash;</td></tr>
+          {{/each}}
+        </tbody>
+      </table>
+    </div>
   </div>
 
   <div class="card">

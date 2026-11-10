@@ -75,30 +75,32 @@
 {{!-- ── Per-file tables ── --}}
 {{#if downloads.length}}
 <h3>{{req.t 'admin.etl.runDetail.downloads'}}</h3>
-<table class="table">
-  <thead>
-    <tr>
-      <th>{{req.t 'admin.etl.col.source'}}</th>
-      <th>{{req.t 'admin.etl.col.month'}}</th>
-      <th>{{req.t 'admin.etl.col.bytes'}}</th>
-      <th>{{req.t 'admin.etl.col.duration'}}</th>
-      <th>{{req.t 'admin.etl.col.status'}}</th>
-      <th>{{req.t 'admin.etl.col.error'}}</th>
-    </tr>
-  </thead>
-  <tbody>
-    {{#each downloads}}
-    <tr>
-      <td><code>{{this.source}}</code></td>
-      <td>{{this.month}}</td>
-      <td class="table-num">{{#if this.bytes}}{{this.bytes}}{{else}}—{{/if}}</td>
-      <td class="table-num">{{#if this.durationMs}}{{this.durationMs}}ms{{else}}—{{/if}}</td>
-      <td>{{> pill kind=this.statusKind text=this.status}}</td>
-      <td>{{#if this.errorMessage}}{{this.errorMessage}}{{else}}—{{/if}}</td>
-    </tr>
-    {{/each}}
-  </tbody>
-</table>
+<div class="table-scroll">
+  <table class="table">
+    <thead>
+      <tr>
+        <th>{{req.t 'admin.etl.col.source'}}</th>
+        <th>{{req.t 'admin.etl.col.month'}}</th>
+        <th>{{req.t 'admin.etl.col.bytes'}}</th>
+        <th>{{req.t 'admin.etl.col.duration'}}</th>
+        <th>{{req.t 'admin.etl.col.status'}}</th>
+        <th>{{req.t 'admin.etl.col.error'}}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {{#each downloads}}
+      <tr>
+        <td><code>{{this.source}}</code></td>
+        <td>{{this.month}}</td>
+        <td class="table-num">{{#if this.bytes}}{{this.bytes}}{{else}}—{{/if}}</td>
+        <td class="table-num">{{#if this.durationMs}}{{this.durationMs}}ms{{else}}—{{/if}}</td>
+        <td>{{> pill kind=this.statusKind text=this.status}}</td>
+        <td>{{#if this.errorMessage}}{{this.errorMessage}}{{else}}—{{/if}}</td>
+      </tr>
+      {{/each}}
+    </tbody>
+  </table>
+</div>
 {{/if}}
 
 {{#if parses.length}}

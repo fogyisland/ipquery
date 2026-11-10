@@ -1,4 +1,16 @@
 /* SPDX-License-Identifier: MIT */
+/* Every rule in this codebase sizes boxes with `width: 100%` plus padding.
+   Under the default `content-box` the padding is added on top of the 100%,
+   so a full-width child of a padded column overflows it — silently on
+   desktop, where the parent clips, and as horizontal scroll when the row is
+   full-bleed on mobile. `border-box` makes 100% mean the visible width.
+   Declared on `*` rather than on a list of tags so pseudo-elements and
+   future components inherit it. */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
 :root {
   color-scheme: light dark;
 }
