@@ -34,6 +34,7 @@
       const id = tab.dataset.tab;
       block.querySelectorAll(".m-codeblock-tab").forEach(function (t) {
         t.classList.toggle("active", t === tab);
+        t.setAttribute("aria-selected", t === tab ? "true" : "false");
       });
       block.querySelectorAll("[data-pane]").forEach(function (p) {
         p.style.display = p.dataset.pane === id ? "" : "none";

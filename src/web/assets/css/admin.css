@@ -1123,6 +1123,9 @@ dl.settings-dl dd {
   flex-wrap: wrap;
   align-items: center;
 }
+.ip-hero-cta {
+  margin-top: 16px;
+}
 .ip-hero-meta span::before {
   content: "› ";
   color: var(--text-3);
@@ -1261,20 +1264,6 @@ dl.settings-dl dd {
   border: var(--hairline);
   border-radius: var(--radius);
   padding: 5px 8px;
-  color: var(--text);
-}
-.recent-table {
-  background: var(--surface);
-}
-.recent-table td {
-  font-family: var(--font-mono);
-  font-size: 12px;
-}
-.recent-table td.time {
-  color: var(--text-3);
-  white-space: nowrap;
-}
-.recent-table td.ip {
   color: var(--text);
 }
 
@@ -1554,7 +1543,7 @@ dl.settings-dl dd {
   margin: 2px 0;
 }
 .admin-summary-disabled {
-  color: #f59e0b;
+  color: var(--warning);
 }
 .admin-summary-ips code.admin-ips {
   display: block;
@@ -1660,10 +1649,10 @@ dl.settings-dl dd {
   --status-color: #22c55e;
 }
 .provider-health-card--failing {
-  --status-color: #ef4444;
+  --status-color: var(--danger);
 }
 .provider-health-card--recovering {
-  --status-color: #f59e0b;
+  --status-color: var(--warning);
 }
 .provider-health-card--disabled {
   --status-color: #6b7280;
@@ -1705,10 +1694,10 @@ dl.settings-dl dd {
   --status-color: #22c55e;
 }
 .provider-health-status--failing {
-  --status-color: #ef4444;
+  --status-color: var(--danger);
 }
 .provider-health-status--recovering {
-  --status-color: #f59e0b;
+  --status-color: var(--warning);
 }
 .provider-health-status--disabled {
   --status-color: #6b7280;
@@ -1744,15 +1733,15 @@ dl.settings-dl dd {
   color: var(--text);
 }
 .provider-health-error-text {
-  color: #f59e0b;
+  color: var(--warning);
 }
 
 .provider-health-card-error {
   font-family: var(--font-mono);
   font-size: 11px;
-  color: #ef4444;
+  color: var(--danger);
   background: rgba(239, 68, 68, 0.08);
-  border-left: 2px solid #ef4444;
+  border-left: 2px solid var(--danger);
   padding: var(--sp-2) var(--sp-3);
   margin-bottom: var(--sp-3);
   overflow: hidden;
@@ -2215,13 +2204,13 @@ dl.settings-dl dd {
   line-height: 1.4;
   border: 1px solid transparent;
   background: var(--surface-2);
-  color: var(--text-1);
+  color: var(--text);
   white-space: nowrap;
   vertical-align: baseline;
 }
 .admin-tag--warn {
   background: rgba(245, 158, 11, 0.12);
-  color: #f59e0b;
+  color: var(--warning);
   border-color: rgba(245, 158, 11, 0.35);
 }
 .admin-tag--ok {
@@ -2235,7 +2224,7 @@ dl.settings-dl dd {
 }
 .admin-tag--danger {
   background: rgba(239, 68, 68, 0.12);
-  color: #ef4444;
+  color: var(--danger);
   border-color: rgba(239, 68, 68, 0.35);
 }
 
@@ -2356,7 +2345,7 @@ dl.settings-dl dd {
   margin: 8px 0;
 }
 .etl-progress-label {
-  font: 12px var(--font-ui);
+  font: 12px var(--font-sans);
   color: var(--text-2);
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -2364,7 +2353,7 @@ dl.settings-dl dd {
 .etl-progress-bar {
   height: 14px;
   background: var(--surface-2);
-  border: 1px solid var(--border-1);
+  border: 1px solid var(--border);
   border-radius: 999px;
   overflow: hidden;
 }

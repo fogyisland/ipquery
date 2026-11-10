@@ -1,5 +1,5 @@
 {{! SPDX-License-Identifier: MIT }}
-{{#if flash.success}}<div class="flash flash-success">{{flash.success}}</div>{{/if}}
-{{#if flash.error}}<div class="flash flash-error">{{flash.error}}</div>{{/if}}
-{{#if flash.warning}}<div class="flash flash-warning">{{flash.warning}}</div>{{/if}}
-{{#if flash.info}}<div class="flash flash-info">{{flash.info}}</div>{{/if}}
+{{#if flash.success}}<div class="flash flash-success" role="status">{{flash.success}}</div>{{/if}}
+{{#if flash.error}}<div class="flash flash-error" role="alert">{{flash.error}}</div>{{/if}}
+{{#if flash.warning}}<div class="flash flash-warning" role="alert">{{flash.warning}}</div>{{/if}}
+{{#if flash.info}}<div class="flash flash-info" role="status">{{flash.info}}</div>{{/if}}

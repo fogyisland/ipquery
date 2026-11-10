@@ -208,20 +208,28 @@ describe("query-log tool defs", () => {
 
 describe("mcpQueriesDaily", () => {
   it("sums each day's buckets into a single count", async () => {
+    // Day keys must be computed from the same UTC window countQueriesByDay
+    // builds, or the test breaks at every UTC midnight rollover.
+    const dayKey = (offsetFromToday: number): string => {
+      const d = new Date();
+      d.setUTCHours(0, 0, 0, 0);
+      d.setUTCDate(d.getUTCDate() - offsetFromToday);
+      return d.toISOString().slice(0, 10);
+    };
     const pool = {
       query: vi.fn().mockResolvedValue([
         [
-          { d: "2026-11-08", status: "hit", c: 3 },
-          { d: "2026-11-08", status: "miss", c: 1 },
-          { d: "2026-11-09", status: "invalid", c: 2 },
+          { d: dayKey(1), status: "hit", c: 3 },
+          { d: dayKey(1), status: "miss", c: 1 },
+          { d: dayKey(0), status: "invalid", c: 2 },
         ],
         [],
       ]),
     };
     const res = await mcpQueriesDaily(makeDeps(pool), { days: 2 });
     expect(res).toEqual([
-      { day: "2026-11-08", count: 4 },
-      { day: "2026-11-09", count: 2 },
+      { day: dayKey(1), count: 4 },
+      { day: dayKey(0), count: 2 },
     ]);
     // The `since` bound and every day key are UTC — the SQL buckets on a
     // converted-to-UTC DATE, and the WHERE bound is a UTC midnight.
