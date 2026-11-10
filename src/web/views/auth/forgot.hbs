@@ -1,7 +1,7 @@
 {{!-- SPDX-License-Identifier: MIT --}}
 <form method="POST" action="/forgot">
   <input type="hidden" name="csrf" value="{{req.csrfToken}}">
-  {{> form-field name="email" type="email" label=(req.t 'auth.email') required=true }}
+  {{> form-field name="email" type="email" label=(req.t 'auth.email') required=true autocomplete="email" }}
   <button type="submit" class="btn-primary">{{req.t 'auth.forgot.submit'}}</button>
 </form>
 {{#if flash.success}}<div class="flash flash-success">{{flash.success}}</div>{{/if}}
