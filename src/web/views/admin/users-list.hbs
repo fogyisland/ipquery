@@ -7,7 +7,7 @@
   (hash name='verified' label=(req.t 'admin.users.verified') options=(array (hash value='0' label=(req.t 'common.no')) (hash value='1' label=(req.t 'common.yes'))))
 ) values=filters csvUrl='/admin/users.csv' anyLabel=(req.t 'common.any') filterLabel=(req.t 'common.filter') exportLabel=(req.t 'common.exportCsv')}}
 
-<form method="POST" action="/admin/users/bulk" id="bulk-form">
+<form method="POST" action="/admin/users/bulk" id="bulk-form" data-alert="{{req.t 'common.selectRowsFirst'}}">
   <input type="hidden" name="csrf" value="{{csrfToken}}">
   <input type="hidden" name="action" id="bulk-action" value="">
   <input type="hidden" name="ids" id="bulk-ids" value="">
