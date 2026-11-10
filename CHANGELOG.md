@@ -29,7 +29,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `/admin/settings` 改为 4 个哈希路由标签页（通用／安全／集成／系统）
 - **初始化向导重设计**: `/setup` 6 步向导重做为「开机自检日志 + 配置工作表」——
   左侧 320px 暗色 rail（纵向编号步骤 + `[ok]`/`[>]` 标记 + 6 格进度条），
-  右侧亮色工作表（下划线输入、38rem 行宽）；新增 `src/web/assets/css/setup.css`
+  右侧亮色工作表（下划线输入、38rem 行宽）；新增 `src/web/assets/css/setup.css`。
+  向导字体（Plus Jakarta Sans / JetBrains Mono）来自 Google Fonts，CSP 头对 `/setup*`
+  路由单独放行 `fonts.googleapis.com`/`fonts.gstatic.com`（meta 标签只能收紧、
+  不能放宽 header 里已有的策略，例外必须写在响应头上），其余界面保持纯同源
+- **全新安装自举**: 空库（一张表都没有）时 `buildServer()` 直接崩——`setupGuard` 的
+  `isInitialized` 与若干插件的 `getSetting` 读不存在的 `settings` 表即抛 `ER_NO_SUCH_TABLE`，
+  操作员永远到不了能建表的向导。现 `getSetting`/`isInitialized` 把 1146 分别按
+  null／未初始化处理（其余数据库错误照旧上抛：断连不能伪装成默认配置），
+  且 `buildServer()` 在向导守卫之前跑一次幂等 `runMigrations`，首个请求即落在可用安装上。
+  新增 `test/integration/setup-fresh-boot.test.ts` 固化该路径
 - **CI**: GitHub Actions 工作流（Node 20），ESLint + Prettier 接入 `npm run lint`
 - **每 IP 探测审计**: `random_probe_log` 记录每次 Provider 扇出的完整响应，
   管理界面可按批次回看，见 migration 018
@@ -115,8 +124,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   于是全部错误页——41 处调用点的 CSRF 过期页、403、404——导航塌缩成一列裸文字。
   现补齐网格容器与样式表，与 `layouts/dashboard` 结构一致。
   同时把 `errors/{403,404,500}.hbs` 改用向导的 `boot-*` 语汇（标题／正文／主按钮），
-  并让 `.btn-primary` 脱离 `body.layout-setup` 前缀成为全局规则——`setup.css` 只被
-  setup 与 public 两个布局加载，admin／dashboard／app／marketing 都不受影响
+  并新增 `src/web/assets/css/errors.css`（原先错误视图借用 `setup.css`，
+  导致 public 布局多拉一个 1000 行的向导样式表）——错误页必须能在坏代理／DNS 劫持下
+  正常渲染，不得发起任何第三方请求。28 处内联的 `.view("errors/…")` 调用统一收敛到
+  `src/web/errors/render.ts` 的 `sendErrorPage`/`sendCsrfPage` 助手
+- **管理路径 403 泄漏路由图**: 未登录或非管理员访问 `/admin*` 时返回 403，
+  等于向任何注册用户确认 `/admin`、`/admin/users`、`/admin/settings` 真实存在——
+  一份免费的管理台目录。现改为返回 404（与不存在路由外观一致），
+  管理台的存在性不再通过状态码外泄
+- **全站移动端横向溢出**: 42 组页面×视口探针扫出两类溢出，根源都是 CSS 盒模型与网格
+  的自动最小宽度：(1) 代码库处处用 `width: 100%` 加水平内边距，默认 `content-box`
+  下内边距叠加在 100% 之外，桌面端被父容器静默裁剪、移动端全出血行则出横向滚动条——
+  现在 `base.css` 顶部对 `*, *::before, *::after` 统一 `box-sizing: border-box`；
+  (2) 网格列写 `1fr` 时自动最小宽度取最长不可断子元素（侧栏 CTA 标签、文档 TOC），
+  列宽被顶到视口之外——`.dashboard-shell` 移动列与 `.m-docs-layout` 改为
+  `minmax(0, 1fr)`。修复后全站探针 0 问题页
+- **表格在窄视口撑破布局**: 9 个视图（管理端 7 个 + 仪表盘 2 个）把
+  `<table class="table">` 直接铺进页面，表格的自动布局宽度不可压缩（/admin/users
+  在 390px 视口下最小 587px）。直接给表格 `display: block` 是显然的修法也是错的修法：
+  表格盒一旦消失，`background` 按行组而非整宽绘制。现统一包一层
+  `.table-scroll`（`overflow-x: auto`，触摸滚动）在窄视口横向滚动、宽视口无感
 - **`{{--` 注释起始符写错导致整页 500**: Handlebars 的注释是 `{{!--`，少写一个 `!`
   会被当作块起始符，注释正文随后被当成模板表达式解析。报错信息指向注释中间某个
   无关的词（`Expecting 'ID', got 'INVALID'`），真正的位置在三行之前——排查成本极高。
