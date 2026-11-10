@@ -245,7 +245,7 @@
       {{else}}
         <span class="form-field-hint">{{etlStatusText}}</span>
       {{/if}}
-      <form method="POST" action="/admin/settings/etl-restart" style="margin-left:auto">
+      <form method="POST" action="/admin/settings/etl-restart" class="inline-form push-right">
         <input type="hidden" name="csrf" value="{{csrfToken}}">
         <button type="submit" class="btn-primary">{{req.t 'admin.settings.etlRestart'}}</button>
       </form>

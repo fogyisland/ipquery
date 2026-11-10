@@ -1,6 +1,6 @@
 {{!-- SPDX-License-Identifier: MIT --}}
 {{#if (gt totalPages 1)}}
-<nav class="pagination">
+<nav class="pagination" aria-label="Pagination">
   {{#if (gt page 1)}}<a href="{{baseUrl}}?page={{subtract page 1}}{{#if queryString}}&{{queryString}}{{/if}}">{{req.t 'common.prev'}}</a>{{/if}}
   <span>{{page}} / {{totalPages}}</span>
   {{#if (lt page totalPages)}}<a href="{{baseUrl}}?page={{add page 1}}{{#if queryString}}&{{queryString}}{{/if}}">{{req.t 'common.next'}}</a>{{/if}}
