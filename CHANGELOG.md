@@ -143,6 +143,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   且带着明文数据库口令；`.gitignore` 里的 `.env` 规则对**已跟踪文件无效**，因此从未生效。
   现已 `git rm --cached .env`，仓库只保留 `.env.example`，本地 `.env` 不再进入版本库。
   历史中仍留有明文口令，数据库凭据需要轮换
+
+  历史扫描结果（仅统计位置与取值形态，不含明文）：
+  - `b8a2e51` 的 `.env` —— 真实的数据库口令，**需要轮换**
+  - `251be37` 的 `.env.example` 与 `a10a873`/`b238292` 文档里的 `DB_PASSWORD` —— 占位值 `rootpass`，无害
+  - `056e342`/`e2670f2` 文档里的 `SESSION_SECRET`/`CSRF_SECRET` —— 占位内容
+    （中文注释与 `replace_me_with_64_random_bytes_in_prod` 之类的说明文字），并非真实密钥；
+    代码也从未把密钥默认值写死（`src/config.ts` 读不到即启动失败）
+  - `.env` 中的 `MAXMIND_LICENSE_KEY` 在历史里为空值，不是泄漏
 - 集成测试辅助函数统一为三 Cookie CSRF 协议（`csrf` + `csrf_issued` + `csrf_bind`），
   16 个测试文件同步适配
 - MCP 工具输出中的邮箱与 API Key 前缀默认脱敏
