@@ -26,8 +26,32 @@ export interface AuditLogInput {
   statusCode?: number;
 }
 
+/**
+ * Normalise `target_id` for the BIGINT column.
+ *
+ * `targetId` is typed `number | string` because callers audit both numeric
+ * row ids (user id, api key id) and human-readable names (provider name,
+ * an IP text). Only the numeric form fits the column: `Number("ip-api")`
+ * is NaN, and mysql2 renders NaN as the literal `NaN`, which MySQL rejects
+ * with ER_BAD_FIELD_ERROR ("Unknown column 'NaN' in 'field list'").
+ *
+ * So a non-numeric target becomes NULL here, and the readable value is kept
+ * in `metadata.target` so the audit trail still says *what* was touched.
+ */
+function normalizeTargetId(targetId: number | string | undefined | null): number | null {
+  if (targetId == null) return null;
+  const numeric = Number(targetId);
+  return Number.isFinite(numeric) ? numeric : null;
+}
+
 export async function recordAuditLog(pool: Pool, input: AuditLogInput): Promise<void> {
   const actor = input.actor ?? { id: 0, email: "(system)" };
+  const targetId = normalizeTargetId(input.targetId);
+  const metadata = { ...(input.metadata ?? {}) };
+  if (input.targetId != null && targetId === null) {
+    // Non-numeric target (provider name, IP text): keep it readable.
+    metadata.target = String(input.targetId);
+  }
   await pool.query<ResultSetHeader>(
     `INSERT INTO admin_audit_log
        (actor_user_id, actor_email, action, target_type, target_id, metadata, ip, user_agent, status_code)
@@ -37,8 +61,8 @@ export async function recordAuditLog(pool: Pool, input: AuditLogInput): Promise<
       actor.email,
       input.action,
       input.targetType ?? null,
-      input.targetId == null ? null : Number(input.targetId),
-      input.metadata ? JSON.stringify(input.metadata) : null,
+      targetId,
+      Object.keys(metadata).length > 0 ? JSON.stringify(metadata) : null,
       input.ip ?? null,
       input.userAgent ?? null,
       input.statusCode ?? null,

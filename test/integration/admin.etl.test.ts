@@ -36,8 +36,7 @@ afterAll(async () => {
   await dropTestDb(td);
 });
 
-async function csrfOf(): Promise<{ cookie: string; token: string }> {
-  const r = await request(app.server)
+async function csrfOf(): Promise<{ cookie: string; token: string }> {  const r = await request(app.server)
     .get("/admin/etl/runs")
     .set("Cookie", "sid=" + adminSid);
   const cookies = r.headers["set-cookie"] as string[];
@@ -46,6 +45,12 @@ async function csrfOf(): Promise<{ cookie: string; token: string }> {
   const bindLine = cookies.find((c) => c.startsWith("csrf_bind="))!.split(";")[0]!;
   const tokenMatch = /csrf=([a-f0-9]+)/.exec(csrfLine)!;
   return { cookie: `${csrfLine}; ${issuedLine}; ${bindLine}`, token: tokenMatch[1]! };
+}
+
+/** Number of rows in `etl_runs` — the count the trigger test compares against. */
+async function countEtlRuns(): Promise<number> {
+  const [rows] = await app.pool.query<RowDataPacket[]>("SELECT COUNT(*) AS n FROM etl_runs");
+  return Number(rows[0]!.n);
 }
 
 describe("admin ETL", () => {
@@ -68,6 +73,16 @@ describe("admin ETL", () => {
   });
 
   it("POST /admin/etl/trigger creates a new row", async () => {
+    // The trigger route refuses to start while another run row is still
+    // 'running' (see src/etl/runGuard.ts): the seeded row from beforeAll
+    // is exactly such a row. Close it out first so this test exercises the
+    // trigger's happy path — the refusal path is pinned by
+    // test/integration/etl-guards.test.ts.
+    await app.pool.query(
+      `UPDATE etl_runs SET status = 'failed', finished_at = NOW(3) WHERE status = 'running'`,
+    );
+    const before = await countEtlRuns();
+
     const { cookie, token } = await csrfOf();
     const r = await request(app.server)
       .post("/admin/etl/trigger")
@@ -75,19 +90,42 @@ describe("admin ETL", () => {
       .type("form")
       .send({ csrf: token });
     expect(r.status).toBe(302);
-    // Pipeline is fire-and-forget. recordEtlStart inserts the new row async,
-    // so poll briefly for it to appear (the seeded row from beforeAll + the
-    // new trigger row). We intentionally don't wait for completion — that
+    // The route inserts the run row up-front (it needs the id for the live
+    // detail page) and then hands it to the pipeline, which is
+    // fire-and-forget. We intentionally don't wait for completion — that
     // would race the pipeline's recordEtlFinish, which can fail later for
     // unrelated reasons (e.g. missing source tables after atomicSwapRanges).
-    let count = 1;
+    let count = before;
     for (let i = 0; i < 20; i++) {
       await new Promise((rr) => setTimeout(rr, 100));
-      const [rows] = await app.pool.query<RowDataPacket[]>("SELECT * FROM etl_runs");
-      count = rows.length;
-      if (count >= 2) break;
+      count = await countEtlRuns();
+      if (count > before) break;
     }
-    expect(count).toBeGreaterThanOrEqual(2);
+    expect(count).toBeGreaterThan(before);
+  });
+
+  it("POST /admin/etl/trigger is refused while a run is already running", async () => {
+    // A crashed run leaves its row at status='running'. The trigger must
+    // refuse instead of starting a second, concurrent ETL.
+    const stuckRunId = await recordEtlStart(app.pool);
+    const before = await countEtlRuns();
+    try {
+      const { cookie, token } = await csrfOf();
+      const r = await request(app.server)
+        .post("/admin/etl/trigger")
+        .set("Cookie", "sid=" + adminSid + "; " + cookie)
+        .type("form")
+        .send({ csrf: token });
+      expect(r.status).toBe(302);
+      // It redirects to the still-running run instead of creating a new one.
+      expect(r.headers.location).toContain(`/admin/etl/runs/${stuckRunId}`);
+      expect(await countEtlRuns()).toBe(before);
+    } finally {
+      await app.pool.query(
+        `UPDATE etl_runs SET status = 'failed', finished_at = NOW(3) WHERE id = ?`,
+        [stuckRunId],
+      );
+    }
   });
 
   it("non-admin -> 403", async () => {
