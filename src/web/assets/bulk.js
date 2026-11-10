@@ -13,7 +13,9 @@ document.addEventListener("DOMContentLoaded", () => {
       const action = btn.dataset.bulkAction;
       const ids = [...document.querySelectorAll(".row-check:checked")].map((c) => c.value).join(",");
       if (!ids) {
-        alert("Select rows first");
+        // Message is server-rendered (i18n) on the form via data-alert;
+        // falls back to the English literal only if the attribute is absent.
+        alert(form.getAttribute("data-alert") || "Select rows first");
         return;
       }
       document.getElementById("bulk-action").value = action;

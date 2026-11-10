@@ -18,7 +18,8 @@
     "any": "Any",
     "enableJs": "Enable JavaScript to use bulk actions",
     "view": "View",
-    "actions": "Actions"
+    "actions": "Actions",
+    "selectRowsFirst": "Select rows first"
   },
   "sidebar": {
     "group": {
@@ -158,7 +159,8 @@
         "title": "API endpoint",
         "help": "Replace YOUR_KEY with any active key, and IP with the address you want to look up.",
         "copy": "Copy"
-      }
+      },
+      "revoked": "revoked"
     },
     "profile": {
       "title": "Profile",

@@ -40,7 +40,7 @@
       <td>
         {{#if (not this.revokedAt)}}
         <a href="/dashboard/keys/{{this.id}}/revoke/confirm">{{../req.t 'dashboard.keys.revoke'}}</a>
-        {{else}}<span>(revoked)</span>{{/if}}
+        {{else}}<span>({{req.t 'dashboard.keys.revoked'}})</span>{{/if}}
       </td>
     </tr>
     {{/each}}

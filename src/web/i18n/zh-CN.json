@@ -18,7 +18,8 @@
     "any": "全部",
     "enableJs": "请启用 JavaScript 以使用批量操作",
     "view": "查看",
-    "actions": "操作"
+    "actions": "操作",
+    "selectRowsFirst": "请先选择行"
   },
   "sidebar": {
     "group": {
@@ -159,7 +160,8 @@
         "help": "用任意 API Key 替换 YOUR_KEY,IP 替换为目标地址即可发起查询。",
         "copy": "复制"
       },
-      "copy": "复制"
+      "copy": "复制",
+      "revoked": "已吊销"
     },
     "profile": {
       "title": "个人资料",
