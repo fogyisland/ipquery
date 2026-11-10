@@ -103,6 +103,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **管理轮询挤占公共限流额度**: `/admin`、ETL `/live` 与 `/progress`、`/admin/queries`
   每秒轮询一次，与公共 API 共享 60/分钟的全局限流——轮询本身就能把额度吃光，
   之后整个 IP 的所有管理页面全部 429。现给轮询路由独立的 120/分钟额度
+- **静态资源与页面挤占公共 API 限流额度**: 全局限流按来源 IP 统计**每一个**请求，
+  HTML 页面和静态资源也算在内。setup 页要拉 4 个样式表，匿名访客还没拿到页面
+  就先花掉了五分之一额度。更糟的是失败形态：429 响应体是 JSON，浏览器于是报
+  “Refused to apply style … MIME type 'application/json' is not a supported
+  stylesheet MIME type”——样式表**静默不生效**，页面裸奔。
+  现只对公共 API（`/healthz`、`/lookup`、`/stats`）限流，页面与静态资源不再计入额度；
+  管理路由仍走各自的路由级限额
+- **错误页裸奔**: `layouts/public` 渲染 `{{> sidebar}}` 时既没有 `.dashboard-shell`
+  网格容器，也没有引入 `admin.css`（`.sidebar`／`.sidebar-link` 等类已迁往该文件）。
+  于是全部错误页——41 处调用点的 CSRF 过期页、403、404——导航塌缩成一列裸文字。
+  现补齐网格容器与样式表，与 `layouts/dashboard` 结构一致。
+  同时把 `errors/{403,404,500}.hbs` 改用向导的 `boot-*` 语汇（标题／正文／主按钮），
+  并让 `.btn-primary` 脱离 `body.layout-setup` 前缀成为全局规则——`setup.css` 只被
+  setup 与 public 两个布局加载，admin／dashboard／app／marketing 都不受影响
+- **`{{--` 注释起始符写错导致整页 500**: Handlebars 的注释是 `{{!--`，少写一个 `!`
+  会被当作块起始符，注释正文随后被当成模板表达式解析。报错信息指向注释中间某个
+  无关的词（`Expecting 'ID', got 'INVALID'`），真正的位置在三行之前——排查成本极高。
+  新增 `test/unit/hbs-views.test.ts`，对 66 个视图逐个编译并检查注释格式
 - **验证邮件重发的冷却键错位**: 重发冷却原按**目标** userId 记，挡住了对同一用户的重复发送，
   却挡不住枚举攻击——脚本遍历 userId 1..N 可给每个已注册用户发一封邮件而毫无阻拦。
   现改为按**请求者**（IP）冷却，并加 10/小时 的路由级限流；未知或畸形 userId 返回 404
