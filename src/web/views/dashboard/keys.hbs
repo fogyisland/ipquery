@@ -28,24 +28,26 @@
 </section>
 
 {{#if keys.length}}
-<table class="table">
-  <thead><tr><th>{{req.t 'dashboard.keys.label'}}</th><th>{{req.t 'dashboard.keys.prefix'}}</th><th>{{req.t 'dashboard.keys.lastUsed'}}</th><th>{{req.t 'dashboard.keys.created'}}</th><th></th></tr></thead>
-  <tbody>
-    {{#each keys}}
-    <tr>
-      <td>{{this.label}}</td>
-      <td><code>{{this.keyPrefix}}</code></td>
-      <td>{{formatRelative this.lastUsedAt}}</td>
-      <td>{{formatDate this.createdAt}}</td>
-      <td>
-        {{#if (not this.revokedAt)}}
-        <a href="/dashboard/keys/{{this.id}}/revoke/confirm">{{../req.t 'dashboard.keys.revoke'}}</a>
-        {{else}}<span>({{../req.t 'dashboard.keys.revoked'}})</span>{{/if}}
-      </td>
-    </tr>
-    {{/each}}
-  </tbody>
-</table>
+<div class="table-scroll">
+  <table class="table">
+    <thead><tr><th>{{req.t 'dashboard.keys.label'}}</th><th>{{req.t 'dashboard.keys.prefix'}}</th><th>{{req.t 'dashboard.keys.lastUsed'}}</th><th>{{req.t 'dashboard.keys.created'}}</th><th></th></tr></thead>
+    <tbody>
+      {{#each keys}}
+      <tr>
+        <td>{{this.label}}</td>
+        <td><code>{{this.keyPrefix}}</code></td>
+        <td>{{formatRelative this.lastUsedAt}}</td>
+        <td>{{formatDate this.createdAt}}</td>
+        <td>
+          {{#if (not this.revokedAt)}}
+          <a href="/dashboard/keys/{{this.id}}/revoke/confirm">{{../req.t 'dashboard.keys.revoke'}}</a>
+          {{else}}<span>({{../req.t 'dashboard.keys.revoked'}})</span>{{/if}}
+        </td>
+      </tr>
+      {{/each}}
+    </tbody>
+  </table>
+</div>
 {{else}}
 <p>{{req.t 'dashboard.keys.empty'}}</p>
 {{/if}}

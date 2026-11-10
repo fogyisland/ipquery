@@ -210,6 +210,12 @@
   background: transparent;
   text-align: left;
   cursor: pointer;
+  /* `width: 100%` under the default `content-box` measures the padding OUT of
+     the 100%: a 389px column plus 24px of padding on each side made every
+     link 437px wide on a 390px viewport. In the desktop grid the extra width
+     was clipped by the sidebar; full-bleed on mobile it became horizontal
+     scroll. border-box makes 100% mean the visible width. */
+  box-sizing: border-box;
   width: 100%;
   font-family: inherit;
   position: relative;
@@ -256,6 +262,11 @@
 .sidebar-link-arrow {
   display: inline-block;
   width: 14px;
+  /* The link is a flex row; every child becomes a flex item and loses its
+     inline layout. `flex: none` pins the arrow to its 14px instead of letting
+     the anonymous text run and the CTA label share that axis unpredictably —
+     without it the item grew the row past the viewport at 390px. */
+  flex: none;
   font-family: var(--font-mono);
   color: var(--accent);
 }
@@ -272,10 +283,14 @@
 /* Override: forms.css's button[type="submit"] rule paints submit buttons
    solid cyan with white text and no border-radius/font-family — which
    turns <button class="sidebar-link sidebar-logout"> into a full-width
-   cyan banner. Re-skin it as a sidebar link here. */
+   cyan banner. Re-skin it as a sidebar link here.
+   `layouts/public` renders the same sidebar partial (error pages), so it
+   needs the same override; without it a signed-in user who hits an error
+   page sees the cyan banner this rule exists to prevent. */
 .layout-admin button.sidebar-link,
 .layout-dashboard button.sidebar-link,
-.layout-app button.sidebar-link {
+.layout-app button.sidebar-link,
+.layout-public button.sidebar-link {
   background: transparent;
   color: var(--text-2);
   border: 0;
@@ -288,7 +303,8 @@
 }
 .layout-admin button.sidebar-link:hover,
 .layout-dashboard button.sidebar-link:hover,
-.layout-app button.sidebar-link:hover {
+.layout-app button.sidebar-link:hover,
+.layout-public button.sidebar-link:hover {
   background: var(--surface-2);
   color: var(--text);
 }
@@ -332,15 +348,21 @@
 }
 
 @media (max-width: 768px) {
+  /* A bare `1fr` has an `auto` minimum, so a single long unbreakable child
+     (the sidebar CTA label) can push the column wider than the viewport and
+     take the whole page into horizontal scroll. `minmax(0, 1fr)` lets the
+     column shrink below its content. */
   .dashboard-shell {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
   .sidebar {
     position: relative;
     height: auto;
+    min-width: 0;
   }
   .dashboard-main {
     padding: var(--sp-5) var(--sp-4) var(--sp-6);
+    min-width: 0;
   }
 }
 
@@ -519,6 +541,22 @@ code {
   border-collapse: collapse;
   font-size: 13px;
   background: var(--surface);
+}
+
+/* Nine views render <table class="table"> straight into the page, with no
+   scroll container. A table's automatic layout has a minimum content width —
+   column headers plus cell padding — that does not shrink, so on a 390px
+   viewport the users table measured 587px and dragged the whole document into
+   horizontal scroll.
+   `display: block` on the table itself is the obvious fix and the wrong one:
+   once the table box goes away its `background` paints per row group instead
+   of across the full width, so the surface stopped short of the right-hand
+   columns. Replaced for tables that opt in through a `.table-scroll` parent. */
+.table-scroll {
+  display: block;
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 .table thead th {
   font-family: var(--font-mono);

@@ -1398,7 +1398,11 @@
 }
 .m-docs-layout {
   display: grid;
-  grid-template-columns: 220px 1fr;
+  /* `1fr` has an `auto` minimum, so the table of contents — a `<h4>` plus
+     its longest anchor — sets a floor the grid cannot shrink below, and on a
+     390px viewport the column stayed 586px wide, scrolling the page sideways.
+     `minmax(0, 1fr)` lets the column follow the viewport and the links wrap. */
+  grid-template-columns: 220px minmax(0, 1fr);
   gap: 48px;
 }
 .m-docs-toc {
@@ -1819,7 +1823,7 @@
     font-size: 28px;
   }
   .m-docs-layout {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
   .m-docs-toc {
     position: static;

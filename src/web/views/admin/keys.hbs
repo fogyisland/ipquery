@@ -21,34 +21,36 @@
   </form>
 </div>
 
-<table class="table">
-  <thead>
-    <tr>
-      <th class="table-check"><input type="checkbox" id="keys-check-all" aria-label="{{@root.req.t 'admin.keys.bulkSelectAll'}}"></th>
-      <th><a href="?sort={{ternary (eq sort.col 'id') (ternary (eq sort.dir 'asc') '-id' 'id') (ternary (eq sort.dir 'asc') 'id' '-id')}}">{{req.t 'admin.keys.col.id'}}</a></th>
-      <th>{{req.t 'admin.keys.col.owner'}}</th>
-      <th><a href="?sort={{ternary (eq sort.col 'label') (ternary (eq sort.dir 'asc') '-label' 'label') (ternary (eq sort.dir 'asc') 'label' '-label')}}">{{req.t 'admin.keys.col.label'}}</a></th>
-      <th><a href="?sort={{ternary (eq sort.col 'key_prefix') (ternary (eq sort.dir 'asc') '-key_prefix' 'key_prefix') (ternary (eq sort.dir 'asc') 'key_prefix' '-key_prefix')}}">{{req.t 'admin.keys.col.prefix'}}</a></th>
-      <th><a href="?sort={{ternary (eq sort.col 'created_at') (ternary (eq sort.dir 'asc') '-created_at' 'created_at') (ternary (eq sort.dir 'asc') 'created_at' '-created_at')}}">{{req.t 'admin.keys.col.created'}}</a></th>
-      <th>{{req.t 'admin.keys.col.revoked'}}</th>
-    </tr>
-  </thead>
-  <tbody>
-    {{#each keys}}
-    <tr>
-      <td class="table-check">
-        {{#unless this.revokedAt}}<input type="checkbox" name="ids" value="{{this.id}}" form="keys-bulk-form" class="keys-check-row" aria-label="{{@root.req.t 'admin.keys.bulkSelectOne' id=this.id}}">{{/unless}}
-      </td>
-      <td class="table-num">{{this.id}}</td>
-      <td>{{this.ownerEmail}}</td>
-      <td>{{this.label}}</td>
-      <td><code>{{this.keyPrefix}}</code></td>
-      <td class="table-num">{{formatDate this.createdAt}}</td>
-      <td class="table-num">{{#if this.revokedAt}}{{formatDate this.revokedAt}}{{else}}—{{/if}}</td>
-    </tr>
-    {{/each}}
-  </tbody>
-</table>
+<div class="table-scroll">
+  <table class="table">
+    <thead>
+      <tr>
+        <th class="table-check"><input type="checkbox" id="keys-check-all" aria-label="{{@root.req.t 'admin.keys.bulkSelectAll'}}"></th>
+        <th><a href="?sort={{ternary (eq sort.col 'id') (ternary (eq sort.dir 'asc') '-id' 'id') (ternary (eq sort.dir 'asc') 'id' '-id')}}">{{req.t 'admin.keys.col.id'}}</a></th>
+        <th>{{req.t 'admin.keys.col.owner'}}</th>
+        <th><a href="?sort={{ternary (eq sort.col 'label') (ternary (eq sort.dir 'asc') '-label' 'label') (ternary (eq sort.dir 'asc') 'label' '-label')}}">{{req.t 'admin.keys.col.label'}}</a></th>
+        <th><a href="?sort={{ternary (eq sort.col 'key_prefix') (ternary (eq sort.dir 'asc') '-key_prefix' 'key_prefix') (ternary (eq sort.dir 'asc') 'key_prefix' '-key_prefix')}}">{{req.t 'admin.keys.col.prefix'}}</a></th>
+        <th><a href="?sort={{ternary (eq sort.col 'created_at') (ternary (eq sort.dir 'asc') '-created_at' 'created_at') (ternary (eq sort.dir 'asc') 'created_at' '-created_at')}}">{{req.t 'admin.keys.col.created'}}</a></th>
+        <th>{{req.t 'admin.keys.col.revoked'}}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {{#each keys}}
+      <tr>
+        <td class="table-check">
+          {{#unless this.revokedAt}}<input type="checkbox" name="ids" value="{{this.id}}" form="keys-bulk-form" class="keys-check-row" aria-label="{{@root.req.t 'admin.keys.bulkSelectOne' id=this.id}}">{{/unless}}
+        </td>
+        <td class="table-num">{{this.id}}</td>
+        <td>{{this.ownerEmail}}</td>
+        <td>{{this.label}}</td>
+        <td><code>{{this.keyPrefix}}</code></td>
+        <td class="table-num">{{formatDate this.createdAt}}</td>
+        <td class="table-num">{{#if this.revokedAt}}{{formatDate this.revokedAt}}{{else}}—{{/if}}</td>
+      </tr>
+      {{/each}}
+    </tbody>
+  </table>
+</div>
 
 <script src="/assets/keys-bulk.js" defer></script>
 
