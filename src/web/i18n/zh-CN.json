@@ -1004,18 +1004,19 @@
     "authQueryNote": "?key= 形式仍可用,但 URL 中的密钥会进入服务器日志、代理日志和浏览器历史。推荐使用 Authorization 请求头 —— 它不会出现在任何日志中。使用 ?key= 的请求会收到 Deprecation 响应头。",
     "tocRateLimits": "速率限制",
     "rateLimitsTitle": "速率限制",
-    "rateLimitsBody": "所有请求都按来源 IP 计数限速。未携带密钥的请求与携带密钥的请求使用各自独立的计数桶，因此使用 API 密钥不会占用匿名请求的额度。",
+    "rateLimitsBody": "公共 API 按来源 IP 计数限速。携带 API 密钥与不携带密钥的请求共享同一额度——密钥用于鉴权，不用于放宽限速。网页与静态资源不受此限制。",
     "colScope": "适用范围",
     "colLimit": "额度",
     "rateLimits": {
-      "publicScope": "匿名请求",
-      "publicDesc": "未携带 API 密钥的请求，即上面 curl 示例所使用的额度。",
-      "keyedScope": "API 密钥",
-      "keyedDesc": "携带 API 密钥的请求（Authorization: Bearer 或 ?key=）。",
+      "publicScope": "公共 API",
+      "publicDesc": "/healthz、/lookup、/stats 三个端点共用一个计数器，按来源 IP 统计。匿名请求与携带 API 密钥的请求共享同一额度。",
+      "keyedScope": "网页与静态资源",
+      "keyedDesc": "HTML 页面、样式表与脚本不计入限流额度——一次页面加载可能拉取十余个资源，若与 API 共用额度，正常浏览就会触发 429。",
       "adminScope": "管理后台",
-      "adminDesc": "管理后台需要轮询 ETL 实时进度，因此使用独立且更大的额度，不会占用公开 API 的额度。"
+      "adminDesc": "管理后台需要轮询 ETL 实时进度，因此使用独立且更大的额度，不会占用公开 API 的额度。",
+      "notLimited": "不限"
     },
-    "rateLimitsScopeNote": "各范围使用相互独立的计数器。路由级限速会替换该路由的全局限速，而不是与之叠加；管理后台的轮询路由与公开 API 分开计费。"
+    "rateLimitsScopeNote": "限流按路径生效。网页与静态资源不受公共 API 额度约束；路由级限速会替换该路由的全局限速，而不是与之叠加；管理后台的轮询路由与公共 API 分开计费。"
   },
   "footer": {
     "copyright": "© {year} IPQuery",
@@ -1027,7 +1028,9 @@
       "body": "你没有权限访问此页面"
     },
     "404": {
-      "title": "页面未找到"
+      "title": "页面未找到",
+      "body": "该页面不存在或已被移动",
+      "home": "返回首页"
     },
     "500": {
       "title": "服务器错误",
