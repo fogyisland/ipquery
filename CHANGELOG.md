@@ -27,6 +27,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **随机 IP 生成器**: 一次性生成与连续运行（默认 60s 一次）两种模式，可从保留地址池取址
 - **管理控制台改版**: `/admin` 与 `/dashboard` 重设计为网络运维控制台；
   `/admin/settings` 改为 4 个哈希路由标签页（通用／安全／集成／系统）
+- **初始化向导重设计**: `/setup` 6 步向导重做为「开机自检日志 + 配置工作表」——
+  左侧 320px 暗色 rail（纵向编号步骤 + `[ok]`/`[>]` 标记 + 6 格进度条），
+  右侧亮色工作表（下划线输入、38rem 行宽）；新增 `src/web/assets/css/setup.css`
 - **CI**: GitHub Actions 工作流（Node 20），ESLint + Prettier 接入 `npm run lint`
 - **每 IP 探测审计**: `random_probe_log` 记录每次 Provider 扇出的完整响应，
   管理界面可按批次回看，见 migration 018
@@ -122,9 +125,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **两个集成测试滞后于已提交行为**: `lookup.auth` 未清 last_used_at 的进程内写节流表
   （60 秒节流把断言的写入吞掉）；`seed-data` 的 helper 仍按 migration 023 修复**前**的
   字节序（右填充）断言。均已对齐
+- **`{{req.t}}` 在 `{{#each}}` 内抛 "Missing helper: req.t"**: `req.t` 是 req 上的**属性查找**，
+  不是注册的 Handlebars helper，循环内上下文是迭代项，因此取不到。`/dashboard/keys`
+  对任何有过期密钥的用户直接 500（`{{else}}` 分支则静默渲染成空字符串）。
+  现统一改用 `{{../req.t}}` / `{{@root.req.t}}`
+- **审计日志写入 NaN**: `admin_audit_log.target_id` 是 BIGINT 列，但 6 处调用点审计的是
+  可读名字（Provider 名、IP 文本），`Number("ip-api")` 为 NaN，mysql2 发出字面量 `NaN`，
+  MySQL 报 `ER_BAD_FIELD_ERROR`，这 6 条审计记录全部丢失。现非数字 target 存 NULL，
+  可读值移入 `metadata.target`
+- **ETL 触发测试滞后于并发守卫**: `admin.etl.test.ts` 仍期望 trigger 新建运行行，
+  但 `01e7efd` 加的守卫会在存在 `running` 行时拒绝（正是该测试 `beforeAll` 造出的状态）。
+  现先收尾种子行，并补一条断言拒绝路径的用例
 
 ### Security
 
+- **`.env` 停止纳入版本控制**: `.env` 自 `b8a2e51`（2026-08-28）起被跟踪，
+  且带着明文数据库口令；`.gitignore` 里的 `.env` 规则对**已跟踪文件无效**，因此从未生效。
+  现已 `git rm --cached .env`，仓库只保留 `.env.example`，本地 `.env` 不再进入版本库。
+  历史中仍留有明文口令，数据库凭据需要轮换
 - 集成测试辅助函数统一为三 Cookie CSRF 协议（`csrf` + `csrf_issued` + `csrf_bind`），
   16 个测试文件同步适配
 - MCP 工具输出中的邮箱与 API Key 前缀默认脱敏
