@@ -1,0 +1,272 @@
+/* SPDX-License-Identifier: MIT */
+/* ──────────────────────────────────────────────────────────────────────────
+   IPQuery — error page surface (errors/403, errors/404, errors/500, csrf)
+
+   These views render under `layouts/public`, not `layouts/setup`. They share
+   the wizard's typographic vocabulary — .boot-step-head / .boot-lede /
+   .boot-actions — but not its shell: there is no rail, no six-step sequence,
+   and no 700px worksheet measure.
+
+   Keeping this file separate from setup.css is deliberate. The wizard pulls
+   two web fonts from fonts.googleapis.com, which needs an external-origin
+   exception in the CSP (style-src / font-src). An error page is what a user
+   lands on when something is already wrong — often when a proxy or DNS
+   filter is in the path — so it must not depend on a third-party request.
+   This file uses the same stack minus the webfonts, and no external origin.
+   ────────────────────────────────────────────────────────────────────────── */
+
+:root {
+  --err-ink: #0b1016;
+  --err-card: #ffffff;
+  --err-card-2: #f5f7f8;
+  --err-line: #d8dee3;
+  --err-line-strong: #b9c4cd;
+  --err-text: #16212b;
+  --err-muted: #5b6875;
+  --err-accent: #0c7189;
+  --err-accent-hover: #0a5e73;
+  --err-font-sans:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", "Noto Sans SC", Roboto,
+    sans-serif;
+  --err-font-mono:
+    ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+}
+
+/* The public shell is light chrome with a dark sidebar. Fix the scheme to
+   light so an OS dark-mode preference does not repaint the body out from
+   under the card. */
+body.layout-public {
+  color-scheme: light;
+  background: var(--err-card-2);
+  color: var(--err-text);
+  font-family: var(--err-font-sans);
+}
+
+/* ─── Page frame ─────────────────────────────────────────────────────────── */
+/* Inside `.dashboard-main` the card is centred and bounded, so a short error
+   message does not stretch across a 1600px monitor. */
+body.layout-public .dashboard-main {
+  padding: clamp(2rem, 6vw, 5rem);
+}
+
+body.layout-public .dashboard-main > * {
+  max-width: 34rem;
+}
+
+body.layout-public .boot-step-head {
+  margin: 0 0 2rem;
+}
+
+body.layout-public .boot-step-head h1 {
+  margin: 0 0 0.75rem;
+  font-size: clamp(1.5rem, 3vw, 2rem);
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  line-height: 1.2;
+  color: var(--err-text);
+  text-wrap: balance;
+}
+
+body.layout-public .boot-lede {
+  margin: 0;
+  font-size: 0.9375rem;
+  line-height: 1.7;
+  color: var(--err-muted);
+}
+
+body.layout-public .boot-actions {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-top: 1.75rem;
+}
+
+/* ─── Primary button ─────────────────────────────────────────────────────── */
+/* Not scoped beyond .layout-public: this file is loaded only by
+   layouts/public.hbs, so the admin and dashboard shells keep their own
+   .btn-primary from admin.css. */
+body.layout-public .btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0.6875rem 1.375rem;
+  border: 0;
+  border-radius: 8px;
+  background: var(--err-accent);
+  color: #ffffff;
+  font-family: var(--err-font-sans);
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: 1.3;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background 160ms ease;
+}
+
+body.layout-public .btn-primary:hover {
+  background: var(--err-accent-hover);
+}
+
+body.layout-public .btn-primary:focus-visible {
+  outline: 2px solid var(--err-accent);
+  outline-offset: 3px;
+}
+
+/* ─── CSRF error: wizard-shaped card ─────────────────────────────────────── */
+/* errors/csrf.hbs is reachable from the six setup POST handlers, so it
+   carries the step rail and the retry copy. Give it the same elevated card
+   the wizard uses, minus the rail column. */
+body.layout-public .boot-shell {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  min-height: 0;
+}
+
+body.layout-public .boot-frame {
+  max-width: 34rem;
+  padding: clamp(1.75rem, 4vw, 2.75rem);
+  border: 1px solid var(--err-line);
+  border-radius: 14px;
+  background: var(--err-card);
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.06), 0 16px 40px -24px rgba(16, 24, 40, 0.35);
+}
+
+body.layout-public .boot-step-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0 0 1rem;
+  padding: 0.25rem 0.625rem;
+  border-radius: 999px;
+  border: 1px solid rgba(12, 113, 137, 0.32);
+  background: rgba(12, 113, 137, 0.07);
+  font-family: var(--err-font-mono);
+  font-size: 0.6875rem;
+  font-weight: 500;
+  color: var(--err-accent);
+}
+
+/* ─── Key/value blocks (CSRF page lists the step list) ───────────────────── */
+body.layout-public .boot-kv {
+  margin: 0 0 1.5rem;
+  padding: 0.25rem 1.125rem;
+  border: 1px solid var(--err-line);
+  border-radius: 10px;
+  background: var(--err-card-2);
+}
+
+body.layout-public .boot-kv > div {
+  display: grid;
+  grid-template-columns: minmax(7rem, max-content) minmax(0, 1fr);
+  gap: 1.5rem;
+  padding: 0.75rem 0;
+}
+
+body.layout-public .boot-kv > div + div {
+  border-top: 1px solid var(--err-line);
+}
+
+body.layout-public .boot-kv dt {
+  font-size: 0.8125rem;
+  color: var(--err-muted);
+}
+
+body.layout-public .boot-kv dd {
+  margin: 0;
+  font-family: var(--err-font-mono);
+  font-size: 0.8125rem;
+  color: var(--err-text);
+  overflow-wrap: anywhere;
+}
+
+/* ─── Alerts and notes ───────────────────────────────────────────────────── */
+body.layout-public .boot-alert {
+  margin: 0 0 1.5rem;
+  padding: 0.875rem 1rem;
+  border: 1px solid #e7b6b2;
+  border-radius: 10px;
+  background: #fdf3f2;
+}
+
+body.layout-public .boot-note {
+  margin: 0 0 1.5rem;
+  padding: 0.875rem 1rem;
+  border: 1px solid var(--err-line);
+  border-radius: 10px;
+  background: var(--err-card-2);
+  font-size: 0.8125rem;
+  line-height: 1.65;
+  color: var(--err-muted);
+}
+
+body.layout-public .form-error {
+  margin: 0;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  line-height: 1.6;
+  color: #ad423a;
+}
+
+/* ─── Secondary link ─────────────────────────────────────────────────────── */
+body.layout-public .boot-back {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0.5rem 0.25rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--err-muted);
+  text-decoration: none;
+  transition: color 160ms ease;
+}
+
+body.layout-public .boot-back:hover {
+  color: var(--err-accent);
+}
+
+body.layout-public .boot-back:focus-visible {
+  outline: 2px solid var(--err-accent);
+  outline-offset: 3px;
+}
+
+/* ─── Responsive ─────────────────────────────────────────────────────────── */
+@media (max-width: 700px) {
+  body.layout-public .dashboard-main {
+    padding: 1.5rem 1rem;
+  }
+
+  body.layout-public .boot-frame {
+    padding: 1.5rem 1.125rem;
+    border-radius: 12px;
+  }
+
+  body.layout-public .boot-kv > div {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.25rem;
+  }
+
+  body.layout-public .boot-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  /* `width: 100%` resolves against the content box, so the button reaches the
+     full inner width and then adds nothing — but the container is a flex
+     column with `box-sizing: border-box` on the button while .dashboard-main
+     keeps its own padding, and the pair overflowed by 28px at 390px. Letting
+     the stretch alignment size the button keeps it inside the column. */
+  body.layout-public .boot-actions .btn-primary {
+    width: auto;
+    max-width: 100%;
+  }
+}
+
+/* ─── Reduced motion ─────────────────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  body.layout-public .btn-primary,
+  body.layout-public .boot-back {
+    transition-duration: 0.01ms;
+  }
+}
