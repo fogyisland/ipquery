@@ -47,6 +47,8 @@
     const rowsTotal = Number(container.getAttribute("data-rows-total") || 0);
     const stage = container.getAttribute("data-stage") || "download";
 
+    const dlBar = container.querySelector("#etl-progress-download-bar");
+    const inBar = container.querySelector("#etl-progress-insert-bar");
     const dlFill = container.querySelector("#etl-progress-download-fill");
     const dlText = container.querySelector("#etl-progress-download-text");
     const inFill = container.querySelector("#etl-progress-insert-fill");
@@ -59,6 +61,10 @@
       dlFill.style.width = pct(downloadDone, downloadTotal) + "%";
       dlText.textContent = fmtBytes(downloadDone) + " / " + fmtBytes(downloadTotal)
         + " (" + pct(downloadDone, downloadTotal) + "%)";
+      if (dlBar) {
+        dlBar.setAttribute("aria-valuenow", String(pct(downloadDone, downloadTotal)));
+        dlBar.setAttribute("aria-valuetext", dlText.textContent);
+      }
     } else {
       dlFill.style.width = downloadDone > 0 ? "100%" : "0%";
       dlText.textContent = downloadDone > 0 ? fmtBytes(downloadDone) + " —" : "";
@@ -69,6 +75,10 @@
       inFill.style.width = pct(rowsDone, rowsTotal) + "%";
       inText.textContent = fmtRows(rowsDone) + " / " + fmtRows(rowsTotal)
         + " (" + pct(rowsDone, rowsTotal) + "%)";
+      if (inBar) {
+        inBar.setAttribute("aria-valuenow", String(pct(rowsDone, rowsTotal)));
+        inBar.setAttribute("aria-valuetext", inText.textContent);
+      }
     } else {
       inFill.style.width = "0%";
       inText.textContent = rowsDone > 0 ? fmtRows(rowsDone) + " —" : "0";

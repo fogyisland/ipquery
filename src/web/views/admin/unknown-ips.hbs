@@ -130,10 +130,10 @@
       </div>
     </div>
     <div class="runner-card-actions">
-      <form method="GET" action="/admin/ingest/backfill/confirm" style="display:inline">
+      <form method="GET" action="/admin/ingest/backfill/confirm" class="inline-form">
         <button type="submit" class="btn-primary">{{@root.req.t 'admin.unknownIps.runner.backfillNow'}}</button>
       </form>
-      <form method="POST" action="/admin/ingest/generate" style="display:inline"
+      <form method="POST" action="/admin/ingest/generate" class="inline-form"
             data-confirm="{{@root.req.t 'admin.unknownIps.generate.confirm'}}">
         <input type="hidden" name="csrf" value="{{csrfToken}}">
         <input type="hidden" name="count" value="10">
@@ -142,7 +142,7 @@
     </div>
     <div class="runner-card-queue">
       <span class="runner-card-queue-label">{{@root.req.t 'admin.unknownIps.runner.queueActions'}}</span>
-      <form method="POST" action="/admin/ingest/queue/clear" style="display:inline"
+      <form method="POST" action="/admin/ingest/queue/clear" class="inline-form"
             data-confirm="确定清空所有待回灌 IP?已入库的 IP 不会被删除。">
         <input type="hidden" name="csrf" value="{{csrfToken}}">
         <button type="submit" class="btn-secondary" {{#unless stats.pending}}disabled{{/unless}}>{{@root.req.t 'admin.unknownIps.runner.clearQueue'}}</button>
@@ -229,7 +229,7 @@
     {{!-- Kick form lives outside the config form so its submit doesn't
          accidentally POST the scheduler form fields. The disabled
          attribute mirrors the config form's button via the JS below. --}}
-    <form id="scheduler-kick-form" method="POST" action="/admin/ingest/generate/continuous" style="display:inline"
+    <form id="scheduler-kick-form" method="POST" action="/admin/ingest/generate/continuous" class="inline-form"
           data-confirm="{{@root.req.t 'admin.unknownIps.scheduler.runNowConfirm'}}">
       <input type="hidden" name="csrf" value="{{csrfToken}}">
       <input type="hidden" name="kick" value="1">
@@ -237,7 +237,7 @@
 
     {{!-- Continuous toggle + metrics row --}}
     <div class="scheduler-card-stats">
-      <form method="POST" action="/admin/ingest/generate/continuous" style="display:inline">
+      <form method="POST" action="/admin/ingest/generate/continuous" class="inline-form">
         <input type="hidden" name="csrf" value="{{csrfToken}}">
         <input type="hidden" name="enabled" value="{{#if randomGenState.enabled}}off{{else}}on{{/if}}">
         <button type="submit" class="btn-{{#if randomGenState.enabled}}secondary{{else}}primary{{/if}}">
@@ -519,7 +519,7 @@
         <td><span class="admin-tag admin-tag--warn">{{this.errorCode}}</span></td>
         <td class="failure-log-reason" title="{{this.rawResponse}}">{{this.reason}}</td>
         <td>
-          <form method="POST" action="/admin/ingest/failure-logs/requeue" style="display:inline">
+          <form method="POST" action="/admin/ingest/failure-logs/requeue" class="inline-form">
             <input type="hidden" name="csrf" value="{{../../csrfToken}}">
             <input type="hidden" name="ip" value="{{this.ipText}}">
             <button type="submit" class="button">{{@root.req.t 'admin.unknownIps.failureLogs.requeue'}}</button>

@@ -1,13 +1,14 @@
 {{!-- SPDX-License-Identifier: MIT --}}
 <h1>{{req.t 'dashboard.history.title'}}</h1>
-<form method="GET" action="/dashboard/history">
-  <select name="status">
+<form method="GET" action="/dashboard/history" class="filter-bar">
+  <label class="filter-label" for="history-status">{{req.t 'dashboard.history.col.status'}}</label>
+  <select id="history-status" name="status" class="filter-select">
     <option value="">{{req.t 'dashboard.history.filter.all'}}</option>
     <option value="hit" {{#if (eq status 'hit')}}selected{{/if}}>hit</option>
     <option value="miss" {{#if (eq status 'miss')}}selected{{/if}}>miss</option>
     <option value="invalid" {{#if (eq status 'invalid')}}selected{{/if}}>invalid</option>
   </select>
-  <button type="submit">{{req.t 'common.search'}}</button>
+  <button type="submit" class="btn-secondary">{{req.t 'common.search'}}</button>
 </form>
 {{#if rows.length}}
 <table class="table">

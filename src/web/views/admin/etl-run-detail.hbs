@@ -214,12 +214,12 @@
   data-stage="{{currentStage}}">
   <div class="etl-progress-row">
     <div class="etl-progress-label">{{req.t 'admin.etl.stages.download'}}</div>
-    <div class="etl-progress-bar"><div class="etl-progress-bar-fill" id="etl-progress-download-fill"></div></div>
+    <div class="etl-progress-bar" role="progressbar" aria-label="Download progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="etl-progress-download-bar"><div class="etl-progress-bar-fill" id="etl-progress-download-fill"></div></div>
     <div class="etl-progress-text" id="etl-progress-download-text">—</div>
   </div>
   <div class="etl-progress-row">
     <div class="etl-progress-label">{{req.t 'admin.etl.stages.insert'}}</div>
-    <div class="etl-progress-bar"><div class="etl-progress-bar-fill" id="etl-progress-insert-fill"></div></div>
+    <div class="etl-progress-bar" role="progressbar" aria-label="Insert progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="etl-progress-insert-bar"><div class="etl-progress-bar-fill" id="etl-progress-insert-fill"></div></div>
     <div class="etl-progress-text" id="etl-progress-insert-text">—</div>
   </div>
   <div class="etl-progress-stage" id="etl-progress-stage"></div>

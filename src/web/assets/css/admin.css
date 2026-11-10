@@ -2525,3 +2525,14 @@ dl.settings-dl dd {
   border: var(--hairline);
   min-width: 80px;
 }
+
+/* ─── Inline action forms ───────────────────────────────────────────────── */
+/* Buttons row forms (enable/disable/delete/kick …) render inline next to
+   each other without layout impact — replaces scattered style="display:inline". */
+.inline-form {
+  display: inline-block;
+  margin: 0;
+}
+.push-right {
+  margin-left: auto;
+}

@@ -45,10 +45,16 @@
 
   function activate(tabId) {
     document.querySelectorAll(".settings-tab-link").forEach(function (el) {
-      el.classList.toggle("is-active", el.dataset.tab === tabId);
+      const isActive = el.dataset.tab === tabId;
+      el.classList.toggle("is-active", isActive);
+      if (isActive) el.setAttribute("aria-current", "page");
+      else el.removeAttribute("aria-current");
     });
     document.querySelectorAll(".settings-tab-pane").forEach(function (el) {
-      el.classList.toggle("is-active", el.dataset.tab === tabId);
+      const isActive = el.dataset.tab === tabId;
+      el.classList.toggle("is-active", isActive);
+      if (isActive) el.setAttribute("aria-current", "page");
+      else el.removeAttribute("aria-current");
     });
   }
 

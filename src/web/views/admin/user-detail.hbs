@@ -17,20 +17,20 @@
   </div>
 {{/if}}
 
-<form method="POST" action="/admin/users/{{user.id}}/enable" style="display:inline">
+<form method="POST" action="/admin/users/{{user.id}}/enable" class="inline-form">
   <input type="hidden" name="csrf" value="{{req.csrfToken}}" />
   <button type="submit">{{req.t "admin.users.action.enable"}}</button>
 </form>
-<form method="POST" action="/admin/users/{{user.id}}/disable" style="display:inline">
+<form method="POST" action="/admin/users/{{user.id}}/disable" class="inline-form">
   <input type="hidden" name="csrf" value="{{req.csrfToken}}" />
   <button type="submit">{{req.t "admin.users.action.disable"}}</button>
 </form>
-<form method="POST" action="/admin/users/{{user.id}}/verify-email" style="display:inline">
+<form method="POST" action="/admin/users/{{user.id}}/verify-email" class="inline-form">
   <input type="hidden" name="csrf" value="{{req.csrfToken}}" />
   <button type="submit">{{req.t "admin.users.action.verify"}}</button>
 </form>
-<form method="POST" action="/admin/users/{{user.id}}/reset-password" style="display:inline">
+<form method="POST" action="/admin/users/{{user.id}}/reset-password" class="inline-form">
   <input type="hidden" name="csrf" value="{{req.csrfToken}}" />
   <button type="submit">{{req.t "admin.users.action.resetPassword"}}</button>
 </form>
-<a href="/admin/users/{{user.id}}/delete/confirm" style="display:inline">{{req.t "admin.users.action.delete"}}</a>
+<a href="/admin/users/{{user.id}}/delete/confirm" class="inline-form">{{req.t "admin.users.action.delete"}}</a>

@@ -1117,7 +1117,7 @@
   border: 1px solid var(--m-border);
   color: var(--m-ink-2);
   cursor: pointer;
-  transition: all 120ms ease;
+  transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
 }
 .m-try-chip:hover {
   background: var(--m-accent-soft);
