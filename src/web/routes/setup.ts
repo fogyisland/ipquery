@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-import type { FastifyInstance, FastifyRequest } from "fastify";
+import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import type { RowDataPacket } from "mysql2";
 import * as path from "node:path";
 import { verifyCsrfRequest } from "../plugins/csrf";
@@ -15,20 +15,40 @@ const SITE_NAME_MAX = 128;
 const TAGLINE_MAX = 256;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-// Build the 6-step indicator. Labels are pre-translated here (Phase B Task 6
-// finding: avoid {{req.t '...'}} inside {{#each}}).
+// Build the 6-step boot-log indicator. Labels are pre-translated here (Phase B
+// Task 6 finding: avoid {{req.t '...'}} inside {{#each}}). `done` marks every
+// step before the current one so the rail can show [ok] and filled ticks.
 function buildSteps(
   req: FastifyRequest,
   current: number,
-): Array<{ n: number; label: string; href: string; active: boolean }> {
-  return [
-    { n: 1, label: req.t("setup.steps.1"), href: "/setup", active: current === 1 },
-    { n: 2, label: req.t("setup.steps.2"), href: "/setup/database", active: current === 2 },
-    { n: 3, label: req.t("setup.steps.3"), href: "/setup/site", active: current === 3 },
-    { n: 4, label: req.t("setup.steps.4"), href: "/setup/admin", active: current === 4 },
-    { n: 5, label: req.t("setup.steps.5"), href: "/setup/seed", active: current === 5 },
-    { n: 6, label: req.t("setup.steps.6"), href: "/setup/complete", active: current === 6 },
+): Array<{ n: number; label: string; href: string; active: boolean; done: boolean }> {
+  const steps: Array<[string, string]> = [
+    [req.t("setup.steps.1"), "/setup"],
+    [req.t("setup.steps.2"), "/setup/database"],
+    [req.t("setup.steps.3"), "/setup/site"],
+    [req.t("setup.steps.4"), "/setup/admin"],
+    [req.t("setup.steps.5"), "/setup/seed"],
+    [req.t("setup.steps.6"), "/setup/complete"],
   ];
+  return steps.map(([label, href], index) => {
+    const n = index + 1;
+    return { n, label, href, active: n === current, done: n < current };
+  });
+}
+
+// Every CSRF failure still renders inside the boot console. Give the layout
+// the same rail/step/total data its GET page uses so a 403 never shows an
+// empty step list or a broken progress line.
+function renderCsrfError(req: FastifyRequest, reply: FastifyReply, step: number) {
+  return reply.code(403).view("errors/csrf.hbs", {
+    layout: "layouts/setup",
+    title: req.t("error.csrf.title"),
+    csrfToken: req.csrfToken,
+    steps: buildSteps(req, step),
+    step,
+    total: 6,
+    req,
+  });
 }
 
 // Map ?flash=success|error on redirect to a flash object whose message is the
@@ -163,7 +183,7 @@ export default async function setupRoutes(app: FastifyInstance): Promise<void> {
   // POST /setup/database — probe app.pool. On success → /setup/site.
   app.post("/setup/database", async (req, reply) => {
     if (!verifyCsrfRequest(req)) {
-      return reply.code(403).view("errors/csrf.hbs", { layout: "layouts/setup", req });
+      return renderCsrfError(req, reply, 2);
     }
     let conn;
     try {
@@ -208,7 +228,7 @@ export default async function setupRoutes(app: FastifyInstance): Promise<void> {
   // POST /setup/site — save site.name and site.tagline.
   app.post("/setup/site", async (req, reply) => {
     if (!verifyCsrfRequest(req)) {
-      return reply.code(403).view("errors/csrf.hbs", { layout: "layouts/setup", req });
+      return renderCsrfError(req, reply, 3);
     }
     const body = req.body as { name?: string; tagline?: string };
     const name = (body.name ?? "").trim();
@@ -256,7 +276,7 @@ export default async function setupRoutes(app: FastifyInstance): Promise<void> {
   // POST /setup/admin — bootstrap admin via bootstrapAdmin().
   app.post("/setup/admin", async (req, reply) => {
     if (!verifyCsrfRequest(req)) {
-      return reply.code(403).view("errors/csrf.hbs", { layout: "layouts/setup", req });
+      return renderCsrfError(req, reply, 4);
     }
     const body = req.body as { email?: string; password?: string; displayName?: string };
     const email = (body.email ?? "").trim().toLowerCase();
@@ -341,7 +361,7 @@ export default async function setupRoutes(app: FastifyInstance): Promise<void> {
   // backwards compat with the existing test suite.
   app.post("/setup/seed", async (req, reply) => {
     if (!verifyCsrfRequest(req)) {
-      return reply.code(403).view("errors/csrf.hbs", { layout: "layouts/setup", req });
+      return renderCsrfError(req, reply, 5);
     }
     const body = req.body as { mode?: string; load?: string };
     await runMigrations(app.pool);
@@ -423,7 +443,7 @@ export default async function setupRoutes(app: FastifyInstance): Promise<void> {
   // POST /setup/complete — flip initialized_at; guard re-reads it onResponse.
   app.post("/setup/complete", async (req, reply) => {
     if (!verifyCsrfRequest(req)) {
-      return reply.code(403).view("errors/csrf.hbs", { layout: "layouts/setup", req });
+      return renderCsrfError(req, reply, 6);
     }
     await markInitialized(app.pool);
     return reply.code(302).header("Location", "/login?flash=success").send();

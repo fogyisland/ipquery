@@ -1,3 +1,8 @@
-{{! SPDX-License-Identifier: MIT }}
-<h1>{{req.t "error.csrf.title"}}</h1>
-<p>{{req.t "error.csrf.body"}}</p>
+{{!-- SPDX-License-Identifier: MIT --}}
+<header class="boot-step-head">
+  <h1>{{req.t "error.csrf.title"}}</h1>
+  <p class="boot-lede">{{req.t "error.csrf.body"}}</p>
+</header>
+<div class="boot-actions">
+  <a href="/setup" class="btn-primary">{{req.t "setup.boot.backToStart"}}</a>
+</div>
