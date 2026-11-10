@@ -9,6 +9,7 @@ import staticPlugin from "@fastify/static";
 import * as path from "node:path";
 import type { AppConfig } from "../config";
 import { createPool } from "../storage/mysql";
+import { runMigrations } from "../storage/migrations/runner";
 import { registerView } from "../web/plugins/view";
 import { registerI18n } from "../web/plugins/i18n";
 import { registerSecurityHeaders } from "../web/plugins/security";
@@ -194,6 +195,18 @@ export async function buildServer(
       app.log.warn({ err }, "failed to close the database pool");
     }
   });
+
+  // A brand-new install points at an empty database: no tables at all. The
+  // first-run wizard is what walks the operator through setup, but two of its
+  // six steps read tables (etl_runs, users) before any POST has run the
+  // migrations — /setup/seed and /setup/complete both 500'd on a fresh
+  // database, leaving the wizard unfinishable. Bootstrap the schema here so
+  // that the very first request to the wizard lands on a working install.
+  //
+  // Migration is idempotent and cheap when everything is already applied (one
+  // SELECT against schema_migrations), so this costs a single round trip on
+  // every subsequent boot. The wizard re-runs it at seed time regardless.
+  await runMigrations(app.pool);
 
   await registerSetupGuard(app);
 
