@@ -1,3 +1,7 @@
 {{! SPDX-License-Identifier: MIT }}
-<h1>{{req.t "error.500.title"}}</h1>
-<p>{{req.t "error.500.body"}}</p>
+{{!-- Same vocabulary as errors/csrf.hbs (.boot-step-head / .boot-lede) so the
+     error pages read as one family. --}}
+<header class="boot-step-head">
+  <h1>{{req.t "error.500.title"}}</h1>
+  <p class="boot-lede">{{req.t "error.500.body"}}</p>
+</header>

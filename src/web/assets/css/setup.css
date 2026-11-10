@@ -439,8 +439,36 @@ body.layout-setup .boot-alert .form-error {
   margin-top: 2.5rem;
 }
 
-body.layout-setup button[type="submit"],
-body.layout-setup .btn-primary {
+body.layout-setup button[type="submit"] {
+  display: inline-block;
+  padding: 0.75rem 1.5rem;
+  border: 0;
+  border-radius: 2px;
+  background: var(--boot-cyan);
+  color: #ffffff;
+  font-family: var(--boot-font-sans);
+  font-size: 0.9375rem;
+  font-weight: 600;
+  letter-spacing: 0;
+  line-height: 1.3;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background 140ms ease;
+}
+
+/* The primary button is global, not `body.layout-setup`-scoped: the error
+   pages (errors/csrf.hbs, errors/404.hbs, errors/403.hbs) render with
+   `layouts/public`, whose body class is `layout-public`, and they reuse the
+   boot vocabulary — .boot-step-head, .boot-lede, .boot-actions. Scoping the
+   button to the wizard shell left those pages with forms.css's 12px mono
+   chip sitting under a large boot title: two different design languages on
+   one page.
+
+   Making it global is safe because this file is loaded by exactly two
+   shells — layouts/setup.hbs and layouts/public.hbs. The admin, dashboard,
+   app and marketing shells never load it, so their own .btn-primary
+   styling (admin.css, style.css) is untouched. */
+.btn-primary {
   display: inline-block;
   padding: 0.75rem 1.5rem;
   border: 0;
@@ -458,13 +486,13 @@ body.layout-setup .btn-primary {
 }
 
 body.layout-setup button[type="submit"]:hover,
-body.layout-setup .btn-primary:hover {
+.btn-primary:hover {
   background: #0a5e73;
 }
 
 body.layout-setup button[type="submit"]:focus-visible,
-body.layout-setup .btn-primary:focus-visible,
-body.layout-setup .boot-back:focus-visible {
+.btn-primary:focus-visible,
+.boot-back:focus-visible {
   outline: 2px solid var(--boot-cyan);
   outline-offset: 3px;
 }

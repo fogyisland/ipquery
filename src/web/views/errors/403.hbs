@@ -1,3 +1,10 @@
 {{! SPDX-License-Identifier: MIT }}
-<h1>{{req.t "error.403.title"}}</h1>
-<p>{{req.t "error.403.body"}}</p>
+{{!-- Same vocabulary as errors/csrf.hbs (.boot-step-head / .boot-lede /
+     .boot-actions) so the error pages read as one family. --}}
+<header class="boot-step-head">
+  <h1>{{req.t "error.403.title"}}</h1>
+  <p class="boot-lede">{{req.t "error.403.body"}}</p>
+</header>
+<div class="boot-actions">
+  <a href="/login" class="btn-primary">{{req.t "common.login"}}</a>
+</div>
