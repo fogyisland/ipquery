@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
+import { sendErrorPage } from "../errors/render";
 
 const COOKIE_BASE = { httpOnly: true, sameSite: "lax" as const, path: "/" };
 
@@ -32,8 +33,14 @@ export async function registerAuthGuards(app: FastifyInstance): Promise<void> {
       if (!req.user) return reply.code(302).redirect(`/login?next=${encodeURIComponent(req.url)}`);
       if (req.user.isDisabled) return reply.code(302).redirect("/login?disabled=1");
     } else if (isAdminPath(url)) {
-      if (!req.user || req.user.role !== "admin")
-        return reply.code(403).view("errors/403.hbs", { layout: "layouts/public", req });
+      // A signed-out visitor without the admin role is answered with 404,
+      // not 403. The two cases are indistinguishable from the outside, and
+      // 403 would confirm that /admin exists and that /admin/users,
+      // /admin/settings, … are real routes — a free map of the admin console
+      // for anyone who signs up. The console's existence is not a secret to
+      // an operator, but it need not be a directory listing for every
+      // registered user.
+      if (!req.user || req.user.role !== "admin") return sendErrorPage(reply, 404, "notFound");
       if (req.user.isDisabled) return reply.code(302).redirect("/login?disabled=1");
     }
   });
