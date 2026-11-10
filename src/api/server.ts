@@ -62,6 +62,28 @@ export function redactKeyParam(url: string): string {
   return url.replace(/([?&])key=[^&]*/gi, "$1key=REDACTED");
 }
 
+/**
+ * The public API paths — the only routes the global rate limit applies to.
+ *
+ * These three are what an external caller hits: a range lookup per
+ * request, an unauthenticated endpoint by design. They are the abuseable
+ * surface, and they are what the 60/minute budget exists to protect.
+ *
+ * Everything else — HTML pages, static assets, the MCP tool surface
+ * (a separate process), and admin routes (which carry their own
+ * route-level limits) — is either cheap to serve or already limited
+ * more precisely.
+ *
+ * The comparison is on the path alone, query string stripped, so
+ * `/lookup?ip=…` is still limited.
+ */
+const PUBLIC_API_PATHS = new Set(["/healthz", "/lookup", "/stats"]);
+
+function isPublicApiPath(url: string): boolean {
+  const pathOnly = url.split("?")[0]!;
+  return PUBLIC_API_PATHS.has(pathOnly);
+}
+
 export async function buildServer(
   cfg: AppConfig,
   opts?: { extraRoutes?: (app: FastifyInstance) => Promise<void> | void },
@@ -118,7 +140,34 @@ export async function buildServer(
 
   await app.register(cors, { origin: true });
   await app.register(compress);
-  await app.register(rateLimit, { max: cfg.api.rateLimit, timeWindow: "1 minute" });
+  await app.register(rateLimit, {
+    max: cfg.api.rateLimit,
+    timeWindow: "1 minute",
+    // Only the public API is rate limited. Static assets and HTML pages
+    // are not.
+    //
+    // The global limit counts every request by source IP, so a single
+    // page load spent several of the 60/minute allowance on stylesheets
+    // and scripts. An anonymous visitor could burn most of the budget on
+    // CSS and then be refused the page that was meant to deliver it.
+    //
+    // What a 429 on an asset looks like is worse than a slow page: the
+    // rate limiter answers with a JSON body, so the browser reports
+    // "Refused to apply style ... MIME type 'application/json' is not a
+    // supported stylesheet MIME type" — the stylesheet silently never
+    // applies and the page renders unstyled.
+    //
+    // The split follows what actually needs protecting. The API is the
+    // expensive, abuseable surface: it does a range lookup per request
+    // and is what an external caller would hammer. Page and asset
+    // requests are bounded by human browsing speed and cost a cheap
+    // render or a file read.
+    //
+    // The exemption is by path, so it cannot be used to dodge the limit
+    // on the API itself. Admin routes keep their own route-level limits
+    // (see ADMIN_POLL_RATE_LIMIT in web/routes/admin.ts).
+    allowList: (request) => !isPublicApiPath(request.url),
+  });
 
   app.decorate("cfg", cfg);
   app.decorate("pool", createPool(cfg));

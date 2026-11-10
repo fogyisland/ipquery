@@ -1003,18 +1003,19 @@
     "authQueryNote": "The ?key= form still works, but a key in the URL ends up in server logs, proxy logs and browser history. Prefer the Authorization header — it stays out of every log. Requests using ?key= receive a Deprecation header.",
     "tocRateLimits": "Rate limits",
     "rateLimitsTitle": "Rate limits",
-    "rateLimitsBody": "Requests are rate limited per source IP address. A keyless request and a key-authenticated request are counted in separate buckets, so an API key does not consume the anonymous budget.",
+    "rateLimitsBody": "The public API is rate limited per source IP. Requests carrying an API key and requests without one share the same budget — a key authenticates you, it does not raise your limit. Web pages and static assets are not subject to this limit.",
     "colScope": "Scope",
     "colLimit": "Limit",
     "rateLimits": {
-      "publicScope": "Anonymous",
-      "publicDesc": "Requests without an API key. This is the bucket that applies to the curl examples above.",
-      "keyedScope": "API key",
-      "keyedDesc": "Requests carrying an API key (Authorization: Bearer or ?key=).",
+      "publicScope": "Public API",
+      "publicDesc": "/healthz, /lookup and /stats share one counter, keyed by source IP. Anonymous requests and requests carrying an API key draw on the same budget.",
+      "keyedScope": "Web pages and static assets",
+      "keyedDesc": "HTML pages, stylesheets and scripts are not rate limited. A single page load can pull a dozen resources, and sharing the API budget with them would turn ordinary browsing into a 429.",
       "adminScope": "Admin panel",
-      "adminDesc": "The admin panel polls live ETL progress, so it has its own, larger bucket and never consumes the public budget."
+      "adminDesc": "The admin panel polls live ETL progress, so it has its own, larger bucket and never consumes the public budget.",
+      "notLimited": "Not limited"
     },
-    "rateLimitsScopeNote": "Each scope has an independent counter. A route-level limit replaces the global limit for that route rather than adding to it, and the admin panel's polling routes are budgeted separately from the public API."
+    "rateLimitsScopeNote": "Rate limiting is by path. Web pages and static assets are outside the public API budget. A route-level limit replaces the global limit for that route rather than adding to it, and the admin panel’s polling routes are budgeted separately from the public API."
   },
   "footer": {
     "copyright": "© {year} IPQuery",
@@ -1026,7 +1027,9 @@
       "body": "You do not have permission to view this page"
     },
     "404": {
-      "title": "Not found"
+      "title": "Not found",
+      "body": "This page does not exist or has been moved",
+      "home": "Back to home"
     },
     "500": {
       "title": "Server error",

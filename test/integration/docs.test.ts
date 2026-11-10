@@ -45,13 +45,16 @@ describe("/docs API reference", () => {
     // The rate-limits section and its table-of-contents entry.
     expect(r.text).toContain('id="ratelimits"');
     expect(r.text).toContain('href="#ratelimits"');
-    // The three scopes.
-    expect(r.text).toContain("Anonymous");
-    expect(r.text).toContain("API key");
+    // The three scopes: the public API, the pages and assets that are
+    // outside the budget, and the admin panel's own bucket.
+    expect(r.text).toContain("Public API");
+    expect(r.text).toContain("Web pages and static assets");
     expect(r.text).toContain("Admin panel");
     // The number comes from the server's config, not a hardcoded string —
     // the default is 60/min, and the test config leaves it there.
     expect(r.text).toContain("<code>60/min</code>");
+    // Pages and assets carry no number, because they carry no limit.
+    expect(r.text).toContain("<code>Not limited</code>");
     // The note about route-level limits replacing rather than stacking.
     expect(r.text).toContain("replaces the global limit");
   });
@@ -60,7 +63,8 @@ describe("/docs API reference", () => {
     const r = await request(app.server).get("/docs").set("cookie", "lang=zh-CN");
     expect(r.status).toBe(200);
     expect(r.text).toContain('id="ratelimits"');
-    expect(r.text).toContain("匿名请求");
+    expect(r.text).toContain("公共 API");
+    expect(r.text).toContain("网页与静态资源");
     expect(r.text).toContain("管理后台");
   });
 });
