@@ -36,7 +36,8 @@ afterAll(async () => {
   await dropTestDb(td);
 });
 
-async function csrfOf(): Promise<{ cookie: string; token: string }> {  const r = await request(app.server)
+async function csrfOf(): Promise<{ cookie: string; token: string }> {
+  const r = await request(app.server)
     .get("/admin/etl/runs")
     .set("Cookie", "sid=" + adminSid);
   const cookies = r.headers["set-cookie"] as string[];
@@ -121,10 +122,9 @@ describe("admin ETL", () => {
       expect(r.headers.location).toContain(`/admin/etl/runs/${stuckRunId}`);
       expect(await countEtlRuns()).toBe(before);
     } finally {
-      await app.pool.query(
-        `UPDATE etl_runs SET status = 'failed', finished_at = NOW(3) WHERE id = ?`,
-        [stuckRunId],
-      );
+      await app.pool.query(`UPDATE etl_runs SET status = 'failed', finished_at = NOW(3) WHERE id = ?`, [
+        stuckRunId,
+      ]);
     }
   });
 

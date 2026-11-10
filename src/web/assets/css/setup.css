@@ -164,7 +164,10 @@ body.layout-setup .setup-step a {
   border-left: 2px solid transparent;
   color: var(--boot-ink-muted);
   text-decoration: none;
-  transition: color 140ms ease, background 140ms ease, border-color 140ms ease;
+  transition:
+    color 140ms ease,
+    background 140ms ease,
+    border-color 140ms ease;
 }
 
 body.layout-setup .setup-step a:hover {
@@ -392,7 +395,9 @@ body.layout-setup .boot-form .form-field input {
   color: var(--boot-text);
   font-family: var(--boot-font-sans);
   font-size: 1rem;
-  transition: border-color 140ms ease, box-shadow 140ms ease;
+  transition:
+    border-color 140ms ease,
+    box-shadow 140ms ease;
 }
 
 body.layout-setup .boot-form .form-field input:hover {
@@ -470,7 +475,9 @@ body.layout-setup .boot-back:focus-visible {
   text-decoration: none;
   border-bottom: 1px solid var(--boot-line-strong);
   padding-bottom: 2px;
-  transition: color 140ms ease, border-color 140ms ease;
+  transition:
+    color 140ms ease,
+    border-color 140ms ease;
 }
 
 .boot-back:hover {
@@ -567,7 +574,9 @@ body.layout-setup .flash-info {
   border-radius: 2px;
   background: var(--boot-paper-2);
   cursor: pointer;
-  transition: border-color 140ms ease, background 140ms ease;
+  transition:
+    border-color 140ms ease,
+    background 140ms ease;
 }
 
 .boot-option-label:hover {
