@@ -1,15 +1,19 @@
-{{! SPDX-License-Identifier: MIT }}
-<section class="setup-step">
+{{!-- SPDX-License-Identifier: MIT --}}
+<header class="boot-step-head">
   <h1>{{req.t "setup.complete.title"}}</h1>
-  <p>{{req.t "setup.complete.body"}}</p>
-  {{#if error}}<p class="form-error">{{error}}</p>{{/if}}
-  <ul class="setup-summary">
-    <li><strong>{{req.t "setup.complete.siteName"}}:</strong> {{summary.siteName}}</li>
-    <li><strong>{{req.t "setup.complete.adminEmail"}}:</strong> {{summary.adminEmail}}</li>
-    <li><strong>{{req.t "setup.complete.seedLoaded"}}:</strong> {{#if summary.seedLoaded}}{{req.t "setup.complete.yes"}}{{else}}{{req.t "setup.complete.no"}}{{/if}}</li>
-  </ul>
-  <form method="POST" action="/setup/complete">
-    <input type="hidden" name="csrf" value="{{csrfToken}}" />
+  <p class="boot-lede">{{req.t "setup.complete.body"}}</p>
+</header>
+{{#if error}}<div class="boot-alert"><p class="form-error">{{error}}</p></div>{{/if}}
+<h2 class="boot-section-title">{{req.t "setup.complete.summary"}}</h2>
+<dl class="boot-kv">
+  <div><dt>{{req.t "setup.complete.siteName"}}</dt><dd>{{summary.siteName}}</dd></div>
+  <div><dt>{{req.t "setup.complete.adminEmail"}}</dt><dd>{{summary.adminEmail}}</dd></div>
+  <div><dt>{{req.t "setup.complete.seedLoaded"}}</dt><dd>{{#if summary.seedLoaded}}{{req.t "setup.complete.yes"}}{{else}}{{req.t "setup.complete.no"}}{{/if}}</dd></div>
+</dl>
+<p class="boot-note">{{req.t "setup.boot.finishNote"}}</p>
+<form method="POST" action="/setup/complete" class="boot-form">
+  <input type="hidden" name="csrf" value="{{csrfToken}}">
+  <div class="boot-actions">
     <button type="submit" class="btn-primary">{{req.t "setup.complete.submit"}}</button>
-  </form>
-</section>
+  </div>
+</form>

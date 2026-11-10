@@ -1,0 +1,821 @@
+/* SPDX-License-Identifier: MIT */
+/* ──────────────────────────────────────────────────────────────────────────
+   IPQuery — first-run bootstrap console (setup wizard only)
+
+   Aesthetic: a machine's power-on self-test log on the left, a cold-paper
+   configuration worksheet on the right. Same NOC grammar as admin.css
+   (terminal cyan, hairlines, monospace for real data, near-zero radius)
+   but under a different light: the wizard is a form a human fills in, not
+   a console full of live telemetry.
+
+   This file loads AFTER base.css / layout.css / forms.css. Every override
+   is scoped to `body.layout-setup` so the shared auth + dashboard views
+   keep their own styling. No JavaScript is used: radio selection, focus
+   rings and the mobile rail are pure CSS; the ETL progress page still
+   polls with <meta http-equiv="refresh"> (CSP allows script-src 'self'
+   only, so inline scripts are impossible).
+   ────────────────────────────────────────────────────────────────────────── */
+
+/* ─── Design tokens ─────────────────────────────────────────────────────── */
+:root {
+  --boot-ink: #0b1016;
+  --boot-ink-2: #151d26;
+  --boot-ink-line: #243040;
+  --boot-ink-text: #c8d4de;
+  --boot-ink-muted: #6b7c8c;
+
+  --boot-paper: #f5f7f8;
+  --boot-paper-2: #ffffff;
+  --boot-line: #d8dee3;
+  --boot-line-strong: #b9c4cd;
+  --boot-text: #16212b;
+  --boot-muted: #5b6875;
+
+  --boot-cyan: #0c7189; /* on paper — darkened for AA contrast on white text */
+  --boot-cyan-bright: #22d3ee; /* on ink — identical to admin.css --accent */
+  --boot-cyan-soft: rgba(12, 113, 137, 0.09);
+  --boot-ok: #1f7a55;
+  --boot-fail: #ad423a;
+
+  --boot-font-sans:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "PingFang SC",
+    "Microsoft YaHei", sans-serif;
+  --boot-font-mono:
+    ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", "Roboto Mono", monospace;
+}
+
+/* ─── Shell ─────────────────────────────────────────────────────────────── */
+/* Fix the scheme to light: the paper worksheet is a deliberate choice, not
+   a theme that flips with the OS. Overrides base.css's dark body rule. */
+body.layout-setup {
+  /* layout.css still gives this class the old flex/center/white-card chrome.
+     The boot shell is a full-bleed grid, so cancel all of it here. */
+  display: block;
+  padding: 0;
+  min-height: 0;
+  color-scheme: light;
+  background: var(--boot-paper);
+  color: var(--boot-text);
+  font-family: var(--boot-font-sans);
+  margin: 0;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* .setup-container is kept in the markup but must stop being the 640px white
+   card. The boot-sheet override outranks layout.css, including its
+   prefers-color-scheme: dark block, which otherwise paints it #1e1e1e.
+   `max-width` is intentionally NOT reset: .boot-content owns the 38rem
+   measure that keeps the worksheet's line length under ~80 characters. */
+body.layout-setup .boot-content.setup-container,
+body.layout-setup .setup-container {
+  width: auto;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+}
+
+.boot-shell,
+.boot-shell *,
+.boot-shell *::before,
+.boot-shell *::after {
+  box-sizing: border-box;
+}
+
+.boot-shell {
+  display: grid;
+  grid-template-columns: 320px minmax(0, 1fr);
+  min-height: 100vh;
+  align-items: stretch;
+}
+
+/* ─── Left rail: boot log ───────────────────────────────────────────────── */
+.boot-rail {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  padding: 2.5rem 1.75rem 2rem 2rem;
+  background: var(--boot-ink);
+  color: var(--boot-ink-text);
+  border-right: 1px solid var(--boot-ink-line);
+}
+
+.boot-brand {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.boot-brand-name {
+  font-family: var(--boot-font-mono);
+  font-size: 1.0625rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: #f0f6f9;
+}
+
+.boot-brand-tag {
+  font-family: var(--boot-font-mono);
+  font-size: 0.75rem;
+  color: var(--boot-ink-muted);
+}
+
+.boot-rail-rule {
+  height: 1px;
+  background: var(--boot-ink-line);
+  margin: 1.75rem 0;
+  flex: none;
+}
+
+.boot-rail-nav {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/* The stepper is a vertical boot log, not six side-by-side pills. Keeps the
+   `setup-stepper` / `setup-step` class names so existing tests still pass. */
+body.layout-setup .setup-stepper {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 0;
+  margin: 0;
+  flex-wrap: nowrap;
+}
+
+body.layout-setup .setup-step {
+  flex: none;
+  min-width: 0;
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  text-align: left;
+}
+
+body.layout-setup .setup-step a {
+  display: grid;
+  grid-template-columns: 1.75rem 2.75rem minmax(0, 1fr);
+  align-items: baseline;
+  gap: 0.5rem;
+  padding: 0.65rem 0.5rem 0.65rem 0.75rem;
+  border-left: 2px solid transparent;
+  color: var(--boot-ink-muted);
+  text-decoration: none;
+  transition: color 140ms ease, background 140ms ease, border-color 140ms ease;
+}
+
+body.layout-setup .setup-step a:hover {
+  color: var(--boot-ink-text);
+  background: var(--boot-ink-2);
+}
+
+body.layout-setup .setup-step-n,
+body.layout-setup .setup-step-mark {
+  font-family: var(--boot-font-mono);
+  font-size: 0.75rem;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+body.layout-setup .setup-step-n {
+  color: inherit;
+  font-weight: 600;
+}
+
+body.layout-setup .setup-step-mark {
+  color: var(--boot-ink-muted);
+}
+
+body.layout-setup .setup-step-label {
+  font-size: 0.875rem;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+body.layout-setup .setup-step.is-done a {
+  color: var(--boot-ink-text);
+  border-left-color: rgba(34, 211, 238, 0.32);
+}
+
+body.layout-setup .setup-step.is-done .setup-step-mark {
+  color: var(--boot-cyan-bright);
+}
+
+body.layout-setup .setup-step.is-active a {
+  color: #ffffff;
+  background: var(--boot-ink-2);
+  border-left-color: var(--boot-cyan-bright);
+}
+
+body.layout-setup .setup-step.is-active .setup-step-label {
+  font-weight: 600;
+}
+
+body.layout-setup .setup-step.is-active .setup-step-mark {
+  color: var(--boot-cyan-bright);
+  animation: boot-pulse 2s ease-in-out infinite;
+}
+
+@keyframes boot-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+.boot-rail-foot {
+  margin-top: auto;
+  padding-top: 1.75rem;
+  border-top: 1px solid var(--boot-ink-line);
+}
+
+.boot-ticks {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 0.85rem;
+}
+
+.boot-tick {
+  flex: 1 1 0;
+  height: 3px;
+  background: var(--boot-ink-line);
+}
+
+.boot-tick.is-filled {
+  background: var(--boot-cyan-bright);
+}
+
+.boot-tick.is-current {
+  background: rgba(34, 211, 238, 0.45);
+  animation: boot-pulse 2s ease-in-out infinite;
+}
+
+.boot-progress-meta {
+  margin: 0;
+  font-family: var(--boot-font-mono);
+  font-size: 0.75rem;
+  color: var(--boot-ink-muted);
+}
+
+/* ─── Right worksheet ──────────────────────────────────────────────────── */
+.boot-main {
+  min-width: 0;
+  background: var(--boot-paper);
+  padding: 3.25rem clamp(1.5rem, 6vw, 6rem) 4rem;
+}
+
+.boot-content {
+  max-width: 38rem;
+}
+
+.boot-step-meta {
+  margin: 0 0 1.25rem;
+  font-family: var(--boot-font-mono);
+  font-size: 0.75rem;
+  letter-spacing: 0.04em;
+  color: var(--boot-muted);
+}
+
+.boot-step-head {
+  margin: 0 0 2rem;
+  padding-bottom: 1.5rem;
+  border-bottom: 1px solid var(--boot-line);
+}
+
+.boot-step-head h1 {
+  margin: 0 0 0.75rem;
+  font-size: clamp(1.75rem, 3.2vw, 2.4rem);
+  font-weight: 650;
+  letter-spacing: -0.025em;
+  line-height: 1.15;
+  color: var(--boot-text);
+}
+
+.boot-lede {
+  margin: 0;
+  max-width: 62ch;
+  font-size: 1rem;
+  line-height: 1.65;
+  color: var(--boot-muted);
+}
+
+.boot-section-title {
+  margin: 0 0 0.25rem;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--boot-text);
+}
+
+/* ─── Key/value blocks (database, summary, ETL metadata) ────────────────── */
+.boot-kv {
+  margin: 1.75rem 0;
+  padding: 0;
+  border-top: 1px solid var(--boot-line);
+}
+
+.boot-kv > div {
+  display: grid;
+  grid-template-columns: minmax(8rem, max-content) minmax(0, 1fr);
+  gap: 1.5rem;
+  padding: 0.75rem 0;
+  border-bottom: 1px solid var(--boot-line);
+}
+
+.boot-kv dt {
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  color: var(--boot-muted);
+}
+
+.boot-kv dd {
+  margin: 0;
+  font-family: var(--boot-font-mono);
+  font-size: 0.875rem;
+  line-height: 1.5;
+  color: var(--boot-text);
+  overflow-wrap: anywhere;
+}
+
+.boot-kv dd code {
+  font-family: var(--boot-font-mono);
+  font-size: 0.8125rem;
+  overflow-wrap: anywhere;
+}
+
+.boot-note {
+  margin: 0 0 1.5rem;
+  padding: 0.75rem 1rem;
+  border-left: 2px solid var(--boot-line-strong);
+  background: var(--boot-paper-2);
+  font-size: 0.875rem;
+  line-height: 1.6;
+  color: var(--boot-muted);
+}
+
+.boot-alert {
+  margin: 0 0 1.5rem;
+  padding: 0.75rem 1rem;
+  border-left: 3px solid var(--boot-fail);
+  background: var(--boot-paper-2);
+}
+
+/* ─── Forms: underlined worksheet fields ───────────────────────────────── */
+.boot-form {
+  margin: 0;
+}
+
+body.layout-setup .boot-form .form-field {
+  margin-bottom: 1.75rem;
+}
+
+body.layout-setup .boot-form .form-field label {
+  display: block;
+  margin-bottom: 0.4rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--boot-text);
+}
+
+body.layout-setup .boot-form .form-field input {
+  width: 100%;
+  padding: 0.6rem 0.25rem;
+  border: 0;
+  border-bottom: 1px solid var(--boot-line-strong);
+  border-radius: 0;
+  background: transparent;
+  color: var(--boot-text);
+  font-family: var(--boot-font-sans);
+  font-size: 1rem;
+  transition: border-color 140ms ease, box-shadow 140ms ease;
+}
+
+body.layout-setup .boot-form .form-field input:hover {
+  border-bottom-color: var(--boot-muted);
+}
+
+body.layout-setup .boot-form .form-field input:focus {
+  outline: none;
+  border-bottom-color: var(--boot-cyan);
+  box-shadow: 0 2px 0 -1px var(--boot-cyan);
+}
+
+body.layout-setup .boot-form .form-field input:focus-visible {
+  outline: 2px solid var(--boot-cyan);
+  outline-offset: 3px;
+}
+
+body.layout-setup .boot-form .form-help {
+  margin: 0.5rem 0 0;
+  font-size: 0.8125rem;
+  line-height: 1.55;
+  color: var(--boot-muted);
+}
+
+body.layout-setup .boot-form .form-error,
+body.layout-setup .boot-alert .form-error {
+  margin: 0;
+  font-size: 0.875rem;
+  line-height: 1.55;
+  color: var(--boot-fail);
+}
+
+/* ─── Actions ──────────────────────────────────────────────────────────── */
+.boot-actions {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+  margin-top: 2.5rem;
+}
+
+body.layout-setup button[type="submit"],
+body.layout-setup .btn-primary {
+  display: inline-block;
+  padding: 0.75rem 1.5rem;
+  border: 0;
+  border-radius: 2px;
+  background: var(--boot-cyan);
+  color: #ffffff;
+  font-family: var(--boot-font-sans);
+  font-size: 0.9375rem;
+  font-weight: 600;
+  letter-spacing: 0;
+  line-height: 1.3;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background 140ms ease;
+}
+
+body.layout-setup button[type="submit"]:hover,
+body.layout-setup .btn-primary:hover {
+  background: #0a5e73;
+}
+
+body.layout-setup button[type="submit"]:focus-visible,
+body.layout-setup .btn-primary:focus-visible,
+body.layout-setup .boot-back:focus-visible {
+  outline: 2px solid var(--boot-cyan);
+  outline-offset: 3px;
+}
+
+.boot-back {
+  font-size: 0.875rem;
+  color: var(--boot-muted);
+  text-decoration: none;
+  border-bottom: 1px solid var(--boot-line-strong);
+  padding-bottom: 2px;
+  transition: color 140ms ease, border-color 140ms ease;
+}
+
+.boot-back:hover {
+  color: var(--boot-cyan);
+  border-bottom-color: var(--boot-cyan);
+}
+
+/* ─── Flash messages ───────────────────────────────────────────────────── */
+body.layout-setup .flash {
+  margin: 0 0 1.5rem;
+  padding: 0.75rem 1rem;
+  border-radius: 2px;
+  border-left: 3px solid var(--boot-line-strong);
+  background: var(--boot-paper-2);
+  font-size: 0.875rem;
+  line-height: 1.55;
+}
+
+body.layout-setup .flash-success {
+  border-left-color: var(--boot-ok);
+  color: var(--boot-ok);
+}
+
+body.layout-setup .flash-error {
+  border-left-color: var(--boot-fail);
+  color: var(--boot-fail);
+}
+
+body.layout-setup .flash-warning {
+  border-left-color: #9a6b12;
+  color: #7a540e;
+}
+
+body.layout-setup .flash-info {
+  border-left-color: var(--boot-cyan);
+  color: var(--boot-cyan);
+}
+
+/* ─── Welcome checklist ────────────────────────────────────────────────── */
+.boot-intro-list {
+  list-style: none;
+  margin: 1.75rem 0 0;
+  padding: 0;
+  border-top: 1px solid var(--boot-line);
+}
+
+.boot-intro-list li {
+  display: grid;
+  grid-template-columns: 2.5rem minmax(0, 1fr);
+  gap: 1rem;
+  align-items: baseline;
+  padding: 0.85rem 0;
+  border-bottom: 1px solid var(--boot-line);
+  font-size: 0.9375rem;
+  line-height: 1.55;
+  color: var(--boot-text);
+}
+
+.boot-intro-n {
+  font-family: var(--boot-font-mono);
+  font-size: 0.75rem;
+  color: var(--boot-cyan);
+}
+
+/* ─── Seed option cards ────────────────────────────────────────────────── */
+.boot-options {
+  margin: 1.75rem 0 0;
+  padding: 0;
+  border: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+.boot-option {
+  position: relative;
+  min-width: 0;
+}
+
+.boot-option input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  margin: 0;
+}
+
+.boot-option-label {
+  display: block;
+  padding: 1rem 1.25rem;
+  border: 1px solid var(--boot-line);
+  border-left: 3px solid var(--boot-line);
+  border-radius: 2px;
+  background: var(--boot-paper-2);
+  cursor: pointer;
+  transition: border-color 140ms ease, background 140ms ease;
+}
+
+.boot-option-label:hover {
+  border-color: var(--boot-line-strong);
+}
+
+.boot-option input:checked + .boot-option-label {
+  border-left-color: var(--boot-cyan);
+  background: var(--boot-cyan-soft);
+  border-top-color: var(--boot-line-strong);
+  border-right-color: var(--boot-line-strong);
+  border-bottom-color: var(--boot-line-strong);
+}
+
+.boot-option input:focus-visible + .boot-option-label {
+  outline: 2px solid var(--boot-cyan);
+  outline-offset: 3px;
+}
+
+.boot-option-title {
+  display: block;
+  margin-bottom: 0.4rem;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--boot-text);
+}
+
+.boot-option input:checked + .boot-option-label .boot-option-title {
+  color: var(--boot-cyan);
+}
+
+.boot-option-hint {
+  display: block;
+  font-size: 0.8125rem;
+  line-height: 1.6;
+  color: var(--boot-muted);
+}
+
+/* ─── ETL progress ─────────────────────────────────────────────────────── */
+body.layout-setup .setup-progress-status {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin: 1.75rem 0 0;
+  padding: 0.9rem 1rem;
+  border-radius: 2px;
+  border-left: 3px solid var(--boot-cyan);
+  background: var(--boot-paper-2);
+  font-size: 0.9375rem;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+body.layout-setup .setup-progress-status--running {
+  border-left-color: var(--boot-cyan);
+  color: var(--boot-cyan);
+}
+
+body.layout-setup .setup-progress-status--success {
+  border-left-color: var(--boot-ok);
+  color: var(--boot-ok);
+}
+
+body.layout-setup .setup-progress-status--failed {
+  border-left-color: var(--boot-fail);
+  color: var(--boot-fail);
+}
+
+body.layout-setup .setup-progress-spinner {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--boot-line);
+  border-top-color: var(--boot-cyan);
+  border-radius: 50%;
+  margin: 0;
+  animation: boot-spin 0.9s linear infinite;
+}
+
+@keyframes boot-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+body.layout-setup .setup-progress-meta {
+  margin: 1.75rem 0;
+}
+
+body.layout-setup .form-hint {
+  margin: 0.75rem 0 0;
+  font-size: 0.8125rem;
+  line-height: 1.6;
+  color: var(--boot-muted);
+}
+
+body.layout-setup .boot-status-note {
+  margin: 0.75rem 0 0;
+  font-size: 0.875rem;
+  line-height: 1.6;
+  color: var(--boot-muted);
+}
+
+/* ─── Responsive: rail collapses into a top strip ──────────────────────── */
+@media (max-width: 900px) {
+  .boot-shell {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .boot-rail {
+    position: static;
+    height: auto;
+    padding: 1.15rem 1rem 1rem;
+    border-right: 0;
+    border-bottom: 1px solid var(--boot-ink-line);
+  }
+
+  .boot-brand {
+    flex-direction: row;
+    align-items: baseline;
+    gap: 0.85rem;
+  }
+
+  .boot-rail-rule {
+    display: none;
+  }
+
+  .boot-rail-nav {
+    margin-top: 0.85rem;
+  }
+
+  body.layout-setup .setup-stepper {
+    flex-direction: row;
+    gap: 0;
+  }
+
+  body.layout-setup .setup-step {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+
+  body.layout-setup .setup-step a {
+    display: block;
+    padding: 0.45rem 0.2rem;
+    border-left: 0;
+    border-bottom: 2px solid var(--boot-ink-line);
+    text-align: center;
+  }
+
+  body.layout-setup .setup-step.is-done a {
+    border-left-color: transparent;
+    border-bottom-color: rgba(34, 211, 238, 0.4);
+  }
+
+  body.layout-setup .setup-step.is-active a {
+    border-left: 0;
+    border-bottom-color: var(--boot-cyan-bright);
+    background: transparent;
+  }
+
+  body.layout-setup .setup-step-mark,
+  body.layout-setup .setup-step-label {
+    display: none;
+  }
+
+  .boot-rail-foot {
+    margin-top: 0.85rem;
+    padding-top: 0;
+    border-top: 0;
+  }
+
+  .boot-ticks {
+    display: none;
+  }
+
+  .boot-progress-meta {
+    font-size: 0.6875rem;
+  }
+
+  .boot-main {
+    padding: 2rem 1rem 3rem;
+  }
+
+  .boot-step-head h1 {
+    font-size: 1.75rem;
+  }
+
+  .boot-kv > div {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.25rem;
+  }
+
+  .boot-actions {
+    gap: 1.25rem;
+  }
+}
+
+/* ─── Dark-mode OS: keep the paper light, keep the ink dark ─────────────── */
+@media (prefers-color-scheme: dark) {
+  body.layout-setup,
+  body.layout-setup .boot-main {
+    background: var(--boot-paper);
+    color: var(--boot-text);
+  }
+
+  body.layout-setup .boot-form .form-field input {
+    background: transparent;
+    color: var(--boot-text);
+    border-bottom-color: var(--boot-line-strong);
+  }
+
+  body.layout-setup .form-hint,
+  body.layout-setup .boot-status-note,
+  body.layout-setup .boot-form .form-help {
+    color: var(--boot-muted);
+  }
+
+  body.layout-setup .setup-progress-status,
+  body.layout-setup .setup-progress-status--running,
+  body.layout-setup .setup-progress-status--success,
+  body.layout-setup .setup-progress-status--failed {
+    background: var(--boot-paper-2);
+  }
+
+  body.layout-setup .flash,
+  body.layout-setup .boot-option-label,
+  body.layout-setup .boot-note,
+  body.layout-setup .boot-alert {
+    background: var(--boot-paper-2);
+  }
+}
+
+/* ─── Reduced motion ───────────────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  body.layout-setup .setup-step.is-active .setup-step-mark,
+  body.layout-setup .boot-tick.is-current,
+  body.layout-setup .setup-progress-spinner {
+    animation: none;
+  }
+
+  body.layout-setup .setup-progress-spinner {
+    border-top-color: var(--boot-line);
+  }
+
+  .boot-shell,
+  .boot-shell *,
+  .boot-shell *::before,
+  .boot-shell *::after {
+    transition-duration: 0.01ms !important;
+  }
+}

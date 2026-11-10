@@ -1039,6 +1039,23 @@
   },
   "setup": {
     "title": "Setup Wizard",
+    "boot": {
+      "railLabel": "Setup progress",
+      "tagline": "First-run bootstrap",
+      "stepsLabel": "Configuration steps",
+      "progress": "Step {current} of {total}",
+      "introTitle": "What happens next",
+      "intro1": "Verify the database connection",
+      "intro2": "Name the site and add a tagline",
+      "intro3": "Create the administrator account",
+      "intro4": "Load seed data and finish",
+      "connectionTitle": "Connection parameters",
+      "siteLede": "Name this installation. You can change it later in Settings.",
+      "adminLede": "Create the first administrator account for the console.",
+      "seedProgressLede": "The background task is running. You can leave this page and come back.",
+      "finishNote": "Once finished, /setup is locked and the login page takes over.",
+      "backToStart": "Back to start"
+    },
     "steps": {
       "1": "Welcome",
       "2": "Database",

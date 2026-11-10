@@ -1,32 +1,68 @@
 {{!-- SPDX-License-Identifier: MIT --}}
-{{!-- Task 6: setup wizard layout. Full-width centered card, no sidebar
-     (the wizard is pre-auth; no nav applies). The stepper is rendered via
-     Handlebars; the route pre-translates each label so we avoid {{req.t}}
-     inside {{#each}} (Phase B Task 6 finding). --}}
+{{!--
+  First-run bootstrap console. Left rail = boot log (the wizard really is a
+  sequence, so numbering is structural here), right = light worksheet.
+
+  buildSteps() supplies n, label, href, active and done; labels are already
+  translated in the route. No inline scripts: CSP is script-src self and the
+  ETL progress page polls via a meta refresh. The setup-stepper, setup-step
+  and layout-setup class names are kept because integration tests assert on
+  them. Views use boot-step-head, not setup-step, so the rail grid rules
+  cannot leak onto content links. CSRF 403 renders pass step and total too;
+  the if guard keeps the progress sentence out of renders that omit them.
+--}}
 <!DOCTYPE html>
 <html lang="{{req.locale}}">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{{title}} - IPQuery</title>
-  <meta name="theme-color" content="#ffffff">
+  <meta name="theme-color" content="#0b1016">
   <link rel="stylesheet" href="/assets/css/base.css">
   <link rel="stylesheet" href="/assets/css/layout.css">
   <link rel="stylesheet" href="/assets/css/forms.css">
+  <link rel="stylesheet" href="/assets/css/setup.css">
 </head>
 <body class="layout-setup">
-  <main class="setup-container">
-    {{> flash }}
-    {{#if steps}}
-    <ol class="setup-stepper">
-      {{#each steps}}
-      <li class="setup-step{{#if active}} active{{/if}}">
-        <a href="{{href}}"><span class="setup-step-n">{{n}}</span><span class="setup-step-label">{{label}}</span></a>
-      </li>
-      {{/each}}
-    </ol>
-    {{/if}}
-    {{{body}}}
-  </main>
+  <div class="boot-shell">
+    <aside class="boot-rail" aria-label="{{req.t 'setup.boot.railLabel'}}">
+      <div class="boot-brand">
+        <span class="boot-brand-name">IPQuery</span>
+        <span class="boot-brand-tag">{{req.t 'setup.boot.tagline'}}</span>
+      </div>
+      <div class="boot-rail-rule" aria-hidden="true"></div>
+      <nav class="boot-rail-nav" aria-label="{{req.t 'setup.boot.stepsLabel'}}">
+        {{#if steps}}
+        <ol class="setup-stepper">
+          {{#each steps}}
+          <li class="setup-step{{#if active}} is-active{{/if}}{{#if done}} is-done{{/if}}">
+            <a href="{{href}}"{{#if active}} aria-current="step"{{/if}}>
+              <span class="setup-step-n">{{n}}</span>
+              <span class="setup-step-mark" aria-hidden="true">{{#if done}}[ok]{{else if active}}[&gt;]{{else}}[ ]{{/if}}</span>
+              <span class="setup-step-label">{{label}}</span>
+            </a>
+          </li>
+          {{/each}}
+        </ol>
+        {{/if}}
+      </nav>
+      <div class="boot-rail-foot">
+        <div class="boot-ticks" aria-hidden="true">
+          {{#each steps}}
+          <span class="boot-tick{{#if done}} is-filled{{else if active}} is-current{{/if}}"></span>
+          {{/each}}
+        </div>
+        <p class="boot-progress-meta">{{step}} / {{total}}</p>
+      </div>
+    </aside>
+
+    <main class="boot-main">
+      <div class="boot-content setup-container">
+        {{> flash }}
+        {{#if step}}<p class="boot-step-meta">{{req.t 'setup.boot.progress' current=step total=total}}</p>{{/if}}
+        {{{body}}}
+      </div>
+    </main>
+  </div>
 </body>
 </html>

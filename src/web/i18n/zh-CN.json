@@ -1040,6 +1040,23 @@
   },
   "setup": {
     "title": "初始化设置",
+    "boot": {
+      "railLabel": "初始化进度",
+      "tagline": "首次运行配置",
+      "stepsLabel": "配置步骤",
+      "progress": "第 {current} 步 / 共 {total} 步",
+      "introTitle": "接下来会发生什么",
+      "intro1": "确认数据库连接可用",
+      "intro2": "设置站点名称与副标题",
+      "intro3": "创建管理员账号",
+      "intro4": "导入种子数据并完成",
+      "connectionTitle": "连接参数",
+      "siteLede": "给这个安装起个名字。之后可以在系统设置里修改。",
+      "adminLede": "创建第一个管理员账号,用于登录控制台。",
+      "seedProgressLede": "后台任务正在运行,可以离开本页,稍后回来。",
+      "finishNote": "完成后 /setup 将被锁定,只能从登录页进入。",
+      "backToStart": "返回开始"
+    },
     "steps": {
       "1": "欢迎",
       "2": "数据库",
