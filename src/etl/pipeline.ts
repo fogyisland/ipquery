@@ -28,7 +28,7 @@ import {
   parseDbipAsnCsvStreamWithStats,
   type ParseStreamResult,
 } from "./sources/dbip";
-import { DEFAULT_SPECS, downloadAll } from "./download";
+import { DEFAULT_SPECS, downloadAll, validateGzFile, type DownloadSpec } from "./download";
 import { acquireEtlRunLock, EtlRunLockedError } from "./runGuard";
 import type { AppConfig } from "../config";
 import type { Source, NormalizedRecord, IpRangeRow, EtlStage } from "../types";
@@ -252,10 +252,14 @@ async function runDownloadStage(
   rawDir: string,
   now: Date,
   sink?: EtlProgressSink,
+  /** Which specs to fetch. Defaults to all of them; the pipeline passes
+   *  only the files that are missing or corrupt, so a cached-and-valid
+   *  file is never re-downloaded. */
+  specs: ReadonlyArray<DownloadSpec> = DEFAULT_SPECS,
 ): Promise<EtlRunDownloadRow[]> {
   const t0 = Date.now();
   const { attempts } = await downloadAll(
-    DEFAULT_SPECS,
+    specs,
     rawDir,
     now,
     sink ? (bytesDone, bytesTotal) => sink.onDownload(bytesDone, bytesTotal) : undefined,
@@ -302,6 +306,13 @@ async function runParseStage(
   const rows: EtlRunParseRow[] = [];
   for (const f of files) {
     const fullPath = path.join(rawDir, f.filename);
+    // Defence in depth: the download stage already refuses to proceed
+    // with a missing file, but the parse stage used to silently skip
+    // anything not handed to it — which is how a run could report
+    // "success" with a partial data set. Fail loudly instead.
+    if (!(await fileExists(fullPath))) {
+      throw new Error(`source file vanished before parsing: ${f.filename}`);
+    }
     const startedAt = new Date();
     const t0 = Date.now();
     // Walk the file once to fill in skip counters. The actual insert
@@ -487,6 +498,17 @@ export async function runPipeline(opts: {
   /** Test seam: inject a sink so assertions can observe onInsert
    *  progress without patching the module. Defaults to a fresh sink. */
   sink?: EtlProgressSink;
+  /** Test seam: replace the network download stage. The default
+   *  implementation fetches the real DB-IP files; tests inject a stub
+   *  so a missing/corrupt-file scenario never touches the network. */
+  download?: (
+    pool: mysql.Pool,
+    runId: number,
+    rawDir: string,
+    now: Date,
+    sink: EtlProgressSink | undefined,
+    specs: ReadonlyArray<DownloadSpec>,
+  ) => Promise<EtlRunDownloadRow[]>;
 }): Promise<PipelineResult> {
   const { cfg } = opts;
   const pool = await ensurePool(cfg);
@@ -515,7 +537,19 @@ export async function runPipeline(opts: {
  *  ETL run lock; this function owns the stages. */
 async function runPipelineLocked(
   pool: mysql.Pool,
-  opts: { cfg: AppConfig; runId?: number; sink?: EtlProgressSink },
+  opts: {
+    cfg: AppConfig;
+    runId?: number;
+    sink?: EtlProgressSink;
+    download?: (
+      pool: mysql.Pool,
+      runId: number,
+      rawDir: string,
+      now: Date,
+      sink: EtlProgressSink | undefined,
+      specs: ReadonlyArray<DownloadSpec>,
+    ) => Promise<EtlRunDownloadRow[]>;
+  },
 ): Promise<PipelineResult> {
   const { cfg } = opts;
   // If the caller already created a row via recordEtlStart (e.g. the init
@@ -528,64 +562,115 @@ async function runPipelineLocked(
   const sink = opts.sink ?? new EtlProgressSink(pool, runId);
 
   try {
-    // 1) Decide which files we have on disk. If none are present, try
-    //    to download them via the existing downloadAll.
-    const present: StreamFile[] = [];
+    // 1) Decide which files we have on disk.
+    //
+    //    The decision is PER FILE, not all-or-nothing. The old logic
+    //    ("if no file is present, download everything") had two bugs:
+    //
+    //      a) A half-written .gz left behind by an interrupted run was
+    //         reused as-is and blew up in the parse stage with
+    //         "unexpected end of file" (Z_BUF_ERROR).
+    //      b) If ANY file was present, the missing ones were never
+    //         downloaded and the parse stage silently skipped them —
+    //         the run then reported success with a partial data set
+    //         and swapped it over the live table.
+    //
+    //    So: validate each cached file, delete the corrupt ones, and
+    //    download exactly the files that are missing or damaged.
+    const reusable: StreamFile[] = [];
+    const needDownload: StreamFile[] = [];
     for (const f of DBIP_FILES) {
-      if (await fileExists(path.join(rawDir, f.filename))) present.push(f);
+      const filePath = path.join(rawDir, f.filename);
+      if (!(await fileExists(filePath))) {
+        needDownload.push(f);
+        continue;
+      }
+      const problem = await validateGzFile(filePath);
+      if (problem) {
+        console.warn(
+          `[etl] cached ${f.filename} is corrupt (${problem}); deleting it and re-downloading`,
+        );
+        await fs.rm(filePath, { force: true });
+        needDownload.push(f);
+        continue;
+      }
+      reusable.push(f);
     }
-    if (present.length === 0) {
+
+    if (needDownload.length > 0) {
       sink.setStage("download");
-      await runDownloadStage(pool, runId, rawDir, now, sink);
-      for (const f of DBIP_FILES) {
-        if (await fileExists(path.join(rawDir, f.filename))) present.push(f);
-      }
-    } else {
-      // Files already present; record one synthetic 'skipped' row per
-      // spec so the run-detail page doesn't show an empty stage.
-      for (const f of DBIP_FILES) {
-        const exists = await fileExists(path.join(rawDir, f.filename));
-        await insertEtlRunDownload(pool, {
-          runId,
-          source: f.etlSource,
-          destName: f.filename,
-          sourceUrl: null,
-          month: null,
-          status: exists ? "skipped" : "missing",
-          bytes: null,
-          durationMs: null,
-          retryCount: 0,
-          errorMessage: null,
-          startedAt: now,
-          finishedAt: now,
-        });
-      }
-      // Synthesise the download totals so the bar reads 100% instantly
-      // when re-running against cached files. We don't know the real
-      // totals from disk size, but the file size on disk IS the size
-      // we'd have downloaded — query it cheaply.
-      try {
-        const stat = await fs.stat(path.join(rawDir, DBIP_FILES[0]!.filename));
-        let totalBytes = 0;
-        for (const f of DBIP_FILES) {
-          if (await fileExists(path.join(rawDir, f.filename))) {
-            try {
-              const s = await fs.stat(path.join(rawDir, f.filename));
-              totalBytes += s.size;
-            } catch { /* ignore */ }
-          }
-        }
-        sink.onDownload(totalBytes, totalBytes);
-        sink.setStage("download");
-        await sink.flush();
-        void stat; // silence unused
-      } catch { /* ignore — sink is best-effort */ }
+      // Map the files we need onto their download specs (matched by
+      // destination filename) so a cached-and-valid file is never
+      // re-downloaded.
+      const needNames = new Set(needDownload.map((f) => f.filename));
+      const specs = DEFAULT_SPECS.filter((spec) => needNames.has(spec.destName));
+      const download = opts.download ?? runDownloadStage;
+      await download(pool, runId, rawDir, now, sink, specs);
     }
+
+    // Re-check the disk: after the download stage, every file must be
+    // present AND intact. A file that is still missing or corrupt at
+    // this point is a hard failure — we must not proceed to parse,
+    // because the parse stage would silently skip it.
+    const present: StreamFile[] = [];
+    const missing: string[] = [];
+    for (const f of DBIP_FILES) {
+      const filePath = path.join(rawDir, f.filename);
+      if (!(await fileExists(filePath))) {
+        missing.push(f.filename);
+        continue;
+      }
+      const problem = await validateGzFile(filePath);
+      if (problem) {
+        missing.push(`${f.filename} (${problem})`);
+        continue;
+      }
+      present.push(f);
+    }
+    if (missing.length > 0) {
+      throw new Error(
+        `source files unavailable after download: ${missing.join(", ")} — refusing to swap incomplete data over the live table`,
+      );
+    }
+
+    // Record one synthetic 'skipped' row per reused file so the
+    // run-detail page doesn't show an empty stage for cached inputs.
+    for (const f of reusable) {
+      await insertEtlRunDownload(pool, {
+        runId,
+        source: f.etlSource,
+        destName: f.filename,
+        sourceUrl: null,
+        month: null,
+        status: "skipped",
+        bytes: null,
+        durationMs: null,
+        retryCount: 0,
+        errorMessage: null,
+        startedAt: now,
+        finishedAt: now,
+      });
+    }
+
+    // Synthesise the download totals so the bar reads 100% instantly
+    // when re-running against cached files.
+    try {
+      let totalBytes = 0;
+      for (const f of DBIP_FILES) {
+        try {
+          const stat = await fs.stat(path.join(rawDir, f.filename));
+          totalBytes += stat.size;
+        } catch { /* ignore */ }
+      }
+      sink.onDownload(totalBytes, totalBytes);
+      sink.setStage("download");
+      await sink.flush();
+    } catch { /* ignore — sink is best-effort */ }
 
     // 2) Parse stage: per-file skip counters.
     sink.setStage("parse");
     await sink.flush();
-    await runParseStage(
+    const parseRows = await runParseStage(
       pool,
       runId,
       rawDir,
@@ -598,6 +683,21 @@ async function runPipelineLocked(
       sink,
     );
     await sink.flush();
+
+    // A source file that parses to zero rows is as bad as a missing
+    // one: it means the file is empty or shaped differently than we
+    // expect, and swapping it live would drop that data source
+    // entirely. DB-IP city-lite is the primary source (it carries
+    // city/geo data on top of the country codes), so its absence is
+    // always fatal.
+    const emptySources = parseRows
+      .filter((r) => r.rowsEmitted === 0)
+      .map((r) => r.destName);
+    if (emptySources.length > 0) {
+      throw new Error(
+        `source files parsed to zero rows: ${emptySources.join(", ")} — refusing to swap incomplete data over the live table`,
+      );
+    }
 
     // 3) Insert stage: truncate + per-file streamFileToDb with UpsertCount
     //    aggregation.
