@@ -3,7 +3,7 @@
 //
 // Walks the full wizard end-to-end against a fresh DB and asserts cross-component
 // behavior (routes + guard + bootstrap + login flow). Follows the same
-// beforeAll/afterAll pattern as setup-routes.test.ts (drop+create DB, do NOT
+// beforeAll/afterAll pattern as init-routes.test.ts (drop+create DB, do NOT
 // call markInitialized so we can test the uninitialized path).
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import request from "supertest";
@@ -24,7 +24,7 @@ let td: TestDb;
 // Pre-init: server built against a fresh DB with `initialized_at` not set.
 let appPre: Awaited<ReturnType<typeof buildServer>>;
 // Post-init: rebuilt after the wizard marks initialized_at; flips
-// setupGuard.requireSetup = false.
+// initGuard.requireSetup = false.
 let appPost: Awaited<ReturnType<typeof buildServer>>;
 
 async function dropAndCreate(): Promise<TestDb> {
@@ -51,7 +51,7 @@ async function dropAndCreate(): Promise<TestDb> {
   });
   await runMigrations(pool);
   // NOTE: do NOT call markInitialized here — we want the uninitialized path.
-  // setupGuard's boot cache should read the missing `initialized_at` row and
+  // initGuard's boot cache should read the missing `initialized_at` row and
   // flip `requireSetup=true`.
   return { pool, dbName: TEST_DB };
 }
@@ -94,15 +94,15 @@ function extractCsrfPair(headers: Record<string, unknown>): { cookie: string; to
   return { cookie: `${csrfCookie}; ${issuedCookie}; ${bindCookie}`, token: tokenMatch[1]! };
 }
 
-// POST /setup/<step> with CSRF, threaded through supertest agent so cookies
+// POST /init/<step> with CSRF, threaded through supertest agent so cookies
 // (csrf, csrf_issued) carry forward between GET and POST.
 async function wizardPost(
   agent: ReturnType<typeof request.agent>,
   path: string,
   fields: Record<string, string>,
 ): Promise<request.Response> {
-  const getPage = await agent.get(path.replace("/setup/", "/setup/"));
-  // GET e.g. /setup/database returns the form with csrf input + cookies.
+  const getPage = await agent.get(path.replace("/init/", "/init/"));
+  // GET e.g. /init/database returns the form with csrf input + cookies.
   const token = extractCsrf(getPage.text);
   return agent
     .post(path)
@@ -127,41 +127,41 @@ describe("setup wizard E2E", () => {
     const agent = request.agent(appPre.server);
 
     // Step 1 — welcome
-    const welcome = await agent.get("/setup");
+    const welcome = await agent.get("/init");
     expect(welcome.status).toBe(200);
     expect(welcome.text).toContain('class="layout-setup"');
 
     // Step 2 — database
-    const dbPost = await wizardPost(agent, "/setup/database", {});
+    const dbPost = await wizardPost(agent, "/init/database", {});
     expect(dbPost.status).toBe(302);
-    expect(dbPost.headers["location"]).toMatch(/^\/setup\/site/);
+    expect(dbPost.headers["location"]).toMatch(/^\/init\/site/);
 
     // Step 3 — site
-    const sitePost = await wizardPost(agent, "/setup/site", {
+    const sitePost = await wizardPost(agent, "/init/site", {
       name: "E2E Site",
       tagline: "integration test tagline",
     });
     expect(sitePost.status).toBe(302);
-    expect(sitePost.headers["location"]).toMatch(/^\/setup\/admin/);
+    expect(sitePost.headers["location"]).toMatch(/^\/init\/admin/);
 
     // Step 4 — admin
     const adminEmail = "e2e-admin@setup.test";
     const adminPassword = "longpassword1";
-    const adminPost = await wizardPost(agent, "/setup/admin", {
+    const adminPost = await wizardPost(agent, "/init/admin", {
       email: adminEmail,
       password: adminPassword,
       displayName: "E2E Admin",
     });
     expect(adminPost.status).toBe(302);
-    expect(adminPost.headers["location"]).toMatch(/^\/setup\/seed/);
+    expect(adminPost.headers["location"]).toMatch(/^\/init\/seed/);
 
     // Step 5 — seed (load=true)
-    const seedPost = await wizardPost(agent, "/setup/seed", { load: "true" });
+    const seedPost = await wizardPost(agent, "/init/seed", { load: "true" });
     expect(seedPost.status).toBe(302);
-    expect(seedPost.headers["location"]).toMatch(/^\/setup\/complete/);
+    expect(seedPost.headers["location"]).toMatch(/^\/init\/complete/);
 
     // Step 6 — complete
-    const completePost = await wizardPost(agent, "/setup/complete", {});
+    const completePost = await wizardPost(agent, "/init/complete", {});
     expect(completePost.status).toBe(302);
     expect(completePost.headers["location"]).toMatch(/^\/login/);
 
@@ -183,10 +183,10 @@ describe("setup wizard E2E", () => {
     );
     expect(Number(seedRows[0]!.n)).toBe(50);
 
-    // Rebuild server post-init: setupGuard re-reads `initialized_at` at boot.
+    // Rebuild server post-init: initGuard re-reads `initialized_at` at boot.
     appPost = await freshApp();
 
-    // /login must now be reachable (200, not redirected to /setup).
+    // /login must now be reachable (200, not redirected to /init).
     const loginPage = await request(appPost.server).get("/login");
     expect(loginPage.status).toBe(200);
     expect(loginPage.headers["location"]).toBeUndefined();
@@ -211,7 +211,7 @@ describe("setup wizard E2E", () => {
     expect(adminPage.text).toContain('class="layout-admin"');
   });
 
-  it("guard before-init: /login redirects to /setup", async () => {
+  it("guard before-init: /login redirects to /init", async () => {
     // Use the pre-init app: its DB still has `initialized_at` set from the
     // happy-path test above. We need to delete that row, then build a fresh
     // server so the guard reads requireSetup=true at boot.
@@ -220,15 +220,15 @@ describe("setup wizard E2E", () => {
     try {
       const r = await request(appGuard.server).get("/login");
       expect(r.status).toBe(302);
-      expect(r.headers["location"]).toBe("/setup");
+      expect(r.headers["location"]).toBe("/init");
     } finally {
       await appGuard.close();
     }
   });
 
-  it("guard after-init: /setup returns 404", async () => {
-    // Use appPost (post-init). /setup must be locked out by the guard.
-    const r = await request(appPost.server).get("/setup");
+  it("guard after-init: /init returns 404", async () => {
+    // Use appPost (post-init). /init must be locked out by the guard.
+    const r = await request(appPost.server).get("/init");
     expect(r.status).toBe(404);
   });
 
@@ -251,7 +251,7 @@ describe("setup wizard E2E", () => {
   });
 
   it("DB step failure: probe returns error flash", async () => {
-    // Wipe `initialized_at` so the guard doesn't redirect /setup requests.
+    // Wipe `initialized_at` so the guard doesn't redirect /init requests.
     await td.pool.query(`DELETE FROM settings WHERE k = 'initialized_at'`);
 
     // Delete any users + site settings so we can test setup from a clean
@@ -271,19 +271,19 @@ describe("setup wizard E2E", () => {
       });
       try {
         // GET the database page so we have csrf cookies.
-        const page = await request(appFail.server).get("/setup/database");
+        const page = await request(appFail.server).get("/init/database");
         const token = extractCsrf(page.text);
-        // POST /setup/database should redirect with ?flash=error.
+        // POST /init/database should redirect with ?flash=error.
         const post = await request(appFail.server)
-          .post("/setup/database")
+          .post("/init/database")
           .set("Cookie", extractCsrfPair(page.headers).cookie)
           .type("form")
           .send({ csrf: token });
         expect(post.status).toBe(302);
-        expect(post.headers["location"]).toBe("/setup/database?flash=error");
+        expect(post.headers["location"]).toBe("/init/database?flash=error");
 
         // Follow the redirect; the GET renders the form with the error message.
-        const errPage = await request(appFail.server).get("/setup/database?flash=error");
+        const errPage = await request(appFail.server).get("/init/database?flash=error");
         expect(errPage.status).toBe(200);
         // The page must contain the localized `setup.database.failure` text
         // (zh-CN default locale: "无法连接数据库,请检查 .env 配置并确认服务器已启动。")
@@ -294,16 +294,16 @@ describe("setup wizard E2E", () => {
       }
 
       // After restoring the spy, the next POST succeeds and the wizard can
-      // continue. Sanity check: restore + ping + redirect to /setup/site.
-      const page2 = await request(appFail.server).get("/setup/database");
+      // continue. Sanity check: restore + ping + redirect to /init/site.
+      const page2 = await request(appFail.server).get("/init/database");
       const token2 = extractCsrf(page2.text);
       const post2 = await request(appFail.server)
-        .post("/setup/database")
+        .post("/init/database")
         .set("Cookie", extractCsrfPair(page2.headers).cookie)
         .type("form")
         .send({ csrf: token2 });
       expect(post2.status).toBe(302);
-      expect(post2.headers["location"]).toMatch(/^\/setup\/site/);
+      expect(post2.headers["location"]).toMatch(/^\/init\/site/);
 
       // Verify original binding is intact (spy fully restored).
       const conn = await original();
@@ -314,16 +314,16 @@ describe("setup wizard E2E", () => {
   });
 
   it("site validation failure: re-renders form (200) with name preserved", async () => {
-    // Wizard requires initialized_at cleared so /setup/site is reachable.
+    // Wizard requires initialized_at cleared so /init/site is reachable.
     await td.pool.query(`DELETE FROM settings WHERE k = 'initialized_at'`);
     const cfg = loadConfig();
     cfg.db.database = td.dbName;
     const appFx = await buildServer(cfg);
     try {
-      const page = await request(appFx.server).get("/setup/site");
+      const page = await request(appFx.server).get("/init/site");
       const { cookie, token } = extractCsrfPair(page.headers);
       const r = await request(appFx.server)
-        .post("/setup/site")
+        .post("/init/site")
         .set("Cookie", cookie)
         .type("form")
         .send({ csrf: token, name: "   ", tagline: "kept on the page" });
@@ -346,10 +346,10 @@ describe("setup wizard E2E", () => {
     cfg.db.database = td.dbName;
     const appFx = await buildServer(cfg);
     try {
-      const page = await request(appFx.server).get("/setup/admin");
+      const page = await request(appFx.server).get("/init/admin");
       const { cookie, token } = extractCsrfPair(page.headers);
       const r = await request(appFx.server)
-        .post("/setup/admin")
+        .post("/init/admin")
         .set("Cookie", cookie)
         .type("form")
         .send({ csrf: token, email: "not-an-email", password: "weak", displayName: "KEEP ME" });

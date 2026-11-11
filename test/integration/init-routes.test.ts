@@ -37,7 +37,7 @@ async function dropAndCreate(): Promise<{ pool: mysql.Pool; dbName: string }> {
   });
   await runMigrations(pool);
   // Intentionally do NOT call markInitialized here — we want to test the
-  // uninitialized path. The setupGuard's boot cache should read the missing
+  // uninitialized path. The initGuard's boot cache should read the missing
   // `initialized_at` row and flip `requireSetup=true`.
   return { pool, dbName: TEST_DB };
 }
@@ -77,64 +77,64 @@ afterAll(async () => {
 });
 
 describe("setup wizard routes", () => {
-  it("GET /setup returns 200 with the welcome page", async () => {
-    const r = await request(appPre.server).get("/setup");
+  it("GET /init returns 200 with the welcome page", async () => {
+    const r = await request(appPre.server).get("/init");
     expect(r.status).toBe(200);
     // Default locale is zh-CN; the welcome title is the localized "Welcome".
     expect(r.text).toContain("欢迎");
     expect(r.text).toContain('class="setup-stepper"');
   });
 
-  it("GET / redirects to /setup when uninitialized", async () => {
+  it("GET / redirects to /init when uninitialized", async () => {
     const r = await request(appPre.server).get("/");
     expect(r.status).toBe(302);
-    expect(r.headers["location"]).toBe("/setup");
+    expect(r.headers["location"]).toBe("/init");
   });
 
-  it("GET /setup/admin returns 200 with the form", async () => {
-    const r = await request(appPre.server).get("/setup/admin");
+  it("GET /init/admin returns 200 with the form", async () => {
+    const r = await request(appPre.server).get("/init/admin");
     expect(r.status).toBe(200);
     expect(r.text).toContain('name="email"');
     expect(r.text).toContain('name="password"');
     expect(r.text).toContain('name="csrf"');
   });
 
-  it("POST /setup/database with valid CSRF redirects to /setup/site", async () => {
+  it("POST /init/database with valid CSRF redirects to /init/site", async () => {
     const agent = request.agent(appPre.server);
-    const page = await agent.get("/setup/database");
+    const page = await agent.get("/init/database");
     const csrf = extractCsrf(page.text);
-    const r = await agent.post("/setup/database").type("form").send({ csrf });
+    const r = await agent.post("/init/database").type("form").send({ csrf });
     expect(r.status).toBe(302);
-    expect(r.headers["location"]).toMatch(/^\/setup\/site/);
+    expect(r.headers["location"]).toMatch(/^\/init\/site/);
   });
 
-  it("POST /setup/site with valid CSRF saves settings and redirects to /setup/admin", async () => {
+  it("POST /init/site with valid CSRF saves settings and redirects to /init/admin", async () => {
     const agent = request.agent(appPre.server);
-    const page = await agent.get("/setup/site");
+    const page = await agent.get("/init/site");
     const csrf = extractCsrf(page.text);
-    const r = await agent.post("/setup/site").type("form").send({
+    const r = await agent.post("/init/site").type("form").send({
       csrf,
       name: "Test Site",
       tagline: "hello",
     });
     expect(r.status).toBe(302);
-    expect(r.headers["location"]).toMatch(/^\/setup\/admin/);
+    expect(r.headers["location"]).toMatch(/^\/init\/admin/);
     expect(await getSetting(td.pool, "site.name")).toBe("Test Site");
     expect(await getSetting(td.pool, "site.tagline")).toBe("hello");
   });
 
-  it("POST /setup/admin with valid credentials creates admin and redirects to /setup/seed", async () => {
+  it("POST /init/admin with valid credentials creates admin and redirects to /init/seed", async () => {
     const agent = request.agent(appPre.server);
-    const page = await agent.get("/setup/admin");
+    const page = await agent.get("/init/admin");
     const csrf = extractCsrf(page.text);
-    const r = await agent.post("/setup/admin").type("form").send({
+    const r = await agent.post("/init/admin").type("form").send({
       csrf,
       email: "admin@setup.test",
       password: "longpassword1",
       displayName: "Setup Admin",
     });
     expect(r.status).toBe(302);
-    expect(r.headers["location"]).toMatch(/^\/setup\/seed/);
+    expect(r.headers["location"]).toMatch(/^\/init\/seed/);
 
     const [rows] = await td.pool.query<mysql.RowDataPacket[]>(
       `SELECT email, role FROM users WHERE email = ?`,
@@ -144,15 +144,15 @@ describe("setup wizard routes", () => {
     expect(rows[0]!.role).toBe("admin");
   });
 
-  it("POST /setup/admin with weak password re-renders form with no user created", async () => {
+  it("POST /init/admin with weak password re-renders form with no user created", async () => {
     // Validation failures re-render the form (200) so email/displayName are
     // preserved — see fix(web): preserve form input on setup wizard
     // validation failure. The critical invariant is: weak password must NOT
     // create a user row.
     const agent = request.agent(appPre.server);
-    const page = await agent.get("/setup/admin");
+    const page = await agent.get("/init/admin");
     const csrf = extractCsrf(page.text);
-    const r = await agent.post("/setup/admin").type("form").send({
+    const r = await agent.post("/init/admin").type("form").send({
       csrf,
       email: "weak@setup.test",
       password: "short",
@@ -171,13 +171,13 @@ describe("setup wizard routes", () => {
     expect(rows.length).toBe(0);
   });
 
-  it("POST /setup/seed with load=true runs migrations and ensures 50 seed rows, redirects to /setup/complete", async () => {
+  it("POST /init/seed with load=true runs migrations and ensures 50 seed rows, redirects to /init/complete", async () => {
     const agent = request.agent(appPre.server);
-    const page = await agent.get("/setup/seed");
+    const page = await agent.get("/init/seed");
     const csrf = extractCsrf(page.text);
-    const r = await agent.post("/setup/seed").type("form").send({ csrf, load: "true" });
+    const r = await agent.post("/init/seed").type("form").send({ csrf, load: "true" });
     expect(r.status).toBe(302);
-    expect(r.headers["location"]).toMatch(/^\/setup\/complete/);
+    expect(r.headers["location"]).toMatch(/^\/init\/complete/);
 
     const [seedRows] = await td.pool.query<mysql.RowDataPacket[]>(
       `SELECT COUNT(*) AS n FROM ip_ranges WHERE country_source = 'seed'`,
@@ -186,15 +186,15 @@ describe("setup wizard routes", () => {
     expect(await getSetting(td.pool, "seed.loaded")).toBe("true");
   });
 
-  it("POST /setup/seed with load=false is idempotent (migrations still run) and leaves 0 seed rows", async () => {
+  it("POST /init/seed with load=false is idempotent (migrations still run) and leaves 0 seed rows", async () => {
     // First wipe the seed rows so we can verify load=false inserts none.
     await td.pool.query(`DELETE FROM ip_ranges WHERE country_source = 'seed'`);
     const agent = request.agent(appPre.server);
-    const page = await agent.get("/setup/seed");
+    const page = await agent.get("/init/seed");
     const csrf = extractCsrf(page.text);
-    const r = await agent.post("/setup/seed").type("form").send({ csrf, load: "false" });
+    const r = await agent.post("/init/seed").type("form").send({ csrf, load: "false" });
     expect(r.status).toBe(302);
-    expect(r.headers["location"]).toMatch(/^\/setup\/complete/);
+    expect(r.headers["location"]).toMatch(/^\/init\/complete/);
 
     const [seedRows] = await td.pool.query<mysql.RowDataPacket[]>(
       `SELECT COUNT(*) AS n FROM ip_ranges WHERE country_source = 'seed'`,
@@ -204,21 +204,21 @@ describe("setup wizard routes", () => {
     expect(await getSetting(td.pool, "seed.loaded")).toBe("false");
   });
 
-  it("POST /setup/seed with mode=etl kicks off a background ETL and renders the progress page", async () => {
+  it("POST /init/seed with mode=etl kicks off a background ETL and renders the progress page", async () => {
     const agent = request.agent(appPre.server);
-    const page = await agent.get("/setup/seed");
+    const page = await agent.get("/init/seed");
     const csrf = extractCsrf(page.text);
-    const r = await agent.post("/setup/seed").type("form").send({ csrf, mode: "etl" });
+    const r = await agent.post("/init/seed").type("form").send({ csrf, mode: "etl" });
     // Redirects straight back to the progress page (runId in URL).
     expect(r.status).toBe(302);
-    expect(r.headers["location"]).toMatch(/^\/setup\/seed\?runId=/);
+    expect(r.headers["location"]).toMatch(/^\/init\/seed\?runId=/);
 
     // The progress page is reachable and surfaces an etl_runs row.
     const progress = await agent.get(r.headers["location"]);
     expect(progress.status).toBe(200);
     // Will be one of: running, success, failed — depending on whether the
     // background downloader can reach db-ip.com from the test environment.
-    expect(progress.text).toMatch(/setup-progress-status--(running|success|failed)/);
+    expect(progress.text).toMatch(/init-progress-status--(running|success|failed)/);
 
     // A run row exists. Either still running or already finished.
     const [rows] = await td.pool.query<mysql.RowDataPacket[]>(
@@ -228,23 +228,23 @@ describe("setup wizard routes", () => {
     expect(["running", "success", "failed"]).toContain(rows[0]!.status);
 
     // Guard: a second click while running does NOT spawn a second pipeline.
-    const r2 = await agent.post("/setup/seed").type("form").send({ csrf, mode: "etl" });
+    const r2 = await agent.post("/init/seed").type("form").send({ csrf, mode: "etl" });
     expect(r2.status).toBe(302);
     const [count] = await td.pool.query<mysql.RowDataPacket[]>(`SELECT COUNT(*) AS n FROM etl_runs`);
     expect(Number(count[0]!.n)).toBe(1);
   });
 
-  it("POST /setup/complete marks initialized, redirects to /login, and locks /setup out", async () => {
+  it("POST /init/complete marks initialized, redirects to /login, and locks /init out", async () => {
     const agent = request.agent(appPre.server);
-    const page = await agent.get("/setup/complete");
+    const page = await agent.get("/init/complete");
     const csrf = extractCsrf(page.text);
-    const r = await agent.post("/setup/complete").type("form").send({ csrf });
+    const r = await agent.post("/init/complete").type("form").send({ csrf });
     expect(r.status).toBe(302);
     expect(r.headers["location"]).toMatch(/^\/login/);
     expect(await isInitialized(td.pool)).toBe(true);
 
-    // Rebuild server to refresh boot cache; setupGuard now reads initialized_at
-    // and should flip requireSetup=false. /setup is locked out (404) and /
+    // Rebuild server to refresh boot cache; initGuard now reads initialized_at
+    // and should flip requireSetup=false. /init is locked out (404) and /
     // no longer redirects.
     const cfg = loadConfig();
     cfg.db.database = td.dbName;
@@ -253,7 +253,7 @@ describe("setup wizard routes", () => {
     const root = await request(appPost.server).get("/");
     expect(root.status).not.toBe(302);
 
-    const setup = await request(appPost.server).get("/setup");
+    const setup = await request(appPost.server).get("/init");
     expect(setup.status).toBe(404);
   });
 });

@@ -12,10 +12,10 @@
 </dl>
 <p class="boot-note">{{req.t "setup.database.envHint"}}</p>
 {{#if error}}<div class="boot-alert"><p class="form-error">{{error}}</p></div>{{/if}}
-<form method="POST" action="/setup/database" class="boot-form">
+<form method="POST" action="/init/database" class="boot-form">
   <input type="hidden" name="csrf" value="{{csrfToken}}">
   <div class="boot-actions">
     <button type="submit" class="btn-primary">{{req.t "setup.database.test"}}</button>
-    <a href="/setup" class="boot-back">{{req.t "common.back"}}</a>
+    <a href="/init" class="boot-back">{{req.t "common.back"}}</a>
   </div>
 </form>

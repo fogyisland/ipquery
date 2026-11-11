@@ -8,12 +8,12 @@ declare module "fastify" {
   }
 }
 
-const SETUP_PATH = "/setup";
-const SETUP_COMPLETE_PATH = "/setup/complete";
+const SETUP_PATH = "/init";
+const SETUP_COMPLETE_PATH = "/init/complete";
 
 // Public routes that must remain reachable while the wizard is up. Adding a
-// new public API route? Add it here too, otherwise setupGuard will redirect
-// it to /setup and external integrations / probes will break.
+// new public API route? Add it here too, otherwise initGuard will redirect
+// it to /init and external integrations / probes will break.
 const PUBLIC_API_PATHS = new Set(["/healthz", "/lookup", "/stats"]);
 const ASSETS_PREFIX = "/assets/";
 
@@ -29,7 +29,7 @@ function isSetupCompletePath(url: string, method: string): boolean {
   return url === SETUP_COMPLETE_PATH && method === "POST";
 }
 
-export async function registerSetupGuard(app: FastifyInstance): Promise<void> {
+export async function registerInitGuard(app: FastifyInstance): Promise<void> {
   const initialized = await isInitialized(app.pool);
   app.decorate("requireSetup", !initialized);
 
@@ -39,7 +39,7 @@ export async function registerSetupGuard(app: FastifyInstance): Promise<void> {
 
     if (app.requireSetup) {
       if (isAllowedUrl(pathOnly)) return;
-      return reply.code(302).header("Location", "/setup").send();
+      return reply.code(302).header("Location", "/init").send();
     }
 
     if (pathOnly === SETUP_PATH || pathOnly.startsWith(`${SETUP_PATH}/`)) {
@@ -49,11 +49,11 @@ export async function registerSetupGuard(app: FastifyInstance): Promise<void> {
 
   app.addHook("onResponse", async (req, reply) => {
     if (!isSetupCompletePath(req.url.split("?")[0]!, req.method)) return;
-    // Only skip on 4xx/5xx: `POST /setup/complete` returns 302, and that
+    // Only skip on 4xx/5xx: `POST /init/complete` returns 302, and that
     // redirect is the entire point of the hook (the wizard has just called
     // `markInitialized(app.pool)` and we need to flip the boot-cached flag
     // before the user's next request). Skipping on 3xx left the cache stale
-    // and `/login` got redirected back to `/setup`.
+    // and `/login` got redirected back to `/init`.
     if (reply.statusCode >= 400) return;
     const fresh = await isInitialized(app.pool);
     app.requireSetup = !fresh;

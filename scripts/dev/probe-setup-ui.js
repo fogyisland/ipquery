@@ -10,12 +10,12 @@ const BASE = "http://127.0.0.1:5051";
 const OUT = path.resolve(__dirname, "../../shots");
 
 const STEPS = [
-  ["01-welcome", "/setup"],
-  ["02-database", "/setup/database"],
-  ["03-site", "/setup/site"],
-  ["04-admin", "/setup/admin"],
-  ["05-seed", "/setup/seed"],
-  ["06-complete", "/setup/complete"],
+  ["01-welcome", "/init"],
+  ["02-database", "/init/database"],
+  ["03-site", "/init/site"],
+  ["04-admin", "/init/admin"],
+  ["05-seed", "/init/seed"],
+  ["06-complete", "/init/complete"],
 ];
 
 const VIEWPORTS = [

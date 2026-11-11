@@ -512,7 +512,7 @@ async function runPipelineLocked(
   opts: { cfg: AppConfig; runId?: number },
 ): Promise<PipelineResult> {
   const { cfg } = opts;
-  // If the caller already created a row via recordEtlStart (e.g. the setup
+  // If the caller already created a row via recordEtlStart (e.g. the init
   // wizard needs the runId for its progress page BEFORE the pipeline spins
   // up), reuse that id instead of inserting a new one. Saves a few hundred ms
   // of waiting on the redirect→progress page round trip.

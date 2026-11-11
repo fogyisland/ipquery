@@ -43,7 +43,7 @@
 
     {{#if (eq progress.run.status "success")}}
       <p class="boot-status-note">{{req.t "setup.seed.progress.successHint"}}</p>
-      <form method="POST" action="/setup/seed" class="boot-form">
+      <form method="POST" action="/init/seed" class="boot-form">
         <input type="hidden" name="csrf" value="{{csrfToken}}">
         <input type="hidden" name="mode" value="etl-done">
         <div class="boot-actions">
@@ -52,7 +52,7 @@
       </form>
     {{else if (eq progress.run.status "failed")}}
       <p class="boot-status-note">{{req.t "setup.seed.etl.retryHint"}}</p>
-      <form method="POST" action="/setup/seed" class="boot-form">
+      <form method="POST" action="/init/seed" class="boot-form">
         <input type="hidden" name="csrf" value="{{csrfToken}}">
         <div class="boot-options" role="radiogroup" aria-label="{{req.t 'setup.seed.retry'}}">
           <div class="boot-option">
@@ -91,7 +91,7 @@
 
   {{#if error}}<div class="boot-alert"><p class="form-error">{{error}}</p></div>{{/if}}
 
-  <form method="POST" action="/setup/seed" class="boot-form">
+  <form method="POST" action="/init/seed" class="boot-form">
     <input type="hidden" name="csrf" value="{{csrfToken}}">
     <div class="boot-options" role="radiogroup" aria-label="{{req.t 'setup.seed.title'}}">
       <div class="boot-option">
@@ -118,7 +118,7 @@
     </div>
     <div class="boot-actions">
       <button type="submit" class="btn-primary">{{req.t "setup.seed.submit"}}</button>
-      <a href="/setup/admin" class="boot-back">{{req.t "common.back"}}</a>
+      <a href="/init/admin" class="boot-back">{{req.t "common.back"}}</a>
     </div>
   </form>
 {{/if}}

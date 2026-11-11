@@ -2,12 +2,12 @@
 /* ──────────────────────────────────────────────────────────────────────────
    IPQuery — error page surface (errors/403, errors/404, errors/500, csrf)
 
-   These views render under `layouts/public`, not `layouts/setup`. They share
+   These views render under `layouts/public`, not `layouts/init`. They share
    the wizard's typographic vocabulary — .boot-step-head / .boot-lede /
    .boot-actions — but not its shell: there is no rail, no six-step sequence,
    and no 700px worksheet measure.
 
-   Keeping this file separate from setup.css is deliberate. The wizard pulls
+   Keeping this file separate from init.css is deliberate. The wizard pulls
    two web fonts from fonts.googleapis.com, which needs an external-origin
    exception in the CSP (style-src / font-src). An error page is what a user
    lands on when something is already wrong — often when a proxy or DNS

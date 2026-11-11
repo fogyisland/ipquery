@@ -11,7 +11,7 @@
   <div><dt>{{req.t "setup.complete.seedLoaded"}}</dt><dd>{{#if summary.seedLoaded}}{{req.t "setup.complete.yes"}}{{else}}{{req.t "setup.complete.no"}}{{/if}}</dd></div>
 </dl>
 <p class="boot-note">{{req.t "setup.boot.finishNote"}}</p>
-<form method="POST" action="/setup/complete" class="boot-form">
+<form method="POST" action="/init/complete" class="boot-form">
   <input type="hidden" name="csrf" value="{{csrfToken}}">
   <div class="boot-actions">
     <button type="submit" class="btn-primary">{{req.t "setup.complete.submit"}}</button>

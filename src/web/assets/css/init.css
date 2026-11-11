@@ -612,7 +612,7 @@ body.layout-setup .boot-alert .form-error {
    error pages (errors/csrf.hbs, errors/404.hbs, errors/403.hbs) render with
    `layouts/public` (body class `layout-public`) and reuse this vocabulary.
    Safe to make global because this file is loaded by exactly two shells —
-   layouts/setup.hbs and layouts/public.hbs — so admin/dashboard/app/marketing
+   layouts/init.hbs and layouts/public.hbs — so admin/dashboard/app/marketing
    keep their own .btn-primary from admin.css / style.css. */
 body.layout-setup button[type="submit"],
 .btn-primary {

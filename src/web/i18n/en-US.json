@@ -1056,7 +1056,7 @@
       "siteLede": "Name this installation. You can change it later in Settings.",
       "adminLede": "Create the first administrator account for the console.",
       "seedProgressLede": "The background task is running. You can leave this page and come back.",
-      "finishNote": "Once finished, /setup is locked and the login page takes over.",
+      "finishNote": "Once finished, /init is locked and the login page takes over.",
       "backToStart": "Back to start"
     },
     "steps": {
@@ -1143,7 +1143,7 @@
     },
     "complete": {
       "title": "Ready to finish",
-      "body": "Review the summary below. Once you click Finish, the wizard marks the install as initialized and locks /setup out.",
+      "body": "Review the summary below. Once you click Finish, the wizard marks the install as initialized and locks /init out.",
       "summary": "Summary",
       "siteName": "Site name",
       "adminEmail": "Admin email",

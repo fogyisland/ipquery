@@ -19,7 +19,7 @@ make install build run    # local node + uses local MySQL
 
 The first run downloads data sources and populates the database (~10 min). Subsequent runs take the daily cron.
 
-Full step-by-step bootstrap (Web wizard and headless CLI, with a checklist for production) is in [`docs/setup.md`](docs/setup.md).
+Full step-by-step bootstrap (Web wizard and headless CLI, with a checklist for production) is in [`docs/init.md`](docs/init.md).
 
 ## Endpoints
 
@@ -93,7 +93,7 @@ The UI follows a tool-style layout: a persistent left sidebar groups links by au
 ### Pages
 
 - **Marketing & docs** — `/`, `/about`, `/docs`, `/status`, `/try` (htmx-powered demo)
-- **Auth** — `/signup`, `/login`, `/verify`, `/forgot`, `/reset`, `/setup` (first-run wizard, unauthenticated entry point)
+- **Auth** — `/signup`, `/login`, `/verify`, `/forgot`, `/reset`, `/init` (first-run wizard, unauthenticated entry point)
 - **Dashboard** — `/dashboard`, `/dashboard/history`, `/dashboard/keys`, `/dashboard/profile`
 - **Admin** — `/admin` (overview with ETL/DB/widgets/sparklines), `/admin/users`, `/admin/etl/runs`, `/admin/keys`, `/admin/audit` (query log), `/admin/audit-log` (admin action log), `/admin/queries` (stats + top users + hourly), `/admin/settings` (DB pool + secrets + ETL restart)
 - **API** — `/lookup[/:ip]`, `/healthz`, `/stats`
@@ -105,7 +105,7 @@ The web app and API share one Fastify process. You need a reachable MySQL — in
 1. `cp .env.example .env` and set `SESSION_SECRET` (long random string), `WEB_BASE_URL` (defaults to `http://localhost:5001`), `DB_*` for your MySQL, and `MAXMIND_LICENSE_KEY`. Configure `SMTP_*` if you want real email delivery; otherwise verification/reset emails print to stdout. The deploy target is **native Node + MySQL on the host** — no Docker required.
 2. `make install` then `make build` (compile TypeScript + copy schema into `dist/`).
 3. Bootstrap the admin and the database. Fresh installs must be initialized before `/login` works; choose one of:
-   - **Web wizard (default).** Run `make run` and open `http://localhost:5001/setup` in a browser. The wizard runs migrations, probes the DB connection, lets you set the site name, bootstrap the admin account, and optionally load seed data — a 6-step linear flow. Once `settings.initialized_at` is set, `/setup` returns 404 and every non-allowlisted route stops redirecting to it.
+   - **Web wizard (default).** Run `make run` and open `http://localhost:5001/init` in a browser. The wizard runs migrations, probes the DB connection, lets you set the site name, bootstrap the admin account, and optionally load seed data — a 6-step linear flow. Once `settings.initialized_at` is set, `/init` returns 404 and every non-allowlisted route stops redirecting to it.
    - **CLI `init` (headless).** For scripted deploys (Ansible, Terraform, CI): `ADMIN_EMAIL=you@example.com ADMIN_PASSWORD=$(openssl rand -base64 16) make init` runs migrations + bootstraps the admin. Add `ADMIN_SEED=true` to also load the seed dataset. The command exits with an error if the system is already initialized; pass `--reinit` to re-run without wiping data.
 4. `make run` to start the server (or use your process manager of choice with `node dist/cli.js serve`).
 5. Open `http://localhost:5001/login` (or your `WEB_BASE_URL`) and sign in.

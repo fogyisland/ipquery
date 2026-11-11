@@ -60,7 +60,7 @@ beforeAll(async () => {
   const cfg = loadConfig();
   cfg.db.database = td.dbName;
 
-  // The setupGuard plugin enforces on every non-setup request when
+  // The initGuard plugin enforces on every non-setup request when
   // `initialized_at` is missing. Test fixture: build pre-init server
   // (initialized_at NOT set yet), then mark initialized and rebuild
   // to exercise the post-init lock-out.
@@ -76,18 +76,18 @@ afterAll(async () => {
   await dropDb(td.dbName);
 });
 
-describe("setupGuard plugin", () => {
+describe("initGuard plugin", () => {
   describe("before init", () => {
-    it("redirects GET / to /setup", async () => {
+    it("redirects GET / to /init", async () => {
       const r = await request(appPre.server).get("/");
       expect(r.status).toBe(302);
-      expect(r.headers["location"]).toBe("/setup");
+      expect(r.headers["location"]).toBe("/init");
     });
 
-    it("redirects GET /login to /setup", async () => {
+    it("redirects GET /login to /init", async () => {
       const r = await request(appPre.server).get("/login");
       expect(r.status).toBe(302);
-      expect(r.headers["location"]).toBe("/setup");
+      expect(r.headers["location"]).toBe("/init");
     });
 
     it("allows GET /healthz through (external probes)", async () => {
@@ -98,7 +98,7 @@ describe("setupGuard plugin", () => {
     it("allows GET /lookup through (public IP-API works during setup)", async () => {
       const r = await request(appPre.server).get("/lookup");
       // Endpoint is reachable; status depends on whether seed data was loaded.
-      // We only care that setupGuard didn't redirect to /setup.
+      // We only care that initGuard didn't redirect to /init.
       expect(r.status).not.toBe(302);
       expect(r.headers["location"]).toBeUndefined();
     });
@@ -111,27 +111,27 @@ describe("setupGuard plugin", () => {
   });
 
   describe("after init", () => {
-    it("does NOT redirect GET / to /setup", async () => {
+    it("does NOT redirect GET / to /init", async () => {
       const r = await request(appPost.server).get("/");
       expect(r.status).not.toBe(302);
     });
 
-    it("returns 404 for GET /setup (lock-out)", async () => {
-      const r = await request(appPost.server).get("/setup");
+    it("returns 404 for GET /init (lock-out)", async () => {
+      const r = await request(appPost.server).get("/init");
       expect(r.status).toBe(404);
     });
   });
 
   describe("onResponse cache refresh (regression)", () => {
-    // Regression test for the production bug where `setupGuard`'s onResponse
-    // hook skipped cache refresh on 3xx responses. POST /setup/complete returns
+    // Regression test for the production bug where `initGuard`'s onResponse
+    // hook skipped cache refresh on 3xx responses. POST /init/complete returns
     // 302, so the cache was never refreshed in production: after the wizard
-    // completed, /login got redirected back to /setup, trapping the user in a
+    // completed, /login got redirected back to /init, trapping the user in a
     // loop. The fix is `reply.statusCode >= 400` instead of `>= 300`.
     //
-    // Build a fresh pre-init server, walk the wizard up to /setup/complete on
+    // Build a fresh pre-init server, walk the wizard up to /init/complete on
     // THE SAME instance, and assert /login reaches the real handler (200) — no
-    // redirect to /setup, no server rebuild between steps.
+    // redirect to /init, no server rebuild between steps.
     let liveApp: Awaited<ReturnType<typeof buildServer>>;
     beforeAll(async () => {
       const cfg = loadConfig();
@@ -200,23 +200,23 @@ describe("setupGuard plugin", () => {
       expect(r.status).toBe(302);
     }
 
-    it("POST /setup/complete (302) refreshes cache so GET /login is NOT redirected", async () => {
+    it("POST /init/complete (302) refreshes cache so GET /login is NOT redirected", async () => {
       const agent = request.agent(liveApp.server);
-      await wizardStep(agent, "POST_/setup/site", { name: "X", tagline: "Y" });
-      await wizardStep(agent, "POST_/setup/admin", {
+      await wizardStep(agent, "POST_/init/site", { name: "X", tagline: "Y" });
+      await wizardStep(agent, "POST_/init/admin", {
         email: "x@y.z",
         password: "longpassword1",
         displayName: "X",
       });
-      await wizardStep(agent, "POST_/setup/seed", { load: "true" });
-      await wizardStep(agent, "POST_/setup/complete");
+      await wizardStep(agent, "POST_/init/seed", { load: "true" });
+      await wizardStep(agent, "POST_/init/complete");
 
-      // Same server instance — no rebuild. Pre-fix this redirected 302 to /setup.
+      // Same server instance — no rebuild. Pre-fix this redirected 302 to /init.
       const loginR = await request(liveApp.server).get("/login");
       expect(loginR.status).toBe(200);
       expect(loginR.headers["location"]).toBeUndefined();
 
-      const setupR = await request(liveApp.server).get("/setup");
+      const setupR = await request(liveApp.server).get("/init");
       expect(setupR.status).toBe(404);
     });
   });

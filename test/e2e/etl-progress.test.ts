@@ -70,7 +70,7 @@ beforeAll(async () => {
   // reads `settings.initialized_at` once at boot and caches the answer
   // in `app.requireSetup`. Writing the row afterwards would leave the
   // guard in "not initialized" mode and every admin page would redirect
-  // to /setup.
+  // to /init.
   await markInitialized(migratePool);
   await migratePool.end();
 

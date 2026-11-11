@@ -4,12 +4,12 @@
   <p class="boot-lede">{{req.t 'setup.boot.siteLede'}}</p>
 </header>
 {{#if error}}<div class="boot-alert"><p class="form-error">{{error}}</p></div>{{/if}}
-<form method="POST" action="/setup/site" class="boot-form">
+<form method="POST" action="/init/site" class="boot-form">
   <input type="hidden" name="csrf" value="{{csrfToken}}">
   {{> form-field name="name" label=(req.t 'setup.site.nameLabel') required=true value=siteName }}
   {{> form-field name="tagline" label=(req.t 'setup.site.taglineLabel') value=siteTagline }}
   <div class="boot-actions">
     <button type="submit" class="btn-primary">{{req.t 'setup.site.submit'}}</button>
-    <a href="/setup/database" class="boot-back">{{req.t 'common.back'}}</a>
+    <a href="/init/database" class="boot-back">{{req.t 'common.back'}}</a>
   </div>
 </form>
