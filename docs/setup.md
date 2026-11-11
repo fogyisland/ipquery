@@ -18,6 +18,8 @@
 | MySQL        | **5.7 / 8.0+**，需 `utf8mb4` | 迁移里含 `utf8mb4_unicode_ci` 与 JSON 列        |
 | 操作系统     | Windows / Linux / macOS      | 构建与启动不依赖 Docker                         |
 | MaxMind 许可 | 可选                         | 仅影响 MaxMind 数据源；DB-IP / ip2region 不需要 |
+| 数据库磁盘   | **>= 20 GB**                 | 全量 ETL 后 `ip_ranges` 约 3 GB（815 万行）+ 临时表 + 索引 |
+| `DATA_DIR`   | **>= 1 GB**                  | DB-IP 原始 CSV.gz 共约 93 MB |
 
 MySQL 5.7 用户注意：迁移脚本不使用 `ADD COLUMN IF NOT EXISTS`，而是逐列查
 `INFORMATION_SCHEMA` 判断是否缺失，因此 5.7 可以正常执行。全新库建表约需 40 秒
@@ -140,8 +142,9 @@ node dist/cli.js serve      # 前台运行，Ctrl+C 停止
 - **示例数据（50 条）** —— 瞬时完成。手工精选的公共 DNS、知名云厂商与 RFC 保留段，
   用来先把页面点通、验证查询链路。
 - **真实数据（DB-IP，推荐）** —— 后台下载并导入 DB-IP 免费库
-  （city-lite / country-lite / asn-lite，约 8.3M 条 IP 段）。页面会显示进度并每 3 秒
-  自动刷新，耗时约 5–15 分钟，期间**可以关掉浏览器**，回来仍能看到进度。
+  （city-lite / country-lite / asn-lite，实测约 **815 万条** IP 段）。页面会显示进度并
+  每 3 秒自动刷新，实测耗时约 **21 分钟**（见第 8 节），期间**可以关掉浏览器**，
+  回来仍能看到进度。
   同一时刻只允许一个 ETL 运行，重复提交不会起第二个。
 - **跳过** —— 保持空表，交给每日定时任务（`ETL_SCHEDULE`，默认每天 02:00 UTC）。
 
@@ -213,7 +216,69 @@ node dist/cli.js init \
 
 ---
 
-## 8. 生产部署清单
+## 8. ETL 全量导入的实测开销
+
+以下数字来自 2026-11 在 Windows 11 / MySQL 8 的一次完整 ETL（run 3），用于估算
+云端资源与耗时。数据源为 DB-IP 2026-11 免费库。
+
+| 阶段           | 耗时      | 说明                                          |
+| -------------- | --------- | --------------------------------------------- |
+| 下载           | ~7 s      | 93 MB（city 82 MB + asn 7 MB + country 4.5 MB）|
+| 解析 city      | 66 s      | 777 万行                                      |
+| 解析 country   | 5 s       | 73 万行                                       |
+| 解析 asn       | 3 s       | 49 万行                                       |
+| **插入 city**  | **992 s** | 777 万行 —— **耗时大头**                     |
+| 插入 country   | 97 s      | 73 万行                                       |
+| 插入 asn       | 78 s      | 49 万行                                       |
+| swap           | 0.2 s     | 原子 RENAME                                   |
+| **合计**       | **~21 分钟** |                                        |
+
+导入后的数据规模：
+
+| 指标                   | 实测值            |
+| ---------------------- | ----------------- |
+| `ip_ranges` 行数       | 8,152,112         |
+| `ip_ranges` 表 + 索引  | 约 3.0 GB         |
+| 含 city 的行           | 7,777,727         |
+| 含经纬度的行           | 7,777,815         |
+| 含 ASN 的行            | 485,291           |
+
+**要点**
+
+- **内存**：插入阶段按 1000 行一批流式写入，内存占用平稳；但一次 ETL 会同时持有
+  解析与插入两个阶段的缓冲。1 GB 内存的机器在插入 city 阶段可能被 OOM kill ——
+  被 kill 后磁盘上会留下半截的 `.gz`，**旧的 ETL 会在下次运行时解析它并报
+  `unexpected end of file`**。现在的 ETL 会检测并重新下载损坏的文件（见第 9 节），
+  但跑之前仍建议给到 2 GB 以上。
+- **耗时**：全量约 21 分钟，期间 `ip_ranges` 保持旧数据（swap 是原子的），查询不受影响。
+- **定时任务**：`ETL_SCHEDULE` 默认每天 02:00 UTC 跑**全量**，即每天重下 93 MB
+  并重导 815 万行。资源紧张时可改用 `ETL_CRON` 拉长周期，或改走增量策略。
+
+---
+
+## 9. 源文件完整性校验
+
+ETL 会复用 `DATA_DIR/raw/` 下的 DB-IP 原始文件。**"文件存在"不等于"文件完整"** ——
+一次被中断的下载会留下半截的 `.gz`，而旧版本会直接拿去解析并失败。
+
+现在的行为：
+
+1. **下载时**：`downloadToFile` 比对实际落盘字节数与 `Content-Length`，不一致就
+   **删除半成品**再报错，不会让脏文件留在盘上。
+2. **复用时**：对每个缓存文件做 gzip 校验（magic bytes + trailer ISIZE，流式解压，
+   87 MB 文件约 4 秒、内存不涨）。损坏的文件会被**删除并重新下载**。
+3. **缺失或损坏时不静默跳过**：任一源文件在下载阶段后仍不可用，或解析出 0 行，
+   该次 ETL **直接失败**并保留旧数据，绝不把残缺的数据 swap 上线。
+
+手工检查缓存文件：
+
+```bash
+gzip -t data/raw/*.csv.gz && echo "all intact"
+```
+
+---
+
+## 10. 生产部署清单
 
 - [ ] `COOKIE_SECURE=true`，`WEB_BASE_URL` 为真实 HTTPS 域名
 - [ ] `SESSION_SECRET` / `CSRF_SECRET` 为各自独立的随机值（不要复用）
@@ -221,7 +286,11 @@ node dist/cli.js init \
 - [ ] `.env` 权限收紧（Linux：`chmod 600 .env`），**不进入版本库**
 - [ ] 用 systemd / pm2 / NSSM 托管 `node dist/cli.js serve`，不要靠前台终端
 - [ ] 反代（Nginx / Caddy）转发 `X-Forwarded-For`，否则限流把所有人算成一个 IP
-- [ ] `DATA_DIR` 指向容量足够的磁盘（DB-IP 原始 CSV 约 100+ MB，导入后表更大）
+- [ ] `DATA_DIR` 指向容量足够的磁盘（DB-IP 原始 CSV.gz 约 93 MB）
+- [ ] 数据库数据盘 >= 20 GB（全量导入后 `ip_ranges` 约 3.0 GB / 815 万行）
+- [ ] 内存 >= 2 GB（全量 ETL 峰值在插入 city 阶段，1 GB 机器可能被 OOM kill）
+- [ ] 首次部署后手动跑一次 `node dist/cli.js update` 并等它完成（约 21 分钟），
+      确认 `node dist/cli.js status` 显示 `status: "success"` 且 `dbipRecords` 非 0
 
 ---
 
