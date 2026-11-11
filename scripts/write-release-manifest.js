@@ -38,6 +38,10 @@ const release = {
     init: "node dist/cli.js init",
     update: "node dist/cli.js update",
     status: "node dist/cli.js status",
+    // Development convenience: loads the 50 demo IP ranges. Never run
+    // this on a production server — a real install loads the DB-IP
+    // library with `update`.
+    "seed:demo": "node dist/cli.js seed:demo",
   },
   dependencies: src.dependencies,
 };

@@ -21,7 +21,6 @@ bash install.sh
 | `install.sh`         | 装依赖 → 建 `data/raw/` → 生成 `.env` → 跑迁移                                                              |
 | `init-runbook.md`    | 首次启动与上线核对手册                                                                                      |
 | `MANIFEST.md`        | 每个文件的来源、必需性，以及**不需要**上服务器的东西                                                        |
-| `seed-ip-ranges.sql` | 50 条示例 IP 段的母本与人工审阅版                                                                           |
 
 ## 为什么 `node_modules` 不在这里
 
@@ -56,9 +55,16 @@ node dist/cli.js serve                                                    # 起�
 1. **`.env` 不进版本库**，只在本机（`chmod 600`）。`SESSION_SECRET` 与
    `CSRF_SECRET` 必须是两个不同的随机值，缺任一服务直接拒启。
 
-2. **种子数据不要手工执行** `seed-ip-ranges.sql` —— 它是母本。运行时真正
-   加载的是 `dist/storage/migrations/012_seed_ip_ranges.sql`（由
-   `node dist/cli.js init --seed` 触发），幂等可重跑。
+2. **示例数据只在你明确要求时才会加载。** `dist/storage/seed/demo-ranges.sql`
+   里的 50 条示例段**不会**被迁移自动灌入——一个刚建好的库是干净的。想在开发机
+   上灌示例数据：
+
+   ```bash
+   node dist/cli.js seed:demo    # 仅开发/演示用
+   ```
+
+   **生产环境不要执行这一条。** 生产数据来自 `node dist/cli.js update`（真实
+   DB-IP 库）。
 
 3. **`DATA_DIR` 是相对路径**，相对于进程工作目录。用 systemd / pm2 托管时
    `WorkingDirectory` 必须指向安装根目录，否则 ETL 数据落到别处。

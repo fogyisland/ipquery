@@ -39,6 +39,7 @@ const csrf_1 = require("../plugins/csrf");
 const settings_1 = require("../../storage/settings");
 const bootstrap_1 = require("../admin/bootstrap");
 const runner_1 = require("../../storage/migrations/runner");
+const demoSeed_1 = require("../../storage/seed/demoSeed");
 const pipeline_1 = require("../../etl/pipeline");
 const runGuard_1 = require("../../etl/runGuard");
 const mysql_1 = require("../../storage/mysql");
@@ -368,7 +369,12 @@ async function initRoutes(app) {
         await (0, runner_1.runMigrations)(app.pool);
         const mode = body.mode ?? (body.load === "true" ? "demo" : body.load === "false" ? "skip" : undefined);
         if (mode === "demo") {
-            // Migration 012 inserts the 50 seed rows via INSERT IGNORE (idempotent).
+            // Load the 50 demo rows for real. This used to only set a flag,
+            // because migration 012 had already inserted them during
+            // `migrate` — which meant "skip the demo data" never actually
+            // skipped anything. Now the rows only exist if they were asked
+            // for.
+            await (0, demoSeed_1.loadDemoSeed)(app.pool);
             await (0, settings_1.setSetting)(app.pool, "seed.loaded", "true");
             return reply.code(302).header("Location", "/init/complete?flash=success").send();
         }

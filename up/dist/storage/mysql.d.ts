@@ -16,6 +16,49 @@ export interface SwapResult {
     durationMs: number;
     errorMessage?: string;
 }
+/** Rows whose origin is NOT one of the ETL's own source tags.
+ *
+ *  The ETL rebuilds ip_ranges from scratch: it truncates ip_ranges_new,
+ *  streams the DB-IP files into it, and renames it over ip_ranges. That
+ *  is the correct behaviour for the DB-IP data itself — DB-IP re-issues
+ *  whole files monthly, so a full refresh is the only way to learn that
+ *  a /24 was split into two /25s.
+ *
+ *  But it also destroys rows the ETL knows nothing about. The
+ *  unknown-IP backfill writes /32 rows tagged 'multi-provider' straight
+ *  into ip_ranges (see src/etl/unknownIpBackfill.ts). Those rows are
+ *  the result of real lookups against external providers; the DB-IP
+ *  files will never contain them, so the next ETL run silently
+ *  deleted every one of them. An operator who ran the backfill, saw it
+ *  work, and then refreshed the library lost the work without any
+ *  error — the ETL reported success.
+ *
+ *  So before the swap, hand-authored rows are copied across. The ETL's
+ *  own rows are not: they are the ones the refresh is meant to replace.
+ */
+export declare const MANUAL_SOURCE_TAGS: readonly ["multi-provider"];
+export interface PreservedRows {
+    /** Rows copied out of the live table into the staging table. */
+    preserved: number;
+    /** Rows skipped because the staging table already had that range. */
+    conflicts: number;
+}
+/** Copies hand-authored rows from the live ip_ranges into the staging
+ *  ip_ranges_new, so that the upcoming swap does not drop them.
+ *
+ *  Must be called AFTER the staging table has been filled with the
+ *  freshly parsed ETL rows and BEFORE the RENAME — otherwise the
+ *  preserved rows would be copied into a table that is about to be
+ *  replaced anyway.
+ *
+ *  A row is copied when its country_source is a manual tag. Rows whose
+ *  (start_ip, end_ip) already exist in the staging table are skipped:
+ *  the ETL's row wins, because it is the more complete one (a real
+ *  DB-IP segment carries city, ISP and coordinates where a backfill
+ *  row carries a country code). The count of skipped rows is returned
+ *  so the pipeline can report it rather than silently losing them.
+ */
+export declare function preserveManualRows(pool: mysql.Pool): Promise<PreservedRows>;
 export declare function atomicSwapRanges(pool: mysql.Pool): Promise<SwapResult>;
 export declare function findRange(pool: mysql.Pool, ipBuf: Buffer): Promise<IpRangeRow | null>;
 export declare function recordEtlStart(pool: mysql.Pool): Promise<number>;

@@ -1,26 +1,31 @@
 -- SPDX-License-Identifier: MIT
-
--- Seed rows: a handful of well-known IPs so that /lookup answers
--- something before the first ETL run has loaded the real library.
+--
+-- Demo IP ranges — 50 hand-picked rows for development and demos.
+--
+-- NOT applied by the migration runner. Load them explicitly with:
+--     node dist/cli.js seed:demo
+--
+-- A production deployment should never contain these rows. They cover
+-- Google/Cloudflare/Quad9/114DNS resolvers, a handful of well-known
+-- CDN nodes, and the RFC 1918 / loopback ranges. The point is to give
+-- /lookup something to answer with before the real library is loaded
+-- — not to pretend the database is populated.
 --
 -- Byte order matters. start_ip / end_ip are BINARY(16) and every
 -- runtime path — parseIp() in src/ip.ts, the DB-IP and MaxMind
--- parsers, and findRange()'s query parameter — stores an IPv4
--- address as 16 bytes with the four address bytes in the LAST four
--- positions (the "::a.b.c.d" form, i.e. `00...00 08 08 08 08`).
+-- parsers, and findRange()'s query parameter — stores an IPv4 address
+-- as 16 bytes with the four address bytes in the LAST four positions
+-- (the "::a.b.c.d" form, i.e. `00...00 08 08 08 08`).
 --
 -- These rows were originally written as UNHEX('08080808') — four
 -- bytes, left-aligned in the column. MySQL compares the padded
 -- values, so `00...00 08 08 08 08` sorted BELOW the 16-byte form,
--- and no query could ever match them: every seeded IP was
--- unreachable through /lookup. The values below are the corrected
--- 16-byte form.
-
--- Add a UNIQUE index on (start_ip, end_ip, country_source) so that
--- INSERT IGNORE below has row-level idempotency for seed rows
--- (country_source = 'seed'). This is safe because ETL rows use other
--- source values such as 'maxmind', so the index does not constrain them.
-ALTER TABLE ip_ranges ADD UNIQUE INDEX uniq_seed (start_ip, end_ip, country_source);
+-- and no query could ever match them: every seeded IP was unreachable
+-- through /lookup. The values below are the corrected 16-byte form.
+--
+-- INSERT IGNORE keeps this idempotent, backed by the uniq_seed
+-- UNIQUE index (start_ip, end_ip, country_source) that migration 012
+-- adds. Re-running the loader is harmless.
 
 INSERT IGNORE INTO ip_ranges
   (start_ip, end_ip, country_code, country_name, region, city, isp, asn, asn_org, country_source, city_source, isp_source, geo_source)

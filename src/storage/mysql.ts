@@ -220,6 +220,125 @@ export interface SwapResult {
   errorMessage?: string;
 }
 
+/** Rows whose origin is NOT one of the ETL's own source tags.
+ *
+ *  The ETL rebuilds ip_ranges from scratch: it truncates ip_ranges_new,
+ *  streams the DB-IP files into it, and renames it over ip_ranges. That
+ *  is the correct behaviour for the DB-IP data itself — DB-IP re-issues
+ *  whole files monthly, so a full refresh is the only way to learn that
+ *  a /24 was split into two /25s.
+ *
+ *  But it also destroys rows the ETL knows nothing about. The
+ *  unknown-IP backfill writes /32 rows tagged 'multi-provider' straight
+ *  into ip_ranges (see src/etl/unknownIpBackfill.ts). Those rows are
+ *  the result of real lookups against external providers; the DB-IP
+ *  files will never contain them, so the next ETL run silently
+ *  deleted every one of them. An operator who ran the backfill, saw it
+ *  work, and then refreshed the library lost the work without any
+ *  error — the ETL reported success.
+ *
+ *  So before the swap, hand-authored rows are copied across. The ETL's
+ *  own rows are not: they are the ones the refresh is meant to replace.
+ */
+export const MANUAL_SOURCE_TAGS = ["multi-provider"] as const;
+
+export interface PreservedRows {
+  /** Rows copied out of the live table into the staging table. */
+  preserved: number;
+  /** Rows skipped because the staging table already had that range. */
+  conflicts: number;
+}
+
+/** Copies hand-authored rows from the live ip_ranges into the staging
+ *  ip_ranges_new, so that the upcoming swap does not drop them.
+ *
+ *  Must be called AFTER the staging table has been filled with the
+ *  freshly parsed ETL rows and BEFORE the RENAME — otherwise the
+ *  preserved rows would be copied into a table that is about to be
+ *  replaced anyway.
+ *
+ *  A row is copied when its country_source is a manual tag. Rows whose
+ *  (start_ip, end_ip) already exist in the staging table are skipped:
+ *  the ETL's row wins, because it is the more complete one (a real
+ *  DB-IP segment carries city, ISP and coordinates where a backfill
+ *  row carries a country code). The count of skipped rows is returned
+ *  so the pipeline can report it rather than silently losing them.
+ */
+export async function preserveManualRows(pool: mysql.Pool): Promise<PreservedRows> {
+  const tagPlaceholders = MANUAL_SOURCE_TAGS.map(() => "?").join(",");
+  // The column list is explicit rather than SELECT * so that a schema
+  // change on ip_ranges (a new column) cannot make this insert fail
+  // with "column count doesn't match". The two tables are kept in sync
+  // by the migrations, but the copy should not be the thing that breaks
+  // when they drift.
+  const columns = [
+    "start_ip",
+    "end_ip",
+    "range_size",
+    "country_code",
+    "country_name",
+    "region",
+    "city",
+    "postal_code",
+    "latitude",
+    "longitude",
+    "timezone",
+    "isp",
+    "asn",
+    "asn_org",
+    "country_source",
+    "city_source",
+    "isp_source",
+    "asn_source",
+    "geo_source",
+  ];
+  const columnList = columns.join(",");
+
+  // LEFT JOIN against the staging table to find the manual rows the
+  // refresh does not already cover. NOT EXISTS would be equivalent
+  // here, but the LEFT JOIN lets one statement both filter and count
+  // the conflicts, avoiding a second full pass over the manual rows.
+  //
+  // Every selected column is qualified with the table alias. An
+  // unqualified `start_ip` would be ambiguous — both tables have one —
+  // and relying on MySQL's resolution of that would make the statement
+  // break the moment the query's shape changed.
+  const selectList = columns.map((c) => `old.${c}`).join(",");
+
+  // Count the manual rows the staging table already covers BEFORE the
+  // insert. After the insert every one of them would be present, and
+  // the "still missing" predicate would match nothing — so counting
+  // afterwards would report zero conflicts no matter how many rows
+  // were actually skipped.
+  const [countRows] = await pool.query<mysql.RowDataPacket[]>(
+    `SELECT COUNT(*) AS n
+       FROM ip_ranges old
+       JOIN ip_ranges_new fresh
+              ON fresh.start_ip = old.start_ip AND fresh.end_ip = old.end_ip
+      WHERE old.country_source IN (${tagPlaceholders})`,
+    [...MANUAL_SOURCE_TAGS],
+  );
+  const conflicts = Number(countRows[0]?.n ?? 0);
+
+  // Copy the manual rows the staging table does not have yet. The
+  // LEFT JOIN's IS NULL filter does that in one pass; NOT EXISTS would
+  // be equivalent.
+  const [result] = await pool.query<mysql.ResultSetHeader>(
+    `INSERT IGNORE INTO ip_ranges_new (${columnList})
+     SELECT ${selectList}
+       FROM ip_ranges old
+       LEFT JOIN ip_ranges_new fresh
+              ON fresh.start_ip = old.start_ip AND fresh.end_ip = old.end_ip
+      WHERE old.country_source IN (${tagPlaceholders})
+        AND fresh.id IS NULL`,
+    [...MANUAL_SOURCE_TAGS],
+  );
+  // affectedRows counts only rows actually inserted; INSERT IGNORE
+  // reports 0 for the ones it skipped on a duplicate key.
+  const preserved = Number(result.affectedRows);
+  return { preserved, conflicts };
+}
+
 export async function atomicSwapRanges(pool: mysql.Pool): Promise<SwapResult> {
   const conn = await pool.getConnection();
   const t0 = Date.now();
