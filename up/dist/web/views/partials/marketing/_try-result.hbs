@@ -1,0 +1,23 @@
+{{! SPDX-License-Identifier: MIT }}
+{{! Result panel for /try: 2-column (data + curl repro).
+     Used in marketing/try.hbs only. }}
+<div class="m-result-panel">
+  <div class="m-result-data">
+    <div class="m-result-data-head">
+      <h3>{{result.heading}}</h3>
+      <span class="m-result-ip">{{result.ip}}</span>
+    </div>
+    <dl class="m-result-fields">
+      <dt>{{req.t "try.country"}}</dt>
+      <dd>{{#if result.country.name}}{{result.country.name}}{{else}}<code>{{result.country.code}}</code>{{/if}}<span class="m-source-tag">{{result.country.source}}</span></dd>
+      {{#if result.region}}<dt>{{req.t "try.region"}}</dt><dd>{{result.region}}</dd>{{/if}}
+      {{#if result.city}}<dt>{{req.t "try.city"}}</dt><dd>{{result.city.name}}<span class="m-source-tag">{{result.city.source}}</span></dd>{{/if}}
+      {{#if result.isp}}<dt>{{req.t "try.isp"}}</dt><dd>{{result.isp.name}}<span class="m-source-tag">{{result.isp.source}}</span></dd>{{/if}}
+      {{#if result.asn}}<dt>{{req.t "try.asn"}}</dt><dd><code>AS{{result.asn.number}}</code> {{result.asn.org}}<span class="m-source-tag">{{result.asn.source}}</span></dd>{{/if}}
+    </dl>
+  </div>
+  <aside class="m-result-curl">
+    <span class="m-result-curl-label">{{req.t "try.reproCurl"}}</span>
+    <code><span class="tok-key">curl</span> <span class="tok-str">"{{result.ipLookupUrl}}"</span></code>
+  </aside>
+</div>

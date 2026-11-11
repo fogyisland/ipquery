@@ -1,0 +1,1166 @@
+{
+  "common": {
+    "signup": "注册",
+    "login": "登录",
+    "logout": "登出",
+    "submit": "提交",
+    "cancel": "取消",
+    "save": "保存",
+    "back": "返回",
+    "next": "下一页",
+    "prev": "上一页",
+    "search": "搜索",
+    "loading": "加载中...",
+    "yes": "是",
+    "no": "否",
+    "filter": "筛选",
+    "exportCsv": "导出 CSV",
+    "any": "全部",
+    "enableJs": "请启用 JavaScript 以使用批量操作",
+    "view": "查看",
+    "actions": "操作",
+    "selectRowsFirst": "请先选择行"
+  },
+  "sidebar": {
+    "group": {
+      "public": "公开",
+      "user": "个人",
+      "admin": "管理"
+    },
+    "enterAdmin": "进入管理员控制台",
+    "backToDashboard": "返回个人控制台"
+  },
+  "nav": {
+    "home": "首页",
+    "docs": "文档",
+    "pricing": "定价",
+    "status": "状态",
+    "about": "关于",
+    "try": "在线试查",
+    "dashboard": "控制台",
+    "admin": {
+      "dashboard": "总览",
+      "users": "用户",
+      "etl": "ETL 运维",
+      "queries": "查询日志",
+      "keys": "API Keys",
+      "audit": "查询审计",
+      "auditLog": "操作审计",
+      "settings": "设置",
+      "ingest": "API 入库",
+      "customProviders": "自定义 Provider",
+      "providers": "数据源"
+    },
+    "logout": "登出",
+    "history": "查询历史",
+    "apiKeys": "API Keys",
+    "profile": "个人资料",
+    "signup": "注册",
+    "login": "登录"
+  },
+  "auth": {
+    "email": "邮箱",
+    "password": {
+      "label": "密码",
+      "help": "至少 10 位,包含字母和数字",
+      "confirm": "确认密码"
+    },
+    "displayName": "昵称",
+    "signup": {
+      "title": "注册账号",
+      "submit": "注册",
+      "success": {
+        "title": "注册成功",
+        "body": "请在邮箱中点击验证链接以激活账号。"
+      },
+      "error": {
+        "duplicate": "该邮箱已注册",
+        "email_format": "邮箱格式不正确",
+        "password_weak": "密码至少 10 位,包含字母和数字",
+        "password_mismatch": "两次密码不一致",
+        "displayName_invalid": "昵称长度应为 1-64 字符"
+      }
+    },
+    "verify": {
+      "title": "邮箱验证",
+      "success": "邮箱已验证,请登录",
+      "invalid": "链接无效",
+      "expired": "链接已过期,请重新发送",
+      "consumed": "链接已被使用",
+      "resend": "重新发送验证邮件",
+      "resend.cooldown": "{seconds} 秒后可重新发送",
+      "required": "请先验证邮箱"
+    },
+    "login": {
+      "title": "登录",
+      "submit": "登录",
+      "error": {
+        "credentials": "邮箱或密码错误",
+        "disabled": "账号已禁用,请联系管理员",
+        "locked": "登录尝试过多,请 {minutes} 分钟后重试"
+      }
+    },
+    "logout": {
+      "title": "登出",
+      "confirm": "确定登出?"
+    },
+    "forgot": {
+      "title": "找回密码",
+      "submit": "发送重置链接",
+      "done": "如果该邮箱已注册,你将收到重置链接"
+    },
+    "reset": {
+      "title": "重置密码",
+      "submit": "重置密码"
+    }
+  },
+  "greeting": {
+    "hello": "你好,{name}"
+  },
+  "lookup": {
+    "title": "IP 查询",
+    "input": {
+      "placeholder": "输入 IP 地址,如 8.8.8.8"
+    },
+    "submit": "查询",
+    "found": "{ip} 位于 {country}",
+    "notfound": "{ip} 未找到记录",
+    "invalid": "IP 格式无效"
+  },
+  "dashboard": {
+    "title": "控制台",
+    "welcome": "欢迎,{name}",
+    "history": {
+      "title": "查询历史",
+      "empty": "暂无查询记录",
+      "col": {
+        "time": "时间",
+        "ip": "IP",
+        "status": "状态",
+        "source": "来源"
+      },
+      "filter": {
+        "status": "按状态筛选",
+        "all": "全部"
+      }
+    },
+    "keys": {
+      "title": "API Keys",
+      "empty": "暂无 API Key",
+      "create": "创建新 Key",
+      "label": "标签",
+      "prefix": "前缀",
+      "lastUsed": "最后使用",
+      "created": "创建时间",
+      "revoke": "吊销",
+      "revoke.confirm": "确定吊销此 Key?吊销后无法恢复。",
+      "created_once": "请保存以下 Key,关闭后将无法再次查看:",
+      "endpoint": {
+        "title": "API 接入点",
+        "help": "用任意 API Key 替换 YOUR_KEY,IP 替换为目标地址即可发起查询。",
+        "copy": "复制"
+      },
+      "copy": "复制",
+      "revoked": "已吊销"
+    },
+    "profile": {
+      "title": "个人资料",
+      "displayName": "昵称",
+      "email": "邮箱",
+      "emailHint": "修改邮箱需重新验证",
+      "oldPassword": "当前密码",
+      "newPassword": "新密码",
+      "save": "保存修改",
+      "saved": "资料已保存",
+      "savedWithEviction": "资料已保存。已退出 {{count}} 个其他会话。"
+    },
+    "hit": "命中",
+    "miss": "未命中",
+    "invalid": "无效",
+    "last7d": "近 7 天",
+    "section.queries7d": "查询统计 (7 天)",
+    "account.title": "账户信息",
+    "joined": "注册时间",
+    "shortcuts.title": "快捷入口",
+    "lastQuery.title": "最近一次查询",
+    "lastQuery.empty": "还没有查询记录 — 去 /try 试试",
+    "lastQuery.unknown": "无匹配段",
+    "lastQuery.asn": "ASN",
+    "lastQuery.country": "国家",
+    "lastQuery.at": "于",
+    "lastQuery.cta": "前往在线试查",
+    "lastQuery.miss": "未命中",
+    "lastQuery.invalid": "无效输入"
+  },
+  "admin": {
+    "title": "管理后台",
+    "users": {
+      "title": "用户管理",
+      "search": "按邮箱搜索",
+      "id": "ID",
+      "email": "邮箱",
+      "role": "角色",
+      "status": "状态",
+      "created": "创建时间",
+      "disabled": "已禁用",
+      "verified": "已验证",
+      "bulk": {
+        "enable": "批量启用",
+        "disable": "批量禁用",
+        "verify": "批量验证"
+      },
+      "detail": {
+        "title": "用户 #{id}: {email}"
+      },
+      "col": {
+        "email": "邮箱",
+        "role": "角色",
+        "verified": "已验证",
+        "disabled": "已禁用",
+        "created": "注册时间",
+        "lastLogin": "最后登录"
+      },
+      "action": {
+        "enable": "启用",
+        "disable": "禁用",
+        "verify": "标记已验证",
+        "resetPassword": "重置密码",
+        "delete": "删除"
+      },
+      "delete.confirm": "确定删除该用户?所有相关数据将被清除。",
+      "delete.confirm.title": "确认删除用户",
+      "delete.confirm.body": "此操作将永久删除 {email} 及其所有相关数据,且不可恢复。",
+      "option-role-admin": "管理员",
+      "option-role-user": "用户",
+      "option-status-active": "正常",
+      "option-status-disabled": "已禁用"
+    },
+    "etl": {
+      "title": "ETL 运维",
+      "trigger": "立即运行",
+      "trigger.confirm": "确定手动触发 ETL?",
+      "trigger.confirm.title": "确认触发 ETL",
+      "trigger.confirm.body": "此操作将立即开始一次计划外的 ETL 运行,已下载的源数据将覆盖现有数据。",
+      "stages": {
+        "download": "下载",
+        "parse": "解析",
+        "insert": "入库",
+        "swap": "原子切换",
+        "duration": "耗时 {ms}ms",
+        "totalBytes": "总字节",
+        "rowsSkipped": "已跳过 {count} 行",
+        "rowsInserted": "新插入 {count}",
+        "rowsDuplicates": "重复键 {count}",
+        "rowsAttempted": "尝试插入 {count}",
+        "batchCount": "{count} 批次",
+        "swapOk": "切换成功",
+        "swapFailed": "切换失败",
+        "liveRunning": "运行中…",
+        "skipReason": {
+          "shortLine": "列数不足",
+          "headerRow": "表头行",
+          "unparseableIp": "无法解析的 IP",
+          "missingCol": "列缺失",
+          "nonNumericAsn": "非数字 ASN",
+          "other": "其他"
+        }
+      },
+      "runDetail": {
+        "title": "ETL 运行 #{id}",
+        "status": {
+          "running": "运行中",
+          "success": "成功",
+          "failed": "失败"
+        },
+        "duration": "耗时 {ms}ms",
+        "started": "开始于",
+        "downloads": "下载阶段",
+        "parses": "解析阶段",
+        "inserts": "入库阶段",
+        "runError": "运行错误",
+        "swapError": "原子切换错误"
+      },
+      "col": {
+        "started": "开始时间",
+        "finished": "结束时间",
+        "status": "状态",
+        "merged": "合并记录数",
+        "source": "源",
+        "month": "月份",
+        "bytes": "字节",
+        "duration": "耗时",
+        "error": "错误",
+        "rowsEmitted": "解析行",
+        "rowsSkipped": "跳过行",
+        "gunzipErrors": "解压错误",
+        "rowsAttempted": "尝试",
+        "rowsInserted": "插入",
+        "rowsDuplicates": "重复",
+        "batchCount": "批次"
+      },
+      "status": {
+        "running": "运行中",
+        "success": "成功",
+        "failed": "失败"
+      },
+      "detail": {
+        "title": "ETL Run #{id}"
+      },
+      "alreadyRunning": "已有 ETL 运行正在进行中"
+    },
+    "keys": {
+      "title": "API Keys 全局",
+      "col": {
+        "id": "ID",
+        "owner": "所属用户",
+        "label": "标签",
+        "prefix": "前缀",
+        "created": "创建时间",
+        "revoked": "已吊销",
+        "lastUsed": "最后使用"
+      },
+      "option-revoked-yes": "已吊销",
+      "option-revoked-no": "有效",
+      "bulkRevoke": "批量吊销所选",
+      "bulkRevokeConfirm": "确定吊销选中的 API Key?此操作不可撤销。",
+      "bulkSelectAll": "全选",
+      "bulkSelectOne": "选择 Key #{id}"
+    },
+    "audit": {
+      "title": "查询审计",
+      "col": {
+        "time": "时间",
+        "ip": "查询 IP",
+        "status": "状态",
+        "user": "用户",
+        "apiKey": "API Key"
+      },
+      "option-status-hit": "命中",
+      "option-status-miss": "未命中",
+      "option-status-invalid": "无效",
+      "export": "导出 CSV"
+    },
+    "auditLog": {
+      "title": "操作审计",
+      "id": "ID",
+      "time": "时间",
+      "actor": "操作者",
+      "action": "操作",
+      "target": "目标",
+      "ip": "IP",
+      "created": "创建时间",
+      "option-action-user.delete": "删除用户",
+      "option-action-user.reset_password": "重置密码",
+      "option-action-user.bulk.disable": "批量禁用",
+      "option-action-etl.trigger": "触发 ETL",
+      "option-action-key.revoke": "吊销 Key",
+      "option-target_type-user": "用户",
+      "option-target_type-api_key": "API Key",
+      "option-target_type-etl_run": "ETL 运行"
+    },
+    "dashboard": {
+      "title": "总览",
+      "etlStatus": "ETL 状态",
+      "runsToday": "今日运行次数",
+      "ipRanges": "IP 段数",
+      "users": "用户",
+      "verified": "已验证",
+      "apiKeys": "API Keys",
+      "queries24h": "24h 查询",
+      "hitRate": "命中率",
+      "lastSuccess": "上次成功",
+      "never": "从未",
+      "recentActivity": "近期活动",
+      "noActivity": "暂无活动",
+      "welcome": "欢迎,{email}",
+      "viewAll": "查看全部",
+      "hit": "命中",
+      "miss": "未命中",
+      "invalid": "无效",
+      "last24h": "近 24 小时",
+      "section.queries24h": "查询统计 (24h)",
+      "section.system": "系统指标",
+      "chart7d.title": "近 7 天查询量",
+      "chart7d.total": "总计 {total} 次",
+      "action.queries": "查询日志",
+      "action.audit": "查询审计",
+      "action.triggerEtl": "触发 ETL"
+    },
+    "queries": {
+      "title": "查询统计",
+      "total": "查询总数",
+      "hitRate": "命中率",
+      "topIps": "热门 IP",
+      "topUsers": "活跃用户",
+      "since": "起始",
+      "until": "结束"
+    },
+    "settings": {
+      "title": "系统设置",
+      "tab": {
+        "general": "基础设置",
+        "security": "安全与认证",
+        "integrations": "服务集成",
+        "system": "数据库与运维"
+      },
+      "metricStrip": {
+        "apiPort": "API 端口",
+        "threadsConnected": "当前连接",
+        "maxUsedConnections": "峰值连接",
+        "etlLastRun": "ETL 上次运行"
+      },
+      "secret": {
+        "show": "显示",
+        "hide": "隐藏",
+        "unset": "(未设置)"
+      },
+      "etl": {
+        "scheduleHint": "定时任务表达式",
+        "lastRunNever": "尚未运行",
+        "lastRunOk": "成功 · 合并 {merged} 条",
+        "lastRunFailed": "失败",
+        "lastRunRunning": "运行中…"
+      },
+      "section": {
+        "db": "数据库",
+        "api": "API",
+        "etl": "ETL",
+        "web": "Web",
+        "smtp": "SMTP",
+        "security": "安全",
+        "maxmind": "MaxMind"
+      },
+      "field": {
+        "host": "主机",
+        "port": "端口",
+        "database": "数据库",
+        "user": "用户",
+        "password": "密码",
+        "poolSize": "连接池大小",
+        "rateLimit": "速率限制",
+        "schedule": "Cron",
+        "timezone": "时区",
+        "dataDir": "数据目录",
+        "baseUrl": "Base URL",
+        "cookieDomain": "Cookie 域",
+        "cookieSecure": "Cookie Secure",
+        "sessionTtl": "会话有效期(h)",
+        "sessionSecret": "会话密钥",
+        "csrfSecret": "CSRF 密钥",
+        "from": "发件人",
+        "loginMax": "登录失败上限",
+        "loginLockout": "锁定时长(分钟)",
+        "signupRate": "注册速率(每小时/IP)",
+        "verifyResend": "验证邮件冷却(秒)",
+        "licenseKey": "License Key",
+        "editions": "数据库版本"
+      },
+      "poolStatus": {
+        "title": "数据库连接池",
+        "threadsConnected": "当前连接",
+        "maxUsedConnections": "峰值连接"
+      },
+      "etlRestart": "立即运行 ETL",
+      "etlRestart.confirm": "手动触发 ETL 流水线(异步)"
+    },
+    "unknownIps": {
+      "title": "API 入库",
+      "tabs": {
+        "overview": "概览与调度",
+        "providers": "数据源配置",
+        "failureLogs": "失败日志"
+      },
+      "stats": {
+        "pending": "待回灌",
+        "processed": "已入库",
+        "totalQueries": "累计查询"
+      },
+      "section": {
+        "pending": "待回灌 IP(按热度排序)",
+        "recentlyProcessed": "最近入库记录"
+      },
+      "col": {
+        "ip": "IP",
+        "queryCount": "查询次数",
+        "firstSeen": "首次出现",
+        "lastSeen": "最近出现",
+        "source": "来源",
+        "lastAttempt": "上次尝试",
+        "processedAt": "入库时间",
+        "runId": "ETL Run"
+      },
+      "empty": {
+        "pending": "当前没有待回灌的 IP。/lookup miss 后会自动写入。"
+      },
+      "runId": {
+        "manual": "手动回灌"
+      },
+      "backfill": {
+        "button": "立即回灌",
+        "summary": "本次回灌完成",
+        "considered": "候选 IP",
+        "merged": "已入库",
+        "noConsensus": "多数票不一致",
+        "noCountry": "无国家代码",
+        "allAbstained": "全部失败",
+        "batchLimit": "每批 IP 数",
+        "run": "开始回灌",
+        "confirm": {
+          "title": "确认触发回灌",
+          "body": "将对队列里每个待回灌 IP 并行查询 3 个外部 API,按多数票合并到主表。已收录 IP 会自动跳过。"
+        },
+        "lockBusy": "另一个回灌任务正在进行,本次已跳过(未调用外部 API)",
+        "previewLockBusy": "另一个回灌任务正在进行,预览已跳过(未调用外部 API)",
+        "previewMissing": "预览已失效,请重新发起预览",
+        "previewExpired": "预览已过期,请重新发起预览"
+      },
+      "generate": {
+        "button": "随机生成 10 个 IP 并入库",
+        "confirm": "将随机生成 10 个 IP,对每个未收录的 IP 并行查询已启用的数据源,按多数票合并入库。预计耗时 1–2 分钟。是否继续?",
+        "summary": "随机 IP 入库完成",
+        "considered": "已查询 IP",
+        "merged": "新入库",
+        "noConsensus": "多数票不一致",
+        "noCountry": "无国家代码",
+        "allAbstained": "全部失败",
+        "exhaustedRetries": "未找到未收录 IP",
+        "providersDisabled": "已自动停用数据源(429)",
+        "ipList": "本次随机生成的 IP",
+        "lockBusy": "另一个回灌任务正在进行,本次已跳过(未调用外部 API)"
+      },
+      "continuous": {
+        "title": "连续随机入库",
+        "help": "启用后,系统每分钟自动挑选 10 个随机 IP 并入库。停用则不再触发。可随时手动运行一次立即触发。",
+        "status": "当前状态",
+        "enabled": "已启用(每分钟触发)",
+        "disabled": "已停用",
+        "enable": "启用",
+        "disable": "停用",
+        "kickNow": "立即运行一次",
+        "kicked": "已触发一次手动运行,等待结果…",
+        "lastRunAt": "上次运行时间",
+        "lastRunNever": "尚未运行",
+        "lastSummaryMerged": "上次新入库 {merged}/{considered}"
+      },
+      "scheduler": {
+        "title": "连续随机入库 · 任务调度",
+        "subtitle": "持续探针模式 | 当前每 {interval} 秒自动拉取 {batch} 个随机 IP…",
+        "status": {
+          "running": "运行中",
+          "stopped": "已停用",
+          "cooldown": "冷却中"
+        },
+        "cooldownNotice": "数据源 {provider} 触发限流,连续入库暂停中(剩余 {remaining} 分钟)",
+        "config": {
+          "interval": "运行间隔",
+          "batchSize": "每批数量",
+          "targetRange": "目标地址段",
+          "cooldown": "限流冷却(分钟)",
+          "cbLinkage": "429 自动暂停冷却",
+          "save": "保存调度配置",
+          "retentionDays": "探测日志保留天数",
+          "retentionDaysHint": "0 表示永久保留"
+        },
+        "intervalOptions": {
+          "30s": "30 秒",
+          "1m": "1 分钟",
+          "5m": "5 分钟",
+          "15m": "15 分钟",
+          "30m": "30 分钟"
+        },
+        "targetRangeOptions": {
+          "reserved": "RFC 5737 + 6890 (文档/基准段)"
+        },
+        "metrics": {
+          "lastRun": "上次运行",
+          "lastYield": "上次入库",
+          "warmingRate": "预估写入",
+          "probeSuccessRate": "探针成功率",
+          "noLastRun": "尚未运行"
+        },
+        "runNow": "立即手动触发",
+        "runNowConfirm": "立即触发一次连续入库任务?",
+        "wizard": {
+          "enabled": "启动连续入库",
+          "disabled": "停止连续入库"
+        }
+      },
+      "recentProbes": {
+        "title": "最近探针结果",
+        "help": "最近 20 次探针:每个 IP 的多个数据源响应与最终共识。可点击展开查看每个数据源的完整回复。",
+        "detailToggle": "展开数据源明细",
+        "batchIdLabel": "批次",
+        "noProbes": "暂无探针记录 — 启用连续入库或点击手动触发后将在此显示。",
+        "cols": {
+          "ts": "时间",
+          "ip": "IP",
+          "providers": "数据源响应",
+          "consensus": "共识",
+          "outcome": "结果"
+        },
+        "detailCols": {
+          "provider": "数据源",
+          "status": "状态",
+          "country": "国家",
+          "city": "城市",
+          "asn": "ASN",
+          "duration": "耗时",
+          "errorCode": "错误码"
+        },
+        "providerCell": {
+          "ok": "正常",
+          "throttled": "限流",
+          "timeout": "超时",
+          "no_country": "无国家",
+          "network": "网络错误",
+          "error": "错误",
+          "empty": "空响应"
+        },
+        "outcomeLabel": {
+          "merged": "入库",
+          "no_consensus": "无共识",
+          "no_country": "无国家",
+          "all_abstained": "全部失败",
+          "duplicate": "重复"
+        }
+      },
+      "providers": {
+        "title": "回灌数据源",
+        "help": "回灌任务会向以下外部 API 并行查询每个待处理 IP,并按多数票合并。可在此切换每个数据源是否启用,以及更新需要 API Key 的数据源凭证。修改后下一次回灌即生效,无需重启。",
+        "col": {
+          "name": "数据源",
+          "quota": "免费额度",
+          "enabled": "启用",
+          "apiKey": "API Key",
+          "lastUsed": "最近调用"
+        },
+        "enabled": {
+          "on": "已启用",
+          "off": "已停用"
+        },
+        "save": "保存",
+        "apiKeyPlaceholder": "未填写"
+      },
+      "healthCard": {
+        "statusOk": "正常",
+        "statusFailing": "故障",
+        "statusRecovering": "恢复中",
+        "statusDisabled": "已停用",
+        "statusIdle": "未使用",
+        "lastSuccess": "上次成功",
+        "lastError": "上次失败",
+        "noError": "无错误",
+        "noSuccess": "尚无成功调用",
+        "successRate": "成功率",
+        "lastRun": "上次回灌",
+        "noLastRun": "尚无回灌",
+        "successCount": "成功",
+        "failedCount": "失败",
+        "rateLimitedCount": "限流",
+        "abstainedCount": "弃权",
+        "reenablesIn": "{minutes} 分钟后自动恢复",
+        "quotaToday": "今日配额 {pct}%",
+        "window1h": "1 小时",
+        "window24h": "24 小时",
+        "window7d": "7 天",
+        "calls": "调用",
+        "err429": "429 限流",
+        "failurePct": "失败率",
+        "last429": "最近一次 429"
+      },
+      "runner": {
+        "title": "运行控制",
+        "queueBacklog": "队列积压",
+        "lastRun": "上次回灌",
+        "noLastRun": "尚无回灌",
+        "backfillNow": "立即回灌",
+        "generateNow": "随机生成 10 个 IP 并入库",
+        "queueActions": "队列操作",
+        "clearQueue": "清空待回灌队列",
+        "exportQueue": "导出待回灌 CSV"
+      },
+      "circuitBreaker": {
+        "title": "自动熔断 (Circuit Breaker)",
+        "help": "当数据源在滑动窗口内的失败率超过阈值时自动停用,避免无效调用拖慢整体入库。",
+        "enabled": "启用自动熔断",
+        "threshold": "失败率阈值(%)",
+        "window": "滑动窗口(分钟)",
+        "cooldown": "停用持续时间(分钟)",
+        "save": "保存配置"
+      },
+      "failureLogs": {
+        "title": "失败日志",
+        "help": "回灌/随机入库时,每次非 OK 的数据源调用都会记录在这里。按数据源、错误码、时间筛选,点击 “重新入队” 把单条 IP 加回队列等待下一轮回灌。",
+        "filterProvider": "数据源",
+        "filterCode": "错误码",
+        "filterMode": "触发源",
+        "filterSince": "时间范围",
+        "allProviders": "全部",
+        "allCodes": "全部",
+        "allModes": "全部",
+        "applyFilters": "应用筛选",
+        "since1h": "最近 1 小时",
+        "since24h": "最近 24 小时",
+        "since7d": "最近 7 天",
+        "col": {
+          "ts": "时间",
+          "provider": "数据源",
+          "ip": "目标 IP",
+          "mode": "触发源",
+          "code": "错误码",
+          "reason": "原因",
+          "actions": "操作"
+        },
+        "modeLabel": {
+          "auto": "自动回灌",
+          "manual": "手动生成",
+          "random": "随机生成"
+        },
+        "requeue": "重新入队",
+        "empty": "所选范围内暂无失败记录。"
+      },
+      "queueFlash": {
+        "cleared": "已清空 {removed} 条待回灌 IP。",
+        "invalidIp": "IP \"{ip}\" 格式不合法。"
+      },
+      "customProviders": {
+        "title": "自定义 Provider",
+        "addTitle": "添加自定义 Provider",
+        "listTitle": "已注册自定义 Provider",
+        "empty": "尚未注册任何自定义 Provider。",
+        "name": "名称",
+        "nameHint": "小写、字母数字，唯一",
+        "displayName": "显示名称",
+        "urlTemplate": "URL 模板",
+        "urlTemplateHint": "支持 {ip} 和 {apiKey} 占位符",
+        "method": "方法",
+        "methodGet": "GET",
+        "methodPost": "POST",
+        "requestBody": "请求体 (POST)",
+        "responseFormat": "响应格式",
+        "countryPath": "国家字段路径",
+        "cityPath": "城市字段路径",
+        "asnPath": "ASN 字段路径",
+        "timeoutMs": "超时 (毫秒)",
+        "rateLimit": "每分钟限速",
+        "enabled": "启用",
+        "save": "保存",
+        "delete": "删除",
+        "test": "测试查询",
+        "testIp": "测试 IP",
+        "testResult": "查询结果",
+        "deleteConfirm": "确认删除 {name}?",
+        "saved": "已保存 {name}",
+        "deleted": "已删除 {name}",
+        "errors": {
+          "invalidUrl": "URL 无效或被 SSRF 防御拦截",
+          "nameConflict": "名称已存在或与内置 Provider 冲突",
+          "invalidFieldPath": "字段路径格式错误"
+        }
+      }
+    },
+    "providers": {
+      "title": "数据源管理",
+      "builtInSection": "内置数据源",
+      "circuitBreakerSection": "熔断器配置",
+      "customSection": "自定义数据源"
+    },
+    "ingest": {
+      "backfill": {
+        "preview": {
+          "title": "回填预览",
+          "help": "下方表格展示本次将执行的查询与共识结果;确认后再写入主表。",
+          "cols": {
+            "ip": "IP",
+            "country": "国家/地区",
+            "city": "城市",
+            "asn": "ASN",
+            "providers": "提供者",
+            "outcome": "结果"
+          },
+          "confirm": "确认入库",
+          "cancel": "取消",
+          "expired": "预览已过期,请重新触发。",
+          "missing": "预览不存在,请重新触发。",
+          "previewFirst": "先预览再回填",
+          "busy": "正在处理…"
+        }
+      }
+    }
+  },
+  "home": {
+    "title": "首页 · IPQuery",
+    "heroEyebrow": "IP 地理位置 API",
+    "heroTitleAccent": "查询任何 <em>IP 地址</em>,<br>都能拿到<strong>可信的国家、城市与 ASN</strong>",
+    "heroSubLong": "聚合 MaxMind GeoLite2、ip2region、DB-IP 三大免费数据源,按字段互补策略返回结果。100% 自托管,亚 100ms 中位延迟。",
+    "ipRanges": "IP 段",
+    "metaSources": "数据源",
+    "metaLatency": "中位延迟",
+    "ipgrid": {
+      "demoLabel": "示例查询",
+      "country": "国家",
+      "region": "地区",
+      "city": "城市",
+      "asn": "ASN"
+    },
+    "features": {
+      "eyebrow": "为什么选 IPQuery",
+      "title": "一个查询,三个数据源",
+      "sub": "主源优先,备源补字段。每个字段都标注来源,你来判断取舍。",
+      "sources": {
+        "mark": "01 / 多源",
+        "title": "多源聚合",
+        "sub": "MaxMind / ip2region / DB-IP 互相补位,字段缺失率远低于单源方案。",
+        "stat": "数据源"
+      },
+      "coverage": {
+        "mark": "02 / 覆盖",
+        "title": "IPv4 + IPv6 全覆盖",
+        "sub": "按段而非按 IP 存储,8.3M+ 段覆盖了绝大多数公共网络。",
+        "stat": "已索引段"
+      },
+      "speed": {
+        "mark": "03 / 延迟",
+        "title": "亚 100ms",
+        "sub": "空间索引 + range_size 排序,实测中位延迟远低于行业平均水平。",
+        "stat": "中位响应"
+      }
+    },
+    "steps": {
+      "eyebrow": "工作原理",
+      "title": "三步搞定",
+      "sub": "不需要联网下载任何东西,也不需要构建庞大的 IP 数据库。",
+      "s1": {
+        "title": "输入 IP",
+        "sub": "浏览器表单或 API 调用,任意 IPv4/IPv6 地址都可以。"
+      },
+      "s2": {
+        "title": "命中段位",
+        "sub": "MySQL 索引按 range_size 排序,先小后大,毫秒内定位 IP 所属 CIDR。"
+      },
+      "s3": {
+        "title": "返回 JSON",
+        "sub": "国家/地区/城市/ISP/ASN 一次性返回,字段来源一并给出。"
+      }
+    },
+    "code": {
+      "eyebrow": "快速上手",
+      "title": "三行代码开始",
+      "sub": "公开 API 不需要鉴权;注册账号后 API Key 可提升速率限制到 60/min。"
+    },
+    "cta": {
+      "title": "立即开始使用",
+      "sub": "无需信用卡。注册账号后获得 API Key,生产环境随时切换。",
+      "primary": "免费注册",
+      "primaryAuthed": "进入控制台",
+      "secondary": "查看 API 文档"
+    },
+    "footer": {
+      "product": "产品",
+      "account": "账号",
+      "company": "公司"
+    },
+    "heroTitle": "IP 地理位置查询",
+    "heroSubtitle": "聚合 MaxMind / ip2region / DB-IP 三大数据源,每天自动 ETL 更新",
+    "quickQuery": "快速查询",
+    "status": "API 状态",
+    "online": "在线",
+    "queries24h": "24h 查询",
+    "queries24hSub": "过去 24 小时",
+    "apiExample": "API 示例",
+    "apiDocs": "查看完整文档",
+    "fullDocs": "查看完整 API 文档"
+  },
+  "about": {
+    "eyebrow": "关于 IPQuery",
+    "heading": "一个轻量级、自托管的 IP 地理查询服务",
+    "intro": "为开发者搭建,只做一件事:把分散的免费 IP 数据源聚合起来,给出一个简单、稳定、可审计的查询接口。",
+    "storyTitle": "为什么做它",
+    "storyP1": "市面上的 IP 查询服务要么贵(按 QPS 计费),要么数据陈旧(免费数据源常年不更新),要么黑盒(你看不到字段来源,无法判断信任度)。",
+    "storyP2": "IPQuery 的目标是把这一切反过来:免费、自托管、字段来源透明。每天自动 ETL,把数据装配到一张 MySQL 表里,查询就是一次普通的 SQL。",
+    "principles": {
+      "sources": {
+        "title": "多源融合",
+        "sub": "每个字段都标注来源( maxmind / ip2region / dbip ),便于审计与回溯。"
+      },
+      "speed": {
+        "title": "索引优先",
+        "sub": "range_size 排序的复合索引,先小段再大段,避开大范围的全表扫描。"
+      },
+      "opensource": {
+        "title": "代码开源",
+        "sub": "MIT 协议,你可以审计 ETL 逻辑、查询路径、调度代码——不存在看不见的部分。"
+      },
+      "selfhosted": {
+        "title": "完全自托管",
+        "sub": "数据在你自己的数据库里,API 部署在你自己的服务器上,用户查询不上行。"
+      }
+    },
+    "stackTitle": "技术栈",
+    "stack": {
+      "node": "Node.js 20 + TypeScript 5",
+      "fastify": "Fastify + Handlebars SSR",
+      "mysql": "MySQL 8(8.3M+ IP 段)",
+      "handlebars": "服务端模板,零客户端依赖,轻量到极致"
+    },
+    "licenseTitle": "许可与数据",
+    "licenseBody": "代码以 MIT 协议开源;数据文件由使用者自行下载并遵守各源(MaxMind / ip2region / DB-IP)各自的授权约束。",
+    "timelineTitle": "一路走来",
+    "timeline": {
+      "2024": {
+        "title": "首个提交",
+        "desc": "初始 schema、MaxMind 单源加载器、Fastify 服务。单表设计、单一数据源。"
+      },
+      "2025": {
+        "title": "接入 ip2region + DB-IP",
+        "desc": "三源聚合策略 + 字段级来源标注。range_size 索引实现亚 100ms 查询。"
+      },
+      "2026": {
+        "title": "生产级发布",
+        "desc": "鉴权、速率限制、ETL 调度、控制台、多语言支持。MIT 协议开源。"
+      }
+    }
+  },
+  "try": {
+    "eyebrow": "在线试查",
+    "heading": "随便输入一个 IP",
+    "sub": "无需注册,无需 Key。点击下面的示例 IP 快速体验。",
+    "chipsLabel": "试试这些:",
+    "hint": "提示:输入框可直接粘贴,结果会显示在下方。",
+    "country": "国家",
+    "region": "地区",
+    "city": "城市",
+    "isp": "运营商",
+    "asn": "ASN",
+    "reproCurl": "用 curl 复现"
+  },
+  "status": {
+    "eyebrow": "服务状态",
+    "heading": "实时运行状态",
+    "sub": "API、数据库、ETL 流水线最近一次的健康检查。",
+    "health": "健康检查",
+    "api": "API 服务",
+    "database": "数据库",
+    "etl": "ETL 流水线",
+    "operational": "运行正常",
+    "degraded": "不可用",
+    "never": "暂无运行记录",
+    "lastRun": "最近一次 ETL",
+    "noRuns": "暂无 ETL 运行记录。",
+    "banner": {
+      "okTitle": "所有系统运行正常",
+      "okSub": "API、数据库和 ETL 均报告健康状态。",
+      "badTitle": "服务异常",
+      "badSub": "一个或多个组件报告异常,详见下方。"
+    },
+    "timelineTitle": "近期 ETL 运行",
+    "uptimeTitle": "可用性",
+    "uptimeBody": "API 与数据库实例健康由本页面实时查询;ETL 每天自动跑一次,失败会有日志记录。",
+    "col": {
+      "started": "开始时间",
+      "finished": "结束时间",
+      "status": "状态",
+      "merged": "合并记录数"
+    }
+  },
+  "docs": {
+    "title": "API 文档",
+    "eyebrow": "开发者文档",
+    "heading": "简洁的 HTTP API",
+    "subtitle": "公开 HTTP API,无需鉴权;注册后可获取 API Key 提升速率限制。",
+    "endpointsTitle": "接口列表",
+    "tocHeading": "本页目录",
+    "tocEndpoints": "接口列表",
+    "tocExamples": "调用示例",
+    "tocAuth": "鉴权",
+    "tocResponse": "响应",
+    "tocErrors": "错误码",
+    "colMethod": "方法",
+    "colPath": "路径",
+    "colDescription": "说明",
+    "colStatus": "状态码",
+    "colCode": "错误码",
+    "endpoints": {
+      "lookup": "查询 IP 的国家 / 地区 / 城市 / ISP / ASN",
+      "lookupPath": "同上,IP 作为路径参数",
+      "stats": "查询 ETL 最近一次运行的元数据",
+      "healthz": "健康检查,返回 { status: \"ok\" }"
+    },
+    "examplesTitle": "调用示例",
+    "authTitle": "API Key 认证",
+    "authBody": "登录后在控制台创建 API Key,然后用 key= 或 Authorization: Bearer 传递。",
+    "responseTitle": "响应示例",
+    "responseBody": "成功响应是 JSON 对象,字段缺失时该字段为 null。每个数据字段都附带 source,标明来自哪个上游。",
+    "errorsTitle": "错误码",
+    "errors": {
+      "200": "成功",
+      "400": "IP 格式无效(invalid_ip)",
+      "404": "未找到记录(not_found)",
+      "429": "速率限制(rate_limited)"
+    },
+    "cta": {
+      "try": "在线试查"
+    },
+    "authQueryNote": "?key= 形式仍可用,但 URL 中的密钥会进入服务器日志、代理日志和浏览器历史。推荐使用 Authorization 请求头 —— 它不会出现在任何日志中。使用 ?key= 的请求会收到 Deprecation 响应头。",
+    "tocRateLimits": "速率限制",
+    "rateLimitsTitle": "速率限制",
+    "rateLimitsBody": "公共 API 按来源 IP 计数限速。携带 API 密钥与不携带密钥的请求共享同一额度——密钥用于鉴权，不用于放宽限速。网页与静态资源不受此限制。",
+    "colScope": "适用范围",
+    "colLimit": "额度",
+    "rateLimits": {
+      "publicScope": "公共 API",
+      "publicDesc": "/healthz、/lookup、/stats 三个端点共用一个计数器，按来源 IP 统计。匿名请求与携带 API 密钥的请求共享同一额度。",
+      "keyedScope": "网页与静态资源",
+      "keyedDesc": "HTML 页面、样式表与脚本不计入限流额度——一次页面加载可能拉取十余个资源，若与 API 共用额度，正常浏览就会触发 429。",
+      "adminScope": "管理后台",
+      "adminDesc": "管理后台需要轮询 ETL 实时进度，因此使用独立且更大的额度，不会占用公开 API 的额度。",
+      "notLimited": "不限"
+    },
+    "rateLimitsScopeNote": "限流按路径生效。网页与静态资源不受公共 API 额度约束；路由级限速会替换该路由的全局限速，而不是与之叠加；管理后台的轮询路由与公共 API 分开计费。"
+  },
+  "footer": {
+    "copyright": "© {year} IPQuery",
+    "license": "MIT"
+  },
+  "error": {
+    "403": {
+      "title": "禁止访问",
+      "body": "你没有权限访问此页面"
+    },
+    "404": {
+      "title": "页面未找到",
+      "body": "该页面不存在或已被移动",
+      "home": "返回首页"
+    },
+    "500": {
+      "title": "服务器错误",
+      "body": "请稍后重试"
+    },
+    "csrf": {
+      "title": "会话过期",
+      "body": "请刷新页面后重试"
+    }
+  },
+  "setup": {
+    "title": "初始化设置",
+    "boot": {
+      "railLabel": "初始化进度",
+      "tagline": "首次运行配置",
+      "stepsLabel": "配置步骤",
+      "progress": "第 {current} 步 / 共 {total} 步",
+      "introTitle": "接下来会发生什么",
+      "intro1": "确认数据库连接可用",
+      "intro2": "设置站点名称与副标题",
+      "intro3": "创建管理员账号",
+      "intro4": "导入种子数据并完成",
+      "connectionTitle": "连接参数",
+      "siteLede": "给这个安装起个名字。之后可以在系统设置里修改。",
+      "adminLede": "创建第一个管理员账号,用于登录控制台。",
+      "seedProgressLede": "后台任务正在运行,可以离开本页,稍后回来。",
+      "finishNote": "完成后 /init 将被锁定,只能从登录页进入。",
+      "backToStart": "返回开始"
+    },
+    "steps": {
+      "1": "欢迎",
+      "2": "数据库",
+      "3": "站点",
+      "4": "管理员",
+      "5": "种子数据",
+      "6": "完成"
+    },
+    "welcome": {
+      "title": "欢迎",
+      "body": "本向导将引导你完成 IPQuery 的首次配置:站点名称、数据库连接、管理员账号以及种子数据。",
+      "cta": "开始"
+    },
+    "database": {
+      "title": "数据库",
+      "intro": "当前数据库连接(从 .env 加载):",
+      "hostLabel": "主机",
+      "portLabel": "端口",
+      "userLabel": "用户",
+      "dbLabel": "数据库名",
+      "test": "测试连接",
+      "envHint": "这些值从 .env 加载。如需修改,请编辑 .env 并重启服务器,然后返回此页。",
+      "success": "数据库连接成功",
+      "failure": "无法连接数据库,请检查 .env 配置并确认服务器已启动。"
+    },
+    "site": {
+      "title": "站点",
+      "nameLabel": "站点名称",
+      "taglineLabel": "副标题",
+      "submit": "下一步",
+      "success": "站点信息已保存",
+      "error": "站点名称必填(1-128 字符),副标题不超过 256 字符"
+    },
+    "admin": {
+      "title": "管理员账号",
+      "emailLabel": "邮箱",
+      "passwordLabel": "密码",
+      "nameLabel": "昵称",
+      "passwordHint": "密码至少 10 位,包含字母和数字",
+      "submit": "下一步",
+      "success": "管理员账号已创建",
+      "error": "邮箱、昵称或密码格式不正确"
+    },
+    "seed": {
+      "title": "种子 IP 数据",
+      "intro": "选择如何初始化 IP 段数据。可以立即拉取一份真实数据(约 5-15 分钟),也可以先用 50 条示例数据跑通整个流程。",
+      "yes": "是,加载 50 条种子 IP",
+      "no": "否,跳过种子数据",
+      "submit": "下一步",
+      "success": "种子数据已加载",
+      "skipped": "已跳过种子数据",
+      "invalidMode": "无效的选项",
+      "demo": {
+        "label": "示例数据 (50 条)",
+        "hint": "立即生效。仅包含公共 DNS / 知名云厂商 / RFC 保留段等手工精选条目,适合先看效果。"
+      },
+      "etl": {
+        "label": "真实数据 (DB-IP,推荐)",
+        "hint": "后台下载并导入 DB-IP 免费库(city-lite / country-lite / asn-lite,约 8.3M 段)。本页面会自动刷新进度,你也可以关掉去做别的事。",
+        "retryHint": "上次运行失败。可重试,或改用其他选项。"
+      },
+      "skip": {
+        "label": "跳过",
+        "hint": "保持空数据库。定时任务稍后会拉取数据。"
+      },
+      "retry": "重试",
+      "progress": {
+        "title": "正在导入真实数据",
+        "running": "后台任务运行中…",
+        "starting": "正在启动 ETL…",
+        "success": "导入完成,共 {rows} 条 IP 段",
+        "failed": "导入失败",
+        "runId": "运行 ID",
+        "started": "开始",
+        "finished": "结束",
+        "merged": "合并记录数",
+        "error": "错误信息",
+        "autoRefresh": "本页面每 3 秒自动刷新。导入过程中可随时关闭。",
+        "continue": "继续",
+        "successHint": "导入已完成,点击继续完成初始化。"
+      }
+    },
+    "complete": {
+      "title": "准备完成",
+      "body": "请检查下方汇总信息。点击完成后,向导会将本安装标记为已初始化,并锁定 /init 路径。",
+      "summary": "汇总信息",
+      "siteName": "站点名称",
+      "adminEmail": "管理员邮箱",
+      "seedLoaded": "已加载种子",
+      "yes": "是",
+      "no": "否",
+      "submit": "完成",
+      "success": "初始化完成,可以登录了。"
+    },
+    "errors": {
+      "csrf": "会话已过期,请刷新页面后重试。",
+      "password_weak": "密码强度不足",
+      "email_invalid": "邮箱格式不正确",
+      "db_unreachable": "无法连接数据库",
+      "site_name_required": "站点名称必填",
+      "displayName_invalid": "昵称长度应为 1-64 字符"
+    }
+  }
+}

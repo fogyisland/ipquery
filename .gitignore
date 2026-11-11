@@ -1,5 +1,8 @@
 node_modules/
-dist/
+# Root build output only. up/dist/ is the deployable copy of this and
+# IS committed — anchoring the rule with a leading slash keeps git from
+# matching up/dist/ as well.
+/dist/
 coverage/
 data/
 *.mmdb

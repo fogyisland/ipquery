@@ -1,0 +1,15 @@
+{{!-- SPDX-License-Identifier: MIT --}}
+<div class="form-field">
+  <label for="{{name}}">{{label}}</label>
+  {{#if (eq type 'textarea')}}
+    <textarea name="{{name}}" id="{{name}}" {{#if required}}required{{/if}} {{#if placeholder}}placeholder="{{placeholder}}"{{/if}}>{{value}}</textarea>
+  {{else if (eq type 'select')}}
+    <select name="{{name}}" id="{{name}}">
+      {{#each options}}<option value="{{value}}" {{#if (eq value ../value)}}selected{{/if}}>{{label}}</option>{{/each}}
+    </select>
+  {{else}}
+    <input type="{{#if type}}{{type}}{{else}}text{{/if}}" name="{{name}}" id="{{name}}" value="{{value}}" {{#if required}}required{{/if}} {{#if placeholder}}placeholder="{{placeholder}}"{{/if}} {{#if autocomplete}}autocomplete="{{autocomplete}}"{{/if}}>
+  {{/if}}
+  {{#if help}}<p class="form-help">{{help}}</p>{{/if}}
+  {{#if error}}<p class="form-error">{{error}}</p>{{/if}}
+</div>

@@ -1,0 +1,62 @@
+{{! SPDX-License-Identifier: MIT }}
+<section class="m-section m-section--first">
+  <div class="m-section-inner m-about-page">
+    <div class="m-about-hero">
+      <span class="m-eyebrow">{{req.t "about.eyebrow"}}</span>
+      <h1>{{req.t "about.heading"}}</h1>
+      <p>{{req.t "about.intro"}}</p>
+    </div>
+
+    <div class="m-about-story">
+      <div>
+        <h3>{{req.t "about.storyTitle"}}</h3>
+        <p>{{req.t "about.storyP1"}}</p>
+      </div>
+      <div>
+        <h3>&nbsp;</h3>
+        <p>{{req.t "about.storyP2"}}</p>
+      </div>
+    </div>
+
+    <div class="m-timeline">
+      <h2>{{req.t "about.timelineTitle"}}</h2>
+      <ul class="m-timeline-list">
+        {{#each timeline}}
+          <li class="m-timeline-item">
+            <span class="m-timeline-dot"></span>
+            <div class="m-timeline-year">{{this.year}}</div>
+            <div class="m-timeline-title">{{this.title}}</div>
+            <p class="m-timeline-desc">{{this.desc}}</p>
+          </li>
+        {{/each}}
+      </ul>
+    </div>
+
+    <div class="m-about-stack">
+      <h2>{{req.t "about.stackTitle"}}</h2>
+      <div class="m-stack-grid">
+        <div class="m-stack-item">
+          <div class="m-stack-name">Node.js 20 / TypeScript 5</div>
+          <p class="m-stack-detail">{{req.t "about.stack.node"}}</p>
+        </div>
+        <div class="m-stack-item">
+          <div class="m-stack-name">Fastify + Handlebars</div>
+          <p class="m-stack-detail">{{req.t "about.stack.fastify"}}</p>
+        </div>
+        <div class="m-stack-item">
+          <div class="m-stack-name">MySQL 8</div>
+          <p class="m-stack-detail">{{req.t "about.stack.mysql"}}</p>
+        </div>
+        <div class="m-stack-item">
+          <div class="m-stack-name">Handlebars SSR</div>
+          <p class="m-stack-detail">{{req.t "about.stack.handlebars"}}</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="m-card">
+      <h3 class="m-card-title">{{req.t "about.licenseTitle"}}</h3>
+      <p>{{req.t "about.licenseBody"}}</p>
+    </div>
+  </div>
+</section>

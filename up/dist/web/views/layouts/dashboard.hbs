@@ -1,0 +1,23 @@
+{{!-- SPDX-License-Identifier: MIT --}}
+<!DOCTYPE html>
+<html lang="{{req.locale}}">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{title}} - IPQuery</title>
+  <meta name="theme-color" content="#0a0e14">
+  <link rel="stylesheet" href="/assets/css/base.css?v=20260828">
+  <link rel="stylesheet" href="/assets/css/layout.css?v=20260828">
+  <link rel="stylesheet" href="/assets/css/forms.css?v=20260828">
+  <link rel="stylesheet" href="/assets/css/admin.css?v=20260828">
+</head>
+<body class="layout-dashboard">
+  <div class="dashboard-shell">
+    {{> sidebar}}
+    <main class="dashboard-main">
+      {{> flash }}
+      {{{body}}}
+    </main>
+  </div>
+</body>
+</html>

@@ -24,4 +24,15 @@ if (existsSync(dist)) {
 
 execSync("npx tsc -p tsconfig.json", { stdio: "inherit", cwd: root });
 execSync("node scripts/copy-schema.js", { stdio: "inherit", cwd: root });
+
+// Refresh the deployable copy in up/. Without this, up/dist/ would
+// silently drift from src/ after every source change — and a stale
+// up/dist/ deploys an older application while looking like it worked.
+execSync("node scripts/sync-up-dist.js", { stdio: "inherit", cwd: root });
+
+// The release package.json must list only the runtime dependencies and
+// the scripts that work without a source tree. Regenerate it from the
+// repo manifest so the two cannot disagree.
+execSync("node scripts/write-release-manifest.js", { stdio: "inherit", cwd: root });
+
 console.log("[build] OK");

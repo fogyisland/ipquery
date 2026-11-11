@@ -1,0 +1,16 @@
+{{! SPDX-License-Identifier: MIT }}
+{{!-- Same vocabulary as errors/csrf.hbs (.boot-step-head / .boot-lede /
+     .boot-actions) so the error pages read as one family.
+     /login is the right way out here. This view is reached from the
+     `onRequest` auth guard, which runs before the session plugin resolves
+     the cookie, so `req.session` is still null and the shell cannot tell a
+     signed-in caller from a signed-out one. Signing in again is also the
+     honest fix whatever the answer: the caller lacks the role, and only an
+     administrator can change that. --}}
+<header class="boot-step-head">
+  <h1>{{req.t "error.403.title"}}</h1>
+  <p class="boot-lede">{{req.t "error.403.body"}}</p>
+</header>
+<div class="boot-actions">
+  <a href="/login" class="btn-primary">{{req.t "common.login"}}</a>
+</div>

@@ -1,0 +1,39 @@
+{
+  "name": "ipquery",
+  "version": "0.1.0",
+  "description": "IP geolocation aggregator over MaxMind, ip2region, DB-IP",
+  "license": "MIT",
+  "type": "commonjs",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "start": "node dist/cli.js",
+    "serve": "node dist/cli.js serve",
+    "migrate": "node dist/cli.js migrate",
+    "migrate:status": "node dist/cli.js migrate:status",
+    "init": "node dist/cli.js init",
+    "update": "node dist/cli.js update",
+    "status": "node dist/cli.js status"
+  },
+  "dependencies": {
+    "@fastify/compress": "^7.0.3",
+    "@fastify/cookie": "^9.4.0",
+    "@fastify/cors": "^9.0.1",
+    "@fastify/formbody": "^7.4.0",
+    "@fastify/rate-limit": "^9.1.0",
+    "@fastify/static": "^7.0.4",
+    "@fastify/view": "^9.1.0",
+    "@modelcontextprotocol/sdk": "^1.32.2",
+    "argon2": "^0.45.1",
+    "commander": "^12.1.0",
+    "date-fns": "^4.4.0",
+    "dotenv": "^17.4.2",
+    "fastify": "^4.28.0",
+    "handlebars": "^4.7.9",
+    "maxmind": "^4.3.10",
+    "mysql2": "^3.11.0",
+    "node-cron": "^3.0.3",
+    "nodemailer": "^9.0.5"
+  }
+}

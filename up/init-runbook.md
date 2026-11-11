@@ -1,22 +1,30 @@
 # 首次启动（init）与发布核对手册
 
-> 详细版见 `docs/setup.md`；服务器文件清单见 `deploy/MANIFEST.md`。
-> 本手册是 `up/` 部署交付包随附的精简操作单，按「准备 → 引导 → 发布核对」三段执行。
+> 详细版见 `docs/setup.md`；服务器文件清单见 [`MANIFEST.md`](MANIFEST.md)。
+> 本手册随发布目录一起交付，按「部署 → 引导 → 发布核对」三段执行。
 
-## 〇、部署（两种方式）
+## 〇、部署
 
-**方式 A：脚本（推荐）**
+`up/` 目录**就是发布包**：里面已经带着编译好的 `dist/`、依赖清单和 `.env`
+模板。把整个目录拷到服务器即可：
 
 ```bash
-./up/deploy/deploy.sh /opt/ipquery
+cp -r up/ /opt/ipquery/
+cd /opt/ipquery
+bash install.sh
 ```
 
-脚本会构建 `dist/`、装配到目标目录、装生产依赖（`npm ci --omit=dev`）、
-建 `data/raw/`，并在 `.env` 已存在时顺带跑迁移。装完打印剩余步骤。
+`install.sh` 依次做四件事：
 
-**方式 B：手工**
+1. `npm ci --omit=dev` 装运行期依赖
+2. 建 `data/raw/`（ETL 下载 CSV 的落地点）
+3. 没有 `.env` 就从模板生成一份，并提示填哪些项
+4. 跑 `node dist/cli.js migrate` 应用迁移
 
-照 [`deploy/MANIFEST.md`](deploy/MANIFEST.md) 搬文件——那张表列了服务器上
+第 4 步需要 `.env` 里的数据库凭据是真的——模板里的 `rootpass` 是占位符，
+直接跑会报 `ER_ACCESS_DENIED_ERROR`。这是预期行为：脚本不会替你猜密码。
+
+**手工部署**：照 [`MANIFEST.md`](MANIFEST.md) 搬文件——那张表列了服务器上
 需要的**每一个文件**、来源、必需性，以及不需要搬的（`src/`、`test/`、`scripts/`）。
 
 ## 一、准备
@@ -30,8 +38,8 @@
    FLUSH PRIVILEGES;
    ```
 
-2. **`.env`**：`cp .env.example .env`，至少填 `DB_*`、`SESSION_SECRET`、`CSRF_SECRET`、
-   `WEB_BASE_URL`、`PORT`。密钥生成：
+2. **`.env`**：`install.sh` 已经从 `.env.example` 生成好了，编辑它，至少填
+   `DB_*`、`SESSION_SECRET`、`CSRF_SECRET`、`WEB_BASE_URL`、`PORT`。密钥生成：
 
    ```bash
    node -e "console.log(require('crypto').randomBytes(48).toString('base64'))"
@@ -39,10 +47,7 @@
 
    生产环境缺任一密钥服务会直接拒启（fail-fast，不静默降级）。两个密钥必须不同。
 
-3. **构建**：`npm install && npm run build`（或 `make install && make build`）。
-   方式 A 的脚本已经代做这一步。
-
-4. **原生依赖**：`argon2` 需要编译工具链，否则 `npm ci` 会失败：
+3. **原生依赖**：`argon2` 需要编译工具链，否则 `npm ci` 会失败：
 
    ```bash
    apt-get install -y python3 make g++     # Debian / Ubuntu
@@ -51,11 +56,11 @@
 
 ## 二、引导（三选一）
 
-| 方式 | 命令 / 入口 | 适用 |
-|------|------------|------|
-| Web 向导 | `node dist/cli.js serve` 后浏览器开 `http://localhost:5001/init` | 首次部署、想看界面 |
+| 方式     | 命令 / 入口                                                                      | 适用                     |
+| -------- | -------------------------------------------------------------------------------- | ------------------------ |
+| Web 向导 | `node dist/cli.js serve` 后浏览器开 `http://localhost:5001/init`                 | 首次部署、想看界面       |
 | CLI 无头 | `make init`（读 `ADMIN_EMAIL` / `ADMIN_PASSWORD` / `ADMIN_NAME` / `ADMIN_SEED`） | Ansible / Terraform / CI |
-| CLI 直调 | `node dist/cli.js init --email <admin> --password '<强口令>' [--seed]` | 同上，显式传参 |
+| CLI 直调 | `node dist/cli.js init --email <admin> --password '<强口令>' [--seed]`           | 同上，显式传参           |
 
 - 向导六步：欢迎 → 数据库 → 站点 → 管理员 → 种子数据 → 完成。
 - 未初始化时除 `/init*`、`/healthz`、`/lookup`、`/stats`、`/assets/*` 外全部 302 到 `/init`；

@@ -1,0 +1,25 @@
+{{!-- SPDX-License-Identifier: MIT --}}
+<h1>{{req.t 'dashboard.profile.title'}}</h1>
+{{#if flash.success}}<div class="flash flash-success">{{flash.success}}</div>{{/if}}
+
+<form method="POST" action="/dashboard/profile" class="form-section">
+  <input type="hidden" name="csrf" value="{{req.csrfToken}}">
+  <input type="hidden" name="action" value="displayName">
+  {{> form-field name="displayName" label=(req.t 'dashboard.profile.displayName') value=req.user.displayName required=true }}
+  <button type="submit">{{req.t 'common.save'}}</button>
+</form>
+
+<form method="POST" action="/dashboard/profile" class="form-section">
+  <input type="hidden" name="csrf" value="{{req.csrfToken}}">
+  <input type="hidden" name="action" value="email">
+  {{> form-field name="email" type="email" label=(req.t 'dashboard.profile.email') value=req.user.email required=true help=(req.t 'dashboard.profile.emailHint') }}
+  <button type="submit">{{req.t 'common.save'}}</button>
+</form>
+
+<form method="POST" action="/dashboard/profile" class="form-section">
+  <input type="hidden" name="csrf" value="{{req.csrfToken}}">
+  <input type="hidden" name="action" value="password">
+  {{> form-field name="oldPassword" type="password" label=(req.t 'dashboard.profile.oldPassword') required=true autocomplete="current-password" }}
+  {{> form-field name="newPassword" type="password" label=(req.t 'dashboard.profile.newPassword') required=true help=(req.t 'auth.password.help') autocomplete="new-password" }}
+  <button type="submit">{{req.t 'common.save'}}</button>
+</form>

@@ -1,0 +1,306 @@
+{{!-- SPDX-License-Identifier: MIT --}}
+{{!--
+  /admin/settings — system configuration. Read-only: settings are loaded
+  from .env at boot and the only mutation exposed here is the ETL "run
+  now" button. Layout: top Metric Badge strip (always visible) + 4-tab
+  nav with form-field rows inside each pane. Tab state lives in the URL
+  hash so reload + bookmark preserve the active tab; the inline <script>
+  at the bottom boots the hashchange handler.
+
+  Secrets (db.password, web.sessionSecret, web.csrfSecret, smtp.pass,
+  maxmind.licenseKey) are REDACTED server-side before reaching this
+  template (first4…last4). They ship via data-secret on a .secret-mask
+  <code>; the .secret-toggle button swaps innerText between
+  "••••••••••" and the redacted form — never the raw value. Raw secrets
+  must not exist in the rendered DOM (see src/web/routes/admin.ts).
+--}}
+
+<h2>{{req.t 'admin.settings.title'}}</h2>
+
+{{!-- ─── Top Metric Badge strip ─────────────────────────────────────────
+     Live status above the tabs: API port (rarely changes), DB pool
+     current/peak connections, and the ETL last-run pill with relative
+     timestamp. These were previously a card at the bottom of the page
+     which mixed static config with live operational state. --}}
+<div class="metric-strip">
+  <div class="metric-strip-item">
+    <span class="metric-strip-label">{{req.t 'admin.settings.metricStrip.apiPort'}}</span>
+    <span class="metric-strip-value">{{config.api.port}}</span>
+  </div>
+  <div class="metric-strip-item">
+    <span class="metric-strip-label">{{req.t 'admin.settings.poolStatus.threadsConnected'}}</span>
+    <span class="metric-strip-value">{{#if pool.Threads_connected}}{{pool.Threads_connected}}{{else}}—{{/if}}</span>
+  </div>
+  <div class="metric-strip-item">
+    <span class="metric-strip-label">{{req.t 'admin.settings.poolStatus.maxUsedConnections'}}</span>
+    <span class="metric-strip-value">{{#if pool.Max_used_connections}}{{pool.Max_used_connections}}{{else}}—{{/if}}</span>
+  </div>
+  <div class="metric-strip-item">
+    <span class="metric-strip-label">{{req.t 'admin.settings.metricStrip.etlLastRun'}}</span>
+    <span class="metric-strip-value">
+      {{#if etlLastRun}}
+        {{> pill kind=etlStatusKind text=etlStatusText}}
+        <span class="form-field-hint" title="{{formatDate etlLastRun.startedAt}}">{{formatRelative etlLastRun.startedAt}}</span>
+      {{else}}
+        <span class="form-field-hint">{{etlStatusText}}</span>
+      {{/if}}
+    </span>
+  </div>
+</div>
+
+{{!-- ─── Tab nav ─────────────────────────────────────────────────────────
+     Anchor links with the tab id in href. The inline <script> at the
+     bottom reads location.hash and toggles .is-active on the matching
+     link + pane. data-tab is also set on the link so JS can find the
+     right elements without parsing the href. --}}
+<nav class="settings-tabs-nav" aria-label="Settings sections">
+  <a class="settings-tab-link is-active" href="#general" data-tab="general">{{req.t 'admin.settings.tab.general'}}</a>
+  <a class="settings-tab-link" href="#security" data-tab="security">{{req.t 'admin.settings.tab.security'}}</a>
+  <a class="settings-tab-link" href="#integrations" data-tab="integrations">{{req.t 'admin.settings.tab.integrations'}}</a>
+  <a class="settings-tab-link" href="#system" data-tab="system">{{req.t 'admin.settings.tab.system'}}</a>
+</nav>
+
+{{!-- ─── Tab panes ────────────────────────────────────────────────────────
+     Each pane is a .settings-tab-pane. The first pane carries is-active
+     by default; the inline script will replace is-active when a hash is
+     present in the URL or the user clicks a tab link. --}}
+
+{{!-- 基础设置 (General) ──────────────────────────────────────────────── --}}
+<div class="settings-tab-pane is-active" id="pane-general" data-tab="general">
+  <div class="form-field">
+    <span class="form-field-label">{{req.t 'admin.settings.field.baseUrl'}}</span>
+    <div class="form-field-input">
+      <input type="text" readonly value="{{config.web.baseUrl}}">
+    </div>
+  </div>
+  <div class="form-field">
+    <span class="form-field-label">{{req.t 'admin.settings.field.cookieDomain'}}</span>
+    <div class="form-field-input">
+      <input type="text" readonly value="{{config.web.cookieDomain}}">
+    </div>
+  </div>
+  <div class="form-field">
+    <span class="form-field-label">{{req.t 'admin.settings.field.cookieSecure'}}</span>
+    <div class="form-field-input">
+      <span class="switch-readonly {{#if config.web.cookieSecure}}switch-readonly--on{{/if}}" aria-label="{{config.web.cookieSecure}}"></span>
+      <span class="form-field-hint">{{#if config.web.cookieSecure}}on{{else}}off{{/if}}</span>
+    </div>
+  </div>
+  <div class="form-field">
+    <span class="form-field-label">{{req.t 'admin.settings.field.sessionTtl'}}</span>
+    <div class="form-field-input">
+      <input type="text" readonly value="{{config.web.sessionTtlHours}}">
+    </div>
+  </div>
+  <div class="form-field">
+    <span class="form-field-label">{{req.t 'admin.settings.field.timezone'}}</span>
+    <div class="form-field-input">
+      <input type="text" readonly value="{{config.etl.timezone}}">
+    </div>
+  </div>
+  <div class="form-field">
+    <span class="form-field-label">{{req.t 'admin.settings.field.dataDir'}}</span>
+    <div class="form-field-input">
+      <input type="text" readonly value="{{config.etl.dataDir}}">
+    </div>
+  </div>
+</div>
+
+{{!-- 安全与认证 (Security) ──────────────────────────────────────────── --}}
+<div class="settings-tab-pane" id="pane-security" data-tab="security">
+  <div class="form-field">
+    <span class="form-field-label">{{req.t 'admin.settings.field.loginMax'}}</span>
+    <div class="form-field-input">
+      <input type="text" readonly value="{{config.security.loginMaxAttempts}}">
+    </div>
+  </div>
+  <div class="form-field">
+    <span class="form-field-label">{{req.t 'admin.settings.field.loginLockout'}}</span>
+    <div class="form-field-input">
+      <input type="text" readonly value="{{config.security.loginLockoutMinutes}}">
+    </div>
+  </div>
+  <div class="form-field">
+    <span class="form-field-label">{{req.t 'admin.settings.field.signupRate'}}</span>
+    <div class="form-field-input">
+      <input type="text" readonly value="{{config.security.signupRatePerIpPerHour}}">
+    </div>
+  </div>
+  <div class="form-field">
+    <span class="form-field-label">{{req.t 'admin.settings.field.verifyResend'}}</span>
+    <div class="form-field-input">
+      <input type="text" readonly value="{{config.security.verifyResendCooldownSeconds}}">
+    </div>
+  </div>
+  <div class="form-field">
+    <span class="form-field-label">{{req.t 'admin.settings.field.sessionSecret'}}</span>
+    <div class="form-field-input">
+      <div class="input-trailing {{#unless config.web.sessionSecret}}is-unset{{/unless}}">
+        <code class="secret-mask" data-secret="{{config.web.sessionSecret}}">{{#if config.web.sessionSecret}}••••••••••{{else}}{{req.t 'admin.settings.secret.unset'}}{{/if}}</code>
+        {{#if config.web.sessionSecret}}
+        <button type="button" class="secret-toggle btn-icon" aria-label="{{req.t 'admin.settings.secret.show'}}" data-show-label="{{req.t 'admin.settings.secret.show'}}" data-hide-label="{{req.t 'admin.settings.secret.hide'}}">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M1.5 8s2.5-4.5 6.5-4.5S14.5 8 14.5 8s-2.5 4.5-6.5 4.5S1.5 8 1.5 8z"/><circle cx="8" cy="8" r="2"/></svg>
+        </button>
+        {{/if}}
+      </div>
+    </div>
+  </div>
+  <div class="form-field">
+    <span class="form-field-label">{{req.t 'admin.settings.field.csrfSecret'}}</span>
+    <div class="form-field-input">
+      <div class="input-trailing {{#unless config.web.csrfSecret}}is-unset{{/unless}}">
+        <code class="secret-mask" data-secret="{{config.web.csrfSecret}}">{{#if config.web.csrfSecret}}••••••••••{{else}}{{req.t 'admin.settings.secret.unset'}}{{/if}}</code>
+        {{#if config.web.csrfSecret}}
+        <button type="button" class="secret-toggle btn-icon" aria-label="{{req.t 'admin.settings.secret.show'}}" data-show-label="{{req.t 'admin.settings.secret.show'}}" data-hide-label="{{req.t 'admin.settings.secret.hide'}}">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M1.5 8s2.5-4.5 6.5-4.5S14.5 8 14.5 8s-2.5 4.5-6.5 4.5S1.5 8 1.5 8z"/><circle cx="8" cy="8" r="2"/></svg>
+        </button>
+        {{/if}}
+      </div>
+    </div>
+  </div>
+</div>
+
+{{!-- 服务集成 (Integrations) ─────────────────────────────────────────── --}}
+<div class="settings-tab-pane" id="pane-integrations" data-tab="integrations">
+  <div class="form-field">
+    <span class="form-field-label">SMTP · {{req.t 'admin.settings.field.host'}}</span>
+    <div class="form-field-input">
+      <input type="text" readonly value="{{config.smtp.host}}">
+    </div>
+  </div>
+  <div class="form-field">
+    <span class="form-field-label">SMTP · {{req.t 'admin.settings.field.port'}}</span>
+    <div class="form-field-input">
+      <input type="text" readonly value="{{config.smtp.port}}">
+    </div>
+  </div>
+  <div class="form-field">
+    <span class="form-field-label">SMTP · TLS</span>
+    <div class="form-field-input">
+      <span class="switch-readonly {{#if config.smtp.secure}}switch-readonly--on{{/if}}"></span>
+      <span class="form-field-hint">{{#if config.smtp.secure}}on{{else}}off{{/if}}</span>
+    </div>
+  </div>
+  <div class="form-field">
+    <span class="form-field-label">SMTP · {{req.t 'admin.settings.field.user'}}</span>
+    <div class="form-field-input">
+      <input type="text" readonly value="{{config.smtp.user}}">
+    </div>
+  </div>
+  <div class="form-field">
+    <span class="form-field-label">SMTP · {{req.t 'admin.settings.field.password'}}</span>
+    <div class="form-field-input">
+      <div class="input-trailing {{#unless config.smtp.pass}}is-unset{{/unless}}">
+        <code class="secret-mask" data-secret="{{config.smtp.pass}}">{{#if config.smtp.pass}}••••••••••{{else}}{{req.t 'admin.settings.secret.unset'}}{{/if}}</code>
+        {{#if config.smtp.pass}}
+        <button type="button" class="secret-toggle btn-icon" aria-label="{{req.t 'admin.settings.secret.show'}}" data-show-label="{{req.t 'admin.settings.secret.show'}}" data-hide-label="{{req.t 'admin.settings.secret.hide'}}">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M1.5 8s2.5-4.5 6.5-4.5S14.5 8 14.5 8s-2.5 4.5-6.5 4.5S1.5 8 1.5 8z"/><circle cx="8" cy="8" r="2"/></svg>
+        </button>
+        {{/if}}
+      </div>
+    </div>
+  </div>
+  <div class="form-field">
+    <span class="form-field-label">SMTP · {{req.t 'admin.settings.field.from'}}</span>
+    <div class="form-field-input">
+      <input type="text" readonly value="{{config.smtp.from}}">
+    </div>
+  </div>
+  <div class="form-field">
+    <span class="form-field-label">MaxMind · {{req.t 'admin.settings.field.licenseKey'}}</span>
+    <div class="form-field-input">
+      <div class="input-trailing {{#unless config.maxmind.licenseKey}}is-unset{{/unless}}">
+        <code class="secret-mask" data-secret="{{config.maxmind.licenseKey}}">{{#if config.maxmind.licenseKey}}••••••••••{{else}}{{req.t 'admin.settings.secret.unset'}}{{/if}}</code>
+        {{#if config.maxmind.licenseKey}}
+        <button type="button" class="secret-toggle btn-icon" aria-label="{{req.t 'admin.settings.secret.show'}}" data-show-label="{{req.t 'admin.settings.secret.show'}}" data-hide-label="{{req.t 'admin.settings.secret.hide'}}">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M1.5 8s2.5-4.5 6.5-4.5S14.5 8 14.5 8s-2.5 4.5-6.5 4.5S1.5 8 1.5 8z"/><circle cx="8" cy="8" r="2"/></svg>
+        </button>
+        {{/if}}
+      </div>
+    </div>
+  </div>
+  <div class="form-field">
+    <span class="form-field-label">MaxMind · {{req.t 'admin.settings.field.editions'}}</span>
+    <div class="form-field-input">
+      <div class="pill-row">
+        {{#each config.maxmind.editions}}
+          {{> pill kind='info' text=this}}
+        {{/each}}
+      </div>
+    </div>
+  </div>
+  <div class="form-field">
+    <span class="form-field-label">{{req.t 'admin.settings.section.etl'}} · {{req.t 'admin.settings.field.schedule'}}</span>
+    <div class="form-field-input">
+      <input type="text" readonly value="{{config.etl.schedule}}">
+      <span class="form-field-hint">{{req.t 'admin.settings.etl.scheduleHint'}}</span>
+    </div>
+  </div>
+  <div class="form-field">
+    <span class="form-field-label">{{req.t 'admin.settings.section.etl'}} · {{req.t 'admin.settings.metricStrip.etlLastRun'}}</span>
+    <div class="form-field-action">
+      {{#if etlLastRun}}
+        {{> pill kind=etlStatusKind text=etlStatusText}}
+        <span class="form-field-hint" title="{{formatDate etlLastRun.startedAt}}">{{formatRelative etlLastRun.startedAt}}</span>
+      {{else}}
+        <span class="form-field-hint">{{etlStatusText}}</span>
+      {{/if}}
+      <form method="POST" action="/admin/settings/etl-restart" class="inline-form push-right">
+        <input type="hidden" name="csrf" value="{{csrfToken}}">
+        <button type="submit" class="btn-primary">{{req.t 'admin.settings.etlRestart'}}</button>
+      </form>
+    </div>
+  </div>
+</div>
+
+{{!-- 数据库与运维 (System) ───────────────────────────────────────────── --}}
+<div class="settings-tab-pane" id="pane-system" data-tab="system">
+  <div class="form-field">
+    <span class="form-field-label">{{req.t 'admin.settings.field.host'}}</span>
+    <div class="form-field-input">
+      <input type="text" readonly value="{{config.db.host}}">
+    </div>
+  </div>
+  <div class="form-field">
+    <span class="form-field-label">{{req.t 'admin.settings.field.port'}}</span>
+    <div class="form-field-input">
+      <input type="text" readonly value="{{config.db.port}}">
+    </div>
+  </div>
+  <div class="form-field">
+    <span class="form-field-label">{{req.t 'admin.settings.field.database'}}</span>
+    <div class="form-field-input">
+      <input type="text" readonly value="{{config.db.database}}">
+    </div>
+  </div>
+  <div class="form-field">
+    <span class="form-field-label">{{req.t 'admin.settings.field.user'}}</span>
+    <div class="form-field-input">
+      <input type="text" readonly value="{{config.db.user}}">
+    </div>
+  </div>
+  <div class="form-field">
+    <span class="form-field-label">{{req.t 'admin.settings.field.password'}}</span>
+    <div class="form-field-input">
+      <div class="input-trailing {{#unless config.db.password}}is-unset{{/unless}}">
+        <code class="secret-mask" data-secret="{{config.db.password}}">{{#if config.db.password}}••••••••••{{else}}{{req.t 'admin.settings.secret.unset'}}{{/if}}</code>
+        {{#if config.db.password}}
+        <button type="button" class="secret-toggle btn-icon" aria-label="{{req.t 'admin.settings.secret.show'}}" data-show-label="{{req.t 'admin.settings.secret.show'}}" data-hide-label="{{req.t 'admin.settings.secret.hide'}}">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M1.5 8s2.5-4.5 6.5-4.5S14.5 8 14.5 8s-2.5 4.5-6.5 4.5S1.5 8 1.5 8z"/><circle cx="8" cy="8" r="2"/></svg>
+        </button>
+        {{/if}}
+      </div>
+    </div>
+  </div>
+  <div class="form-field">
+    <span class="form-field-label">{{req.t 'admin.settings.field.poolSize'}}</span>
+    <div class="form-field-input">
+      <input type="text" readonly value="{{config.db.poolSize}}">
+    </div>
+  </div>
+</div>
+
+{{!-- ─── Tab + secret-reveal JS — external files (CSP blocks inline) ──── --}}
+<script src="/assets/tab-nav.js" defer></script>
+<script src="/assets/secret-reveal.js" defer></script>
+</script>

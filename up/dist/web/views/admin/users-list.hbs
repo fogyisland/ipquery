@@ -1,0 +1,46 @@
+{{!-- SPDX-License-Identifier: MIT --}}
+<h2>{{req.t 'admin.users.title'}}</h2>
+
+{{> filter-bar action='/admin/users' filters=(array
+  (hash name='role' label=(req.t 'admin.users.role') options=(array (hash value='admin' label=(req.t 'admin.users.option-role-admin')) (hash value='user' label=(req.t 'admin.users.option-role-user'))))
+  (hash name='disabled' label=(req.t 'admin.users.disabled') options=(array (hash value='0' label=(req.t 'admin.users.option-status-active')) (hash value='1' label=(req.t 'admin.users.option-status-disabled'))))
+  (hash name='verified' label=(req.t 'admin.users.verified') options=(array (hash value='0' label=(req.t 'common.no')) (hash value='1' label=(req.t 'common.yes'))))
+) values=filters csvUrl='/admin/users.csv' anyLabel=(req.t 'common.any') filterLabel=(req.t 'common.filter') exportLabel=(req.t 'common.exportCsv')}}
+
+<form method="POST" action="/admin/users/bulk" id="bulk-form" data-alert="{{req.t 'common.selectRowsFirst'}}">
+  <input type="hidden" name="csrf" value="{{csrfToken}}">
+  <input type="hidden" name="action" id="bulk-action" value="">
+  <input type="hidden" name="ids" id="bulk-ids" value="">
+
+  <div class="table-scroll">
+    <table class="table">
+      <thead>
+        <tr><th></th><th><a href="?sort={{ternary (eq sort.col 'id') (ternary (eq sort.dir 'asc') '-id' 'id') (ternary (eq sort.dir 'asc') 'id' '-id')}}">{{req.t 'admin.users.id'}}</a></th><th><a href="?sort={{ternary (eq sort.col 'email') (ternary (eq sort.dir 'asc') '-email' 'email') (ternary (eq sort.dir 'asc') 'email' '-email')}}">{{req.t 'admin.users.email'}}</a></th><th>{{req.t 'admin.users.role'}}</th><th>{{req.t 'admin.users.status'}}</th><th>{{req.t 'admin.users.created'}}</th><th>{{req.t 'common.actions'}}</th></tr>
+      </thead>
+      <tbody>
+        {{#each users}}
+        <tr>
+          <td><input type="checkbox" class="row-check" value="{{this.id}}"></td>
+          <td class="table-num">{{this.id}}</td>
+          <td><a href="/admin/users/{{this.id}}">{{this.email}}</a></td>
+          <td>{{> pill kind=(ternary (eq this.role 'admin') 'info' 'muted') text=this.role}}</td>
+          <td>
+            {{#if this.is_disabled}}{{> pill kind='danger' text='disabled'}}{{else}}{{#if this.email_verified}}{{> pill kind='success' text='verified'}}{{else}}{{> pill kind='warning' text='unverified'}}{{/if}}{{/if}}
+          </td>
+          <td class="table-num">{{formatRelative this.created_at}}</td>
+          <td class="table-actions"><a class="button button-small" href="/admin/users/{{this.id}}">{{@root.req.t 'common.view'}}</a></td>
+        </tr>
+        {{/each}}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="bulk-bar">
+    <button type="button" class="button button-secondary" data-bulk-action="enable">{{req.t 'admin.users.bulk.enable'}}</button>
+    <button type="button" class="button button-secondary" data-bulk-action="disable">{{req.t 'admin.users.bulk.disable'}}</button>
+    <button type="button" class="button button-secondary" data-bulk-action="verify">{{req.t 'admin.users.bulk.verify'}}</button>
+    <noscript>{{req.t 'common.enableJs'}}</noscript>
+  </div>
+</form>
+
+<script src="/assets/bulk.js" defer></script>

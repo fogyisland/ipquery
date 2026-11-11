@@ -1,0 +1,10 @@
+import type { Pool } from "mysql2/promise";
+import type { EmailVerification, PasswordReset } from "../types";
+export declare function createVerification(pool: Pool, userId: number, tokenHash: string, expiresAt: Date): Promise<EmailVerification>;
+export declare function findVerificationByHash(pool: Pool, tokenHash: string): Promise<EmailVerification | null>;
+export declare function findVerificationById(pool: Pool, id: number): Promise<EmailVerification | null>;
+export declare function consumeVerification(pool: Pool, id: number): Promise<void>;
+export declare function createPasswordReset(pool: Pool, userId: number, tokenHash: string, expiresAt: Date): Promise<PasswordReset>;
+export declare function findPasswordResetByHash(pool: Pool, tokenHash: string): Promise<PasswordReset | null>;
+export declare function findPasswordResetById(pool: Pool, id: number): Promise<PasswordReset | null>;
+export declare function consumePasswordReset(pool: Pool, id: number): Promise<void>;

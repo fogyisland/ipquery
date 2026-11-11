@@ -1,0 +1,102 @@
+{{!-- SPDX-License-Identifier: MIT --}}
+{{!--
+  First-run bootstrap console — product-grade shell.
+
+  Layout: a centred, bounded product frame (sidebar + main) on a deep ink
+  canvas, mirroring the admin console's information architecture rather than
+  a bare form on a page. The numbered rail is still structural: the wizard
+  really is a six-step sequence.
+
+  buildSteps() supplies n, label, href, active and done; labels are already
+  translated in the route (pre-translated because `{{req.t}}` is a property
+  lookup, not a helper, and resolves to nothing inside {{#each}}). No inline
+  scripts: CSP is script-src self and the ETL progress page polls via a meta
+  refresh. The setup-stepper, setup-step and layout-setup class names are kept
+  because integration tests assert on them (setup-routes / setup-wizard).
+--}}
+<!DOCTYPE html>
+<html lang="{{req.locale}}">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{title}} - IPQuery</title>
+  <meta name="theme-color" content="#070b14">
+  <meta name="color-scheme" content="dark">
+  {{!-- The two webfonts above load from Google Fonts. A meta CSP cannot
+       grant that: with both a header policy and a meta policy present the
+       browser enforces their intersection, so a meta tag can only tighten.
+       The exception lives in the header instead — registerSecurityHeaders()
+       widens style-src/font-src for /init* only. --}}
+  {{!-- Self-hosted fallback stack is in init.css; these two families load
+       here so the wizard looks identical on a machine that has neither. --}}
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap">
+  <link rel="stylesheet" href="/assets/css/base.css">
+  <link rel="stylesheet" href="/assets/css/layout.css">
+  <link rel="stylesheet" href="/assets/css/forms.css">
+  <link rel="stylesheet" href="/assets/css/init.css">
+</head>
+<body class="layout-setup">
+  <a class="boot-skip" href="#boot-main">跳到主要内容</a>
+
+  <div class="boot-shell">
+    <aside class="boot-rail">
+      <div class="boot-brand">
+        <span class="boot-mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="9"></circle>
+            <path d="M3 12h18"></path>
+            <path d="M12 3a15 15 0 0 1 0 18a15 15 0 0 1 0-18z"></path>
+          </svg>
+        </span>
+        <span class="boot-brand-text">
+          <span class="boot-brand-name">IPQuery</span>
+          <span class="boot-brand-tag">{{req.t 'setup.boot.tagline'}}</span>
+        </span>
+      </div>
+
+      <nav class="boot-rail-nav" aria-label="{{req.t 'setup.boot.stepsLabel'}}">
+        {{#if steps}}
+        <ol class="setup-stepper">
+          {{#each steps}}
+          <li class="setup-step{{#if active}} is-active{{/if}}{{#if done}} is-done{{/if}}">
+            <a href="{{href}}"{{#if active}} aria-current="step"{{/if}}>
+              <span class="setup-step-n" aria-hidden="true">
+                {{#if done}}
+                <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 8.5l3 3 6-6"></path></svg>
+                {{else}}{{n}}{{/if}}
+              </span>
+              <span class="setup-step-label">{{label}}</span>
+            </a>
+          </li>
+          {{/each}}
+        </ol>
+        {{/if}}
+      </nav>
+
+      <div class="boot-rail-foot">
+        <div class="boot-progress-row">
+          <span class="boot-progress-label">{{req.t 'setup.boot.stepsLabel'}}</span>
+          {{#if step}}<span class="boot-progress-meta">{{step}} / {{total}}</span>{{/if}}
+        </div>
+        <div class="boot-ticks" aria-hidden="true">
+          {{#each steps}}
+          <span class="boot-tick{{#if done}} is-filled{{else if active}} is-current{{/if}}"></span>
+          {{/each}}
+        </div>
+      </div>
+    </aside>
+
+    <main class="boot-main" id="boot-main">
+      <div class="boot-frame">
+        {{> flash }}
+        {{#if step}}<p class="boot-step-meta">{{req.t 'setup.boot.progress' current=step total=total}}</p>{{/if}}
+        <div class="boot-content">
+          {{{body}}}
+        </div>
+      </div>
+    </main>
+  </div>
+</body>
+</html>

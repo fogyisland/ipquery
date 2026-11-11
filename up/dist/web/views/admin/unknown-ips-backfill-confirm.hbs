@@ -1,0 +1,16 @@
+{{! SPDX-License-Identifier: MIT }}
+{{! PR3: the new flow is preview-first. POST to /preview (dry-run) →
+     /admin/ingest/backfill/preview (review table) →
+     POST /confirm (token-verified write). This page is the entry point
+     that asks for batchLimit and starts the preview run. }}
+<h1>{{req.t "admin.unknownIps.backfill.confirm.title"}}</h1>
+<p>{{req.t "admin.unknownIps.backfill.confirm.body"}}</p>
+<form method="POST" action="/admin/ingest/backfill/preview">
+  <input type="hidden" name="csrf" value="{{req.csrfToken}}" />
+  <label>
+    {{req.t "admin.unknownIps.backfill.batchLimit"}}
+    <input type="number" name="batchLimit" value="100" min="1" max="1000" />
+  </label>
+  <button type="submit" class="btn-primary">{{req.t "admin.ingest.backfill.preview.previewFirst"}}</button>
+  <a href="/admin/ingest">{{req.t "common.cancel"}}</a>
+</form>

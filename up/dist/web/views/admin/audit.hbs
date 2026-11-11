@@ -1,0 +1,50 @@
+{{!-- SPDX-License-Identifier: MIT --}}
+<h2>{{req.t 'admin.audit.title'}}</h2>
+
+<form method="GET" action="/admin/audit" class="filter-bar">
+  <label class="filter-label">{{req.t 'admin.audit.col.user'}}
+    <input type="text" name="userEmail" class="filter-select" value="{{filters.userEmail}}" placeholder="user@x.com">
+  </label>
+  <label class="filter-label">{{req.t 'admin.audit.col.status'}}
+    <select name="status" class="filter-select">
+      <option value="">{{req.t 'common.any'}}</option>
+      <option value="hit" {{#if (eq filters.status 'hit')}}selected{{/if}}>{{req.t 'admin.audit.option-status-hit'}}</option>
+      <option value="miss" {{#if (eq filters.status 'miss')}}selected{{/if}}>{{req.t 'admin.audit.option-status-miss'}}</option>
+      <option value="invalid" {{#if (eq filters.status 'invalid')}}selected{{/if}}>{{req.t 'admin.audit.option-status-invalid'}}</option>
+    </select>
+  </label>
+  <label class="filter-label">{{req.t 'admin.audit.col.ip'}}
+    <input type="text" name="ipText" class="filter-select" value="{{filters.ipText}}" placeholder="8.8.8.8">
+  </label>
+  <button type="submit" class="button">{{req.t 'common.filter'}}</button>
+  <a class="button button-secondary" href="/admin/audit.csv?{{#if filters.userEmail}}userEmail={{filters.userEmail}}&{{/if}}{{#if filters.status}}status={{filters.status}}&{{/if}}{{#if filters.ipText}}ipText={{filters.ipText}}&{{/if}}{{#if sort}}sort={{#if (eq sort.dir 'desc')}}-{{/if}}{{sort.col}}{{/if}}">{{req.t 'common.exportCsv'}}</a>
+</form>
+
+<div class="table-scroll">
+  <table class="table">
+    <thead>
+      <tr>
+        <th><a href="?sort={{ternary (eq sort.col 'id') (ternary (eq sort.dir 'asc') '-id' 'id') (ternary (eq sort.dir 'asc') 'id' '-id')}}">ID</a></th>
+        <th><a href="?sort={{ternary (eq sort.col 'ts') (ternary (eq sort.dir 'asc') '-ts' 'ts') (ternary (eq sort.dir 'asc') 'ts' '-ts')}}">{{@root.req.t 'admin.audit.col.time'}}</a></th>
+        <th>{{@root.req.t 'admin.audit.col.ip'}}</th>
+        <th>{{@root.req.t 'admin.audit.col.status'}}</th>
+        <th>{{@root.req.t 'admin.audit.col.user'}}</th>
+        <th>{{@root.req.t 'admin.audit.col.apiKey'}}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {{#each rows}}
+      <tr>
+        <td class="table-num">{{this.id}}</td>
+        <td class="table-num">{{formatDate this.ts}}</td>
+        <td><code>{{this.ipText}}</code></td>
+        <td>{{> pill kind=(ternary (eq this.status 'hit') 'success' (ternary (eq this.status 'miss') 'warning' 'danger')) text=this.status}}</td>
+        <td>{{#if this.userEmail}}{{this.userEmail}}{{else}}—{{/if}}</td>
+        <td>{{#if this.apiKeyPrefix}}<code>{{this.apiKeyPrefix}}</code>{{else}}—{{/if}}</td>
+      </tr>
+      {{/each}}
+    </tbody>
+  </table>
+</div>
+
+{{> pagination baseUrl="/admin/audit" page=page totalPages=totalPages queryString=queryString }}

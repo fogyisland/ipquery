@@ -1,0 +1,2576 @@
+/* SPDX-License-Identifier: MIT */
+/* ──────────────────────────────────────────────────────────────────────────
+   IPQuery — admin + dashboard stylesheet
+   ──────────────────────────────────────────────────────────────────────────
+   Aesthetic: Network Operations Console (NOC).
+
+   Subject grounding: IPQuery is an IP intelligence tool. Its users —
+   backend engineers, ops, security analysts — live in terminals, BGP
+   tools, Grafana dark mode, and Wireshark. They want a console that
+   feels like the systems they already know, not a marketing site.
+
+   Visual identity:
+     · dark canvas (deep ink, like a terminal)
+     · monospace for ALL data (IPs, numbers, IDs, timestamps)
+     · single terminal-cyan accent (#22d3ee), nothing else loud
+     · hairline 1px borders, no border-radius — flat panel edges
+     · compact density — NOC consoles show a lot in a small area
+     · live "ping" status indicators with subtle glow
+     · IP addresses rendered as oversized mono glyphs on key surfaces
+
+   The signature element: a horizontal "trace" line that ties together
+   activity over time, with cyan markers. The user always knows the
+   system is alive without ever looking at a spinner.
+
+   Class catalog below must stay tight — every selector is referenced
+   from a partial or admin/*.hbs view. Don't add unused classes.
+   ────────────────────────────────────────────────────────────────────────── */
+
+/* ─── Design tokens ─────────────────────────────────────────────────────── */
+:root {
+  /* Surface scale — darkest at the bottom of the panel stack */
+  --bg: #0a0e14; /* canvas */
+  --surface: #11161d; /* card */
+  --surface-2: #161c24; /* interactive / nested */
+  --surface-3: #1d2530; /* hover */
+
+  --border: #1f2630;
+  --border-2: #2a333f;
+  --border-3: #3a4554;
+
+  --text: #e6edf3;
+  --text-2: #8a96a3;
+  --text-3: #5c6773;
+
+  /* Cyan accent — terminal cyan, the only loud color */
+  --accent: #22d3ee;
+  --accent-dim: #0891b2;
+  --accent-glow: rgba(34, 211, 238, 0.18);
+  --accent-line: rgba(34, 211, 238, 0.35);
+
+  /* Status colors — tuned for dark background */
+  --success: #34d399;
+  --success-glow: rgba(52, 211, 153, 0.18);
+  --warning: #fbbf24;
+  --warning-glow: rgba(251, 191, 36, 0.18);
+  --danger: #f87171;
+  --danger-glow: rgba(248, 113, 113, 0.18);
+
+  --muted: #475569;
+
+  /* Subtle backdrop grid — like a network topology grid */
+  --grid-line: rgba(120, 144, 168, 0.04);
+
+  /* Typography */
+  --font-sans:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "PingFang SC",
+    "Microsoft YaHei", sans-serif;
+  --font-mono:
+    ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", "Roboto Mono", monospace;
+
+  /* Spacing */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 24px;
+  --sp-6: 32px;
+  --sp-7: 48px;
+
+  /* Borders — flat, terminal-like */
+  --radius: 2px;
+  --radius-sm: 2px;
+  --hairline: 1px solid var(--border);
+
+  /* Shadows — minimal, replaced by borders */
+  --shadow-glow: 0 0 0 1px var(--accent-line);
+}
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg: #f3f5f8;
+    --surface: #ffffff;
+    --surface-2: #f8fafc;
+    --surface-3: #eef2f6;
+    --border: #d8dee5;
+    --border-2: #c4ccd5;
+    --border-3: #aab4bf;
+    --text: #0a0e14;
+    --text-2: #4b5563;
+    --text-3: #6b7280;
+    --accent: #0891b2;
+    --accent-dim: #0e7490;
+    --accent-glow: rgba(8, 145, 178, 0.12);
+    --accent-line: rgba(8, 145, 178, 0.3);
+    --grid-line: rgba(10, 14, 20, 0.04);
+  }
+}
+
+/* ─── Shell ─────────────────────────────────────────────────────────────── */
+.layout-admin,
+.layout-dashboard,
+.layout-app {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.5;
+  font-feature-settings: "ss01", "cv11", "tnum";
+  /* Subtle grid backdrop — reads as network topology */
+  background-image:
+    linear-gradient(var(--grid-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
+  background-size: 32px 32px;
+  background-position: -1px -1px;
+}
+
+.dashboard-shell {
+  display: grid;
+  grid-template-columns: 232px 1fr;
+  gap: 0;
+  max-width: none;
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+}
+.dashboard-main {
+  min-width: 0;
+  padding: var(--sp-6) var(--sp-6) var(--sp-7);
+  max-width: 1400px;
+}
+
+/* ─── Sidebar ───────────────────────────────────────────────────────────── */
+.sidebar {
+  background: var(--surface);
+  border-right: var(--hairline);
+  padding: var(--sp-5) 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-5);
+  color: var(--text);
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow-y: auto;
+}
+.sidebar-brand {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 15px;
+  letter-spacing: -0.02em;
+  color: var(--accent);
+  text-decoration: none;
+  padding: 0 var(--sp-5);
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+.sidebar-brand::before {
+  content: "▌";
+  color: var(--accent);
+  font-size: 18px;
+  line-height: 1;
+}
+.sidebar-brand:hover {
+  text-decoration: none;
+  color: var(--accent);
+}
+
+.sidebar-nav {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-5);
+  flex: 1;
+}
+.sidebar-group {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.sidebar-group-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-3);
+  padding: 0 var(--sp-5) var(--sp-2);
+}
+.sidebar-link {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: 7px var(--sp-5);
+  color: var(--text-2);
+  text-decoration: none;
+  font-size: 13px;
+  font-weight: 500;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  /* `width: 100%` under the default `content-box` measures the padding OUT of
+     the 100%: a 389px column plus 24px of padding on each side made every
+     link 437px wide on a 390px viewport. In the desktop grid the extra width
+     was clipped by the sidebar; full-bleed on mobile it became horizontal
+     scroll. border-box makes 100% mean the visible width. */
+  box-sizing: border-box;
+  width: 100%;
+  font-family: inherit;
+  position: relative;
+  transition:
+    color 80ms ease,
+    background 80ms ease;
+}
+.sidebar-link::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  background: transparent;
+  border-radius: 50%;
+  flex-shrink: 0;
+  transition:
+    background 80ms ease,
+    box-shadow 80ms ease;
+}
+.sidebar-link:hover {
+  background: var(--surface-2);
+  color: var(--text);
+  text-decoration: none;
+}
+.sidebar-link.active {
+  background: var(--surface-2);
+  color: var(--accent);
+}
+.sidebar-link.active::before {
+  background: var(--accent);
+  box-shadow: 0 0 8px var(--accent-glow);
+}
+
+/* CTA variant — used as a single "switch context" link, not a full menu.
+   Visually different: no dot indicator, accent color, mono arrow prefix. */
+.sidebar-link--cta {
+  color: var(--accent);
+  font-family: var(--font-mono);
+  font-weight: 500;
+}
+.sidebar-link--cta::before {
+  background: transparent !important;
+  box-shadow: none !important;
+}
+.sidebar-link-arrow {
+  display: inline-block;
+  width: 14px;
+  /* The link is a flex row; every child becomes a flex item and loses its
+     inline layout. `flex: none` pins the arrow to its 14px instead of letting
+     the anonymous text run and the CTA label share that axis unpredictably —
+     without it the item grew the row past the viewport at 390px. */
+  flex: none;
+  font-family: var(--font-mono);
+  color: var(--accent);
+}
+
+/* Override: links INSIDE the sidebar are navigation, not primary CTAs —
+   they should be muted gray until active/hover. The base rule below
+   colors every <a> cyan; this gives sidebar navigation a voice. */
+.layout-admin .sidebar-link:not(.active),
+.layout-dashboard .sidebar-link:not(.active),
+.layout-app .sidebar-link:not(.active) {
+  color: var(--text-2);
+}
+
+/* Override: forms.css's button[type="submit"] rule paints submit buttons
+   solid cyan with white text and no border-radius/font-family — which
+   turns <button class="sidebar-link sidebar-logout"> into a full-width
+   cyan banner. Re-skin it as a sidebar link here.
+   `layouts/public` renders the same sidebar partial (error pages), so it
+   needs the same override; without it a signed-in user who hits an error
+   page sees the cyan banner this rule exists to prevent. */
+.layout-admin button.sidebar-link,
+.layout-dashboard button.sidebar-link,
+.layout-app button.sidebar-link,
+.layout-public button.sidebar-link {
+  background: transparent;
+  color: var(--text-2);
+  border: 0;
+  border-radius: 0;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0;
+  padding: 7px var(--sp-5);
+}
+.layout-admin button.sidebar-link:hover,
+.layout-dashboard button.sidebar-link:hover,
+.layout-app button.sidebar-link:hover,
+.layout-public button.sidebar-link:hover {
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+/* Override: .btn-primary is text-on-cyan by design. The base rule that
+   colors every <a> cyan would otherwise paint the dark text the same
+   color as the cyan background, hiding the label. */
+.layout-admin a.btn-primary,
+.layout-dashboard a.btn-primary,
+.layout-app a.btn-primary,
+.layout-admin button.btn-primary,
+.layout-dashboard button.btn-primary,
+.layout-app button.btn-primary {
+  color: #062028;
+}
+
+.sidebar-footer {
+  border-top: var(--hairline);
+  padding-top: var(--sp-3);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.sidebar-user {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-2);
+  padding: var(--sp-2) var(--sp-5);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sidebar-logout-form {
+  margin: 0;
+}
+.sidebar-logout {
+  color: var(--text-2);
+}
+.sidebar-logout:hover {
+  color: var(--danger);
+}
+
+@media (max-width: 768px) {
+  /* A bare `1fr` has an `auto` minimum, so a single long unbreakable child
+     (the sidebar CTA label) can push the column wider than the viewport and
+     take the whole page into horizontal scroll. `minmax(0, 1fr)` lets the
+     column shrink below its content. */
+  .dashboard-shell {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .sidebar {
+    position: relative;
+    height: auto;
+    min-width: 0;
+  }
+  .dashboard-main {
+    padding: var(--sp-5) var(--sp-4) var(--sp-6);
+    min-width: 0;
+  }
+}
+
+/* ─── Headings & typography ─────────────────────────────────────────────── */
+.layout-admin h1,
+.layout-dashboard h1,
+.layout-app h1,
+.layout-admin h2,
+.layout-dashboard h2,
+.layout-app h2,
+.layout-admin h3,
+.layout-dashboard h3,
+.layout-app h3 {
+  color: var(--text);
+  letter-spacing: -0.015em;
+  font-weight: 600;
+}
+.layout-admin h1,
+.layout-dashboard h1,
+.layout-app h1 {
+  font-size: 22px;
+  margin: 0 0 var(--sp-5);
+}
+.layout-admin h2,
+.layout-dashboard h2,
+.layout-app h2 {
+  font-size: 18px;
+  margin: var(--sp-6) 0 var(--sp-4);
+}
+.layout-admin h3,
+.layout-dashboard h3,
+.layout-app h3 {
+  font-size: 13px;
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-2);
+  margin: var(--sp-6) 0 var(--sp-3);
+  font-weight: 600;
+}
+.layout-admin h3:first-of-type,
+.layout-dashboard h3:first-of-type,
+.layout-app h3:first-of-type {
+  margin-top: 0;
+}
+
+.layout-admin p,
+.layout-dashboard p,
+.layout-app p {
+  margin: 0 0 var(--sp-3);
+}
+.layout-admin a,
+.layout-dashboard a,
+.layout-app a {
+  color: var(--accent);
+}
+.layout-admin code,
+.layout-dashboard code,
+.layout-app code,
+code {
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+  background: var(--surface-2);
+  border: var(--hairline);
+  padding: 1px 6px;
+  border-radius: var(--radius-sm);
+  color: var(--accent);
+}
+
+/* ─── Card primitive ────────────────────────────────────────────────────── */
+.card {
+  background: var(--surface);
+  border: var(--hairline);
+  padding: var(--sp-5);
+  position: relative;
+}
+.card + .card {
+  margin-top: var(--sp-4);
+}
+.card-title {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-3);
+  margin: 0 0 var(--sp-3);
+}
+.card-value {
+  font-family: var(--font-mono);
+  font-size: 32px;
+  font-weight: 600;
+  color: var(--text);
+  margin: 0;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+.card-sub {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-3);
+  margin: var(--sp-2) 0 0;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.card-value--small {
+  font-size: 18px;
+}
+
+/* ─── Grids ─────────────────────────────────────────────────────────────── */
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--sp-3);
+  margin-bottom: var(--sp-5);
+}
+
+/* ─── Buttons ───────────────────────────────────────────────────────────── */
+.button,
+.btn-primary,
+.btn-secondary,
+.btn-danger {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: 7px 14px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  border: var(--hairline);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  color: var(--text);
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    background 80ms ease,
+    border-color 80ms ease,
+    color 80ms ease;
+}
+.button:hover,
+.btn-secondary:hover {
+  background: var(--surface-3);
+  border-color: var(--border-3);
+  text-decoration: none;
+}
+.btn-primary {
+  background: var(--accent);
+  color: #062028;
+  border-color: var(--accent);
+  font-weight: 600;
+}
+.btn-primary:hover {
+  background: var(--accent-dim);
+  border-color: var(--accent-dim);
+  color: #fff;
+  text-decoration: none;
+}
+.btn-danger {
+  background: var(--danger);
+  color: #1a0808;
+  border-color: var(--danger);
+}
+.btn-danger:hover {
+  background: #dc2626;
+  border-color: #dc2626;
+  color: #fff;
+  text-decoration: none;
+}
+
+/* ─── Tables ────────────────────────────────────────────────────────────── */
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  background: var(--surface);
+}
+
+/* Nine views render <table class="table"> straight into the page, with no
+   scroll container. A table's automatic layout has a minimum content width —
+   column headers plus cell padding — that does not shrink, so on a 390px
+   viewport the users table measured 587px and dragged the whole document into
+   horizontal scroll.
+   `display: block` on the table itself is the obvious fix and the wrong one:
+   once the table box goes away its `background` paints per row group instead
+   of across the full width, so the surface stopped short of the right-hand
+   columns. Replaced for tables that opt in through a `.table-scroll` parent. */
+.table-scroll {
+  display: block;
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.table thead th {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-3);
+  text-align: left;
+  padding: var(--sp-3) var(--sp-4);
+  border-bottom: 1px solid var(--border-2);
+  background: var(--surface-2);
+}
+.table thead th a {
+  color: inherit;
+  text-decoration: none;
+}
+.table thead th a:hover {
+  color: var(--text);
+}
+.table tbody tr {
+  border-bottom: 1px solid var(--border);
+  transition: background 80ms ease;
+}
+.table tbody tr:last-child {
+  border-bottom: 0;
+}
+.table tbody tr:hover {
+  background: var(--surface-2);
+}
+.table tbody td {
+  padding: var(--sp-3) var(--sp-4);
+  color: var(--text);
+  vertical-align: middle;
+}
+.table tbody td code {
+  font-size: 12px;
+}
+.table tbody td .ip,
+.table tbody td code.ip {
+  font-family: var(--font-mono);
+  color: var(--text);
+  background: transparent;
+  border: 0;
+  padding: 0;
+  font-size: 13px;
+}
+.table-num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-family: var(--font-mono);
+}
+.table-actions {
+  white-space: nowrap;
+  text-align: right;
+}
+.table a.button {
+  display: inline-flex;
+}
+
+/* ─── Forms ─────────────────────────────────────────────────────────────── */
+.layout-admin input[type="text"],
+.layout-admin input[type="email"],
+.layout-admin input[type="password"],
+.layout-admin input[type="search"],
+.layout-admin input[type="number"],
+.layout-admin select,
+.layout-admin textarea,
+.layout-dashboard input[type="text"],
+.layout-dashboard input[type="email"],
+.layout-dashboard input[type="password"],
+.layout-dashboard input[type="search"],
+.layout-dashboard input[type="number"],
+.layout-dashboard select,
+.layout-dashboard textarea {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  background: var(--bg);
+  border: var(--hairline);
+  border-radius: var(--radius);
+  padding: 8px 10px;
+  color: var(--text);
+  width: 100%;
+  max-width: 360px;
+}
+.layout-admin input:focus,
+.layout-dashboard input:focus,
+.layout-admin select:focus,
+.layout-dashboard select:focus,
+.layout-admin textarea:focus,
+.layout-dashboard textarea:focus {
+  outline: 0;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-glow);
+}
+.layout-admin label,
+.layout-dashboard label {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-2);
+  margin: 0 0 var(--sp-2);
+}
+
+/* ─── Pills / status indicators ─────────────────────────────────────────── */
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 8px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  border: 1px solid;
+  border-radius: 999px;
+  background: transparent;
+  line-height: 1.6;
+}
+.pill::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 6px currentColor;
+}
+.pill-success {
+  color: var(--success);
+  border-color: var(--success);
+  background: var(--success-glow);
+}
+.pill-warning {
+  color: var(--warning);
+  border-color: var(--warning);
+  background: var(--warning-glow);
+}
+.pill-danger {
+  color: var(--danger);
+  border-color: var(--danger);
+  background: var(--danger-glow);
+}
+.pill-info {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: var(--accent-glow);
+}
+.pill-muted {
+  color: var(--text-3);
+  border-color: var(--border-3);
+}
+
+/* ─── Filter bar ────────────────────────────────────────────────────────── */
+.filter-bar {
+  display: flex;
+  gap: var(--sp-3);
+  align-items: center;
+  margin-bottom: var(--sp-4);
+  padding: var(--sp-3) var(--sp-4);
+  background: var(--surface);
+  border: var(--hairline);
+  flex-wrap: wrap;
+}
+.filter-select {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  background: var(--bg);
+  border: var(--hairline);
+  color: var(--text);
+  padding: 6px 10px;
+  border-radius: var(--radius);
+}
+
+/* ─── Flash ─────────────────────────────────────────────────────────────── */
+.flash {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  padding: var(--sp-3) var(--sp-4);
+  border: var(--hairline);
+  margin-bottom: var(--sp-4);
+  border-left-width: 3px;
+}
+.flash-success {
+  border-left-color: var(--success);
+  color: var(--success);
+  background: var(--success-glow);
+}
+.flash-error {
+  border-left-color: var(--danger);
+  color: var(--danger);
+  background: var(--danger-glow);
+}
+.flash-info {
+  border-left-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-glow);
+}
+
+/* ─── Pagination ────────────────────────────────────────────────────────── */
+.pagination {
+  display: flex;
+  gap: var(--sp-2);
+  align-items: center;
+  margin-top: var(--sp-4);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-2);
+}
+.pagination a,
+.pagination span {
+  padding: 4px 8px;
+  border: var(--hairline);
+  color: var(--text);
+  text-decoration: none;
+  background: var(--surface);
+}
+.pagination .current {
+  background: var(--accent);
+  color: #062028;
+  border-color: var(--accent);
+}
+
+/* ─── Definition lists ──────────────────────────────────────────────────── */
+dl.settings-dl {
+  display: grid;
+  grid-template-columns: minmax(120px, max-content) 1fr;
+  gap: var(--sp-3) var(--sp-5);
+  margin: 0;
+}
+dl.settings-dl dt {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-2);
+}
+dl.settings-dl dd {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  word-break: break-all;
+}
+
+.layout-admin dl:not(.settings-dl),
+.layout-dashboard dl:not(.settings-dl),
+.layout-app dl:not(.settings-dl) {
+  display: grid;
+  grid-template-columns: minmax(120px, max-content) 1fr;
+  gap: var(--sp-2) var(--sp-5);
+  margin: 0;
+}
+.layout-admin dl:not(.settings-dl) dt,
+.layout-dashboard dl:not(.settings-dl) dt,
+.layout-app dl:not(.settings-dl) dt {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-2);
+  font-weight: 500;
+}
+.layout-admin dl:not(.settings-dl) dd,
+.layout-dashboard dl:not(.settings-dl) dd,
+.layout-app dl:not(.settings-dl) dd {
+  margin: 0;
+  font-size: 13px;
+}
+.layout-admin dl:not(.settings-dl) pre,
+.layout-dashboard dl:not(.settings-dl) pre,
+.layout-app dl:not(.settings-dl) pre {
+  background: var(--bg);
+  border: var(--hairline);
+  padding: var(--sp-3);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  white-space: pre-wrap;
+  overflow-x: auto;
+}
+
+/* ─── Activity feed ─────────────────────────────────────────────────────── */
+.activity-feed {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+.activity-row {
+  display: grid;
+  grid-template-columns: 80px 90px 1fr auto;
+  gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-2);
+  border-top: var(--hairline);
+  align-items: center;
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+.activity-row:first-child {
+  border-top: 0;
+}
+.activity-time {
+  color: var(--text-3);
+  font-size: 11px;
+}
+.activity-row > span:nth-child(2),
+.activity-row > span:nth-child(3),
+.activity-row > span:nth-child(4) {
+  color: var(--text-2);
+}
+
+/* ─── Admin table variant ───────────────────────────────────────────────── */
+.admin-table {
+  background: var(--surface);
+}
+
+/* ─── Reduced motion ────────────────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+    animation: none !important;
+  }
+}
+
+/* ─── Dashboard v2: welcome + status cards + 7-day chart ────────────────── */
+.dash-welcome {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--sp-4);
+  flex-wrap: wrap;
+  margin-bottom: var(--sp-6);
+  padding-bottom: var(--sp-5);
+  border-bottom: var(--hairline);
+}
+.dash-welcome h2 {
+  margin: 0 0 var(--sp-2);
+  font-size: 24px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--text);
+}
+.dash-welcome-sub {
+  margin: 0;
+  color: var(--text-2);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+.dash-welcome-actions {
+  display: flex;
+  gap: var(--sp-2);
+  flex-wrap: wrap;
+}
+
+.dash-section-title {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-3);
+  margin: var(--sp-5) 0 var(--sp-3);
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+}
+.dash-section-title::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  background: var(--accent);
+  border-radius: 50%;
+  box-shadow: 0 0 6px var(--accent);
+}
+.dash-section-title:first-of-type {
+  margin-top: var(--sp-3);
+}
+
+.dashboard-grid--three {
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+}
+
+.dash-quick {
+  display: flex;
+  gap: var(--sp-2);
+  flex-wrap: wrap;
+}
+
+.form-section {
+  margin-top: var(--sp-5);
+  padding-top: var(--sp-5);
+  border-top: var(--hairline);
+}
+
+.stat-card {
+  border-top: 2px solid var(--border-3);
+}
+.stat-card--hit {
+  border-top-color: var(--success);
+}
+.stat-card--miss {
+  border-top-color: var(--warning);
+}
+.stat-card--invalid {
+  border-top-color: var(--danger);
+}
+.stat-card .card-value {
+  color: var(--text);
+}
+
+/* ─── Chart card ────────────────────────────────────────────────────────── */
+.chart-card {
+  padding: var(--sp-5);
+}
+.chart-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--sp-4);
+  margin-bottom: var(--sp-4);
+  flex-wrap: wrap;
+}
+.chart-card-head .card-title {
+  margin: 0;
+}
+.chart-host {
+  width: 100%;
+}
+
+.chart-bars {
+  display: grid;
+  grid-template-columns: 24px 1fr;
+  gap: 0 var(--sp-3);
+  align-items: end;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-3);
+}
+.chart-y {
+  display: flex;
+  flex-direction: column-reverse;
+  justify-content: space-between;
+  height: 160px;
+  text-align: right;
+  padding-bottom: 22px;
+}
+.chart-bars-track {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: var(--sp-3);
+  height: 160px;
+  align-items: end;
+  position: relative;
+  border-bottom: 1px solid var(--border-2);
+}
+.chart-bars-track::before,
+.chart-bars-track::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  border-bottom: 1px dashed var(--border);
+}
+.chart-bars-track::before {
+  top: 33%;
+}
+.chart-bars-track::after {
+  top: 66%;
+}
+.chart-bar-col {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: stretch;
+  gap: 1px;
+  min-width: 0;
+}
+.chart-bar {
+  width: 100%;
+  min-height: 1px;
+  transition: opacity 80ms ease;
+}
+.chart-bar--hit {
+  background: var(--success);
+}
+.chart-bar--miss {
+  background: var(--warning);
+}
+.chart-bar--invalid {
+  background: var(--danger);
+}
+.chart-bar-col:hover .chart-bar {
+  opacity: 0.85;
+}
+.chart-bar-total {
+  font-size: 11px;
+  color: var(--text);
+  text-align: center;
+  margin-top: 6px;
+}
+.chart-bar-axis {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: var(--sp-3);
+  margin-top: 6px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-3);
+}
+.chart-bar-axis span {
+  text-align: center;
+}
+
+.chart-legend {
+  display: flex;
+  gap: var(--sp-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-2);
+}
+.chart-legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.chart-swatch {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+}
+.chart-swatch--hit {
+  background: var(--success);
+}
+.chart-swatch--miss {
+  background: var(--warning);
+}
+.chart-swatch--invalid {
+  background: var(--danger);
+}
+
+.chart-empty {
+  height: 160px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-3);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  border: 1px dashed var(--border);
+}
+
+.dash-link {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--accent);
+  text-decoration: none;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.dash-link:hover {
+  text-decoration: underline;
+}
+
+/* ─── Page hero (signature element) ─────────────────────────────────────── */
+/* The .ip-hero block turns a single IP + its resolved metadata into an
+   oversized mono display — the visual identity of the product. */
+.ip-hero-card {
+  background: radial-gradient(circle at 0% 0%, var(--accent-glow) 0%, transparent 60%), var(--surface);
+  border-color: var(--accent-line);
+}
+.ip-hero {
+  font-family: var(--font-mono);
+  font-size: 40px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--accent);
+  margin: 0;
+  line-height: 1.05;
+  text-shadow: 0 0 24px var(--accent-glow);
+  word-break: break-all;
+}
+.ip-hero--empty {
+  color: var(--text-3);
+  text-shadow: none;
+  letter-spacing: 0.2em;
+}
+.ip-hero-meta {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-2);
+  margin: var(--sp-3) 0 0;
+  display: flex;
+  gap: var(--sp-4);
+  flex-wrap: wrap;
+  align-items: center;
+}
+.ip-hero-cta {
+  margin-top: 16px;
+}
+.ip-hero-meta span::before {
+  content: "› ";
+  color: var(--text-3);
+  margin-right: 2px;
+}
+.ip-status {
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.ip-status::before {
+  content: "●";
+  font-size: 12px;
+}
+.ip-status--hit {
+  color: var(--success);
+}
+.ip-status--miss {
+  color: var(--warning);
+}
+.ip-status--invalid {
+  color: var(--danger);
+}
+
+/* ─── Recent activity table variant ─────────────────────────────────────── */
+.recent-table {
+  background: var(--surface);
+}
+.recent-table td {
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+.recent-table td.time {
+  color: var(--text-3);
+  white-space: nowrap;
+}
+.recent-table td.ip {
+  color: var(--text);
+}
+
+/* ─── API endpoint card (shown on /dashboard/keys) ──────────────────────── */
+/* The endpoint URL is the answer to "where do I send my requests?" — make
+   it the most readable thing on the page: monospace, full-width, one
+   line. The Copy button sits inline so a user can grab it without thinking. */
+.endpoint-card {
+  margin: var(--sp-4) 0 var(--sp-5);
+  padding: var(--sp-4) var(--sp-5);
+  background: var(--surface);
+  border: var(--hairline);
+  border-left: 3px solid var(--accent);
+}
+.endpoint-card-title {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-2);
+  margin: 0 0 var(--sp-2);
+}
+.endpoint-card-sub {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-3);
+  margin: 0 0 var(--sp-3);
+}
+.endpoint-url {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--accent);
+  background: var(--bg);
+  border: var(--hairline);
+  padding: 8px 10px;
+  word-break: break-all;
+  margin: 0 0 var(--sp-3);
+}
+.endpoint-copy {
+  margin-left: 0;
+}
+
+/* ─── Provider config table (on /admin/unknown-ips) ────────────────────── */
+/* Each row pairs a provider name + free-tier quota with two inline forms:
+   a one-click toggle for the enabled flag and a separate api-key form
+   so the key field doesn't have to be retyped to flip the toggle. The
+   forms render compact and stack on narrow widths via flex-wrap. */
+.provider-table {
+  table-layout: fixed;
+}
+.provider-table td {
+  vertical-align: top;
+}
+.provider-table-meta {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-3);
+  margin-top: 2px;
+}
+.provider-table-quota {
+  display: inline-block;
+  font-size: 11px;
+  color: var(--text-2);
+  background: var(--bg);
+  padding: 2px 6px;
+  border-radius: var(--radius);
+  white-space: normal;
+}
+.provider-table-err {
+  margin-top: 4px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--warning);
+  word-break: break-all;
+}
+.provider-toggle-form,
+.provider-key-form {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  flex-wrap: wrap;
+}
+.provider-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-2);
+}
+.provider-key-form input[type="password"] {
+  width: 200px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  background: var(--bg);
+  border: var(--hairline);
+  border-radius: var(--radius);
+  padding: 5px 8px;
+  color: var(--text);
+}
+
+/* ─── Settings page: metric strip + tabs + form fields ────────────────
+   Stripe/Cloudflare-style read-only settings console. Tabs are pure CSS
+   driven by URL hash; the admin/settings.hbs view boots a small inline
+   JS to swap .is-active on .settings-tab-link / .settings-tab-pane when
+   location.hash changes. No router, no query string, no full reload —
+   back/forward and bookmark-via-hash all work for free. */
+.metric-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: var(--sp-3);
+  margin-bottom: var(--sp-5);
+}
+.metric-strip-item {
+  background: var(--surface);
+  border: var(--hairline);
+  padding: var(--sp-3) var(--sp-4);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-height: 60px;
+}
+.metric-strip-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+.metric-strip-value {
+  font-family: var(--font-mono);
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.metric-strip-value .pill {
+  font-size: 9px;
+}
+
+/* Tabs */
+.settings-tabs-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-1);
+  border-bottom: var(--hairline);
+  margin: var(--sp-5) 0 var(--sp-4);
+}
+.settings-tab-link {
+  display: inline-flex;
+  align-items: center;
+  padding: 10px 16px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-3);
+  text-decoration: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  transition:
+    color 80ms ease,
+    border-color 80ms ease;
+}
+.settings-tab-link:hover {
+  color: var(--text-2);
+  text-decoration: none;
+}
+.settings-tab-link.is-active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+.settings-tab-pane {
+  display: none;
+}
+.settings-tab-pane.is-active {
+  display: block;
+}
+
+/* Form fields (read-only settings) — the global .form-field rules at the
+   top of this file provide label/input/hint styling. The grid template
+   below is settings-specific because other forms (signup/login/setup)
+   use different column ratios. */
+.settings-tab-pane .form-field {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  gap: var(--sp-3) var(--sp-4);
+  align-items: center;
+  padding: var(--sp-3) 0;
+  border-bottom: var(--hairline);
+}
+.settings-tab-pane .form-field:last-child {
+  border-bottom: none;
+}
+.settings-tab-pane .form-field-label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-2);
+}
+.settings-tab-pane .form-field-input {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  flex-wrap: wrap;
+}
+.settings-tab-pane .form-field-input input[readonly] {
+  flex: 1;
+  min-width: 0;
+  max-width: 480px;
+  background: var(--bg);
+  color: var(--text);
+  opacity: 0.85;
+  cursor: default;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  padding: 8px 10px;
+  border: var(--hairline);
+  border-radius: var(--radius);
+}
+.settings-tab-pane .form-field-input input[readonly]:focus {
+  outline: none;
+  box-shadow: none;
+  border-color: var(--border);
+}
+.settings-tab-pane .form-field-hint {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-3);
+}
+
+/* Input with trailing action (eye-icon reveal, copy button, etc.) */
+.input-trailing {
+  display: flex;
+  align-items: stretch;
+  border: var(--hairline);
+  background: var(--bg);
+  max-width: 480px;
+  min-width: 0;
+  flex: 1;
+}
+.input-trailing > .secret-mask {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 10px;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--text-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  user-select: all;
+}
+.input-trailing > .secret-mask.is-shown {
+  color: var(--accent);
+}
+.input-trailing.is-unset > .secret-mask {
+  color: var(--text-3);
+  font-style: italic;
+}
+.btn-icon {
+  background: var(--surface-2);
+  border: none;
+  border-left: var(--hairline);
+  padding: 0 10px;
+  color: var(--text-3);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition:
+    color 80ms ease,
+    background 80ms ease;
+}
+.btn-icon:hover {
+  color: var(--accent);
+  background: var(--surface-3);
+}
+.btn-icon svg {
+  width: 14px;
+  height: 14px;
+  display: block;
+}
+
+/* Read-only switch (booleans) — looks like a toggle but is non-interactive */
+.switch-readonly {
+  display: inline-block;
+  width: 36px;
+  height: 20px;
+  background: var(--surface-3);
+  border: var(--hairline);
+  border-radius: 999px;
+  position: relative;
+  vertical-align: middle;
+  cursor: default;
+  flex-shrink: 0;
+}
+.switch-readonly::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  background: var(--text-3);
+  border-radius: 50%;
+  transition:
+    transform 120ms ease,
+    background 120ms ease;
+}
+.switch-readonly--on {
+  background: var(--accent-glow);
+  border-color: var(--accent);
+}
+.switch-readonly--on::after {
+  transform: translateX(16px);
+  background: var(--accent);
+}
+
+/* Inline action row (e.g. ETL "run now" button next to the cron field) */
+.form-field-action {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+}
+.form-field-action .btn-primary {
+  margin-left: auto;
+}
+
+/* Editions row — pills used as tags inside a form-field */
+.settings-tab-pane .pill-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+}
+
+/* ─── Ingest console (/admin/unknown-ips) ───────────────────────────── */
+
+/* Generic alert banner (success/info/danger) for flash messages. */
+.admin-alert {
+  display: block;
+  padding: var(--sp-3) var(--sp-4);
+  margin-bottom: var(--sp-3);
+  border: var(--hairline);
+  background: var(--surface-2);
+  font-size: 13px;
+}
+.admin-alert strong {
+  display: block;
+  margin-bottom: var(--sp-2);
+}
+.admin-alert--success {
+  border-color: rgba(34, 197, 94, 0.35);
+  background: rgba(34, 197, 94, 0.06);
+}
+.admin-alert--info {
+  border-color: var(--accent-line);
+  background: var(--accent-glow);
+}
+.admin-alert--danger {
+  border-color: rgba(239, 68, 68, 0.35);
+  background: rgba(239, 68, 68, 0.06);
+}
+
+.admin-summary-list {
+  margin: 0;
+  padding-left: var(--sp-4);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-2);
+  list-style: square;
+}
+.admin-summary-list li {
+  margin: 2px 0;
+}
+.admin-summary-disabled {
+  color: var(--warning);
+}
+.admin-summary-ips code.admin-ips {
+  display: block;
+  padding: var(--sp-2);
+  background: var(--bg);
+  color: var(--text-2);
+  font-size: 11px;
+  word-break: break-all;
+  border: var(--hairline);
+  margin-top: var(--sp-2);
+}
+
+/* Runner status card — top of Overview tab.
+   Layout: 4-stat row on top, then a 2-button action row, then a queue-bulk-ops row. */
+.runner-card {
+  background: var(--surface);
+  border: var(--hairline);
+  margin-bottom: var(--sp-4);
+}
+.runner-card-head {
+  padding: var(--sp-3) var(--sp-4) var(--sp-2);
+  border-bottom: var(--hairline);
+}
+.runner-card-head h3 {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-2);
+}
+.runner-card-body {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-4);
+}
+.runner-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.runner-stat-value {
+  font-family: var(--font-mono);
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+}
+.runner-stat-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+.runner-card-actions,
+.runner-card-queue {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-4);
+  border-top: var(--hairline);
+}
+.runner-card-queue {
+  padding-top: var(--sp-2);
+  padding-bottom: var(--sp-3);
+}
+.runner-card-queue-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-3);
+  margin-right: var(--sp-2);
+}
+.runner-card-actions form {
+  margin: 0;
+}
+
+/* Provider health card — one card per provider on the Providers tab.
+   Status color comes from --status-color set inline by the .provider-health-status modifier. */
+.provider-health-card {
+  background: var(--surface);
+  border: var(--hairline);
+  padding: var(--sp-3) var(--sp-4);
+  margin-bottom: var(--sp-3);
+  position: relative;
+}
+.provider-health-card::before {
+  /* Left border stripe keyed to status — at-a-glance triage. */
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: var(--status-color, var(--accent));
+}
+.provider-health-card--healthy {
+  --status-color: #22c55e;
+}
+.provider-health-card--failing {
+  --status-color: var(--danger);
+}
+.provider-health-card--recovering {
+  --status-color: var(--warning);
+}
+.provider-health-card--disabled {
+  --status-color: #6b7280;
+}
+.provider-health-card--idle {
+  --status-color: var(--accent);
+}
+
+.provider-health-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  margin-bottom: var(--sp-3);
+}
+.provider-health-card-name {
+  font-family: var(--font-mono);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  margin-right: var(--sp-2);
+}
+.provider-health-card-slug {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-3);
+}
+.provider-health-status {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  border: var(--hairline);
+  color: var(--status-color, var(--accent));
+  flex-shrink: 0;
+}
+.provider-health-status--healthy {
+  --status-color: #22c55e;
+}
+.provider-health-status--failing {
+  --status-color: var(--danger);
+}
+.provider-health-status--recovering {
+  --status-color: var(--warning);
+}
+.provider-health-status--disabled {
+  --status-color: #6b7280;
+}
+.provider-health-status--idle {
+  --status-color: var(--accent);
+}
+
+.provider-health-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--sp-3);
+  margin-bottom: var(--sp-3);
+}
+.provider-health-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--sp-2) var(--sp-3);
+  background: var(--surface-2);
+  border: var(--hairline);
+}
+.provider-health-stat-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+.provider-health-stat-value {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text);
+}
+.provider-health-error-text {
+  color: var(--warning);
+}
+
+.provider-health-card-error {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--danger);
+  background: rgba(239, 68, 68, 0.08);
+  border-left: 2px solid var(--danger);
+  padding: var(--sp-2) var(--sp-3);
+  margin-bottom: var(--sp-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.provider-health-card-config {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-3);
+  padding-top: var(--sp-3);
+  border-top: var(--hairline);
+}
+.provider-toggle-form,
+.provider-key-form {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  margin: 0;
+  flex-wrap: wrap;
+}
+.provider-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-2);
+  cursor: pointer;
+}
+.provider-key-form input[type="password"] {
+  width: 200px;
+  max-width: 100%;
+  background: var(--bg);
+  border: var(--hairline);
+  color: var(--text);
+  padding: 6px 8px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+.provider-health-card-quota {
+  margin-top: var(--sp-3);
+  padding-top: var(--sp-2);
+  border-top: var(--hairline);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-3);
+}
+
+/* Circuit breaker card. */
+.circuit-breaker-card {
+  background: var(--surface);
+  border: var(--hairline);
+  padding: var(--sp-4);
+  margin-top: var(--sp-4);
+}
+.circuit-breaker-card h3 {
+  margin: 0 0 var(--sp-2);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-2);
+}
+.circuit-breaker-help {
+  font-size: 12px;
+  color: var(--text-3);
+  margin: 0 0 var(--sp-3);
+}
+.circuit-breaker-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+.circuit-breaker-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: var(--sp-3);
+}
+.circuit-breaker-row label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.circuit-breaker-row label span {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+
+/* ─── Scheduler card (continuous random-IP ingest) ──────────────────── */
+/* Replaces the old .admin-continuous-card. Same terminal-aesthetic as
+   .runner-card — flat panels, monospace headers, hairline borders.
+   Layout: head (title + status pill) → cooldown banner (conditional) →
+   config form (interval/batch/range/cb-linkage) → stats row (toggle +
+   4 metrics). */
+.scheduler-card {
+  background: var(--surface);
+  border: var(--hairline);
+  margin-bottom: var(--sp-4);
+}
+.scheduler-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-4);
+  border-bottom: var(--hairline);
+}
+.scheduler-card-head h3 {
+  margin: 0 0 var(--sp-1);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-2);
+}
+.scheduler-card-sub {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-3);
+}
+.scheduler-status-pill {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 4px var(--sp-3);
+  border: var(--hairline);
+  white-space: nowrap;
+}
+.scheduler-status-pill--running {
+  color: var(--success);
+  border-color: var(--success);
+  background: var(--success-glow);
+}
+.scheduler-status-pill--stopped {
+  color: var(--text-3);
+}
+.scheduler-status-pill--cooldown {
+  color: var(--warning);
+  border-color: var(--warning);
+  background: var(--warning-glow);
+}
+.scheduler-cooldown-banner {
+  padding: var(--sp-2) var(--sp-4);
+  background: var(--warning-glow);
+  border-bottom: var(--hairline);
+  color: var(--warning);
+  font-size: 12px;
+}
+.scheduler-card-form {
+  padding: var(--sp-3) var(--sp-4);
+  border-bottom: var(--hairline);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+.scheduler-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: var(--sp-3);
+}
+.scheduler-card-grid label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.scheduler-card-grid label span {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+.scheduler-card-grid select,
+.scheduler-card-grid input[type="number"] {
+  background: var(--bg);
+  border: var(--hairline);
+  color: var(--text);
+  padding: 6px 8px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+.scheduler-card-grid select[disabled] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.scheduler-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-2);
+  cursor: pointer;
+  align-self: end;
+}
+.scheduler-card-actions {
+  display: flex;
+  gap: var(--sp-2);
+  flex-wrap: wrap;
+  padding-top: var(--sp-2);
+  border-top: var(--hairline);
+}
+.scheduler-card-actions .btn-primary,
+.scheduler-card-actions .btn-secondary {
+  margin: 0;
+}
+.scheduler-card-stats {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-4);
+  padding: var(--sp-3) var(--sp-4);
+}
+.scheduler-card-stats form {
+  margin: 0;
+}
+.scheduler-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.scheduler-stat-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+.scheduler-stat-value {
+  font-family: var(--font-mono);
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+}
+.scheduler-stat-unit {
+  font-size: 11px;
+  color: var(--text-3);
+  font-weight: 400;
+  margin-left: 2px;
+}
+
+/* ─── Recent probes table ───────────────────────────────────────────── */
+/* One row per IP, expandable to show the per-provider fan-out detail.
+   The provider cells at the top of each row give a one-glance health
+   verdict: green = ok+country, amber = throttled, red = error/timeout,
+   muted = empty/no country. */
+.probe-log-heading {
+  margin: var(--sp-5) 0 var(--sp-2);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-2);
+}
+.probe-log-help {
+  margin: 0 0 var(--sp-3);
+  font-size: 12px;
+  color: var(--text-3);
+}
+.probe-log-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: var(--sp-3);
+  padding: var(--sp-2) var(--sp-3);
+  background: var(--surface-2);
+  border: var(--hairline);
+  margin-bottom: var(--sp-3);
+}
+.probe-log-filters label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.probe-log-filters label span {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+.probe-log-filters select {
+  background: var(--bg);
+  border: var(--hairline);
+  color: var(--text);
+  padding: 6px 8px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+.probe-log-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--surface);
+  border: var(--hairline);
+}
+.probe-log-table thead th {
+  text-align: left;
+  padding: var(--sp-2) var(--sp-3);
+  background: var(--surface-2);
+  border-bottom: var(--hairline);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+.probe-log-table tbody td {
+  padding: var(--sp-2) var(--sp-3);
+  border-bottom: var(--hairline);
+  vertical-align: top;
+  font-size: 12px;
+}
+.probe-log-cells {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-1);
+  margin-bottom: var(--sp-1);
+}
+.provider-cell {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 2px 6px;
+  border: var(--hairline);
+  white-space: nowrap;
+}
+.provider-cell--ok {
+  color: var(--success);
+  border-color: var(--success);
+  background: var(--success-glow);
+}
+.provider-cell--throttled {
+  color: var(--warning);
+  border-color: var(--warning);
+  background: var(--warning-glow);
+}
+.provider-cell--timeout,
+.provider-cell--error,
+.provider-cell--network {
+  color: var(--danger);
+  border-color: var(--danger);
+  background: var(--danger-glow);
+}
+.provider-cell--no_country,
+.provider-cell--empty {
+  color: var(--text-3);
+  border-color: var(--border-2);
+  background: transparent;
+}
+.probe-log-detail {
+  margin-top: var(--sp-1);
+}
+.probe-log-detail summary {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-3);
+  cursor: pointer;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.probe-log-detail summary:hover {
+  color: var(--accent);
+}
+.probe-detail-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: var(--sp-2);
+  background: var(--surface-2);
+  border: var(--hairline);
+}
+.probe-detail-table th,
+.probe-detail-table td {
+  padding: 4px var(--sp-2);
+  border-bottom: var(--hairline);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  text-align: left;
+}
+.probe-detail-table th {
+  background: var(--surface-3);
+  color: var(--text-3);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-size: 10px;
+}
+.probe-detail-batch {
+  margin: var(--sp-2) 0 0;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-3);
+}
+.circuit-breaker-row input[type="number"] {
+  background: var(--bg);
+  border: var(--hairline);
+  color: var(--text);
+  padding: 6px 10px;
+  font-family: var(--font-mono);
+  font-size: 13px;
+}
+
+/* Failure logs filter bar + table. */
+.failure-logs-help {
+  font-size: 12px;
+  color: var(--text-3);
+  margin: 0 0 var(--sp-3);
+}
+.failure-logs-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-4);
+  background: var(--surface-2);
+  border: var(--hairline);
+  margin-bottom: var(--sp-3);
+}
+.failure-logs-filters label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+.failure-logs-filters select {
+  background: var(--bg);
+  border: var(--hairline);
+  color: var(--text);
+  padding: 6px 10px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  min-width: 140px;
+}
+
+.failure-log-reason {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-2);
+  max-width: 320px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Existing admin-* tag system uses inline class modifiers; keep consistent. */
+.admin-tag {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.4;
+  border: 1px solid transparent;
+  background: var(--surface-2);
+  color: var(--text);
+  white-space: nowrap;
+  vertical-align: baseline;
+}
+.admin-tag--warn {
+  background: rgba(245, 158, 11, 0.12);
+  color: var(--warning);
+  border-color: rgba(245, 158, 11, 0.35);
+}
+.admin-tag--ok {
+  background: rgba(34, 197, 94, 0.12);
+  color: #22c55e;
+  border-color: rgba(34, 197, 94, 0.35);
+}
+.admin-tag--muted {
+  background: var(--surface-2);
+  color: var(--text-3);
+}
+.admin-tag--danger {
+  background: rgba(239, 68, 68, 0.12);
+  color: var(--danger);
+  border-color: rgba(239, 68, 68, 0.35);
+}
+
+.admin-empty {
+  font-size: 12px;
+  color: var(--text-3);
+  padding: var(--sp-3) var(--sp-4);
+  background: var(--surface-2);
+  border: var(--hairline);
+  margin: 0 0 var(--sp-3);
+  font-style: italic;
+}
+
+/* Bulk-select bar for the API keys table. Sits above the table so the
+   action is always visible while scrolling; on smaller screens the
+   button wraps below the row on its own. */
+.keys-bulk-bar {
+  display: flex;
+  justify-content: flex-end;
+  padding: var(--sp-2) 0;
+  margin-bottom: var(--sp-2);
+}
+.keys-bulk-bar form {
+  margin: 0;
+}
+.keys-bulk-bar .btn-secondary[disabled] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Per-row checkbox column. Used by /admin/keys so the bulk-select UI has
+   a consistent gutter. Width is fixed so columns don't reflow when the
+   checkbox toggles. */
+.table-check {
+  width: 36px;
+  text-align: center;
+  padding-left: var(--sp-3);
+  padding-right: var(--sp-2);
+}
+.table-check input[type="checkbox"] {
+  margin: 0;
+  vertical-align: middle;
+  cursor: pointer;
+}
+
+/* ETL run detail — stage card grid + per-file tables. The .etl-stage-live
+   wrapper is the HTMX swap target for the live-polling endpoint (every 5s
+   while the run is in flight); styling matches the rest of the NOC
+   aesthetic. */
+.etl-run-header {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  margin-bottom: var(--sp-4);
+  flex-wrap: wrap;
+}
+.etl-run-duration {
+  font: 12px var(--font-mono);
+  color: var(--text-2);
+}
+.etl-stage-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: var(--sp-3);
+  margin-bottom: var(--sp-4);
+}
+.etl-stage-card {
+  border: var(--hairline);
+  background: var(--surface);
+  padding: var(--sp-3) var(--sp-4);
+}
+.etl-stage-card-title {
+  font: 11px var(--font-mono);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-2);
+  margin-bottom: 6px;
+}
+.etl-stage-card-value {
+  font: 600 22px var(--font-mono);
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+  margin-bottom: 4px;
+}
+.etl-stage-card-sub {
+  font: 11px var(--font-mono);
+  color: var(--text-3);
+  line-height: 1.5;
+}
+.etl-error-banner {
+  border: var(--hairline);
+  border-color: var(--danger);
+  background: var(--surface);
+  padding: var(--sp-3);
+  margin: var(--sp-3) 0;
+}
+.etl-error-banner pre {
+  margin: 6px 0 0;
+  font: 12px var(--font-mono);
+  color: var(--danger);
+  white-space: pre-wrap;
+}
+.etl-live-pulse {
+  font: 11px var(--font-mono);
+  color: var(--accent);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+/* Live progress bars — server-rendered initial state, JS keeps them
+   moving on every /progress JSON poll. Bar fill uses a CSS custom
+   property (--pct) so we never need to read computed widths. */
+.etl-progress-row {
+  display: grid;
+  grid-template-columns: 80px 1fr 180px;
+  align-items: center;
+  gap: 12px;
+  margin: 8px 0;
+}
+.etl-progress-label {
+  font: 12px var(--font-sans);
+  color: var(--text-2);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.etl-progress-bar {
+  height: 14px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.etl-progress-bar-fill {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, var(--accent), color-mix(in srgb, var(--accent) 70%, white 30%));
+  transition: width 250ms ease-out;
+}
+.etl-progress-text {
+  font: 12px var(--font-mono);
+  color: var(--text-3);
+  text-align: right;
+  white-space: nowrap;
+}
+.etl-progress-stage {
+  margin-top: 12px;
+  font: 11px var(--font-mono);
+  color: var(--text-3);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+.etl-progress-stage[data-stage="insert"],
+.etl-progress-stage[data-stage="swap"] {
+  color: var(--accent);
+}
+.etl-progress-stage[data-stage="done"] {
+  color: var(--success, #2a8a4a);
+}
+.etl-skip-details {
+  font: 11px var(--font-mono);
+  color: var(--text-3);
+}
+.etl-skip-details summary {
+  cursor: pointer;
+}
+.etl-skip-details ul {
+  margin: 4px 0 0;
+  padding-left: var(--sp-4);
+}
+
+/* Provider health window sub-grid (1h / 24h / 7d mini-cells) */
+.provider-health-window {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--sp-2);
+  margin-top: var(--sp-3);
+  padding-top: var(--sp-3);
+  border-top: var(--hairline);
+}
+.provider-health-window-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.provider-health-window-label {
+  font: 10px var(--font-mono);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+.provider-health-window-value {
+  font: 12px var(--font-mono);
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.provider-last-error {
+  margin-top: var(--sp-2);
+}
+.provider-last-error pre {
+  font: 11px var(--font-mono);
+  color: var(--text-2);
+  background: var(--surface);
+  padding: var(--sp-2);
+  white-space: pre-wrap;
+  max-height: 120px;
+  overflow: auto;
+}
+.provider-last-error summary {
+  cursor: pointer;
+  font: 11px var(--font-mono);
+  color: var(--text-3);
+}
+.provider-last-error small {
+  font: 11px var(--font-mono);
+  color: var(--text-3);
+}
+
+/* Custom providers page — same visual language as the built-in cards. */
+.custom-provider-form {
+  background: var(--surface);
+  border: var(--hairline);
+  padding: var(--sp-4);
+  margin-bottom: var(--sp-4);
+}
+.custom-provider-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--sp-3);
+}
+.custom-provider-form-grid-full {
+  grid-column: 1 / -1;
+}
+.custom-provider-form-grid label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font: 12px var(--font-mono);
+  color: var(--text-2);
+}
+.custom-provider-form-grid input[type="text"],
+.custom-provider-form-grid input[type="number"],
+.custom-provider-form-grid input[type="password"],
+.custom-provider-form-grid select,
+.custom-provider-form-grid textarea {
+  background: var(--bg);
+  border: var(--hairline);
+  color: var(--text);
+  padding: 6px 8px;
+  font: 12px var(--font-mono);
+}
+.custom-provider-form-grid textarea {
+  min-height: 60px;
+  resize: vertical;
+}
+.custom-provider-form-grid .form-hint {
+  font: 10px var(--font-mono);
+  color: var(--text-3);
+}
+.custom-provider-form-actions {
+  margin-top: var(--sp-3);
+  padding-top: var(--sp-3);
+  border-top: var(--hairline);
+  display: flex;
+  gap: var(--sp-2);
+}
+.custom-providers-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+.custom-provider-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  margin-top: var(--sp-3);
+  padding-top: var(--sp-3);
+  border-top: var(--hairline);
+  align-items: center;
+}
+.custom-provider-actions form {
+  margin: 0;
+  display: inline-flex;
+  gap: var(--sp-2);
+}
+.custom-provider-actions input[type="text"] {
+  background: var(--bg);
+  border: var(--hairline);
+  color: var(--text);
+  padding: 6px 8px;
+  font: 12px var(--font-mono);
+  width: 160px;
+}
+.custom-provider-test-result {
+  font: 11px var(--font-mono);
+  color: var(--text-2);
+  padding: 4px 6px;
+  background: var(--surface-2);
+  border: var(--hairline);
+  min-width: 80px;
+}
+
+/* ─── Inline action forms ───────────────────────────────────────────────── */
+/* Buttons row forms (enable/disable/delete/kick …) render inline next to
+   each other without layout impact — replaces scattered style="display:inline". */
+.inline-form {
+  display: inline-block;
+  margin: 0;
+}
+.push-right {
+  margin-left: auto;
+}
