@@ -218,7 +218,10 @@ describe("setup wizard routes", () => {
     expect(progress.status).toBe(200);
     // Will be one of: running, success, failed — depending on whether the
     // background downloader can reach db-ip.com from the test environment.
-    expect(progress.text).toMatch(/init-progress-status--(running|success|failed)/);
+    // The view keeps the `setup-progress-status--*` class name through
+    // the /setup -> /init rename (the CSS and i18n keys were kept for
+    // test compatibility), so assert on that.
+    expect(progress.text).toMatch(/setup-progress-status--(running|success|failed)/);
 
     // A run row exists. Either still running or already finished.
     const [rows] = await td.pool.query<mysql.RowDataPacket[]>(

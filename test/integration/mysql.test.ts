@@ -66,6 +66,7 @@ describe("mysql storage", () => {
       "ip_ranges_new",
       "password_resets",
       "provider_call_counter",
+      "provider_call_counter_minute",
       "provider_error_log",
       "query_log",
       "random_probe_log",

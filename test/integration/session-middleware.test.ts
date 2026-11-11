@@ -47,15 +47,16 @@ describe("session middleware", () => {
     expect(r.headers.location).toMatch(/^\/login/);
   });
 
-  it("non-admin -> 403 on /admin/*", async () => {
+  it("non-admin -> 404 on /admin/*", async () => {
     const sid = generateToken(16);
     const regular = await createUser(app.pool, { email: "r@x.com", passwordHash: "h", displayName: "R" });
     await createSession(app.pool, sid, regular.id, new Date(Date.now() + 3600_000));
     const r = await request(app.server)
       .get("/admin/users")
       .set("Cookie", "sid=" + sid);
-    expect(r.status).toBe(403);
-  });
+    // The admin guard answers a non-admin with 404, not 403: a 403 would
+    // confirm that /admin/* routes exist (see src/web/plugins/auth.ts).
+    expect(r.status).toBe(404);  });
 
   it("admin passes admin gate", async () => {
     const sid = generateToken(16);

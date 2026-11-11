@@ -42,9 +42,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **CI**: GitHub Actions 工作流（Node 20），ESLint + Prettier 接入 `npm run lint`
 - **每 IP 探测审计**: `random_probe_log` 记录每次 Provider 扇出的完整响应，
   管理界面可按批次回看，见 migration 018
+- **Provider 分钟级调用计数**: `provider_call_counter_minute` 按 UTC 分钟分桶，
+  让熔断窗口真正以分钟计（见 migration 024 与下方「Provider 熔断窗口粒度」）。
+  滚动发布时新代码可能先于迁移上线：分钟表缺失时写入降级为告警、读取自动回退
+  日表，熔断仍按日表生效（已由测试固化，不会因「读到的 0」而静默失效）
 
 ### Changed
 
+- **ETL 守卫测试不再依赖网络**: `etl-guards.test.ts` 只写了 city 一个 fixture，
+  而 ETL 现在会按份判断缓存、缺失即重下——于是这个测试会真的去下载约 93 MB 的
+  DB-IP 数据并插入约 120 万行，撑爆 90s 超时，还留下「运行中」的 ETL 行连累
+  同文件其余用例。现补齐 country／asn fixture 并用 `runPipeline` 的下载缝
+  替换下载阶段，测试不再碰网络
 - `/admin/unknown-ips` 更名为 `/admin/ingest`（旧路径保留重定向）；`/admin/providers`
   成为 Provider 管理的统一入口
 - 管理界面内联脚本外提为独立文件，以符合 CSP
@@ -56,6 +65,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Provider 熔断窗口粒度**: 熔断窗口按分钟配置（默认 10 分钟），但调用计数器
+  `provider_call_counter` 按 UTC **天**分桶，于是 10 分钟窗口实际读到 24 小时历史——
+  一次下午的抖动会让 Provider 停用一整天，而已经恢复的 Provider 要等到下一个
+  UTC 零点才重新启用。现新增按分钟分桶的 `provider_call_counter_minute`
+  （migration 024），`touchProviderCalled` 双写两张表，窗口小于一天时读分钟表、
+  更大时仍读天表；分钟表缺失时自动回退到天表，不影响熔断本身
+- **回灌预览污染审计日志**: 干跑（`dryRun=true`）同样会往 `random_probe_log`
+  写入 `merged` 记录，于是「最近探测」列表里会出现根本没写入 `ip_ranges` 的 IP，
+  与真实运行无法区分。干跑现在不再写任何探测记录，预览结果只在 `previewRows` 中
+- **ETL 失败运行残留阶段行**: `markStageFailed` 只清理了下载与 swap 行，解析／入库行
+  的 `finished_at` 留空，在管理界面上读起来像「这个阶段还在跑」，与真实运行无法区分。
+  现一并关闭这些行并补齐 `duration_ms`
+- **下载重定向未校验协议**: 重定向目标来自服务端响应，此前原样跟随，可能被指向
+  `http://`（降级为明文）或内网地址。现只跟随 `https://`，其余一律拒绝
+- **失效的 `perIpTimeoutMs` 选项**: 回灌与随机 IP 生成的该选项从未接到任何地方
+  （5 个 Provider 各自硬编码 `AbortSignal.timeout(5_000)`），传值毫无效果，属误导性
+  API。现移除该选项及其整条透传链
+- **失效的 `maxTriesPerIp` 选项**: `pickRandomIpsNotInRanges` 收下该参数却硬编码
+  重试 10 次，现改为真正按传入值重试
+- **ETL 跨源合并的死代码**: `src/etl/merger.ts` 的 `mergeByPriority` 无任何调用方
+  （实际合并由入库阶段的按列 `COALESCE` upsert 完成），连同其单元测试一并移除；
+  相关注释同步更正
+- **统计口径失真**: `maxmind` 与 `ip2region` 的解析器存在但从未接入 ETL 流水线，
+  统计接口却用 `?? 0` 把「未运行」报成「运行了但 0 条」。现未运行的源返回 `null`，
+  与实测的 `0` 区分开
+- **失效的测试断言**: 六处断言与实现早已不一致，代码行为是对的、断言是旧的：
+  `etl-run-detail-route.test.ts`、`admin.dashboard.test.ts`、`admin.etl.test.ts`、
+  `admin.users.test.ts`、`session-middleware.test.ts` 期望非管理员拿到 403，
+  而 `auth.ts` 出于防目录枚举的考虑刻意返回 404（见 commit `a2626e6`）；
+  `init-routes.test.ts` 断言 `init-progress-status--*`，而视图渲染的仍是
+  `setup-progress-status--*`（`/setup` → `/init` 改名时只改了断言没改类名）；
+  `mysql.test.ts` 与 `cli.migrate.test.ts` 的表清单／迁移计数停在 migration 024 之前。
+  现按实际行为修正断言
 - **CSRF 绑定**: CSRF 校验改为 HMAC 绑定（`csrf_bind` httpOnly Cookie），
   防止跨站请求伪造绕过
 - **密钥泄漏**: `/admin/settings` 曾在 `data-secret` 属性中输出原始密钥，
