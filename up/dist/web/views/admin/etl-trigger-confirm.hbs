@@ -1,0 +1,8 @@
+{{! SPDX-License-Identifier: MIT }}
+<h1>{{req.t "admin.etl.trigger.confirm.title"}}</h1>
+<p>{{req.t "admin.etl.trigger.confirm.body"}}</p>
+<form method="POST" action="/admin/etl/trigger">
+  <input type="hidden" name="csrf" value="{{req.csrfToken}}" />
+  <button type="submit" class="btn-primary">{{req.t "admin.etl.trigger"}}</button>
+  <a href="/admin/etl/runs">{{req.t "common.cancel"}}</a>
+</form>

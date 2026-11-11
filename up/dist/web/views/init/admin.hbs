@@ -1,0 +1,16 @@
+{{!-- SPDX-License-Identifier: MIT --}}
+<header class="boot-step-head">
+  <h1>{{req.t 'setup.admin.title'}}</h1>
+  <p class="boot-lede">{{req.t 'setup.boot.adminLede'}}</p>
+</header>
+{{#if error}}<div class="boot-alert"><p class="form-error">{{error}}</p></div>{{/if}}
+<form method="POST" action="/init/admin" class="boot-form">
+  <input type="hidden" name="csrf" value="{{csrfToken}}">
+  {{> form-field name="email" type="email" label=(req.t 'setup.admin.emailLabel') required=true autocomplete="email" value=email }}
+  {{> form-field name="password" type="password" label=(req.t 'setup.admin.passwordLabel') required=true autocomplete="new-password" help=(req.t 'setup.admin.passwordHint') }}
+  {{> form-field name="displayName" label=(req.t 'setup.admin.nameLabel') required=true autocomplete="nickname" value=displayName }}
+  <div class="boot-actions">
+    <button type="submit" class="btn-primary">{{req.t 'setup.admin.submit'}}</button>
+    <a href="/init/site" class="boot-back">{{req.t 'common.back'}}</a>
+  </div>
+</form>

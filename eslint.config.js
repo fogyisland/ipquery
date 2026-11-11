@@ -14,11 +14,19 @@ module.exports = tseslint.config(
   {
     ignores: [
       "dist/**",
+      // The committed release copy of dist/. It is generated output —
+      // linting it would flag the compiler's own output, and it is
+      // verified by `npm run check:release` instead.
+      "up/dist/**",
       "coverage/**",
       "node_modules/**",
       "*.config.{js,ts}",
       "scripts/build.js", // build tool — runs under Node, not part of src
       "scripts/copy-schema.js",
+      // Release-packaging tools — run under Node, print progress to
+      // stdout by design.
+      "scripts/sync-up-dist.js",
+      "scripts/write-release-manifest.js",
       // Vendored client libraries — linted by prettier for formatting only.
       "src/web/assets/js/htmx.min.js",
       "src/web/assets/js/**/*.min.js",

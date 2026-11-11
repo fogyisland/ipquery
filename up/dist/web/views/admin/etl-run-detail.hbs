@@ -1,0 +1,230 @@
+{{!-- SPDX-License-Identifier: MIT --}}
+{{!-- ETL run-detail page. The whole panel is wrapped in <section
+     class="etl-stage-live"> so HTMX's hx-select="section" can swap the
+     dynamic stage cards + tables every 5s while the run is still in
+     flight. When the live-only partial lands it carries no hx-get of its
+     own, so polling terminates naturally on the next tick. --}}
+
+{{#if liveOnly}}
+<section class="etl-stage-live">
+{{else}}
+{{#if (eq run.status 'running')}}
+<section class="etl-stage-live"
+  hx-get="/admin/etl/runs/{{run.id}}/live"
+  hx-trigger="every 5s"
+  hx-swap="outerHTML"
+  hx-select="section">
+{{else}}
+<section class="etl-stage-live">
+{{/if}}
+{{/if}}
+
+<h2>{{req.t 'admin.etl.runDetail.title' id=run.id}}</h2>
+
+{{!-- Header pill row — only in the full view to avoid 5s flicker; the
+     live partial is the dynamic stage data, the chrome stays put. --}}
+{{#unless liveOnly}}
+<div class="etl-run-header">
+  {{> pill kind=(ternary (eq run.status 'success') 'success' (ternary (eq run.status 'failed') 'danger' 'warning')) text=statusText}}
+  <span class="etl-run-duration">{{runDurationText}}</span>
+  {{#if run.started_at}}<span>{{req.t 'admin.etl.runDetail.started'}} {{formatDate run.started_at}}</span>{{/if}}
+</div>
+{{/unless}}
+
+{{!-- ── 4-card stage grid ── --}}
+<div class="etl-stage-grid">
+
+  {{!-- Download card --}}
+  <div class="etl-stage-card">
+    <div class="etl-stage-card-title">{{req.t 'admin.etl.stages.download'}}</div>
+    <div class="etl-stage-card-value">{{downloads.length}}</div>
+    <div class="etl-stage-card-sub">{{bytesTotal}} {{totalBytesText}}</div>
+    <div class="etl-stage-card-sub">{{durationDownloadText}}</div>
+  </div>
+
+  {{!-- Parse card --}}
+  <div class="etl-stage-card">
+    <div class="etl-stage-card-title">{{req.t 'admin.etl.stages.parse'}}</div>
+    <div class="etl-stage-card-value">{{rowsEmittedTotal}}</div>
+    <div class="etl-stage-card-sub">{{rowsSkippedText}}</div>
+    <div class="etl-stage-card-sub">{{durationParseText}}</div>
+  </div>
+
+  {{!-- Insert card --}}
+  <div class="etl-stage-card">
+    <div class="etl-stage-card-title">{{req.t 'admin.etl.stages.insert'}}</div>
+    <div class="etl-stage-card-value">{{rowsAttemptedTotal}}</div>
+    <div class="etl-stage-card-sub">{{rowsInsertedText}} · {{rowsDuplicatesText}}</div>
+    <div class="etl-stage-card-sub">{{durationInsertText}}</div>
+  </div>
+
+  {{!-- Swap card --}}
+  <div class="etl-stage-card">
+    <div class="etl-stage-card-title">{{req.t 'admin.etl.stages.swap'}}</div>
+    <div class="etl-stage-card-value">
+      {{#if swap}}
+        {{> pill kind=(ternary (eq swap.status 'success') 'success' 'danger') text=swap.statusText}}
+      {{else}}
+        {{> pill kind='muted' text='—'}}
+      {{/if}}
+    </div>
+    <div class="etl-stage-card-sub">{{#if swap}}{{swap.durationText}}{{else}}—{{/if}}</div>
+  </div>
+</div>
+
+{{!-- ── Per-file tables ── --}}
+{{#if downloads.length}}
+<h3>{{req.t 'admin.etl.runDetail.downloads'}}</h3>
+<div class="table-scroll">
+  <table class="table">
+    <thead>
+      <tr>
+        <th>{{req.t 'admin.etl.col.source'}}</th>
+        <th>{{req.t 'admin.etl.col.month'}}</th>
+        <th>{{req.t 'admin.etl.col.bytes'}}</th>
+        <th>{{req.t 'admin.etl.col.duration'}}</th>
+        <th>{{req.t 'admin.etl.col.status'}}</th>
+        <th>{{req.t 'admin.etl.col.error'}}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {{#each downloads}}
+      <tr>
+        <td><code>{{this.source}}</code></td>
+        <td>{{this.month}}</td>
+        <td class="table-num">{{#if this.bytes}}{{this.bytes}}{{else}}—{{/if}}</td>
+        <td class="table-num">{{#if this.durationMs}}{{this.durationMs}}ms{{else}}—{{/if}}</td>
+        <td>{{> pill kind=this.statusKind text=this.status}}</td>
+        <td>{{#if this.errorMessage}}{{this.errorMessage}}{{else}}—{{/if}}</td>
+      </tr>
+      {{/each}}
+    </tbody>
+  </table>
+</div>
+{{/if}}
+
+{{#if parses.length}}
+<h3>{{req.t 'admin.etl.runDetail.parses'}}</h3>
+<table class="table">
+  <thead>
+    <tr>
+      <th>{{req.t 'admin.etl.col.source'}}</th>
+      <th>{{req.t 'admin.etl.col.rowsEmitted'}}</th>
+      <th>{{req.t 'admin.etl.col.rowsSkipped'}}</th>
+      <th>{{req.t 'admin.etl.col.gunzipErrors'}}</th>
+      <th>{{req.t 'admin.etl.col.duration'}}</th>
+    </tr>
+  </thead>
+  <tbody>
+    {{#each parses}}
+    <tr>
+      <td><code>{{this.source}}</code></td>
+      <td class="table-num">{{this.rowsEmitted}}</td>
+      <td class="table-num">
+        <details class="etl-skip-details">
+          <summary>{{this.skippedTotal}}</summary>
+          <ul>
+            <li>{{this.skipLabels.shortLine}}: {{this.rowsSkippedShort}}</li>
+            <li>{{this.skipLabels.headerRow}}: {{this.rowsSkippedHeader}}</li>
+            <li>{{this.skipLabels.unparseableIp}}: {{this.rowsSkippedUnparseableIp}}</li>
+            <li>{{this.skipLabels.missingCol}}: {{this.rowsSkippedMissingCol}}</li>
+            <li>{{this.skipLabels.nonNumericAsn}}: {{this.rowsSkippedNanAsn}}</li>
+            <li>{{this.skipLabels.other}}: {{this.rowsSkippedOther}}</li>
+          </ul>
+        </details>
+      </td>
+      <td class="table-num">{{this.gunzipErrors}}</td>
+      <td class="table-num">{{#if this.durationMs}}{{this.durationMs}}ms{{else}}—{{/if}}</td>
+    </tr>
+    {{/each}}
+  </tbody>
+</table>
+{{/if}}
+
+{{#if inserts.length}}
+<h3>{{req.t 'admin.etl.runDetail.inserts'}}</h3>
+<table class="table">
+  <thead>
+    <tr>
+      <th>{{req.t 'admin.etl.col.source'}}</th>
+      <th>{{req.t 'admin.etl.col.rowsAttempted'}}</th>
+      <th>{{req.t 'admin.etl.col.rowsInserted'}}</th>
+      <th>{{req.t 'admin.etl.col.rowsDuplicates'}}</th>
+      <th>{{req.t 'admin.etl.col.batchCount'}}</th>
+      <th>{{req.t 'admin.etl.col.duration'}}</th>
+    </tr>
+  </thead>
+  <tbody>
+    {{#each inserts}}
+    <tr>
+      <td><code>{{this.source}}</code></td>
+      <td class="table-num">{{this.rowsAttempted}}</td>
+      <td class="table-num">{{this.rowsInserted}}</td>
+      <td class="table-num">{{this.rowsDuplicates}}</td>
+      <td class="table-num">{{this.batchCount}}</td>
+      <td class="table-num">{{#if this.durationMs}}{{this.durationMs}}ms{{else}}—{{/if}}</td>
+    </tr>
+    {{/each}}
+  </tbody>
+</table>
+{{/if}}
+
+{{!-- ── Error banners ── --}}
+{{#if run.error_message}}
+<div class="etl-error-banner">
+  <strong>{{req.t 'admin.etl.runDetail.runError'}}</strong>
+  <pre>{{run.error_message}}</pre>
+</div>
+{{/if}}
+{{#if swap.errorMessage}}
+<div class="etl-error-banner">
+  <strong>{{req.t 'admin.etl.runDetail.swapError'}}</strong>
+  <pre>{{swap.errorMessage}}</pre>
+</div>
+{{/if}}
+
+{{#unless liveOnly}}
+{{#if (eq run.status 'running')}}
+<div class="etl-live-pulse">{{req.t 'admin.etl.stages.liveRunning'}}</div>
+{{/if}}
+{{/unless}}
+
+</section>
+
+{{!-- ── Live progress bars ── --}}
+{{!-- Two progress bars + a stage indicator. Deliberately OUTSIDE the
+     <section class="etl-stage-live">: that section is re-rendered every
+     5s by the /live partial via hx-swap="outerHTML", and the live
+     partial is rendered with liveOnly=true (no progress bars). Keeping
+     the bars outside means the 5s swap cannot delete them.
+
+     The container polls its own lightweight JSON endpoint at 2s; the
+     client script sizes the bars and updates the labels. When the run
+     finishes the endpoint returns 204, which htmx treats as "no swap",
+     so the bars keep their last values and the polling stops. --}}
+{{#unless liveOnly}}
+<div id="etl-progress-bars"
+  {{#if (eq run.status 'running')}}
+  hx-get="/admin/etl/runs/{{run.id}}/progress"
+  hx-trigger="every 2s"
+  hx-swap="innerHTML"
+  {{/if}}
+  data-done="{{downloadBytesDone}}"
+  data-total="{{downloadBytesTotal}}"
+  data-rows-done="{{insertRowsDone}}"
+  data-rows-total="{{insertRowsTotal}}"
+  data-stage="{{currentStage}}">
+  <div class="etl-progress-row">
+    <div class="etl-progress-label">{{req.t 'admin.etl.stages.download'}}</div>
+    <div class="etl-progress-bar" role="progressbar" aria-label="Download progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="etl-progress-download-bar"><div class="etl-progress-bar-fill" id="etl-progress-download-fill"></div></div>
+    <div class="etl-progress-text" id="etl-progress-download-text">—</div>
+  </div>
+  <div class="etl-progress-row">
+    <div class="etl-progress-label">{{req.t 'admin.etl.stages.insert'}}</div>
+    <div class="etl-progress-bar" role="progressbar" aria-label="Insert progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="etl-progress-insert-bar"><div class="etl-progress-bar-fill" id="etl-progress-insert-fill"></div></div>
+    <div class="etl-progress-text" id="etl-progress-insert-text">—</div>
+  </div>
+  <div class="etl-progress-stage" id="etl-progress-stage"></div>
+</div>
+<script src="/assets/etl-progress.js" defer></script>
+{{/unless}}

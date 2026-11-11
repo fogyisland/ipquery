@@ -1,0 +1,15 @@
+{{!-- SPDX-License-Identifier: MIT --}}
+<form method="POST" action="/login">
+  <input type="hidden" name="csrf" value="{{req.csrfToken}}">
+  {{> form-field name="email" type="email" label=(req.t 'auth.email') required=true autocomplete="email" value=email }}
+  {{> form-field name="password" type="password" label=(req.t 'auth.password.label') required=true autocomplete="current-password" }}
+  {{#if error}}<p class="form-error">{{error}}</p>{{/if}}
+  <button type="submit" class="btn-primary">{{req.t 'auth.login.submit'}}</button>
+</form>
+<p><a href="/signup">{{req.t 'common.signup'}}</a> · <a href="/forgot">{{req.t 'auth.forgot.title'}}</a></p>
+{{#if verifyRequired}}
+<form method="POST" action="/verify/resend/{{verifyUserId}}" style="margin-top:1rem">
+  <input type="hidden" name="csrf" value="{{req.csrfToken}}">
+  <button type="submit">{{req.t 'auth.verify.resend'}}</button>
+</form>
+{{/if}}

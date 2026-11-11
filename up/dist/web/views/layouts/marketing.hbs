@@ -1,0 +1,27 @@
+{{!-- SPDX-License-Identifier: MIT --}}
+{{!-- Marketing layout: top nav + content + footer.
+     Replaces layouts/public.hbs for the redesigned public pages.
+     Light commercial SaaS chrome (no sidebar — public marketing pages
+     don't need account chrome on every screen). --}}
+<!doctype html>
+<html lang="{{req.locale}}">
+<head>
+  <meta charset="utf-8">
+  <title>{{title}} · IPQuery</title>
+  <meta name="theme-color" content="#ffffff">
+  <link rel="stylesheet" href="/assets/style.css?v=20260828">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="{{#if metaDescription}}{{metaDescription}}{{else}}IPQuery — IP geolocation API aggregating MaxMind, ip2region, and DB-IP. One query, three sources, sub-100ms latency.{{/if}}">
+</head>
+<body class="m-page">
+  {{> marketing/_topnav}}
+  <main>
+    {{{body}}}
+  </main>
+  {{> marketing/_footer}}
+  {{!-- External handlers — CSP `script-src 'self'` blocks inline. Loads
+       once for all marketing pages; showCodeTabs branch moved out since
+       the unified handler now covers both behaviors. --}}
+  <script src="/assets/marketing-tabs.js" defer></script>
+</body>
+</html>

@@ -1,0 +1,44 @@
+{{!-- SPDX-License-Identifier: MIT --}}
+<h2>{{req.t 'admin.auditLog.title'}}</h2>
+
+{{> filter-bar action='/admin/audit-log' filters=(array
+  (hash name='action' label=(req.t 'admin.auditLog.action') options=(array
+    (hash value='user.delete' label=(req.t 'admin.auditLog.option-action-user.delete'))
+    (hash value='user.reset_password' label=(req.t 'admin.auditLog.option-action-user.reset_password'))
+    (hash value='user.bulk.disable' label=(req.t 'admin.auditLog.option-action-user.bulk.disable'))
+    (hash value='etl.trigger' label=(req.t 'admin.auditLog.option-action-etl.trigger'))
+    (hash value='key.revoke' label=(req.t 'admin.auditLog.option-action-key.revoke'))))
+  (hash name='target_type' label=(req.t 'admin.auditLog.target') options=(array
+    (hash value='user' label=(req.t 'admin.auditLog.option-target_type-user'))
+    (hash value='api_key' label=(req.t 'admin.auditLog.option-target_type-api_key'))
+    (hash value='etl_run' label=(req.t 'admin.auditLog.option-target_type-etl_run'))))
+) values=filters csvUrl='/admin/audit-log.csv' anyLabel=(req.t 'common.any') filterLabel=(req.t 'common.filter') exportLabel=(req.t 'common.exportCsv')}}
+
+<div class="table-scroll">
+  <table class="table">
+    <thead>
+      <tr>
+        <th><a href="?sort={{ternary (eq sort.col 'id') (ternary (eq sort.dir 'asc') '-id' 'id') (ternary (eq sort.dir 'asc') 'id' '-id')}}">{{@root.req.t 'admin.auditLog.id'}}</a></th>
+        <th><a href="?sort={{ternary (eq sort.col 'created_at') (ternary (eq sort.dir 'asc') '-created_at' 'created_at') (ternary (eq sort.dir 'asc') 'created_at' '-created_at')}}">{{@root.req.t 'admin.auditLog.time'}}</a></th>
+        <th>{{@root.req.t 'admin.auditLog.actor'}}</th>
+        <th>{{@root.req.t 'admin.auditLog.action'}}</th>
+        <th>{{@root.req.t 'admin.auditLog.target'}}</th>
+        <th>{{@root.req.t 'admin.auditLog.ip'}}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {{#each rows}}
+      <tr>
+        <td class="table-num">{{this.id}}</td>
+        <td class="table-num">{{formatRelative this.created_at}}</td>
+        <td>{{this.actor_email}}</td>
+        <td>{{> pill kind='info' text=this.action}}</td>
+        <td>{{#if this.target_type}}{{this.target_type}}#{{this.target_id}}{{else}}—{{/if}}</td>
+        <td class="table-num">{{this.ip}}</td>
+      </tr>
+      {{/each}}
+    </tbody>
+  </table>
+</div>
+
+{{> pagination baseUrl="/admin/audit-log" page=page totalPages=totalPages queryString=queryString }}

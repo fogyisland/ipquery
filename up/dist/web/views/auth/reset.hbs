@@ -1,0 +1,9 @@
+{{!-- SPDX-License-Identifier: MIT --}}
+<form method="POST" action="/reset">
+  <input type="hidden" name="csrf" value="{{req.csrfToken}}">
+  <input type="hidden" name="token" value="{{token}}">
+  {{> form-field name="password" type="password" label=(req.t 'auth.password.label') required=true help=(req.t 'auth.password.help') autocomplete="new-password" }}
+  {{> form-field name="passwordConfirm" type="password" label=(req.t 'auth.password.confirm') required=true autocomplete="new-password" }}
+  {{#if error}}<p class="form-error">{{error}}</p>{{/if}}
+  <button type="submit" class="btn-primary">{{req.t 'auth.reset.submit'}}</button>
+</form>

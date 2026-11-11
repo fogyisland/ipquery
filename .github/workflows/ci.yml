@@ -34,6 +34,15 @@ jobs:
       - name: Build
         run: npm run build
 
+      # up/dist/ is a committed copy of the build output, so the
+      # release a server gets is whatever is in the repository. If it
+      # has drifted from src/ the deployment would ship an older
+      # application while looking like it worked. The check compares
+      # every file's SHA-256 against the committed manifest and fails
+      # the build on any drift.
+      - name: Verify release bundle is in sync
+        run: npm run check:release
+
       - name: Unit tests
         run: npm run test:unit
 

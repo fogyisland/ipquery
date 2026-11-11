@@ -1,0 +1,1165 @@
+{
+  "common": {
+    "signup": "Sign up",
+    "login": "Log in",
+    "logout": "Log out",
+    "submit": "Submit",
+    "cancel": "Cancel",
+    "save": "Save",
+    "back": "Back",
+    "next": "Next",
+    "prev": "Previous",
+    "search": "Search",
+    "loading": "Loading...",
+    "yes": "Yes",
+    "no": "No",
+    "filter": "Filter",
+    "exportCsv": "Export CSV",
+    "any": "Any",
+    "enableJs": "Enable JavaScript to use bulk actions",
+    "view": "View",
+    "actions": "Actions",
+    "selectRowsFirst": "Select rows first"
+  },
+  "sidebar": {
+    "group": {
+      "public": "Public",
+      "user": "Account",
+      "admin": "Admin"
+    },
+    "enterAdmin": "Enter admin console",
+    "backToDashboard": "Back to account"
+  },
+  "nav": {
+    "home": "Home",
+    "docs": "Docs",
+    "pricing": "Pricing",
+    "status": "Status",
+    "about": "About",
+    "try": "Try",
+    "dashboard": "Dashboard",
+    "admin": {
+      "dashboard": "Overview",
+      "users": "Users",
+      "etl": "ETL Runs",
+      "queries": "Query Log",
+      "keys": "API Keys",
+      "audit": "Query Audit",
+      "auditLog": "Audit Log",
+      "settings": "Settings",
+      "ingest": "API Ingest",
+      "customProviders": "Custom Providers",
+      "providers": "Providers"
+    },
+    "logout": "Log out",
+    "history": "History",
+    "apiKeys": "API Keys",
+    "profile": "Profile",
+    "signup": "Sign up",
+    "login": "Log in"
+  },
+  "auth": {
+    "email": "Email",
+    "password": {
+      "label": "Password",
+      "help": "At least 10 characters, must include letters and digits",
+      "confirm": "Confirm password"
+    },
+    "displayName": "Display name",
+    "signup": {
+      "title": "Sign up",
+      "submit": "Create account",
+      "success": {
+        "title": "Check your email",
+        "body": "Click the verification link in the email to activate your account."
+      },
+      "error": {
+        "duplicate": "This email is already registered",
+        "email_format": "Invalid email format",
+        "password_weak": "Password must be at least 10 chars with letters and digits",
+        "password_mismatch": "Passwords do not match",
+        "displayName_invalid": "Display name must be 1-64 characters"
+      }
+    },
+    "verify": {
+      "title": "Email verification",
+      "success": "Email verified, please log in",
+      "invalid": "Invalid link",
+      "expired": "Link expired, request a new one",
+      "consumed": "Link already used",
+      "resend": "Resend verification email",
+      "resend.cooldown": "Try again in {seconds} seconds",
+      "required": "Please verify your email first"
+    },
+    "login": {
+      "title": "Log in",
+      "submit": "Log in",
+      "error": {
+        "credentials": "Wrong email or password",
+        "disabled": "Account disabled, contact admin",
+        "locked": "Too many attempts, try again in {minutes} minutes"
+      }
+    },
+    "logout": {
+      "title": "Log out",
+      "confirm": "Log out?"
+    },
+    "forgot": {
+      "title": "Reset password",
+      "submit": "Send reset link",
+      "done": "If that email is registered, you will receive a reset link"
+    },
+    "reset": {
+      "title": "Reset password",
+      "submit": "Reset password"
+    }
+  },
+  "greeting": {
+    "hello": "Hello, {name}"
+  },
+  "lookup": {
+    "title": "IP Lookup",
+    "input": {
+      "placeholder": "Enter an IP address, e.g. 8.8.8.8"
+    },
+    "submit": "Lookup",
+    "found": "{ip} is in {country}",
+    "notfound": "{ip} not found",
+    "invalid": "Invalid IP format"
+  },
+  "dashboard": {
+    "title": "Dashboard",
+    "welcome": "Welcome, {name}",
+    "history": {
+      "title": "Query history",
+      "empty": "No queries yet",
+      "col": {
+        "time": "Time",
+        "ip": "IP",
+        "status": "Status",
+        "source": "Source"
+      },
+      "filter": {
+        "status": "Filter by status",
+        "all": "All"
+      }
+    },
+    "keys": {
+      "title": "API Keys",
+      "empty": "No API keys yet",
+      "create": "Create new key",
+      "label": "Label",
+      "prefix": "Prefix",
+      "lastUsed": "Last used",
+      "created": "Created",
+      "revoke": "Revoke",
+      "revoke.confirm": "Revoke this key? It cannot be undone.",
+      "created_once": "Save this key now, you will not see it again:",
+      "endpoint": {
+        "title": "API endpoint",
+        "help": "Replace YOUR_KEY with any active key, and IP with the address you want to look up.",
+        "copy": "Copy"
+      },
+      "revoked": "revoked"
+    },
+    "profile": {
+      "title": "Profile",
+      "displayName": "Display name",
+      "email": "Email",
+      "emailHint": "Changing email requires re-verification",
+      "oldPassword": "Current password",
+      "newPassword": "New password",
+      "save": "Save changes",
+      "saved": "Profile saved",
+      "savedWithEviction": "Profile saved. {{count}} other session(s) signed out."
+    },
+    "hit": "Hit",
+    "miss": "Miss",
+    "invalid": "Invalid",
+    "last7d": "Last 7d",
+    "section.queries7d": "Query volume (7d)",
+    "account.title": "Account",
+    "joined": "Joined",
+    "shortcuts.title": "Shortcuts",
+    "lastQuery.title": "Last lookup",
+    "lastQuery.empty": "No lookups yet — try /try",
+    "lastQuery.unknown": "No range matched",
+    "lastQuery.asn": "ASN",
+    "lastQuery.country": "Country",
+    "lastQuery.at": "at",
+    "lastQuery.cta": "Open the live lookup",
+    "lastQuery.miss": "no match",
+    "lastQuery.invalid": "invalid input"
+  },
+  "admin": {
+    "title": "Admin",
+    "users": {
+      "title": "Users",
+      "search": "Search by email",
+      "id": "ID",
+      "email": "Email",
+      "role": "Role",
+      "status": "Status",
+      "created": "Created",
+      "disabled": "Disabled",
+      "verified": "Verified",
+      "bulk": {
+        "enable": "Bulk enable",
+        "disable": "Bulk disable",
+        "verify": "Bulk verify"
+      },
+      "detail": {
+        "title": "User #{id}: {email}"
+      },
+      "col": {
+        "email": "Email",
+        "role": "Role",
+        "verified": "Verified",
+        "disabled": "Disabled",
+        "created": "Created",
+        "lastLogin": "Last login"
+      },
+      "action": {
+        "enable": "Enable",
+        "disable": "Disable",
+        "verify": "Mark verified",
+        "resetPassword": "Reset password",
+        "delete": "Delete"
+      },
+      "delete.confirm": "Delete this user? All related data will be removed.",
+      "delete.confirm.title": "Delete user?",
+      "delete.confirm.body": "This will permanently delete {email} and all related data. This action cannot be undone.",
+      "option-role-admin": "Admin",
+      "option-role-user": "User",
+      "option-status-active": "Active",
+      "option-status-disabled": "Disabled"
+    },
+    "etl": {
+      "title": "ETL runs",
+      "trigger": "Run now",
+      "trigger.confirm": "Trigger ETL manually?",
+      "trigger.confirm.title": "Trigger ETL pipeline?",
+      "trigger.confirm.body": "This will start an out-of-schedule ETL run. Existing data will be replaced with the freshly downloaded source files.",
+      "stages": {
+        "download": "Download",
+        "parse": "Parse",
+        "insert": "Insert",
+        "swap": "Atomic Swap",
+        "duration": "took {ms}ms",
+        "totalBytes": "bytes total",
+        "rowsSkipped": "{count} skipped",
+        "rowsInserted": "{count} inserted",
+        "rowsDuplicates": "{count} duplicates",
+        "rowsAttempted": "{count} attempted",
+        "batchCount": "{count} batches",
+        "swapOk": "Swap OK",
+        "swapFailed": "Swap Failed",
+        "liveRunning": "Running…",
+        "skipReason": {
+          "shortLine": "too few columns",
+          "headerRow": "header row",
+          "unparseableIp": "unparseable IP",
+          "missingCol": "missing column",
+          "nonNumericAsn": "non-numeric ASN",
+          "other": "other"
+        }
+      },
+      "runDetail": {
+        "title": "ETL run #{id}",
+        "status": {
+          "running": "Running",
+          "success": "Success",
+          "failed": "Failed"
+        },
+        "duration": "took {ms}ms",
+        "started": "Started",
+        "downloads": "Downloads",
+        "parses": "Parses",
+        "inserts": "Inserts",
+        "runError": "Run error",
+        "swapError": "Atomic swap error"
+      },
+      "col": {
+        "started": "Started",
+        "finished": "Finished",
+        "status": "Status",
+        "merged": "Merged records",
+        "source": "Source",
+        "month": "Month",
+        "bytes": "Bytes",
+        "duration": "Duration",
+        "error": "Error",
+        "rowsEmitted": "Rows emitted",
+        "rowsSkipped": "Rows skipped",
+        "gunzipErrors": "Gunzip errors",
+        "rowsAttempted": "Attempted",
+        "rowsInserted": "Inserted",
+        "rowsDuplicates": "Duplicates",
+        "batchCount": "Batches"
+      },
+      "status": {
+        "running": "Running",
+        "success": "Success",
+        "failed": "Failed"
+      },
+      "detail": {
+        "title": "ETL Run #{id}"
+      },
+      "alreadyRunning": "An ETL run is already in progress"
+    },
+    "keys": {
+      "title": "API Keys (global)",
+      "col": {
+        "id": "ID",
+        "owner": "Owner",
+        "label": "Label",
+        "prefix": "Prefix",
+        "created": "Created",
+        "revoked": "Revoked",
+        "lastUsed": "Last used"
+      },
+      "option-revoked-yes": "Revoked",
+      "option-revoked-no": "Active",
+      "bulkRevoke": "Revoke selected",
+      "bulkRevokeConfirm": "Revoke the selected API keys? This cannot be undone.",
+      "bulkSelectAll": "Select all keys",
+      "bulkSelectOne": "Select key #{id}"
+    },
+    "audit": {
+      "title": "Query audit",
+      "col": {
+        "time": "Time",
+        "ip": "Queried IP",
+        "status": "Status",
+        "user": "User",
+        "apiKey": "API key"
+      },
+      "option-status-hit": "Hit",
+      "option-status-miss": "Miss",
+      "option-status-invalid": "Invalid",
+      "export": "Export CSV"
+    },
+    "auditLog": {
+      "title": "Audit log",
+      "id": "ID",
+      "time": "Time",
+      "actor": "Actor",
+      "action": "Action",
+      "target": "Target",
+      "ip": "IP",
+      "created": "Created",
+      "option-action-user.delete": "Delete user",
+      "option-action-user.reset_password": "Reset password",
+      "option-action-user.bulk.disable": "Bulk disable",
+      "option-action-etl.trigger": "Trigger ETL",
+      "option-action-key.revoke": "Revoke key",
+      "option-target_type-user": "User",
+      "option-target_type-api_key": "API key",
+      "option-target_type-etl_run": "ETL run"
+    },
+    "dashboard": {
+      "title": "Overview",
+      "etlStatus": "ETL status",
+      "runsToday": "runs today",
+      "ipRanges": "IP ranges",
+      "users": "Users",
+      "verified": "verified",
+      "apiKeys": "API keys",
+      "queries24h": "Queries (24h)",
+      "hitRate": "Hit rate",
+      "lastSuccess": "Last success",
+      "never": "never",
+      "recentActivity": "Recent activity",
+      "noActivity": "No recent activity",
+      "welcome": "Welcome, {email}",
+      "viewAll": "View all",
+      "hit": "Hit",
+      "miss": "Miss",
+      "invalid": "Invalid",
+      "last24h": "Last 24h",
+      "section.queries24h": "Query volume (24h)",
+      "section.system": "System metrics",
+      "chart7d.title": "Last 7 days",
+      "chart7d.total": "{total} total",
+      "action.queries": "Query log",
+      "action.audit": "Query audit",
+      "action.triggerEtl": "Run ETL"
+    },
+    "queries": {
+      "title": "Query volume",
+      "total": "Total queries",
+      "hitRate": "Hit rate",
+      "topIps": "Top IPs",
+      "topUsers": "Top users",
+      "since": "Since",
+      "until": "Until"
+    },
+    "settings": {
+      "title": "Settings",
+      "tab": {
+        "general": "General",
+        "security": "Security & Auth",
+        "integrations": "Integrations",
+        "system": "Database & Ops"
+      },
+      "metricStrip": {
+        "apiPort": "API port",
+        "threadsConnected": "Threads connected",
+        "maxUsedConnections": "Max used",
+        "etlLastRun": "Last ETL run"
+      },
+      "secret": {
+        "show": "Show",
+        "hide": "Hide",
+        "unset": "(unset)"
+      },
+      "etl": {
+        "scheduleHint": "Cron expression",
+        "lastRunNever": "Never run",
+        "lastRunOk": "success · merged {merged}",
+        "lastRunFailed": "failed",
+        "lastRunRunning": "running…"
+      },
+      "section": {
+        "db": "Database",
+        "api": "API",
+        "etl": "ETL",
+        "web": "Web",
+        "smtp": "SMTP",
+        "security": "Security",
+        "maxmind": "MaxMind"
+      },
+      "field": {
+        "host": "Host",
+        "port": "Port",
+        "database": "Database",
+        "user": "User",
+        "password": "Password",
+        "poolSize": "Pool size",
+        "rateLimit": "Rate limit",
+        "schedule": "Cron",
+        "timezone": "Timezone",
+        "dataDir": "Data dir",
+        "baseUrl": "Base URL",
+        "cookieDomain": "Cookie domain",
+        "cookieSecure": "Cookie secure",
+        "sessionTtl": "Session TTL (h)",
+        "sessionSecret": "Session secret",
+        "csrfSecret": "CSRF secret",
+        "from": "From",
+        "loginMax": "Login max attempts",
+        "loginLockout": "Lockout (minutes)",
+        "signupRate": "Signups / hour / IP",
+        "verifyResend": "Verify resend cooldown (s)",
+        "licenseKey": "License key",
+        "editions": "Editions"
+      },
+      "poolStatus": {
+        "title": "DB pool status",
+        "threadsConnected": "Threads connected",
+        "maxUsedConnections": "Max used connections"
+      },
+      "etlRestart": "Run ETL now",
+      "etlRestart.confirm": "Trigger ETL pipeline manually (fire-and-forget)"
+    },
+    "unknownIps": {
+      "title": "API Ingest",
+      "tabs": {
+        "overview": "Overview & Runner",
+        "providers": "Providers",
+        "failureLogs": "Failure Logs"
+      },
+      "stats": {
+        "pending": "Pending",
+        "processed": "Merged",
+        "totalQueries": "Total queries"
+      },
+      "section": {
+        "pending": "Pending backfill (by pressure)",
+        "recentlyProcessed": "Recently merged"
+      },
+      "col": {
+        "ip": "IP",
+        "queryCount": "Hits",
+        "firstSeen": "First seen",
+        "lastSeen": "Last seen",
+        "source": "Source",
+        "lastAttempt": "Last attempt",
+        "processedAt": "Merged at",
+        "runId": "ETL Run"
+      },
+      "empty": {
+        "pending": "No pending IPs. New ones auto-enqueue on /lookup miss."
+      },
+      "runId": {
+        "manual": "manual backfill"
+      },
+      "backfill": {
+        "button": "Backfill now",
+        "summary": "Backfill complete",
+        "considered": "considered",
+        "merged": "merged",
+        "noConsensus": "no consensus",
+        "noCountry": "no country",
+        "allAbstained": "all abstained",
+        "batchLimit": "IPs per batch",
+        "run": "Run backfill",
+        "confirm": {
+          "title": "Confirm backfill",
+          "body": "Each pending IP will be queried against 3 external APIs in parallel and merged via majority vote. IPs already in ip_ranges are auto-skipped."
+        },
+        "lockBusy": "Another ingest run is already in progress — this run was skipped (no provider calls were made)",
+        "previewLockBusy": "Another ingest run is already in progress — the preview was skipped (no provider calls were made)",
+        "previewMissing": "Preview is no longer valid — please start a new preview",
+        "previewExpired": "Preview expired — please start a new preview"
+      },
+      "generate": {
+        "button": "Generate 10 random IPs",
+        "confirm": "Generate 10 random IPs, fan out to every enabled provider, and merge via majority vote. Takes about 1–2 minutes. Continue?",
+        "summary": "Random IP generation complete",
+        "considered": "queried",
+        "merged": "merged",
+        "noConsensus": "no consensus",
+        "noCountry": "no country",
+        "allAbstained": "all abstained",
+        "exhaustedRetries": "exhausted retries",
+        "providersDisabled": "auto-disabled providers (429)",
+        "ipList": "generated IPs",
+        "lockBusy": "Another ingest run is already in progress — this run was skipped (no provider calls were made)"
+      },
+      "continuous": {
+        "title": "Continuous random ingest",
+        "help": "When enabled, the system picks 10 random IPs every minute and ingests them via the backfill pipeline. Disable to stop. You can also kick a one-off run at any time.",
+        "status": "Status",
+        "enabled": "Enabled (fires every minute)",
+        "disabled": "Disabled",
+        "enable": "Enable",
+        "disable": "Disable",
+        "kickNow": "Run once now",
+        "kicked": "Manual run kicked off, waiting for result…",
+        "lastRunAt": "Last run",
+        "lastRunNever": "never",
+        "lastSummaryMerged": "last: {merged}/{considered} merged"
+      },
+      "scheduler": {
+        "title": "Continuous random ingest · Task scheduler",
+        "subtitle": "Continuous probe mode | currently pulls {batch} random IPs every {interval} seconds…",
+        "status": {
+          "running": "Running",
+          "stopped": "Stopped",
+          "cooldown": "Cooldown"
+        },
+        "cooldownNotice": "Provider {provider} hit rate limit — pausing for {remaining} more minute(s)",
+        "config": {
+          "interval": "Interval",
+          "batchSize": "Batch size",
+          "targetRange": "Target range",
+          "cooldown": "Cooldown (min)",
+          "cbLinkage": "Auto-pause on 429",
+          "save": "Save scheduler",
+          "retentionDays": "Probe log retention (days)",
+          "retentionDaysHint": "0 keeps the probe log forever"
+        },
+        "intervalOptions": {
+          "30s": "30 seconds",
+          "1m": "1 minute",
+          "5m": "5 minutes",
+          "15m": "15 minutes",
+          "30m": "30 minutes"
+        },
+        "targetRangeOptions": {
+          "reserved": "RFC 5737 + 6890 (documentation/benchmark)"
+        },
+        "metrics": {
+          "lastRun": "Last run",
+          "lastYield": "Last yield",
+          "warmingRate": "Projected write",
+          "probeSuccessRate": "Probe success",
+          "noLastRun": "never"
+        },
+        "runNow": "Run once now",
+        "runNowConfirm": "Run one continuous-ingest tick now?",
+        "wizard": {
+          "enabled": "Start continuous ingest",
+          "disabled": "Stop continuous ingest"
+        }
+      },
+      "recentProbes": {
+        "title": "Recent probe results",
+        "help": "Last 20 probes: per-provider responses and the consensus outcome for each IP. Click any row to expand the full per-provider detail.",
+        "detailToggle": "Show per-provider detail",
+        "batchIdLabel": "Batch",
+        "noProbes": "No probe records yet — enable continuous ingest or trigger a manual run.",
+        "cols": {
+          "ts": "Time",
+          "ip": "IP",
+          "providers": "Provider responses",
+          "consensus": "Consensus",
+          "outcome": "Outcome"
+        },
+        "detailCols": {
+          "provider": "Provider",
+          "status": "Status",
+          "country": "Country",
+          "city": "City",
+          "asn": "ASN",
+          "duration": "Duration",
+          "errorCode": "Error"
+        },
+        "providerCell": {
+          "ok": "ok",
+          "throttled": "throttled",
+          "timeout": "timeout",
+          "no_country": "no country",
+          "network": "network",
+          "error": "error",
+          "empty": "empty"
+        },
+        "outcomeLabel": {
+          "merged": "merged",
+          "no_consensus": "no consensus",
+          "no_country": "no country",
+          "all_abstained": "all abstained",
+          "duplicate": "duplicate"
+        }
+      },
+      "providers": {
+        "title": "Backfill providers",
+        "help": "Backfill fans out each pending IP to the external APIs below in parallel and merges via majority vote. Toggle each provider on/off and rotate API keys here. Changes take effect on the next backfill — no restart required.",
+        "col": {
+          "name": "Provider",
+          "quota": "Free tier",
+          "enabled": "Enabled",
+          "apiKey": "API key",
+          "lastUsed": "Last used"
+        },
+        "enabled": {
+          "on": "Enabled",
+          "off": "Disabled"
+        },
+        "save": "Save",
+        "apiKeyPlaceholder": "not set"
+      },
+      "healthCard": {
+        "statusOk": "Healthy",
+        "statusFailing": "Failing",
+        "statusRecovering": "Recovering",
+        "statusDisabled": "Disabled",
+        "statusIdle": "Idle",
+        "lastSuccess": "Last success",
+        "lastError": "Last error",
+        "noError": "no errors",
+        "noSuccess": "no successful calls yet",
+        "successRate": "Success rate",
+        "lastRun": "Last run",
+        "noLastRun": "never run",
+        "successCount": "ok",
+        "failedCount": "failed",
+        "rateLimitedCount": "throttled",
+        "abstainedCount": "abstained",
+        "reenablesIn": "auto-re-enables in {minutes}m",
+        "quotaToday": "today's quota {pct}%",
+        "window1h": "1 hour",
+        "window24h": "24 hours",
+        "window7d": "7 days",
+        "calls": "calls",
+        "err429": "429s",
+        "failurePct": "failure",
+        "last429": "last 429"
+      },
+      "runner": {
+        "title": "Runner",
+        "queueBacklog": "Queue backlog",
+        "lastRun": "Last run",
+        "noLastRun": "never",
+        "backfillNow": "Backfill now",
+        "generateNow": "Generate 10 random IPs",
+        "queueActions": "Queue actions",
+        "clearQueue": "Clear pending queue",
+        "exportQueue": "Export pending CSV"
+      },
+      "circuitBreaker": {
+        "title": "Circuit Breaker",
+        "help": "When a provider's failure rate over the sliding window exceeds the threshold, it is auto-disabled to keep the backfill from hammering a broken endpoint.",
+        "enabled": "Enable auto-disable",
+        "threshold": "Failure rate threshold (%)",
+        "window": "Sliding window (minutes)",
+        "cooldown": "Disable duration (minutes)",
+        "save": "Save config"
+      },
+      "failureLogs": {
+        "title": "Failure Logs",
+        "help": "Every non-OK provider call from backfill or random-ingest lands here. Filter by provider / error code / time, and re-queue a single IP to retry it on the next run.",
+        "filterProvider": "Provider",
+        "filterCode": "Error code",
+        "filterMode": "Source",
+        "filterSince": "Time range",
+        "allProviders": "All",
+        "allCodes": "All",
+        "allModes": "All",
+        "applyFilters": "Apply",
+        "since1h": "Last 1 hour",
+        "since24h": "Last 24 hours",
+        "since7d": "Last 7 days",
+        "col": {
+          "ts": "Time",
+          "provider": "Provider",
+          "ip": "Target IP",
+          "mode": "Source",
+          "code": "Error code",
+          "reason": "Reason",
+          "actions": "Actions"
+        },
+        "modeLabel": {
+          "auto": "Auto backfill",
+          "manual": "Manual generate",
+          "random": "Random generate"
+        },
+        "requeue": "Re-queue",
+        "empty": "No failures in the selected range."
+      },
+      "queueFlash": {
+        "cleared": "Cleared {removed} pending IPs.",
+        "invalidIp": "IP \"{ip}\" is malformed."
+      },
+      "customProviders": {
+        "title": "Custom Providers",
+        "addTitle": "Add Custom Provider",
+        "listTitle": "Registered Custom Providers",
+        "empty": "No custom providers registered yet.",
+        "name": "Name",
+        "nameHint": "lowercase alphanumeric, unique",
+        "displayName": "Display Name",
+        "urlTemplate": "URL Template",
+        "urlTemplateHint": "supports {ip} and {apiKey} placeholders",
+        "method": "Method",
+        "methodGet": "GET",
+        "methodPost": "POST",
+        "requestBody": "Request Body (POST)",
+        "responseFormat": "Response Format",
+        "countryPath": "Country Field Path",
+        "cityPath": "City Field Path",
+        "asnPath": "ASN Field Path",
+        "timeoutMs": "Timeout (ms)",
+        "rateLimit": "Rate Limit / Min",
+        "enabled": "Enabled",
+        "save": "Save",
+        "delete": "Delete",
+        "test": "Test Lookup",
+        "testIp": "Test IP",
+        "testResult": "Result",
+        "deleteConfirm": "Delete {name}?",
+        "saved": "Saved {name}",
+        "deleted": "Deleted {name}",
+        "errors": {
+          "invalidUrl": "URL is invalid or blocked by SSRF guard",
+          "nameConflict": "Name already exists or conflicts with a built-in provider",
+          "invalidFieldPath": "Field path format invalid"
+        }
+      }
+    },
+    "providers": {
+      "title": "Providers",
+      "builtInSection": "Built-in providers",
+      "circuitBreakerSection": "Circuit breaker",
+      "customSection": "Custom providers"
+    },
+    "ingest": {
+      "backfill": {
+        "preview": {
+          "title": "Backfill preview",
+          "help": "Below is what this run would write. Confirm to ingest.",
+          "cols": {
+            "ip": "IP",
+            "country": "Country",
+            "city": "City",
+            "asn": "ASN",
+            "providers": "Providers",
+            "outcome": "Outcome"
+          },
+          "confirm": "Confirm & ingest",
+          "cancel": "Cancel",
+          "expired": "Preview expired — please re-run.",
+          "missing": "Preview missing — please re-run.",
+          "previewFirst": "Preview first",
+          "busy": "Processing…"
+        }
+      }
+    }
+  },
+  "home": {
+    "title": "IPQuery · IP Geolocation",
+    "heroEyebrow": "IP Geolocation API",
+    "heroTitleAccent": "Look up any <em>IP address</em>,<br>get <strong>trustworthy country, city, and ASN</strong>",
+    "heroSubLong": "Aggregates MaxMind GeoLite2, ip2region, and DB-IP using a field-complementary strategy. 100% self-hosted. Sub-100ms median latency.",
+    "ipRanges": "IP ranges",
+    "metaSources": "data sources",
+    "metaLatency": "median latency",
+    "ipgrid": {
+      "demoLabel": "Sample query",
+      "country": "Country",
+      "region": "Region",
+      "city": "City",
+      "asn": "ASN"
+    },
+    "features": {
+      "eyebrow": "Why IPQuery",
+      "title": "One query, three sources",
+      "sub": "Primary source first, backups fill the gaps. Each field is tagged with its source so you can decide.",
+      "sources": {
+        "mark": "01 / aggregation",
+        "title": "Multi-source merge",
+        "sub": "MaxMind / ip2region / DB-IP back each other up. Field coverage is far higher than single-source solutions.",
+        "stat": "data sources"
+      },
+      "coverage": {
+        "mark": "02 / coverage",
+        "title": "IPv4 + IPv6 coverage",
+        "sub": "Stored by range, not by IP. 8.3M+ ranges cover almost the entire routable internet.",
+        "stat": "indexed ranges"
+      },
+      "speed": {
+        "mark": "03 / latency",
+        "title": "Sub-100ms",
+        "sub": "Spatial index ordered by range_size: smallest first. Median latency well below industry average.",
+        "stat": "median response"
+      }
+    },
+    "steps": {
+      "eyebrow": "How it works",
+      "title": "Three steps",
+      "sub": "No network downloads, no in-memory database. Just a single MySQL query.",
+      "s1": {
+        "title": "Send an IP",
+        "sub": "Form or HTTP call. Any IPv4/IPv6 address works."
+      },
+      "s2": {
+        "title": "Match the range",
+        "sub": "Composite index sorted by range_size. The smallest matching CIDR wins in milliseconds."
+      },
+      "s3": {
+        "title": "Get JSON back",
+        "sub": "Country, region, city, ISP, ASN. Each field carries its source."
+      }
+    },
+    "code": {
+      "eyebrow": "Quickstart",
+      "title": "Three lines of code",
+      "sub": "Public endpoints need no auth. Signed-up users get API keys raising the rate limit to 60/min."
+    },
+    "cta": {
+      "title": "Start using IPQuery",
+      "sub": "No credit card. Sign up for an API key and switch to production whenever you're ready.",
+      "primary": "Sign up free",
+      "primaryAuthed": "Open dashboard",
+      "secondary": "Read API docs"
+    },
+    "footer": {
+      "product": "Product",
+      "account": "Account",
+      "company": "Company"
+    },
+    "heroTitle": "IP Geolocation Lookup",
+    "heroSubtitle": "Aggregating MaxMind / ip2region / DB-IP with daily ETL refresh",
+    "quickQuery": "Quick lookup",
+    "status": "API status",
+    "online": "Online",
+    "queries24h": "Queries (24h)",
+    "queries24hSub": "Past 24 hours",
+    "apiExample": "API example",
+    "apiDocs": "Read full docs",
+    "fullDocs": "Read full API documentation"
+  },
+  "about": {
+    "eyebrow": "About IPQuery",
+    "heading": "A lightweight, self-hosted IP geolocation service",
+    "intro": "Built for developers. Does one thing well: aggregate scattered free IP data sources behind one stable, auditable API.",
+    "storyTitle": "Why we built it",
+    "storyP1": "Existing IP lookup services are either expensive (per-QPS billing), stale (free sources rarely updated), or opaque (no field provenance means you can't judge trust).",
+    "storyP2": "IPQuery flips that: free, self-hosted, transparent field sources. Daily ETL pipelines keep a single MySQL table fresh. A lookup is just a regular SQL query.",
+    "principles": {
+      "sources": {
+        "title": "Multi-source merge",
+        "sub": "Each field carries its source ( maxmind / ip2region / dbip ) for audit and traceability."
+      },
+      "speed": {
+        "title": "Index-first",
+        "sub": "Composite index sorted by range_size — smallest first, avoiding full table scans over large ranges."
+      },
+      "opensource": {
+        "title": "Open source",
+        "sub": "MIT licensed. Audit the ETL, the query path, the scheduler — nothing hidden."
+      },
+      "selfhosted": {
+        "title": "Fully self-hosted",
+        "sub": "Data lives in your own database. API runs on your own server. User queries never leave your infrastructure."
+      }
+    },
+    "stackTitle": "Tech stack",
+    "stack": {
+      "node": "Node.js 20 + TypeScript 5",
+      "fastify": "Fastify + Handlebars SSR",
+      "mysql": "MySQL 8 (8.3M+ IP ranges)",
+      "handlebars": "Server-side templates. Zero client dependencies. Lean to the bone."
+    },
+    "licenseTitle": "License & data",
+    "licenseBody": "Source code is MIT licensed. Data files are downloaded and consumed under each upstream's own license terms (MaxMind / ip2region / DB-IP).",
+    "timelineTitle": "How we got here",
+    "timeline": {
+      "2024": {
+        "title": "First commit",
+        "desc": "Initial schema, MaxMind-only loader, and a Fastify server. Single-table design, one source."
+      },
+      "2025": {
+        "title": "ip2region + DB-IP integration",
+        "desc": "Three-source merge strategy with field-level source tracking. Range-size index for sub-100ms lookups."
+      },
+      "2026": {
+        "title": "Production-ready release",
+        "desc": "Auth, rate limiting, ETL scheduling, dashboard, multi-locale. Open-sourced under MIT."
+      }
+    }
+  },
+  "try": {
+    "eyebrow": "Try it",
+    "heading": "Type any IP",
+    "sub": "No signup. No key. Click a sample chip below to start.",
+    "chipsLabel": "Try these:",
+    "hint": "Tip: paste straight into the input. The result appears below.",
+    "country": "Country",
+    "region": "Region",
+    "city": "City",
+    "isp": "ISP",
+    "asn": "ASN",
+    "reproCurl": "Reproduce with curl"
+  },
+  "status": {
+    "eyebrow": "Status",
+    "heading": "Live service status",
+    "sub": "Latest health check for the API, database, and ETL pipeline.",
+    "health": "Health checks",
+    "api": "API service",
+    "database": "Database",
+    "etl": "ETL pipeline",
+    "operational": "Operational",
+    "degraded": "Degraded",
+    "never": "No runs yet",
+    "lastRun": "Last ETL run",
+    "noRuns": "No ETL runs yet.",
+    "banner": {
+      "okTitle": "All systems operational",
+      "okSub": "API, database and ETL are all reporting healthy.",
+      "badTitle": "Service disruption",
+      "badSub": "One or more components are reporting failures. See details below."
+    },
+    "timelineTitle": "Recent ETL runs",
+    "uptimeTitle": "Uptime",
+    "uptimeBody": "API and database health are probed live by this page. ETL runs daily on a schedule; failures are logged.",
+    "col": {
+      "started": "Started",
+      "finished": "Finished",
+      "status": "Status",
+      "merged": "Merged records"
+    }
+  },
+  "docs": {
+    "title": "API Documentation",
+    "eyebrow": "Developer docs",
+    "heading": "A simple HTTP API",
+    "subtitle": "Public HTTP API, no auth required; sign up for an API key for higher rate limits.",
+    "endpointsTitle": "Endpoints",
+    "tocHeading": "On this page",
+    "tocEndpoints": "Endpoints",
+    "tocExamples": "Examples",
+    "tocAuth": "Authentication",
+    "tocResponse": "Response",
+    "tocErrors": "Errors",
+    "colMethod": "Method",
+    "colPath": "Path",
+    "colDescription": "Description",
+    "colStatus": "Status",
+    "colCode": "Code",
+    "endpoints": {
+      "lookup": "Lookup IP country / region / city / ISP / ASN",
+      "lookupPath": "Same, with IP as a path parameter",
+      "stats": "Last ETL run metadata (started / finished / status / merged records)",
+      "healthz": "Health check, returns { status: \"ok\" }"
+    },
+    "examplesTitle": "Examples",
+    "authTitle": "API key authentication",
+    "authBody": "Create an API key in the dashboard, then pass it via key= or Authorization: Bearer.",
+    "responseTitle": "Response example",
+    "responseBody": "Successful responses are JSON. Missing fields are null. Each data field carries its source, naming the upstream it came from.",
+    "errorsTitle": "Errors",
+    "errors": {
+      "200": "Success",
+      "400": "Invalid IP format (invalid_ip)",
+      "404": "Not found",
+      "429": "Rate limited"
+    },
+    "cta": {
+      "try": "Try online"
+    },
+    "authQueryNote": "The ?key= form still works, but a key in the URL ends up in server logs, proxy logs and browser history. Prefer the Authorization header — it stays out of every log. Requests using ?key= receive a Deprecation header.",
+    "tocRateLimits": "Rate limits",
+    "rateLimitsTitle": "Rate limits",
+    "rateLimitsBody": "The public API is rate limited per source IP. Requests carrying an API key and requests without one share the same budget — a key authenticates you, it does not raise your limit. Web pages and static assets are not subject to this limit.",
+    "colScope": "Scope",
+    "colLimit": "Limit",
+    "rateLimits": {
+      "publicScope": "Public API",
+      "publicDesc": "/healthz, /lookup and /stats share one counter, keyed by source IP. Anonymous requests and requests carrying an API key draw on the same budget.",
+      "keyedScope": "Web pages and static assets",
+      "keyedDesc": "HTML pages, stylesheets and scripts are not rate limited. A single page load can pull a dozen resources, and sharing the API budget with them would turn ordinary browsing into a 429.",
+      "adminScope": "Admin panel",
+      "adminDesc": "The admin panel polls live ETL progress, so it has its own, larger bucket and never consumes the public budget.",
+      "notLimited": "Not limited"
+    },
+    "rateLimitsScopeNote": "Rate limiting is by path. Web pages and static assets are outside the public API budget. A route-level limit replaces the global limit for that route rather than adding to it, and the admin panel’s polling routes are budgeted separately from the public API."
+  },
+  "footer": {
+    "copyright": "© {year} IPQuery",
+    "license": "MIT"
+  },
+  "error": {
+    "403": {
+      "title": "Forbidden",
+      "body": "You do not have permission to view this page"
+    },
+    "404": {
+      "title": "Not found",
+      "body": "This page does not exist or has been moved",
+      "home": "Back to home"
+    },
+    "500": {
+      "title": "Server error",
+      "body": "Please try again later"
+    },
+    "csrf": {
+      "title": "Session expired",
+      "body": "Please refresh and try again"
+    }
+  },
+  "setup": {
+    "title": "Setup Wizard",
+    "boot": {
+      "railLabel": "Setup progress",
+      "tagline": "First-run bootstrap",
+      "stepsLabel": "Configuration steps",
+      "progress": "Step {current} of {total}",
+      "introTitle": "What happens next",
+      "intro1": "Verify the database connection",
+      "intro2": "Name the site and add a tagline",
+      "intro3": "Create the administrator account",
+      "intro4": "Load seed data and finish",
+      "connectionTitle": "Connection parameters",
+      "siteLede": "Name this installation. You can change it later in Settings.",
+      "adminLede": "Create the first administrator account for the console.",
+      "seedProgressLede": "The background task is running. You can leave this page and come back.",
+      "finishNote": "Once finished, /init is locked and the login page takes over.",
+      "backToStart": "Back to start"
+    },
+    "steps": {
+      "1": "Welcome",
+      "2": "Database",
+      "3": "Site",
+      "4": "Admin",
+      "5": "Seed Data",
+      "6": "Finish"
+    },
+    "welcome": {
+      "title": "Welcome",
+      "body": "This wizard will set up IPQuery for first use: site name, database connection, administrator account, and seed data.",
+      "cta": "Start"
+    },
+    "database": {
+      "title": "Database",
+      "intro": "Current database connection (loaded from .env):",
+      "hostLabel": "Host",
+      "portLabel": "Port",
+      "userLabel": "User",
+      "dbLabel": "Database",
+      "test": "Test connection",
+      "envHint": "These values are loaded from .env. To change them, edit .env and restart the server, then return to this page.",
+      "success": "Database connection successful",
+      "failure": "Cannot reach the database. Check .env and make sure the server is running."
+    },
+    "site": {
+      "title": "Site",
+      "nameLabel": "Site name",
+      "taglineLabel": "Tagline",
+      "submit": "Next",
+      "success": "Site settings saved",
+      "error": "Site name is required (1-128 characters); tagline up to 256 characters"
+    },
+    "admin": {
+      "title": "Admin account",
+      "emailLabel": "Email",
+      "passwordLabel": "Password",
+      "nameLabel": "Display name",
+      "passwordHint": "At least 10 characters, must include a letter and a digit",
+      "submit": "Next",
+      "success": "Admin account created",
+      "error": "Invalid email, display name, or password"
+    },
+    "seed": {
+      "title": "Seed IP ranges",
+      "intro": "Pick how to initialise your IP-range data. You can pull real data right now (5-15 min), or load 50 demo rows to walk the wizard through first.",
+      "yes": "Yes, load 50 seed IPs",
+      "no": "No, skip seed data",
+      "submit": "Next",
+      "success": "Seed data loaded",
+      "skipped": "Seed data skipped",
+      "invalidMode": "Invalid option",
+      "demo": {
+        "label": "Demo data (50 rows)",
+        "hint": "Instant. Hand-picked public DNS / cloud / RFC reserved ranges. Good for trying things out."
+      },
+      "etl": {
+        "label": "Real data (DB-IP, recommended)",
+        "hint": "Background download + ingest of the free DB-IP library (city-lite / country-lite / asn-lite, ~8.3M ranges). This page auto-refreshes; you can leave it open and come back.",
+        "retryHint": "Last run failed. Try again, or pick another option."
+      },
+      "skip": {
+        "label": "Skip",
+        "hint": "Leave the database empty. The cron job will pick it up later."
+      },
+      "retry": "Retry",
+      "progress": {
+        "title": "Importing real data",
+        "running": "Background task running…",
+        "starting": "Starting ETL…",
+        "success": "Done. Imported {rows} IP ranges.",
+        "failed": "Import failed",
+        "runId": "Run ID",
+        "started": "Started",
+        "finished": "Finished",
+        "merged": "Merged records",
+        "error": "Error",
+        "autoRefresh": "This page auto-refreshes every 3 seconds. You can close it during the import.",
+        "continue": "Continue",
+        "successHint": "Import complete. Click continue to finish setup."
+      }
+    },
+    "complete": {
+      "title": "Ready to finish",
+      "body": "Review the summary below. Once you click Finish, the wizard marks the install as initialized and locks /init out.",
+      "summary": "Summary",
+      "siteName": "Site name",
+      "adminEmail": "Admin email",
+      "seedLoaded": "Seed loaded",
+      "yes": "yes",
+      "no": "no",
+      "submit": "Finish",
+      "success": "Setup complete. You can now log in."
+    },
+    "errors": {
+      "csrf": "Session expired. Please refresh and try again.",
+      "password_weak": "Password too weak",
+      "email_invalid": "Invalid email format",
+      "db_unreachable": "Database is unreachable",
+      "site_name_required": "Site name is required",
+      "displayName_invalid": "Display name must be 1-64 characters"
+    }
+  }
+}

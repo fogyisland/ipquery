@@ -1,0 +1,15 @@
+{{! SPDX-License-Identifier: MIT }}
+{{!-- expects: data (number[]), max (number)
+     Width/height are fixed at 80×24 — the documented default. Callers in
+     admin/dashboard.hbs and admin/queries.hbs pass neither width nor height,
+     so Handlebars would emit an empty attribute (viewBox="0 0  ") and the
+     browser would log "<svg> attribute viewBox: Unexpected end of attribute".
+     Don't reintroduce {{width}} / {{height}} here without also updating both
+     callers (and adding a default-value Handlebars helper). --}}
+<svg class="sparkline" viewBox="0 0 80 24" width="80" height="24" preserveAspectRatio="none">
+  {{#if (gt max 0)}}
+    <path d="{{sparkline-path data max 80 24}}" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round" />
+  {{else}}
+    <line x1="0" y1="24" x2="80" y2="24" stroke="currentColor" stroke-opacity="0.25" />
+  {{/if}}
+</svg>

@@ -1,0 +1,26 @@
+{{!-- SPDX-License-Identifier: MIT --}}
+<section class="m-section m-section--first">
+  <div class="m-section-inner m-try-page">
+    <div class="m-section-head m-section-head--center">
+      <span class="m-eyebrow">{{req.t 'try.eyebrow'}}</span>
+      <h1 class="m-section-title">{{req.t 'try.heading'}}</h1>
+      <p class="m-section-sub">{{req.t 'try.sub'}}</p>
+    </div>
+
+    <form method="POST" action="/try" class="m-try-form">
+      <input type="hidden" name="csrf" value="{{req.csrfToken}}">
+      <input type="text" name="ip" placeholder="{{req.t 'lookup.input.placeholder'}}" required autocomplete="off" autofocus spellcheck="false" inputmode="decimal">
+      <button type="submit">{{req.t 'lookup.submit'}}</button>
+    </form>
+
+    <div class="m-try-chips">
+      <span class="m-try-chips-label">{{req.t 'try.chipsLabel'}}</span>
+      <button type="button" class="m-try-chip" data-ip="8.8.8.8">8.8.8.8</button>
+      <button type="button" class="m-try-chip" data-ip="1.1.1.1">1.1.1.1</button>
+      <button type="button" class="m-try-chip" data-ip="114.114.114.114">114.114.114.114</button>
+      <button type="button" class="m-try-chip" data-ip="9.9.9.9">9.9.9.9</button>
+    </div>
+
+    <div id="try-result" aria-live="polite">{{#if result}}{{> marketing/_try-result}}{{else if notFound}}<div class="m-alert m-alert--warn">{{notFoundMsg}}</div>{{else if invalid}}<div class="m-alert m-alert--error">{{invalidMsg}}</div>{{else}}<div class="m-alert m-alert--hint">{{req.t 'try.hint'}}</div>{{/if}}</div>
+  </div>
+</section>

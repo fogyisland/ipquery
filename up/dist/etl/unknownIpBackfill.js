@@ -1,0 +1,583 @@
+"use strict";
+// SPDX-License-Identifier: MIT
+//
+// Draining the unknown_ip_queue via external providers + majority vote.
+//
+// Flow:
+//   1. nextBatch() pulls pending IPs that aren't covered by ip_ranges.
+//   2. For each IP we fan out to every provider in parallel, each gated
+//      by its own token bucket.
+//   3. majorityVote() decides whether the responses converge.
+//      - consensus → upsert a /32 (IPv4) or /128 (IPv6) range into
+//        ip_ranges with every *_source tagged 'multi-provider', then
+//        markProcessed the queue rows.
+//      - no consensus / no providers → markAttempted() with a reason
+//        and leave processed_at NULL so we try again next time.
+//   4. If any provider returns HTTP 429, it gets disabled in
+//      ingest_providers (rateLimited=true -> touchProviderError +
+//      updateProviderConfig({enabled:false})) so the rest of this run and
+//      future runs skip it until the admin re-enables it.
+//   5. Returns a summary so the admin route can show "X processed, Y
+//      merged, Z skipped".
+//
+// Run this from:
+//   - POST /admin/unknown-ips/backfill (manual, sync)
+//   - cron / future scheduler
+//
+// processIp() (exported) is the reusable per-IP fan-out + vote + write
+// core. The random-IP generator imports it to drive its synthetic IPs
+// without needing unknown_ip_queue rows.
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.runBackfill = runBackfill;
+exports.processIp = processIp;
+exports.disableRateLimitedProviders = disableRateLimitedProviders;
+exports.buildDefaultProviders = buildDefaultProviders;
+exports.bufferFromIpText = bufferFromIpText;
+const unknownIpQueue_1 = require("../storage/unknownIpQueue");
+const ingestProviders_1 = require("../storage/ingestProviders");
+const providerErrorLog_1 = require("../storage/providerErrorLog");
+const majority_1 = require("./majority");
+const ip_1 = require("../ip");
+const randomProbeLog_1 = require("../storage/randomProbeLog");
+const providerLock_1 = require("./providerLock");
+const node_crypto_1 = require("node:crypto");
+const DEFAULT_BATCH = 100;
+async function runBackfill(pool, providers, opts = {}) {
+    const batchLimit = opts.batchLimit ?? DEFAULT_BATCH;
+    const log = opts.logger ?? console;
+    const startedAt = Date.now();
+    const dryRun = opts.dryRun ?? false;
+    const summary = {
+        considered: 0,
+        merged: 0,
+        noConsensus: 0,
+        noCountry: 0,
+        allAbstained: 0,
+        alreadyCovered: 0,
+        startedAt,
+        finishedAt: 0,
+        providers: Object.fromEntries(providers.map((p) => [p.name, { ok: 0, failed: 0, abstained: 0, rateLimited: 0 }])),
+        providersDisabled: [],
+        mode: dryRun ? "preview" : "committed",
+        previewRows: [],
+    };
+    // Mode is threaded through to processIp so failure rows carry the
+    // right tag in provider_error_log. Defaults to 'auto' (queue backfill).
+    const runMode = opts.mode ?? "auto";
+    const queueRows = await (0, unknownIpQueue_1.nextBatch)(pool, batchLimit);
+    summary.considered = queueRows.length;
+    if (queueRows.length === 0) {
+        summary.finishedAt = Date.now();
+        return summary;
+    }
+    // One batchId per run groups every probe from this tick for the admin UI.
+    const batchId = (0, node_crypto_1.randomUUID)();
+    // Take the shared provider-fan-out mutex. If another ingest path is
+    // already calling the external providers, skip this run entirely —
+    // no provider calls, no writes. Running concurrently would double the
+    // request rate against a shared free-tier quota.
+    const lock = opts.lock ?? providerLock_1.providerFanoutLock;
+    const attempt = lock.tryAcquire();
+    if (!attempt.acquired) {
+        summary.finishedAt = Date.now();
+        summary.skippedLockBusy = true;
+        // The queue rows were read before we took the lock, but this run
+        // considered nothing — reset the counter so the UI doesn't report
+        // "1 candidate" for a run that made zero provider calls. The rows
+        // are untouched (not marked processed/attempted), so the next run
+        // picks them up again.
+        summary.considered = 0;
+        log.warn?.("[backfill] skipped — another provider fan-out is already in flight; " + "no provider calls were made");
+        return summary;
+    }
+    try {
+        return await runBackfillLocked(pool, providers, queueRows, summary, opts, runMode, dryRun, batchId, log);
+    }
+    finally {
+        lock.release();
+    }
+}
+/** The provider-calling body of runBackfill. Runs with the shared
+ *  provider mutex already held by the caller. Split out so the lock's
+ *  acquire/release pair wraps exactly the fan-out + write section and
+ *  the queue read stays outside it. */
+async function runBackfillLocked(pool, providers, queueRows, summary, opts, runMode, dryRun, batchId, log) {
+    const startedAt = summary.startedAt;
+    const outcomes = [];
+    // Fan out all IPs concurrently, but cap concurrency at 16 to avoid
+    // hammering the providers (and our own DB connection pool) in one go.
+    const CONCURRENCY = 16;
+    for (let i = 0; i < queueRows.length; i += CONCURRENCY) {
+        const slice = queueRows.slice(i, i + CONCURRENCY);
+        const sliceOutcomes = await Promise.all(slice.map(async (row) => {
+            const result = await processIp(pool, providers, row.ipText, row.ip, summary, runMode, dryRun, log);
+            const outcome = result.outcome;
+            const consensus = outcome.kind === "merged" ? outcome.record : null;
+            // Fire-and-forget probe audit. Same defensive pattern as
+            // recordProviderError above — a write failure must never poison
+            // the backfill loop.
+            //
+            // A dry run writes NOTHING: the probe log is an audit trail of
+            // what was actually committed, and a preview that recorded
+            // 'merged' rows would put consensus results in the Recent
+            // Probes list for IPs that were never written to ip_ranges.
+            // The preview's own results live in summary.previewRows.
+            const probeWrite = dryRun
+                ? Promise.resolve()
+                : (0, randomProbeLog_1.recordRandomProbe)(pool, {
+                    ipText: row.ipText,
+                    ipBinary: row.ip,
+                    mode: runMode,
+                    outcome: outcome.kind,
+                    consensusCountry: consensus?.countryCode ?? null,
+                    consensusCity: consensus?.city ?? null,
+                    consensusAsn: consensus?.asn ?? null,
+                    // The backfill flow has no etl_runs row to point at.
+                    mergedRunId: null,
+                    providers: result.perProvider,
+                    batchId,
+                });
+            probeWrite.catch((err) => {
+                // Fire-and-forget: a write failure must never poison the
+                // backfill loop. Logged rather than swallowed silently — the
+                // probe log is the only record of what each provider said, so
+                // a dropped row is indistinguishable from a provider that was
+                // never called.
+                log.warn?.("random_probe_log write failed", {
+                    ip: row.ipText,
+                    mode: runMode,
+                    error: err instanceof Error ? err.message : String(err),
+                });
+            });
+            // Preview rows: only populated when dryRun=true. We capture
+            // per-IP detail for the admin to review before confirming.
+            if (dryRun) {
+                summary.previewRows.push({
+                    ipText: row.ipText,
+                    countryCode: consensus?.countryCode ?? null,
+                    city: consensus?.city ?? null,
+                    asn: consensus?.asn ?? null,
+                    outcome: outcome.kind,
+                    perProvider: result.perProvider.map((p) => ({
+                        name: p.provider,
+                        // 'ok' = provider returned a non-null record (regardless
+                        // of whether it agreed with the majority). A 429 or
+                        // network error sets ok=false.
+                        ok: p.countryCode !== null && !p.rateLimited && !p.errorCode,
+                        country: p.countryCode ?? null,
+                        errorCode: p.errorCode ?? (p.rateLimited ? "429" : null),
+                    })),
+                });
+            }
+            return { row, outcome };
+        }));
+        outcomes.push(...sliceOutcomes);
+    }
+    // Auto-disable any provider that hit 429 during this run. We do this
+    // AFTER all IPs are processed (rather than mid-run) so we don't keep
+    // the old in-memory provider instance alive while it's no longer in
+    // the DB config. This is the safety the user asked for: "如果显示大大
+    // 限制则立即禁用".
+    await disableRateLimitedProviders(pool, providers, summary);
+    // Drop disabled providers from the per-provider stats so the UI
+    // doesn't show ongoing failures for something we just turned off.
+    for (const name of summary.providersDisabled) {
+        delete summary.providers[name];
+    }
+    // Bulk-update the queue: mark merged rows as processed, mark attempted
+    // rows with their reason. Bulk keeps the DB round-trips predictable.
+    const mergedIds = [];
+    const attempted = {
+        no_consensus: [],
+        no_country: [],
+        all_abstained: [],
+    };
+    for (const { row, outcome } of outcomes) {
+        if (outcome.kind === "merged") {
+            mergedIds.push(row.id);
+            summary.merged += 1;
+        }
+        else {
+            attempted[outcome.kind].push(row.id);
+            if (outcome.kind === "no_consensus")
+                summary.noConsensus += 1;
+            else if (outcome.kind === "no_country")
+                summary.noCountry += 1;
+            else
+                summary.allAbstained += 1;
+        }
+    }
+    if (mergedIds.length > 0) {
+        // Use a synthetic run id (negative sentinel) — we don't have a real
+        // etl_runs row for this backfill, but the column is BIGINT UNSIGNED
+        // and FK is optional. NULL would be cleaner but markProcessed takes a
+        // runId. Pick a high negative-as-uint convention: 0 means "manual
+        // backfill, no etl_runs row". If a future maintainer wants the FK
+        // strictly enforced, they can drop the constraint.
+        // Skip in dry-run mode: processIp's INSERT IGNORE was a no-op too,
+        // so we must not mutate the queue rows or they'd get stuck in the
+        // 'attempted' state without an actual run.
+        if (!dryRun)
+            await (0, unknownIpQueue_1.markProcessed)(pool, mergedIds, 0);
+    }
+    if (!dryRun) {
+        if (attempted.no_consensus.length > 0)
+            await (0, unknownIpQueue_1.markAttempted)(pool, attempted.no_consensus, "no_consensus");
+        if (attempted.no_country.length > 0)
+            await (0, unknownIpQueue_1.markAttempted)(pool, attempted.no_country, "no_country");
+        if (attempted.all_abstained.length > 0)
+            await (0, unknownIpQueue_1.markAttempted)(pool, attempted.all_abstained, "all_abstained");
+    }
+    summary.finishedAt = Date.now();
+    log.log?.(`[backfill] ${summary.merged}/${summary.considered} merged in ${summary.finishedAt - startedAt}ms; disabled=${summary.providersDisabled.join(",") || "none"}${dryRun ? " [DRY-RUN]" : ""}`);
+    return summary;
+}
+/** Per-IP fan-out + vote + write. Used by both the queue-driven backfill
+ *  and the random-IP generator. Updates `summary.providers[name]` stats
+ *  in place. Returns the outcome so the caller can track it.
+ *
+ *  Each non-OK per-provider call is recorded into provider_error_log so
+ *  the Failure Logs tab can audit exactly what failed and why. The
+ *  record is fire-and-forget — a failure to log must not poison the
+ *  vote. */
+async function processIp(pool, providers, ipText, ipBuffer, summary, mode = "auto", dryRun = false, logger = console) {
+    // Collect per-provider detail for the probe log alongside the
+    // vote-shape we feed into majorityVote. The two arrays share the same
+    // providers in the same order, so zip by index.
+    const perProvider = [];
+    const responses = await Promise.all(providers.map(async (p) => {
+        const start = Date.now();
+        let result;
+        try {
+            result = await p.lookup(ipText);
+        }
+        catch (err) {
+            const stats = summary.providers[p.name];
+            if (stats)
+                stats.failed += 1;
+            const msg = err instanceof Error ? err.message : String(err);
+            const code = msg.includes("timeout") || msg.includes("aborted") ? "timeout" : "network";
+            // Fire-and-forget; logging failures shouldn't break the backfill.
+            (0, providerErrorLog_1.recordProviderError)(pool, {
+                providerName: p.name,
+                ipText,
+                mode,
+                errorCode: code,
+                reason: `lookup() threw: ${msg.slice(0, 200)}`,
+                rawResponse: null,
+            }).catch((err) => {
+                // Fire-and-forget: a logging failure must not break the
+                // backfill. But provider_error_log is what the circuit
+                // breaker reads — if this write is lost silently the breaker
+                // never sees the failure and never trips.
+                logger.warn?.("provider_error_log write failed", {
+                    provider: p.name,
+                    ip: ipText,
+                    error: err instanceof Error ? err.message : String(err),
+                });
+            });
+            // Fire-and-forget the per-provider, per-UTC-day counter. Same
+            // defensive .catch — a DB write failure must never poison the
+            // fan-out loop. Logged so a silently-broken counter (which
+            // would under-report daily quota usage) is visible.
+            (0, ingestProviders_1.touchProviderCalled)(pool, p.name, { rateLimited: false, errorCode: code }).catch((err) => {
+                logger.warn?.("provider_called_counter write failed", {
+                    provider: p.name,
+                    ip: ipText,
+                    error: err instanceof Error ? err.message : String(err),
+                });
+            });
+            const elapsed = Date.now() - start;
+            perProvider.push({
+                provider: p.name,
+                countryCode: null,
+                city: null,
+                asn: null,
+                rateLimited: false,
+                errorCode: code,
+                durationMs: elapsed,
+                rawResponse: null,
+            });
+            return { provider: p.name, record: null, rateLimited: false };
+        }
+        const elapsed = Date.now() - start;
+        const stats = summary.providers[p.name];
+        if (stats) {
+            if (result.rateLimited)
+                stats.rateLimited += 1;
+            else if (result.record)
+                stats.ok += 1;
+            else
+                stats.abstained += 1;
+        }
+        if (elapsed > 2_000) {
+            console.warn?.(`[backfill] provider ${p.name} took ${elapsed}ms for ${ipText}`);
+        }
+        // Fire-and-forget the per-provider, per-UTC-day counter. Same
+        // defensive .catch — covers rateLimited, errored, AND successful
+        // responses (so the "calls_total" widget reflects real traffic,
+        // not just failures).
+        (0, ingestProviders_1.touchProviderCalled)(pool, p.name, {
+            rateLimited: result.rateLimited,
+            errorCode: result.errorCode,
+        }).catch((err) => {
+            logger.warn?.("provider_called_counter write failed", {
+                provider: p.name,
+                ip: ipText,
+                error: err instanceof Error ? err.message : String(err),
+            });
+        });
+        // Record every non-OK, non-abstain call (i.e. providers that returned
+        // an explicit errorCode) into the failure log. We skip abstains
+        // (provider returned no record, no errorCode) because they reflect
+        // "this IP has no data" — not a provider fault.
+        if (!result.rateLimited && !result.record && result.errorCode) {
+            const reason = result.errorCode === "no_country"
+                ? `provider returned no country code for ${ipText}`
+                : `${result.errorCode}: ${(result.rawResponse ?? "").slice(0, 180) || "(no body)"}`;
+            (0, providerErrorLog_1.recordProviderError)(pool, {
+                providerName: p.name,
+                ipText,
+                mode,
+                errorCode: result.errorCode,
+                reason: reason.slice(0, 255),
+                rawResponse: result.rawResponse ?? null,
+            }).catch((err) => {
+                // Same reasoning as the lookup() path: provider_error_log
+                // feeds the circuit breaker, so a dropped row is not a
+                // harmless loss.
+                logger.warn?.("provider_error_log write failed", {
+                    provider: p.name,
+                    ip: ipText,
+                    errorCode: result.errorCode,
+                    error: err instanceof Error ? err.message : String(err),
+                });
+            });
+        }
+        perProvider.push({
+            provider: p.name,
+            countryCode: result.record?.countryCode ?? null,
+            city: result.record?.city ?? null,
+            asn: result.record?.asn ?? null,
+            rateLimited: result.rateLimited,
+            errorCode: result.errorCode ?? null,
+            durationMs: elapsed,
+            rawResponse: result.rawResponse ?? null,
+        });
+        return { provider: p.name, record: result.record, rateLimited: result.rateLimited };
+    }));
+    const vote = (0, majority_1.majorityVote)(responses);
+    if (!vote.ok) {
+        return { outcome: { kind: vote.reason }, perProvider };
+    }
+    // In dry-run mode, skip the actual INSERT and report `newlyInserted`
+    // as if the row would be written. The caller can still render
+    // summary.previewRows knowing each would-be-merged /32.
+    if (dryRun) {
+        return { outcome: { kind: "merged", record: vote.record, newlyInserted: true }, perProvider };
+    }
+    const newlyInserted = await writeConsensusRange(pool, ipBuffer, vote.record);
+    return { outcome: { kind: "merged", record: vote.record, newlyInserted }, perProvider };
+}
+/** Disable any provider whose rateLimited counter > 0. Idempotent. Also
+ *  consults the circuit-breaker config: when the failure rate (non-ok
+ *  outcomes / total) over the configured window exceeds the threshold,
+ *  the provider is auto-disabled even without a 429. The breaker reads
+ *  the persisted `provider_error_log` for a sliding-window check. */
+async function disableRateLimitedProviders(pool, providers, summary) {
+    const liveProviders = new Set(providers.map((p) => p.name));
+    // Read the breaker config ONCE per run — it's stable for the duration.
+    const cb = await (0, providerErrorLog_1.getCircuitBreakerConfig)(pool);
+    for (const [name, stats] of Object.entries(summary.providers)) {
+        if (!liveProviders.has(name))
+            continue;
+        if (summary.providersDisabled.includes(name))
+            continue;
+        let shouldDisable = false;
+        let reason = "";
+        if (stats.rateLimited > 0) {
+            shouldDisable = true;
+            reason = `429 rate limited (${stats.rateLimited}x in this run)`;
+        }
+        else if (cb.enabled) {
+            // Count failures for this provider over the sliding window.
+            const total = stats.ok + stats.failed + stats.abstained;
+            const failures = stats.failed;
+            const rate = total > 0 ? (failures / total) * 100 : 0;
+            if (total >= 5 && rate >= cb.failureThresholdPct) {
+                shouldDisable = true;
+                reason = `circuit breaker: ${Math.round(rate)}% failure rate (${failures}/${total} in run, threshold ${cb.failureThresholdPct}%)`;
+            }
+            else {
+                // Cross-window check via provider_error_log — only fires when the
+                // run had too few calls for a clean local decision.
+                const windowTotal = await countProviderCallsInWindow(pool, name, cb.windowMinutes);
+                const windowFailed = await countProviderFailuresInWindow(pool, name, cb.windowMinutes);
+                if (windowTotal >= 10) {
+                    const winRate = (windowFailed / windowTotal) * 100;
+                    if (winRate >= cb.failureThresholdPct) {
+                        shouldDisable = true;
+                        reason = `circuit breaker: ${Math.round(winRate)}% failure rate (${windowFailed}/${windowTotal} in ${cb.windowMinutes}m window, threshold ${cb.failureThresholdPct}%)`;
+                    }
+                }
+            }
+        }
+        if (!shouldDisable)
+            continue;
+        try {
+            const autoReenableAt = new Date(Date.now() + cb.cooldownMinutes * 60_000);
+            // Single UPDATE write: enabled=0, auto_reenable_at=now+cooldown,
+            // auto_disabled_reason=reason. The reaper (see
+            // randomIpGeneratorRunner.reapProviders) flips back to enabled=1
+            // once auto_reenable_at <= NOW(3).
+            await (0, ingestProviders_1.updateProviderConfig)(pool, name, {
+                enabled: false,
+                autoReenableAt,
+                autoDisabledReason: reason,
+            });
+            // Keep touchProviderError around — UI cells ("Last error" /
+            // "Last error reason") read from last_error_at + last_error_reason
+            // and don't auto-clear like auto_disabled_reason would. Keeping
+            // both stores lets the UI choose which surface to render.
+            await (0, ingestProviders_1.touchProviderError)(pool, name, reason);
+            summary.providersDisabled.push(name);
+            console.warn?.(`[backfill] auto-disabled provider ${name}: ${reason} (re-enable in ${cb.cooldownMinutes}m)`);
+        }
+        catch (err) {
+            console.error?.(`[backfill] failed to disable ${name}:`, err);
+        }
+    }
+}
+async function countProviderCallsInWindow(pool, providerName, windowMinutes) {
+    // Denominator for the circuit-breaker failure-rate calculation. Uses
+    // provider_call_counter (which records EVERY call — ok, 429, timeout,
+    // network, other) rather than provider_error_log (which only records
+    // errored calls). Reading total = error count previously caused the
+    // rate to compute as 100% whenever any error existed in the window.
+    //
+    // Granularity: a window shorter than a day reads the per-minute
+    // table (migration 024) so a 10-minute window really covers 10
+    // minutes. Longer windows keep using the daily table — day buckets
+    // are the right resolution there, and the minute table would be
+    // needlessly large.
+    const useMinuteTable = windowMinutes < 24 * 60;
+    if (useMinuteTable) {
+        const total = await sumFromMinuteTable(pool, providerName, windowMinutes, "calls_total");
+        if (total !== null)
+            return total;
+        // The minute table is missing (database predates migration 024) —
+        // fall through to the daily table rather than losing the breaker
+        // entirely.
+    }
+    const [rows] = await pool.query(`SELECT COALESCE(SUM(calls_total), 0) AS total
+       FROM provider_call_counter
+      WHERE provider_name = ?
+        AND day_utc >= (UTC_DATE() - INTERVAL ? DAY)`, [providerName, Math.max(1, Math.ceil(windowMinutes / (24 * 60)))]);
+    return Number(rows[0]?.total ?? 0);
+}
+/** The column expressions the minute table can be summed by. A fixed
+ *  map rather than an inline ternary so the interpolated SQL can only
+ *  ever be one of these two literals. */
+const MINUTE_COUNTER_EXPR = {
+    calls_total: "calls_total",
+    failure_columns: "calls_429 + calls_timeout + calls_network_err",
+};
+/** Sums one counter column from the per-minute table over a window.
+ *  Returns null when the table does not exist, so the caller can fall
+ *  back to the daily table instead of failing the whole run. */
+async function sumFromMinuteTable(pool, providerName, windowMinutes, column) {
+    // The failure numerator is 429 + timeout + network; `calls_other_err`
+    // is excluded because it also carries abstains (a 200 with no data),
+    // which are not failures.
+    const expr = MINUTE_COUNTER_EXPR[column];
+    try {
+        const [rows] = await pool.query(`SELECT COALESCE(SUM(${expr}), 0) AS total
+         FROM provider_call_counter_minute
+        WHERE provider_name = ?
+          AND minute_utc >= (UTC_TIMESTAMP() - INTERVAL ? MINUTE)`, [providerName, Math.max(1, Math.round(windowMinutes))]);
+        return Number(rows[0]?.total ?? 0);
+    }
+    catch (err) {
+        console.warn(`[backfill] minute counter read failed for ${providerName}: ${err instanceof Error ? err.message : String(err)}`);
+        return null;
+    }
+}
+async function countProviderFailuresInWindow(pool, providerName, windowMinutes) {
+    // Numerator for the circuit-breaker. Sums calls_429 + calls_timeout +
+    // calls_network_err + calls_other_err across the window. Note: abstains
+    // (e.g. 'no_country' which the provider returns as a 200 with no data)
+    // are NOT counted as failures — they're tracked separately in
+    // calls_other_err at the touchProviderCalled level but here we treat
+    // them as "did not produce a result, did not error" and exclude them.
+    const useMinuteTable = windowMinutes < 24 * 60;
+    if (useMinuteTable) {
+        const failures = await sumFromMinuteTable(pool, providerName, windowMinutes, "failure_columns");
+        if (failures !== null)
+            return failures;
+        // Minute table missing — fall through to the daily table.
+    }
+    const [rows] = await pool.query(`SELECT COALESCE(SUM(calls_429 + calls_timeout + calls_network_err), 0) AS total
+       FROM provider_call_counter
+      WHERE provider_name = ?
+        AND day_utc >= (UTC_DATE() - INTERVAL ? DAY)`, [providerName, Math.max(1, Math.ceil(windowMinutes / (24 * 60)))]);
+    return Number(rows[0]?.total ?? 0);
+}
+/** Insert a /32 (IPv4) or /128 (IPv6) range covering exactly `ip`. Tagged
+  // 'multi-provider' on every *_source column so the origin is greppable
+  // and so the seed-DB-IP flow (which UNIQUE-indexes (start,end,source)
+  // won't collide on it). INSERT IGNORE because the random-IP generator
+  // may pick the same reserved-range IP twice across runs (the IPv6
+  // catchall makes findRange-based dedupe impossible), and a duplicate
+  // /32 from a previous run shouldn't abort this run. Returns true if
+  // a NEW row was inserted, false if the unique index turned it into a
+  // no-op (already existed). The random-gen flow tracks duplicates
+  // separately from genuinely-new rows. */
+async function writeConsensusRange(pool, ip, rec) {
+    const startBig = BigInt("0x" + ip.toString("hex"));
+    const endBig = startBig + 1n;
+    const endBuf = Buffer.from(endBig.toString(16).padStart(32, "0"), "hex");
+    const startBuf = Buffer.from(startBig.toString(16).padStart(32, "0"), "hex");
+    const [res] = await pool.query(`INSERT IGNORE INTO ip_ranges
+       (start_ip, end_ip, range_size, country_code, country_name, region, city,
+        latitude, longitude, timezone, isp, asn, asn_org,
+        country_source, city_source, isp_source, asn_source, geo_source)
+     VALUES (?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'multi-provider', 'multi-provider', 'multi-provider', 'multi-provider', 'multi-provider')`, [
+        startBuf,
+        endBuf,
+        rec.countryCode,
+        rec.countryName,
+        rec.region,
+        rec.city,
+        rec.latitude,
+        rec.longitude,
+        rec.timezone,
+        rec.isp,
+        rec.asn,
+        rec.asnOrg,
+    ]);
+    return res.affectedRows === 1;
+}
+/** Convenience constructor: pick providers based on which API keys are
+ *  present in env. Each provider silently abstains if its key is missing,
+ *  so the backfill is robust to partial configurations — it'll just have
+ *  fewer votes and may fail to reach consensus. */
+function buildDefaultProviders(env = process.env) {
+    // Lazy import so the providers' deps (which only fire when lookup() is
+    // called) aren't loaded for callers that don't need backfill.
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { IpApiProvider, IpinfoProvider, IplocateProvider, FreeIpApiProvider, IpapiCoProvider } = require("./providers");
+    return [
+        new IpApiProvider(), // no key required, 45/min HTTP
+        new IpinfoProvider({ token: env.IPINFO_TOKEN }), // key optional, 50k/month HTTPS
+        new IplocateProvider({ apiKey: env.IPLOCATE_API_KEY }), // key optional, 1k/day HTTPS
+        new FreeIpApiProvider(), // no key, 60/min HTTPS
+        new IpapiCoProvider(), // no key, 30k/month HTTPS
+    ];
+}
+/** Convenience: parse + validate an IP string into the same Buffer format
+ *  unknown_ip_queue stores. Re-exported here so admin routes don't need
+ *  to import the low-level helper directly. */
+function bufferFromIpText(text) {
+    return (0, ip_1.parseIp)(text);
+}
+//# sourceMappingURL=unknownIpBackfill.js.map

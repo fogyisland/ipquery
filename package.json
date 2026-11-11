@@ -9,6 +9,8 @@
   },
   "scripts": {
     "build": "node scripts/build.js",
+    "sync:release": "node scripts/sync-up-dist.js",
+    "check:release": "node scripts/sync-up-dist.js --check",
     "test": "vitest run test/unit",
     "test:all": "vitest run",
     "test:unit": "vitest run test/unit",

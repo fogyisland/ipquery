@@ -1,0 +1,8 @@
+{{! SPDX-License-Identifier: MIT }}
+<h1>{{req.t "dashboard.keys.revoke.confirm.title"}}</h1>
+<p>{{req.t "dashboard.keys.revoke.confirm.body" label=key.label prefix=key.keyPrefix}}</p>
+<form method="POST" action="/dashboard/keys/{{key.id}}/revoke">
+  <input type="hidden" name="csrf" value="{{req.csrfToken}}" />
+  <button type="submit" class="btn-danger">{{req.t "dashboard.keys.revoke"}}</button>
+  <a href="/dashboard/keys">{{req.t "common.cancel"}}</a>
+</form>

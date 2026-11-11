@@ -1,0 +1,39 @@
+{{!-- SPDX-License-Identifier: MIT --}}
+<!DOCTYPE html>
+<html lang="{{req.locale}}">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{#if title}}{{title}} - IPQuery{{else}}IPQuery{{/if}}</title>
+  <meta name="theme-color" content="#ffffff">
+  <link rel="stylesheet" href="/assets/css/base.css?v=20260828">
+  <link rel="stylesheet" href="/assets/css/layout.css?v=20260828">
+  <link rel="stylesheet" href="/assets/css/forms.css?v=20260828">
+  {{!-- The sidebar partial is shared with the dashboard and admin shells,
+       and its styling (.sidebar, .sidebar-link, …) now lives in admin.css —
+       layout.css only keeps a comment pointing there. Without this file the
+       navigation renders as unstyled text. --}}
+  <link rel="stylesheet" href="/assets/css/admin.css?v=20260828">
+  {{!-- The error views (errors/{403,404,500,csrf}.hbs) share the wizard's
+       typographic vocabulary — .boot-step-head, .boot-lede, .boot-actions —
+       but not its shell. errors.css carries exactly those rules and nothing
+       else, so this shell stays webfont-free and makes no third-party
+       request: an error page is what you land on when something is already
+       wrong, and it must render behind a broken proxy or DNS filter. --}}
+  <link rel="stylesheet" href="/assets/css/errors.css?v=20261110">
+  <script src="/assets/js/htmx.min.js" defer></script>
+</head>
+<body class="layout-public">
+  {{!-- Same shell as the dashboard layout: .dashboard-shell is the grid that
+       gives the sidebar its column. A bare <aside> next to <main> has no
+       width and collapses the navigation into a text column. --}}
+  <div class="dashboard-shell">
+    {{> sidebar}}
+    <main class="dashboard-main">
+      {{> flash }}
+      {{{body}}}
+    </main>
+  </div>
+  {{> footer }}
+</body>
+</html>
