@@ -1,7 +1,23 @@
 # 首次启动（init）与发布核对手册
 
-> 详细版见 `docs/setup.md`；本手册是 `up/` 引导物料包随附的精简操作单，
-> 按「准备 → 引导 → 发布核对」三段执行。
+> 详细版见 `docs/setup.md`；服务器文件清单见 `deploy/MANIFEST.md`。
+> 本手册是 `up/` 部署交付包随附的精简操作单，按「准备 → 引导 → 发布核对」三段执行。
+
+## 〇、部署（两种方式）
+
+**方式 A：脚本（推荐）**
+
+```bash
+./up/deploy/deploy.sh /opt/ipquery
+```
+
+脚本会构建 `dist/`、装配到目标目录、装生产依赖（`npm ci --omit=dev`）、
+建 `data/raw/`，并在 `.env` 已存在时顺带跑迁移。装完打印剩余步骤。
+
+**方式 B：手工**
+
+照 [`deploy/MANIFEST.md`](deploy/MANIFEST.md) 搬文件——那张表列了服务器上
+需要的**每一个文件**、来源、必需性，以及不需要搬的（`src/`、`test/`、`scripts/`）。
 
 ## 一、准备
 
@@ -21,9 +37,17 @@
    node -e "console.log(require('crypto').randomBytes(48).toString('base64'))"
    ```
 
-   生产环境缺任一密钥服务会直接拒启（fail-fast，不静默降级）。
+   生产环境缺任一密钥服务会直接拒启（fail-fast，不静默降级）。两个密钥必须不同。
 
 3. **构建**：`npm install && npm run build`（或 `make install && make build`）。
+   方式 A 的脚本已经代做这一步。
+
+4. **原生依赖**：`argon2` 需要编译工具链，否则 `npm ci` 会失败：
+
+   ```bash
+   apt-get install -y python3 make g++     # Debian / Ubuntu
+   apk add --no-cache python3 make g++    # Alpine
+   ```
 
 ## 二、引导（三选一）
 
