@@ -17,6 +17,7 @@ afterAll(async () => {
 beforeEach(async () => {
   await td.pool.query("TRUNCATE TABLE unknown_ip_queue");
   await td.pool.query("TRUNCATE TABLE ip_ranges");
+  await td.pool.query("TRUNCATE TABLE random_probe_log");
 });
 
 function rec(over: Partial<IpGeoRecord>): IpGeoRecord {
@@ -138,6 +139,50 @@ describe("runBackfill dry-run", () => {
       `SELECT last_attempt_reason FROM unknown_ip_queue`,
     );
     expect(queueRows[0].last_attempt_reason).toBeNull();
+  });
+
+  it("does NOT write to random_probe_log when dryRun=true", async () => {
+    // random_probe_log is the admin "Recent Probes" audit trail — a
+    // record of what was actually looked up and committed. A preview
+    // that wrote 'merged' rows there would put consensus results in
+    // the list for IPs that never reached ip_ranges, indistinguishable
+    // from a real run.
+    const ip = "203.0.113.40";
+    const buf = parseIp(ip)!;
+    await insertOrIncrement(td.pool, buf, ip);
+
+    const providers = [
+      new StubProvider("a", { [ip]: rec({ countryCode: "US", city: "Mountain View" }) }),
+      new StubProvider("b", { [ip]: rec({ countryCode: "US", city: "Mountain View" }) }),
+      new StubProvider("c", { [ip]: rec({ countryCode: "US", city: "Mountain View" }) }),
+    ];
+    const summary = await runBackfill(td.pool, providers, { batchLimit: 50, dryRun: true });
+    expect(summary.merged).toBe(1);
+
+    const [rows] = await td.pool.query<{ id: number }[]>(`SELECT id FROM random_probe_log`);
+    expect(rows.length).toBe(0);
+  });
+
+  it("DOES write to random_probe_log when dryRun=false", async () => {
+    // The counterpart assertion: the audit trail must still record a
+    // real run, otherwise the fix would just disable the feature.
+    const ip = "203.0.113.50";
+    const buf = parseIp(ip)!;
+    await insertOrIncrement(td.pool, buf, ip);
+
+    const providers = [
+      new StubProvider("a", { [ip]: rec({ countryCode: "US", city: "Mountain View" }) }),
+      new StubProvider("b", { [ip]: rec({ countryCode: "US", city: "Mountain View" }) }),
+      new StubProvider("c", { [ip]: rec({ countryCode: "US", city: "Mountain View" }) }),
+    ];
+    await runBackfill(td.pool, providers, { batchLimit: 50, dryRun: false });
+
+    const [rows] = await td.pool.query<{ ip_text: string; outcome: string }[]>(
+      `SELECT ip_text, outcome FROM random_probe_log`,
+    );
+    expect(rows.length).toBe(1);
+    expect(rows[0]!.ip_text).toBe(ip);
+    expect(rows[0]!.outcome).toBe("merged");
   });
 
   it("object shape on dryRun=true is BackfillSummary-compatible (mode === preview)", async () => {

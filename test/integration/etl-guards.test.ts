@@ -77,6 +77,19 @@ async function writeFixtures(): Promise<void> {
     path.join(rawDir, "dbip.csv.gz"),
     zlib.gzipSync(Buffer.from(CSV_HEADER + CSV_ROW)),
   );
+  // The country-lite and asn-lite fixtures must exist too. The
+  // pipeline treats a missing source file as "download it", so without
+  // these the download stage reaches out to the real DB-IP servers and
+  // the test inserts ~1.2M real rows — which blows the 90s timeout and
+  // turns a unit-ish test into a network test.
+  await fs.writeFile(
+    path.join(rawDir, "dbip-country.csv.gz"),
+    zlib.gzipSync(Buffer.from("ip_start,ip_end,country\n9.9.9.0,9.9.9.255,GB\n")),
+  );
+  await fs.writeFile(
+    path.join(rawDir, "dbip-asn.csv.gz"),
+    zlib.gzipSync(Buffer.from("start_ip,end_ip,asn,asn_name\n9.9.9.0,9.9.9.255,64500,Example ISP\n")),
+  );
   await fs.writeFile(
     path.join(rawDir, "ip2region.xdb"),
     JSON.stringify([{ start: "9.9.9.0", end: "9.9.9.255", country: "英国", city: "London" }]),
@@ -87,13 +100,20 @@ async function writeFixtures(): Promise<void> {
   );
 }
 
-/** Remove every source file so the pipeline's download stage has to try
- *  the network (and, offline, fails). */
+/** Remove every source file so the pipeline has nothing to parse. */
 async function clearFixtures(): Promise<void> {
   const rawDir = path.join(cfg.etl.dataDir, "raw");
   await fs.rm(rawDir, { recursive: true, force: true });
   await fs.mkdir(rawDir, { recursive: true });
 }
+
+/** A download stage that fetches nothing. The guard tests remove the
+ *  source files on purpose; without this stub the pipeline would fetch
+ *  the real DB-IP files from the network and the guards under test would
+ *  never fire (and the test would take minutes and download ~90 MB).
+ *  This makes the behaviour of the guard independent of whether the
+ *  machine has internet access. */
+const noDownload = async (): Promise<[]> => [];
 
 describe("etl guards", () => {
   it("runs end-to-end and populates ip_ranges", async () => {
@@ -127,8 +147,22 @@ describe("etl guards", () => {
       path.join(cfg.etl.dataDir, "raw", "dbip.csv.gz"),
       zlib.gzipSync(Buffer.from(CSV_HEADER)),
     );
+    // The other two sources must be present (and non-empty) so the
+    // pipeline gets past the download stage and actually reaches the
+    // zero-rows guard. A missing file fails earlier, with a different
+    // message, and would not test what this test is about.
+    await fs.writeFile(
+      path.join(cfg.etl.dataDir, "raw", "dbip-country.csv.gz"),
+      zlib.gzipSync(Buffer.from("ip_start,ip_end,country\n9.9.9.0,9.9.9.255,GB\n")),
+    );
+    await fs.writeFile(
+      path.join(cfg.etl.dataDir, "raw", "dbip-asn.csv.gz"),
+      zlib.gzipSync(Buffer.from("start_ip,end_ip,asn,asn_name\n9.9.9.0,9.9.9.255,64500,Example ISP\n")),
+    );
 
-    await expect(runPipeline({ cfg })).rejects.toThrow(/no usable records|no source files/i);
+    await expect(runPipeline({ cfg, download: noDownload })).rejects.toThrow(
+      /no usable records|no source files|parsed to zero rows/i,
+    );
 
     // The live table must be untouched.
     const after = await findRange(pool, Buffer.from([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 9, 9, 9, 5]));
@@ -138,7 +172,7 @@ describe("etl guards", () => {
     // And the run must be recorded as failed, not success.
     const last = await lastEtlRun(pool);
     expect(last?.status).toBe("failed");
-    expect(last?.errorMessage).toMatch(/no usable records|no source files/i);
+    expect(last?.errorMessage).toMatch(/no usable records|no source files|parsed to zero rows/i);
   });
 
   it("leaves the live data in place when a source file is truncated to zero bytes", async () => {
@@ -153,7 +187,7 @@ describe("etl guards", () => {
     await clearFixtures();
     await fs.writeFile(path.join(cfg.etl.dataDir, "raw", "dbip.csv.gz"), Buffer.alloc(0));
 
-    await expect(runPipeline({ cfg })).rejects.toThrow();
+    await expect(runPipeline({ cfg, download: noDownload })).rejects.toThrow();
 
     const after = await findRange(pool, Buffer.from([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 9, 9, 9, 5]));
     expect(after).not.toBeNull();
@@ -176,7 +210,9 @@ describe("etl guards", () => {
     await fs.mkdir(blockedCfg.etl.dataDir, { recursive: true });
     await fs.writeFile(path.join(blockedCfg.etl.dataDir, "raw"), "blocked", "utf8");
 
-    await expect(runPipeline({ cfg: blockedCfg })).rejects.toThrow(/no usable records|no source files/i);
+    await expect(runPipeline({ cfg: blockedCfg, download: noDownload })).rejects.toThrow(
+      /no usable records|no source files|parsed to zero rows|unavailable/i,
+    );
 
     // The live table must be untouched.
     const after = await findRange(pool, Buffer.from([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 9, 9, 9, 5]));

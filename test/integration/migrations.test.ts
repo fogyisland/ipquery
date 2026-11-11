@@ -61,6 +61,7 @@ describe("migrations", () => {
       "021",
       "022",
       "023",
+      "024",
     ]);
   });
 
@@ -90,6 +91,7 @@ describe("migrations", () => {
       "021",
       "022",
       "023",
+      "024",
     ]);
   });
 
@@ -105,13 +107,15 @@ describe("migrations", () => {
     expect(tables).toContain("password_resets");
     expect(tables).toContain("query_log");
     expect(tables).toContain("schema_migrations");
+    expect(tables).toContain("provider_call_counter");
+    expect(tables).toContain("provider_call_counter_minute");
   });
 
   it("skips versions already marked applied", async () => {
     const before = await getAppliedVersions(pool);
     expect(before.has("003")).toBe(true);
     const r = await runMigrations(pool);
-    expect(r.skipped.length).toBe(22);
+    expect(r.skipped.length).toBe(23);
   });
 
   it("records apply timestamps", async () => {

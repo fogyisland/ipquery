@@ -91,7 +91,14 @@ export interface EtlStatusResult {
     finishedAt: string | null;
     status: string;
     mergedRecords: number;
-    sources: Record<string, { records: number; builtAt: string | null }>;
+    /**
+     * Per-source counters. `records` is null for a source that did not
+     * run and 0 for one that ran and contributed nothing — the two are
+     * different facts and callers should not conflate them. MaxMind
+     * and ip2region parsers exist but are not wired into the ETL
+     * pipeline, so their counters are always null.
+     */
+    sources: Record<string, { records: number | null; builtAt: string | null }>;
   } | null;
   queue: QueueStatsResult;
 }
@@ -108,8 +115,17 @@ export async function mcpEtlStatus(deps: McpPool): Promise<EtlStatusResult> {
         status: last.status,
         mergedRecords: last.mergedRecords ?? 0,
         sources: {
-          maxmind: { records: last.maxmindRecords ?? 0, builtAt: iso(last.maxmindBuiltAt ?? null) },
-          ip2region: { records: last.ip2regionRecords ?? 0, builtAt: iso(last.ip2regionBuiltAt ?? null) },
+          // null = the source did not run; 0 = it ran and contributed
+          // nothing. MaxMind and ip2region parsers exist but are not
+          // wired into the ETL pipeline, so their counters stay NULL.
+          maxmind: {
+            records: last.maxmindRecords ?? null,
+            builtAt: iso(last.maxmindBuiltAt ?? null),
+          },
+          ip2region: {
+            records: last.ip2regionRecords ?? null,
+            builtAt: iso(last.ip2regionBuiltAt ?? null),
+          },
           dbip: { records: last.dbipRecords ?? 0, builtAt: iso(last.dbipBuiltAt ?? null) },
         },
       },

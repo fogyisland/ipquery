@@ -336,6 +336,50 @@ export async function touchProviderCalled(
       isOther,
     ],
   );
+
+  // Mirror the call into the per-minute table. The daily table cannot
+  // express a circuit-breaker window shorter than a day, so the
+  // breaker reads this one for sub-day windows (see
+  // countProviderCallsInWindow in src/etl/unknownIpBackfill.ts).
+  //
+  // Best-effort by design: on a database that predates migration 024
+  // the table does not exist, and the daily counter above has already
+  // recorded the call. Failing here would lose that call AND abort the
+  // caller, so we log and move on — the only consequence is that the
+  // breaker keeps day granularity until the migration is applied.
+  try {
+    await pool.query(
+      `INSERT INTO provider_call_counter_minute
+         (provider_name, minute_utc, calls_total, calls_429, calls_timeout,
+          calls_network_err, calls_other_err)
+       VALUES (?, DATE_FORMAT(UTC_TIMESTAMP(), '%Y-%m-%d %H:%i:00'), 1, ?, ?, ?, ?)
+       ON DUPLICATE KEY UPDATE
+         calls_total        = calls_total + 1,
+         calls_429          = calls_429 + ?,
+         calls_timeout      = calls_timeout + ?,
+         calls_network_err  = calls_network_err + ?,
+         calls_other_err    = calls_other_err + ?`,
+      [
+        // INSERT VALUES (5 placeholders):
+        name,
+        is429,
+        isTimeout,
+        isNetwork,
+        isOther,
+        // ON DUPLICATE KEY UPDATE (4 placeholders, in order):
+        is429,
+        isTimeout,
+        isNetwork,
+        isOther,
+      ],
+    );
+  } catch (err) {
+    console.warn(
+      `[providers] minute counter write failed for ${name}: ${
+        err instanceof Error ? err.message : String(err)
+      }`,
+    );
+  }
 }
 
 /** Build provider instances for the backfill job, reading enabled

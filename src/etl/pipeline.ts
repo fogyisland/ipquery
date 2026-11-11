@@ -50,8 +50,10 @@ interface StreamFile {
   fillCols: ReadonlySet<keyof IpRangeRow>;
 }
 
-// Priority order matches the cross-source merger: insert maxmind first if
-// present, then ip2region, then DB-IP files (city, country, asn).
+// Priority order matches the cross-source merge: insert maxmind first if
+// present, then ip2region, then DB-IP files (city, country, asn). Each
+// file fills only its own columns, so a lower-priority file can never
+// overwrite a higher-priority one.
 const DBIP_FILES: StreamFile[] = [
   {
     source: "dbip",
@@ -481,6 +483,48 @@ async function markStageFailed(pool: mysql.Pool, runId: number, errorMsg: string
   } catch (err) {
     console.warn(
       `[etl] failed to mark swaps as failed for run ${runId}: ${
+        err instanceof Error ? err.message : String(err)
+      }`,
+    );
+  }
+  // Close out the per-stage rows the same way. A parse or insert row
+  // left with finished_at IS NULL reads as "this stage is still running"
+  // in the admin stage table, which is indistinguishable from a live
+  // run — and the failed run's own error message would be nowhere near
+  // it.
+  await closeOpenStageRows(pool, runId, "parses");
+  await closeOpenStageRows(pool, runId, "inserts");
+}
+
+/** Marks every still-open parse/insert row of a failed run as finished.
+ *  `table` is one of "parses" / "inserts" — both share the
+ *  (run_id, started_at, finished_at) shape. Neither has an
+ *  error_message column (only etl_run_downloads and etl_run_swaps do),
+ *  so the run-level error lives on etl_runs and is joined for display.
+ *  The table name is a literal from the caller, never user input, so
+ *  interpolating it is safe here. */
+async function closeOpenStageRows(
+  pool: mysql.Pool,
+  runId: number,
+  table: "parses" | "inserts",
+): Promise<void> {
+  try {
+    await pool.query(
+      `UPDATE etl_run_${table}
+          SET finished_at = COALESCE(finished_at, NOW(3)),
+              duration_ms = COALESCE(
+                duration_ms,
+                TIMESTAMPDIFF(MICROSECOND, started_at, NOW(3)) DIV 1000
+              )
+        WHERE run_id = ? AND finished_at IS NULL`,
+      [runId],
+    );
+  } catch (err) {
+    // Best-effort, like the sibling cleanups above: a lost cleanup must
+    // not mask the original failure. Logged so the leftover open rows
+    // are traceable.
+    console.warn(
+      `[etl] failed to close open ${table} rows for run ${runId}: ${
         err instanceof Error ? err.message : String(err)
       }`,
     );

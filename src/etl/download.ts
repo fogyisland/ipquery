@@ -206,7 +206,28 @@ export function downloadToFile(
       // Follow one redirect level (DB-IP occasionally moves CDN edges).
       if (status >= 300 && status < 400 && res.headers.location) {
         res.resume(); // drain
-        downloadToFile(res.headers.location, destPath, onProgress, getImpl).then(resolve, reject);
+        // Only follow https redirects. The redirect target comes from
+        // the server, so a compromised or hostile upstream could point
+        // it at http:// (plaintext) or at an internal address. We
+        // refuse anything that isn't https rather than following it.
+        let target: string;
+        try {
+          target = new URL(res.headers.location, url).toString();
+        } catch (err) {
+          reject(
+            new Error(
+              `invalid redirect target from ${url}: ${
+                err instanceof Error ? err.message : String(err)
+              }`,
+            ),
+          );
+          return;
+        }
+        if (!target.startsWith("https://")) {
+          reject(new Error(`refusing non-https redirect for ${url}: ${target}`));
+          return;
+        }
+        downloadToFile(target, destPath, onProgress, getImpl).then(resolve, reject);
         return;
       }
       if (status < 200 || status >= 300) {
