@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT
 import type { FastifyInstance } from "fastify";
 
-// The setup wizard loads its two webfonts (Plus Jakarta Sans, JetBrains Mono)
+// The init wizard loads its two webfonts (Plus Jakarta Sans, JetBrains Mono)
 // from Google Fonts. Everything else on the site is same-origin only.
-const SETUP_PATH = "/setup";
+const INIT_PATH = "/init";
 const FONT_STYLE_ORIGIN = "https://fonts.googleapis.com";
 const FONT_FILE_ORIGIN = "https://fonts.gstatic.com";
 
@@ -19,7 +19,7 @@ const FONT_FILE_ORIGIN = "https://fonts.gstatic.com";
  */
 function externalOriginsFor(url: string): { styles?: string; fonts?: string } {
   const pathOnly = url.split("?")[0]!.split("#")[0]!;
-  if (pathOnly === SETUP_PATH || pathOnly.startsWith(`${SETUP_PATH}/`)) {
+  if (pathOnly === INIT_PATH || pathOnly.startsWith(`${INIT_PATH}/`)) {
     return { styles: FONT_STYLE_ORIGIN, fonts: FONT_FILE_ORIGIN };
   }
   return {};

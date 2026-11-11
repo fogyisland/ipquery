@@ -23,12 +23,12 @@ function buildSteps(
   current: number,
 ): Array<{ n: number; label: string; href: string; active: boolean; done: boolean }> {
   const steps: Array<[string, string]> = [
-    [req.t("setup.steps.1"), "/setup"],
-    [req.t("setup.steps.2"), "/setup/database"],
-    [req.t("setup.steps.3"), "/setup/site"],
-    [req.t("setup.steps.4"), "/setup/admin"],
-    [req.t("setup.steps.5"), "/setup/seed"],
-    [req.t("setup.steps.6"), "/setup/complete"],
+    [req.t("setup.steps.1"), "/init"],
+    [req.t("setup.steps.2"), "/init/database"],
+    [req.t("setup.steps.3"), "/init/site"],
+    [req.t("setup.steps.4"), "/init/admin"],
+    [req.t("setup.steps.5"), "/init/seed"],
+    [req.t("setup.steps.6"), "/init/complete"],
   ];
   return steps.map(([label, href], index) => {
     const n = index + 1;
@@ -41,7 +41,7 @@ function buildSteps(
 // empty step list or a broken progress line.
 function renderCsrfError(req: FastifyRequest, reply: FastifyReply, step: number) {
   return reply.code(403).view("errors/csrf.hbs", {
-    layout: "layouts/setup",
+    layout: "layouts/init",
     title: req.t("error.csrf.title"),
     csrfToken: req.csrfToken,
     steps: buildSteps(req, step),
@@ -94,7 +94,7 @@ async function readLatestRun(pool: import("mysql2/promise").Pool): Promise<EtlRu
 }
 
 // Spawn a background ETL run for the wizard. The wizard's POST handler calls
-// this and redirects immediately; the progress page polls /setup/seed while
+// this and redirects immediately; the progress page polls /init/seed while
 // a `running` row exists in etl_runs.
 //
 // Guarded: refuses to start if another ETL is already in progress (etl_runs
@@ -109,7 +109,7 @@ async function startBackgroundEtl(app: FastifyInstance): Promise<{ runId: number
   if (runningRunId !== null) return { busy: true };
 
   // Pre-create the run row so the progress page can find it the instant the
-  // client lands on /setup/seed after the redirect.
+  // client lands on /init/seed after the redirect.
   const runId = await recordEtlStart(app.pool);
   await setSetting(app.pool, "etl.setup.inProgress", "true");
 
@@ -143,11 +143,11 @@ async function startBackgroundEtl(app: FastifyInstance): Promise<{ runId: number
   return { runId };
 }
 
-export default async function setupRoutes(app: FastifyInstance): Promise<void> {
-  // GET /setup — landing page. No form, no CSRF required.
-  app.get("/setup", async (req, reply) => {
-    return reply.view("setup/index.hbs", {
-      layout: "layouts/setup",
+export default async function initRoutes(app: FastifyInstance): Promise<void> {
+  // GET /init — landing page. No form, no CSRF required.
+  app.get("/init", async (req, reply) => {
+    return reply.view("init/index.hbs", {
+      layout: "layouts/init",
       title: req.t("setup.welcome.title"),
       csrfToken: req.csrfToken,
       steps: buildSteps(req, 1),
@@ -158,10 +158,10 @@ export default async function setupRoutes(app: FastifyInstance): Promise<void> {
     });
   });
 
-  // GET /setup/database — show current DB config (no password) + Test form.
-  app.get("/setup/database", async (req, reply) => {
-    return reply.view("setup/database.hbs", {
-      layout: "layouts/setup",
+  // GET /init/database — show current DB config (no password) + Test form.
+  app.get("/init/database", async (req, reply) => {
+    return reply.view("init/database.hbs", {
+      layout: "layouts/init",
       title: req.t("setup.database.title"),
       csrfToken: req.csrfToken,
       steps: buildSteps(req, 2),
@@ -180,8 +180,8 @@ export default async function setupRoutes(app: FastifyInstance): Promise<void> {
     });
   });
 
-  // POST /setup/database — probe app.pool. On success → /setup/site.
-  app.post("/setup/database", async (req, reply) => {
+  // POST /init/database — probe app.pool. On success → /init/site.
+  app.post("/init/database", async (req, reply) => {
     if (!verifyCsrfRequest(req)) {
       return renderCsrfError(req, reply, 2);
     }
@@ -191,7 +191,7 @@ export default async function setupRoutes(app: FastifyInstance): Promise<void> {
       await conn.ping();
     } catch (err) {
       // Sanitize: do not echo a raw mysql error string (could leak DSN/hints).
-      return reply.code(302).header("Location", "/setup/database?flash=error").send();
+      return reply.code(302).header("Location", "/init/database?flash=error").send();
     } finally {
       if (conn) {
         try {
@@ -201,17 +201,17 @@ export default async function setupRoutes(app: FastifyInstance): Promise<void> {
         }
       }
     }
-    return reply.code(302).header("Location", "/setup/site?flash=success").send();
+    return reply.code(302).header("Location", "/init/site?flash=success").send();
   });
 
-  // GET /setup/site — site name + tagline form.
-  app.get("/setup/site", async (req, reply) => {
+  // GET /init/site — site name + tagline form.
+  app.get("/init/site", async (req, reply) => {
     const [siteName, siteTagline] = await Promise.all([
       getSetting(app.pool, "site.name"),
       getSetting(app.pool, "site.tagline"),
     ]);
-    return reply.view("setup/site.hbs", {
-      layout: "layouts/setup",
+    return reply.view("init/site.hbs", {
+      layout: "layouts/init",
       title: req.t("setup.site.title"),
       csrfToken: req.csrfToken,
       steps: buildSteps(req, 3),
@@ -225,8 +225,8 @@ export default async function setupRoutes(app: FastifyInstance): Promise<void> {
     });
   });
 
-  // POST /setup/site — save site.name and site.tagline.
-  app.post("/setup/site", async (req, reply) => {
+  // POST /init/site — save site.name and site.tagline.
+  app.post("/init/site", async (req, reply) => {
     if (!verifyCsrfRequest(req)) {
       return renderCsrfError(req, reply, 3);
     }
@@ -241,8 +241,8 @@ export default async function setupRoutes(app: FastifyInstance): Promise<void> {
     else if (name.length > SITE_NAME_MAX || tagline.length > TAGLINE_MAX)
       fieldError = req.t("setup.site.error");
     if (fieldError) {
-      return reply.view("setup/site.hbs", {
-        layout: "layouts/setup",
+      return reply.view("init/site.hbs", {
+        layout: "layouts/init",
         title: req.t("setup.site.title"),
         csrfToken: req.csrfToken,
         steps: buildSteps(req, 3),
@@ -256,13 +256,13 @@ export default async function setupRoutes(app: FastifyInstance): Promise<void> {
     }
     await setSetting(app.pool, "site.name", name);
     await setSetting(app.pool, "site.tagline", tagline);
-    return reply.code(302).header("Location", "/setup/admin?flash=success").send();
+    return reply.code(302).header("Location", "/init/admin?flash=success").send();
   });
 
-  // GET /setup/admin — admin bootstrap form.
-  app.get("/setup/admin", async (req, reply) => {
-    return reply.view("setup/admin.hbs", {
-      layout: "layouts/setup",
+  // GET /init/admin — admin bootstrap form.
+  app.get("/init/admin", async (req, reply) => {
+    return reply.view("init/admin.hbs", {
+      layout: "layouts/init",
       title: req.t("setup.admin.title"),
       csrfToken: req.csrfToken,
       steps: buildSteps(req, 4),
@@ -273,8 +273,8 @@ export default async function setupRoutes(app: FastifyInstance): Promise<void> {
     });
   });
 
-  // POST /setup/admin — bootstrap admin via bootstrapAdmin().
-  app.post("/setup/admin", async (req, reply) => {
+  // POST /init/admin — bootstrap admin via bootstrapAdmin().
+  app.post("/init/admin", async (req, reply) => {
     if (!verifyCsrfRequest(req)) {
       return renderCsrfError(req, reply, 4);
     }
@@ -296,8 +296,8 @@ export default async function setupRoutes(app: FastifyInstance): Promise<void> {
       }
     }
     if (fieldError) {
-      return reply.view("setup/admin.hbs", {
-        layout: "layouts/setup",
+      return reply.view("init/admin.hbs", {
+        layout: "layouts/init",
         title: req.t("setup.admin.title"),
         csrfToken: req.csrfToken,
         steps: buildSteps(req, 4),
@@ -309,16 +309,16 @@ export default async function setupRoutes(app: FastifyInstance): Promise<void> {
         req,
       });
     }
-    return reply.code(302).header("Location", "/setup/seed?flash=success").send();
+    return reply.code(302).header("Location", "/init/seed?flash=success").send();
   });
 
-  // GET /setup/seed — three-mode form OR progress view if an ETL is running.
+  // GET /init/seed — three-mode form OR progress view if an ETL is running.
   //
   // Modes:
   //   demo  — load the 50 hand-picked seed rows from migration 012 (instant)
   //   etl   — trigger a real DB-IP ETL run; page renders progress until done
   //   skip  — leave ip_ranges empty; cron will pick it up later
-  app.get("/setup/seed", async (req, reply) => {
+  app.get("/init/seed", async (req, reply) => {
     const latest = await readLatestRun(app.pool);
     const inProgress = latest?.status === "running";
     const etlSetting = await getSetting(app.pool, "etl.setup.inProgress");
@@ -326,8 +326,8 @@ export default async function setupRoutes(app: FastifyInstance): Promise<void> {
     // While a background ETL is in flight, render the progress page and let
     // it auto-refresh until the run finishes.
     if (inProgress || etlSetting === "true") {
-      return reply.view("setup/seed.hbs", {
-        layout: "layouts/setup",
+      return reply.view("init/seed.hbs", {
+        layout: "layouts/init",
         title: req.t("setup.seed.title"),
         csrfToken: req.csrfToken,
         steps: buildSteps(req, 5),
@@ -344,8 +344,8 @@ export default async function setupRoutes(app: FastifyInstance): Promise<void> {
       });
     }
 
-    return reply.view("setup/seed.hbs", {
-      layout: "layouts/setup",
+    return reply.view("init/seed.hbs", {
+      layout: "layouts/init",
       title: req.t("setup.seed.title"),
       csrfToken: req.csrfToken,
       steps: buildSteps(req, 5),
@@ -356,10 +356,10 @@ export default async function setupRoutes(app: FastifyInstance): Promise<void> {
     });
   });
 
-  // POST /setup/seed — three modes: demo (instant), etl (background), skip.
+  // POST /init/seed — three modes: demo (instant), etl (background), skip.
   // Accepts both `mode=demo|etl|skip` (new) and legacy `load=true|false` for
   // backwards compat with the existing test suite.
-  app.post("/setup/seed", async (req, reply) => {
+  app.post("/init/seed", async (req, reply) => {
     if (!verifyCsrfRequest(req)) {
       return renderCsrfError(req, reply, 5);
     }
@@ -371,12 +371,12 @@ export default async function setupRoutes(app: FastifyInstance): Promise<void> {
     if (mode === "demo") {
       // Migration 012 inserts the 50 seed rows via INSERT IGNORE (idempotent).
       await setSetting(app.pool, "seed.loaded", "true");
-      return reply.code(302).header("Location", "/setup/complete?flash=success").send();
+      return reply.code(302).header("Location", "/init/complete?flash=success").send();
     }
 
     if (mode === "skip") {
       await setSetting(app.pool, "seed.loaded", "false");
-      return reply.code(302).header("Location", "/setup/complete?flash=success").send();
+      return reply.code(302).header("Location", "/init/complete?flash=success").send();
     }
 
     if (mode === "etl") {
@@ -384,22 +384,22 @@ export default async function setupRoutes(app: FastifyInstance): Promise<void> {
       if ("busy" in started) {
         // Another ETL is already running; just send the user to the progress
         // page where they'll see the existing run.
-        return reply.code(302).header("Location", "/setup/seed").send();
+        return reply.code(302).header("Location", "/init/seed").send();
       }
-      return reply.code(302).header("Location", `/setup/seed?runId=${started.runId}`).send();
+      return reply.code(302).header("Location", `/init/seed?runId=${started.runId}`).send();
     }
 
     if (mode === "etl-done") {
       // Confirmation step after the background ETL finished. Persist the
-      // flag and proceed to /setup/complete. Distinct from `etl` so a
+      // flag and proceed to /init/complete. Distinct from `etl` so a
       // double-submit can't re-trigger the pipeline.
       await setSetting(app.pool, "seed.loaded", "true");
-      return reply.code(302).header("Location", "/setup/complete?flash=success").send();
+      return reply.code(302).header("Location", "/init/complete?flash=success").send();
     }
 
     // Unknown mode — re-render the form with a generic error.
-    return reply.view("setup/seed.hbs", {
-      layout: "layouts/setup",
+    return reply.view("init/seed.hbs", {
+      layout: "layouts/init",
       title: req.t("setup.seed.title"),
       csrfToken: req.csrfToken,
       steps: buildSteps(req, 5),
@@ -410,8 +410,8 @@ export default async function setupRoutes(app: FastifyInstance): Promise<void> {
     });
   });
 
-  // GET /setup/complete — summary page.
-  app.get("/setup/complete", async (req, reply) => {
+  // GET /init/complete — summary page.
+  app.get("/init/complete", async (req, reply) => {
     const [siteName, seedLoaded] = await Promise.all([
       getSetting(app.pool, "site.name"),
       getSetting(app.pool, "seed.loaded"),
@@ -423,8 +423,8 @@ export default async function setupRoutes(app: FastifyInstance): Promise<void> {
       `SELECT email FROM users WHERE role = 'admin' ORDER BY id ASC LIMIT 1`,
     );
     const adminEmail = (rows[0] as { email?: string } | undefined)?.email ?? "";
-    return reply.view("setup/complete.hbs", {
-      layout: "layouts/setup",
+    return reply.view("init/complete.hbs", {
+      layout: "layouts/init",
       title: req.t("setup.complete.title"),
       csrfToken: req.csrfToken,
       steps: buildSteps(req, 6),
@@ -440,8 +440,8 @@ export default async function setupRoutes(app: FastifyInstance): Promise<void> {
     });
   });
 
-  // POST /setup/complete — flip initialized_at; guard re-reads it onResponse.
-  app.post("/setup/complete", async (req, reply) => {
+  // POST /init/complete — flip initialized_at; guard re-reads it onResponse.
+  app.post("/init/complete", async (req, reply) => {
     if (!verifyCsrfRequest(req)) {
       return renderCsrfError(req, reply, 6);
     }

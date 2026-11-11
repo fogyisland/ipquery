@@ -39,11 +39,11 @@ export async function setSetting(pool: Pool, key: string, value: string): Promis
  * Has this install been through the first-run wizard?
  *
  * An empty database — tables not created yet — counts as "not initialized".
- * This matters because setupGuard calls this at `buildServer()` time, and a
+ * This matters because initGuard calls this at `buildServer()` time, and a
  * genuinely fresh install has nothing but an empty schema for the wizard to
  * run migrations into. Letting ER_NO_SUCH_TABLE escape crashes the server on
  * the one path that is supposed to bootstrap it: the operator cannot reach
- * /setup to run the migrations that would create this table, and cannot run
+ * /init to run the migrations that would create this table, and cannot run
  * the migrations without a server. Any other database error still throws —
  * a dropped connection must not be reported as "fresh install".
  */

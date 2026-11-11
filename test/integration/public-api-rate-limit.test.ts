@@ -11,7 +11,7 @@
 // The failure mode is worse than a slow page. A 429 from the rate
 // limiter carries a JSON body, so the browser reports:
 //
-//   Refused to apply style from '.../setup.css' because its MIME type
+//   Refused to apply style from '.../init.css' because its MIME type
 //   ('application/json') is not a supported stylesheet MIME type
 //
 // The stylesheet silently never applies and the page renders unstyled.
@@ -63,7 +63,7 @@ beforeAll(async () => {
   });
   await runMigrations(pool);
   // Note: unlike `createTestDb`, `initialized_at` is deliberately NOT
-  // set. The setup guard then serves /setup instead of 404-ing it, so
+  // set. The setup guard then serves /init instead of 404-ing it, so
   // these tests can exercise a real page load.
 
   const serverCfg = loadConfig();
@@ -95,10 +95,10 @@ describe("only the public API consumes the global rate-limit budget", () => {
     // stylesheet is forty requests — four times the budget. If these
     // shared the API's counter, the later ones would be refused.
     for (let i = 0; i < 20; i++) {
-      const page = await request(app.server).get("/setup");
+      const page = await request(app.server).get("/init");
       expect(page.status, `page load #${i + 1}`).toBe(200);
 
-      const css = await request(app.server).get("/assets/css/setup.css");
+      const css = await request(app.server).get("/assets/css/init.css");
       expect(css.status, `stylesheet #${i + 1}`).toBe(200);
     }
   });
@@ -106,7 +106,7 @@ describe("only the public API consumes the global rate-limit budget", () => {
   it("leaves the public API's budget untouched after heavy page loading", async () => {
     // Ten page loads — exactly the API budget, if they shared it.
     for (let i = 0; i < 10; i++) {
-      await request(app.server).get("/setup");
+      await request(app.server).get("/init");
     }
 
     // The API route still has its full budget.
@@ -131,10 +131,10 @@ describe("only the public API consumes the global rate-limit budget", () => {
       await request(app.server).get("/lookup").query({ ip: "8.8.8.8" });
     }
 
-    const page = await request(app.server).get("/setup");
+    const page = await request(app.server).get("/init");
     expect(page.status).toBe(200);
 
-    const css = await request(app.server).get("/assets/css/setup.css");
+    const css = await request(app.server).get("/assets/css/init.css");
     expect(css.status).toBe(200);
     // The asset must be served as CSS, not as the rate limiter's JSON
     // body — that MIME mismatch is what silently unstyled the page.

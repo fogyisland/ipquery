@@ -3,7 +3,7 @@ const { chromium } = require("playwright");
 (async () => {
   const b = await chromium.launch();
   const p = await b.newPage({ viewport: { width: 1440, height: 900 } });
-  await p.goto("http://127.0.0.1:5051/setup/seed", { waitUntil: "networkidle" });
+  await p.goto("http://127.0.0.1:5051/init/seed", { waitUntil: "networkidle" });
   const info = await p.evaluate(() => {
     const label = document.querySelector(".boot-option-label");
     const title = document.querySelector(".boot-option-title");

@@ -18,7 +18,7 @@ import { registerSession } from "../web/plugins/session";
 import { registerAuthGuards } from "../web/plugins/auth";
 import { registerCsrf } from "../web/plugins/csrf";
 import { registerAuditLog } from "../web/plugins/auditLog";
-import { registerSetupGuard } from "../web/plugins/setupGuard";
+import { registerInitGuard } from "../web/plugins/initGuard";
 import { registerSessionPurger } from "../web/plugins/sessionPurger";
 import { registerProbeRetention } from "../web/plugins/probeRetention";
 import { registerRandomGenRunner } from "../web/plugins/randomIpGeneratorRunner";
@@ -32,7 +32,7 @@ import marketingRoute from "../web/routes/marketing";
 import dashboardRoute from "../web/routes/dashboard";
 import adminRoute from "../web/routes/admin";
 import authRoute from "../web/routes/auth";
-import setupRoute from "../web/routes/setup";
+import initRoute from "../web/routes/init";
 
 declare module "fastify" {
   interface FastifyInstance {
@@ -199,7 +199,7 @@ export async function buildServer(
   // A brand-new install points at an empty database: no tables at all. The
   // first-run wizard is what walks the operator through setup, but two of its
   // six steps read tables (etl_runs, users) before any POST has run the
-  // migrations — /setup/seed and /setup/complete both 500'd on a fresh
+  // migrations — /init/seed and /init/complete both 500'd on a fresh
   // database, leaving the wizard unfinishable. Bootstrap the schema here so
   // that the very first request to the wizard lands on a working install.
   //
@@ -208,7 +208,7 @@ export async function buildServer(
   // every subsequent boot. The wizard re-runs it at seed time regardless.
   await runMigrations(app.pool);
 
-  await registerSetupGuard(app);
+  await registerInitGuard(app);
 
   await app.register(cookie, {
     secret: cfg.web.sessionSecret || cfg.web.csrfSecret || "dev-only-secret-change-me",
@@ -245,7 +245,7 @@ export async function buildServer(
   await app.register(dashboardRoute);
   await app.register(adminRoute);
   await app.register(authRoute);
-  await app.register(setupRoute);
+  await app.register(initRoute);
   registerAuditLog(app);
 
   if (opts?.extraRoutes) {

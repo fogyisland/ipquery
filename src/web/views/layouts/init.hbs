@@ -26,8 +26,8 @@
        grant that: with both a header policy and a meta policy present the
        browser enforces their intersection, so a meta tag can only tighten.
        The exception lives in the header instead — registerSecurityHeaders()
-       widens style-src/font-src for /setup* only. --}}
-  {{!-- Self-hosted fallback stack is in setup.css; these two families load
+       widens style-src/font-src for /init* only. --}}
+  {{!-- Self-hosted fallback stack is in init.css; these two families load
        here so the wizard looks identical on a machine that has neither. --}}
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -35,7 +35,7 @@
   <link rel="stylesheet" href="/assets/css/base.css">
   <link rel="stylesheet" href="/assets/css/layout.css">
   <link rel="stylesheet" href="/assets/css/forms.css">
-  <link rel="stylesheet" href="/assets/css/setup.css">
+  <link rel="stylesheet" href="/assets/css/init.css">
 </head>
 <body class="layout-setup">
   <a class="boot-skip" href="#boot-main">跳到主要内容</a>

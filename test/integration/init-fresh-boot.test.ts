@@ -9,9 +9,9 @@ import { isInitialized } from "../../src/storage/settings";
  * A genuinely fresh install has an empty database: not a single table, because
  * the first-run wizard is what runs the migrations.
  *
- * setupGuard calls isInitialized() from buildServer(), so on an empty schema
+ * initGuard calls isInitialized() from buildServer(), so on an empty schema
  * the server used to die with ER_NO_SUCH_TABLE and exit before it could serve
- * /setup — the only page that can create the table it just failed to read.
+ * /init — the only page that can create the table it just failed to read.
  * The operator was left with no way in.
  *
  * This file deliberately does NOT call runMigrations(): that is the whole
@@ -84,7 +84,7 @@ describe("fresh boot against an empty database", () => {
   it("builds the server instead of crashing on the missing settings table", async () => {
     const cfg = loadConfig();
     cfg.db.database = DB_NAME;
-    // buildServer() registers setupGuard, which reads `settings`. Before the
+    // buildServer() registers initGuard, which reads `settings`. Before the
     // fix this threw ER_NO_SUCH_TABLE and the process exited.
     const app = await buildServer(cfg);
     await expect(app.ready()).resolves.toBeInstanceOf(Object);

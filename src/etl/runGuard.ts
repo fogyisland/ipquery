@@ -6,7 +6,7 @@
 //
 //   1. POST /admin/etl/trigger          (web server, manual)
 //   2. POST /admin/settings/etl-restart (web server, manual)
-//   3. the setup wizard's background ETL (web server, background)
+//   3. the init wizard's background ETL (web server, background)
 //   4. `ipq serve`'s cron schedule      (server process, scheduled)
 //
 // None of them knows about the others. Two concurrent runs are not
@@ -77,7 +77,7 @@ export interface EtlGuardResult {
 /**
  * Find the id of the run row currently at status='running', if any.
  *
- * `excludeRunId` skips one row. The setup wizard creates its run row
+ * `excludeRunId` skips one row. The init wizard creates its run row
  * up-front (it needs the id for the progress page before the pipeline
  * starts) and then hands it to the pipeline — without the exclusion
  * the pipeline's own guard would see that row and refuse to run.

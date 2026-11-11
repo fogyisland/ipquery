@@ -1,0 +1,53 @@
+# 首次启动（init）与发布核对手册
+
+> 详细版见 `docs/setup.md`；本手册是 `up/` 引导物料包随附的精简操作单，
+> 按「准备 → 引导 → 发布核对」三段执行。
+
+## 一、准备
+
+1. **数据库**：新建空库（迁移会自动建表，无需手工导 schema）：
+
+   ```sql
+   CREATE DATABASE ipquery DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+   CREATE USER 'ipquery'@'localhost' IDENTIFIED BY 'CHANGE_ME_STRONG_PASSWORD';
+   GRANT ALL PRIVILEGES ON ipquery.* TO 'ipquery'@'localhost';
+   FLUSH PRIVILEGES;
+   ```
+
+2. **`.env`**：`cp .env.example .env`，至少填 `DB_*`、`SESSION_SECRET`、`CSRF_SECRET`、
+   `WEB_BASE_URL`、`PORT`。密钥生成：
+
+   ```bash
+   node -e "console.log(require('crypto').randomBytes(48).toString('base64'))"
+   ```
+
+   生产环境缺任一密钥服务会直接拒启（fail-fast，不静默降级）。
+
+3. **构建**：`npm install && npm run build`（或 `make install && make build`）。
+
+## 二、引导（三选一）
+
+| 方式 | 命令 / 入口 | 适用 |
+|------|------------|------|
+| Web 向导 | `node dist/cli.js serve` 后浏览器开 `http://localhost:5001/init` | 首次部署、想看界面 |
+| CLI 无头 | `make init`（读 `ADMIN_EMAIL` / `ADMIN_PASSWORD` / `ADMIN_NAME` / `ADMIN_SEED`） | Ansible / Terraform / CI |
+| CLI 直调 | `node dist/cli.js init --email <admin> --password '<强口令>' [--seed]` | 同上，显式传参 |
+
+- 向导六步：欢迎 → 数据库 → 站点 → 管理员 → 种子数据 → 完成。
+- 未初始化时除 `/init*`、`/healthz`、`/lookup`、`/stats`、`/assets/*` 外全部 302 到 `/init`；
+  初始化完成后 `/init` 返回 404。
+- 种子数据三选一：**示例数据**（`up/seed-ip-ranges.sql` 的 50 条精选段，瞬时）、
+  **真实数据**（DB-IP 后台 ETL，约 5–15 分钟，可关浏览器回来仍见进度）、**跳过**。
+
+## 三、发布（上线）核对清单
+
+- [ ] `/lookup?ip=8.8.8.8` 返回国家/城市（否则数据为空，等 ETL 或 `node dist/cli.js update`）
+- [ ] `COOKIE_SECURE=true`、`WEB_BASE_URL` 为真实 HTTPS 域名
+- [ ] `SESSION_SECRET` / `CSRF_SECRET` 独立随机值，不复用
+- [ ] 数据库账号非 root，仅授权本库；`.env` 权限收紧（`chmod 600`），不进版本库
+- [ ] `SESSION_SECRET` / `CSRF_SECRET` 只写本机 `.env`，任何提交文件不得含真实凭据
+- [ ] systemd / pm2 / NSSM 托管服务进程，不靠前台终端
+- [ ] 反代转发 `X-Forwarded-For`，否则限流把所有人算成一个 IP
+- [ ] `DATA_DIR` 指向容量足够磁盘（DB-IP 原始 CSV 约 100+ MB）
+- [ ] `node dist/cli.js migrate:status` 全部 `applied`
+- [ ] `/init` 已返回 404（确认初始化锁定生效）
