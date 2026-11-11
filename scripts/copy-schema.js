@@ -16,6 +16,20 @@ for (const file of fs.readdirSync(srcMigrations)) {
   }
 }
 
+// Copy the optional demo seed rows. They are deliberately NOT a
+// migration — `node dist/cli.js seed:demo` loads them on request, so a
+// production database never ends up holding them by accident.
+const distSeed = path.join(distStorage, "seed");
+fs.mkdirSync(distSeed, { recursive: true });
+const srcSeed = path.join(projectRoot, "src", "storage", "seed");
+if (fs.existsSync(srcSeed)) {
+  for (const file of fs.readdirSync(srcSeed)) {
+    if (file.endsWith(".sql")) {
+      fs.copyFileSync(path.join(srcSeed, file), path.join(distSeed, file));
+    }
+  }
+}
+
 // Copy web assets the runtime needs: view templates, static assets, i18n bundles.
 // Without these, `node dist/cli.js serve` crashes:
 //   - @fastify/view can't find .hbs templates

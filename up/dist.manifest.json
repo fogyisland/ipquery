@@ -1,7 +1,7 @@
 {
   "formatVersion": 1,
-  "fileCount": 342,
-  "totalBytes": 1646834,
+  "fileCount": 347,
+  "totalBytes": 1669016,
   "files": {
     "api/errorHandler.d.ts": {
       "bytes": 1191,
@@ -68,12 +68,12 @@
       "sha256": "43e818adf60173644896298637f47b01d5819b17eda46eaa32d0c7d64724d012"
     },
     "cli.js": {
-      "bytes": 10343,
-      "sha256": "c81d15f0be095d2c1e70eb42775aa45296c5eec5caa7c342fa15615b3318afd2"
+      "bytes": 11496,
+      "sha256": "5e97cc53ebd2702304801b47576d276348a5d81b0cec77b6f6a097d8d5587027"
     },
     "cli.js.map": {
-      "bytes": 8403,
-      "sha256": "db1fa33ff58a51abcc19ce32b7045d1124bbd1bde40c187450437e5ffe4751b3"
+      "bytes": 9066,
+      "sha256": "2ee3b696bdc3e2cc9090a6f6958bde48fcc5ca905c1c35a23532cf66c8de5e98"
     },
     "config.d.ts": {
       "bytes": 1310,
@@ -128,12 +128,12 @@
       "sha256": "e8a34929b869a6a69ebcad91407cb100ede9bb0b349d6d4b9c5c92ab1112cc28"
     },
     "etl/pipeline.js": {
-      "bytes": 30501,
-      "sha256": "3df62ea3b1f8613613983d31e4835109fa247cfcf91299d50ab777bf6b74357a"
+      "bytes": 31142,
+      "sha256": "fa9ec9c23fde1ce5c72d108513224cd5520cf07daf92834bea9a0f3b63f1d77e"
     },
     "etl/pipeline.js.map": {
-      "bytes": 20226,
-      "sha256": "3a27263a12c12e0da87879e45b0e3b93be988214823aca23ec1d93e4d9d0aa5f"
+      "bytes": 20533,
+      "sha256": "aaa8e133bc9d60e87f5e732c298e71032cfef7c62639cb6e1bf723c8499974dc"
     },
     "etl/providerLock.d.ts": {
       "bytes": 1224,
@@ -476,8 +476,8 @@
       "sha256": "6654e8e05f905bddd71317e36a86fc1ff4f6ad96f0b752a5efda3b62f68dd165"
     },
     "storage/migrations/012_seed_ip_ranges.sql": {
-      "bytes": 13247,
-      "sha256": "8fc3e8b9038f42958fb194982a330198ba4686ca32747bfe5867799dd6985787"
+      "bytes": 1679,
+      "sha256": "87e6bd8b0b8d9d218d572bf231e471f46d2bd2a0c60dbeb6e70e4140338ad053"
     },
     "storage/migrations/013_ip_ranges_unique_key.sql": {
       "bytes": 1004,
@@ -527,6 +527,10 @@
       "bytes": 1851,
       "sha256": "395b2e2cc73f0b959bdbd9176d115a6f45d633bb3ce4b1f9a1aa035012342e93"
     },
+    "storage/migrations/025_remove_seed_data.sql": {
+      "bytes": 1291,
+      "sha256": "9084a05bf52793ea04e63254d1061fc0ef69454a69b2a662ea9a868a71fc52ff"
+    },
     "storage/migrations/runner.d.ts": {
       "bytes": 475,
       "sha256": "524b81361e04749aa8c66238b0537fb434b877d95aa91641f56b1bb55dccfc28"
@@ -540,16 +544,16 @@
       "sha256": "3a3ad47256d6d38659bb43d0126d4683e5ac5e5fe692d48bfe5a9c41362f0b70"
     },
     "storage/mysql.d.ts": {
-      "bytes": 5068,
-      "sha256": "81b4a2032e212aa8e3ef32bbce9ca72cff8b527617fd60242fbb0872f2b3605d"
+      "bytes": 7306,
+      "sha256": "40fc2929a50e4c695ce90c9cbc0744e2ee5d34aaf70b74bd868e3365c6df7142"
     },
     "storage/mysql.js": {
-      "bytes": 26793,
-      "sha256": "2a103bac55b9fdde18fbb1c0bd1cd11baacb0c0b3427cc91d26de106eeea7ca2"
+      "bytes": 31725,
+      "sha256": "b7ebf1cd7a49d83390f2222578834eba740f12d9db29a3f9547681ed531b6339"
     },
     "storage/mysql.js.map": {
-      "bytes": 19779,
-      "sha256": "0832d24ddbc46430e57af793ddb262d55cf13aa0b972c1e05f87b2398de03928"
+      "bytes": 21167,
+      "sha256": "228276dc4560368302d415d01e132099b1bfbe251e526f71ec52fe7692e950ee"
     },
     "storage/providerErrorLog.d.ts": {
       "bytes": 2645,
@@ -602,6 +606,22 @@
     "storage/schema.sql": {
       "bytes": 1732,
       "sha256": "0935128317045d7b127dde3026c5f16e99d35ebee29244fad3dfe288e46eabc4"
+    },
+    "storage/seed/demo-ranges.sql": {
+      "bytes": 13439,
+      "sha256": "9b40db3aca24fbd0da7ded1f9a0745f98411015fba224982dc1e3b47c372a748"
+    },
+    "storage/seed/demoSeed.d.ts": {
+      "bytes": 1152,
+      "sha256": "020598e45fdec9d64a3f7be47cfeb99a7c9aef07d35f49f7f9eb54ebaff910d3"
+    },
+    "storage/seed/demoSeed.js": {
+      "bytes": 4316,
+      "sha256": "e8de1078241f7ce93be28c92db29668a2bb5d62adeda8fde984e14b59cd067e9"
+    },
+    "storage/seed/demoSeed.js.map": {
+      "bytes": 1466,
+      "sha256": "8f2e35d581debee827f12c596e7a5b1be3cb8645bbaa62cd2dfcf8d611d890d6"
     },
     "storage/sessions.d.ts": {
       "bytes": 628,
@@ -856,8 +876,8 @@
       "sha256": "e725e2a02b806cc9f5bc888bc2d662a5693496433a92d810cae8dd11229a6801"
     },
     "web/i18n/en-US.json": {
-      "bytes": 41288,
-      "sha256": "4fee992dcc91147cc3ac57a647cb1af7bae02311aa1334b66c5cd8fd27e9d71e"
+      "bytes": 41466,
+      "sha256": "5430885c4d874e456b28a6244c6d3bc5b1ccef023017bf407aa015b3b827e294"
     },
     "web/i18n/index.d.ts": {
       "bytes": 309,
@@ -876,8 +896,8 @@
       "sha256": "33cd4e4a9a90a35dc5c3b8308e78a6449754c712719b9f1af35b2e25156641cc"
     },
     "web/i18n/zh-CN.json": {
-      "bytes": 41493,
-      "sha256": "96634dd5d8d98010db4cdbc629ed934a69904a45a4116904d08500f2af71d73e"
+      "bytes": 41614,
+      "sha256": "1d63244f8f78c307c3c5b284367d6a4cf98e29ca46db221583648de53d2cd54c"
     },
     "web/plugins/auditLog.d.ts": {
       "bytes": 368,
@@ -1088,12 +1108,12 @@
       "sha256": "4efd86b0d775793ecc3ebad2419fa5e28f7c9909abad5d993bffec6fd71d9385"
     },
     "web/routes/init.js": {
-      "bytes": 19314,
-      "sha256": "998736c66f440c0e948a1ef0f559a6b0eede74dc3866fb7e06b9af8a6e7df07a"
+      "bytes": 19665,
+      "sha256": "d9654eda8a06b5cae1f764ae8323037f2a92b2ae446bd5a62425b29c3c46ea1f"
     },
     "web/routes/init.js.map": {
-      "bytes": 13928,
-      "sha256": "a8b9ca34b08dcdd7f02b32e6476898b88bb25c7fcb3065d5436a2a3aaa0e3c2d"
+      "bytes": 14042,
+      "sha256": "4d40983789cc3525a5d98f979074b7d17e2b8ef19f000f79713342834bb3edfe"
     },
     "web/routes/marketing.d.ts": {
       "bytes": 126,

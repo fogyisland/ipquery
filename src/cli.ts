@@ -8,6 +8,7 @@ import { EtlRunLockedError } from "./etl/runGuard";
 import { buildServer } from "./api/server";
 import { createPool, lastEtlRun } from "./storage/mysql";
 import { runMigrations, migrationStatus, listMigrationFiles } from "./storage/migrations/runner";
+import { loadDemoSeed } from "./storage/seed/demoSeed";
 import { bootstrapAdmin } from "./web/admin/bootstrap";
 import { isInitialized, markInitialized } from "./storage/settings";
 import { findUserByEmail } from "./storage/users";
@@ -130,6 +131,26 @@ program
   });
 
 program
+  .command("seed:demo")
+  .description(
+    "Load 50 demo IP ranges (development only — production should run `update` to load the real library)",
+  )
+  .action(async () => {
+    const cfg = loadConfig();
+    const pool = createPool(cfg);
+    try {
+      // The demo rows live in a plain .sql file next to the migrations,
+      // not in a migration: a production database must never end up
+      // with them by accident.
+      await runMigrations(pool);
+      const result = await loadDemoSeed(pool);
+      console.log(`[seed:demo] ${result.total} demo rows present (${result.added} newly added)`);
+    } finally {
+      await pool.end();
+    }
+  });
+
+program
   .command("create-admin")
   .description("Create or promote an admin user (idempotent)")
   .requiredOption("--email <email>")
@@ -158,7 +179,7 @@ program
   .requiredOption("--email <email>", "admin email")
   .requiredOption("--password <password>", "admin password (10+ chars, letter + digit)")
   .option("--name <name>", "display name (defaults to email)")
-  .option("--seed", "include the seed migration (loads ~50 demo IP ranges)", false)
+  .option("--seed", "load the 50 demo IP ranges (development only; production should run `update`)", false)
   .option(
     "--reinit",
     "proceed even if the system is already initialized; --email must match the existing admin (does NOT wipe data)",
@@ -196,6 +217,13 @@ program
           password: opts.password,
           displayName: opts.name,
         });
+        // --seed actually loads the rows now. It used to only be
+        // reported in the log line: migration 012 had already inserted
+        // the demo rows during `migrate`, so the flag changed nothing
+        // about what was in the database.
+        if (opts.seed) {
+          await loadDemoSeed(pool);
+        }
         if (!already) {
           await markInitialized(pool);
           markedInitial = true;

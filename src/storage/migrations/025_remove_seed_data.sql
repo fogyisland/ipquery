@@ -1,0 +1,28 @@
+-- SPDX-License-Identifier: MIT
+--
+-- Removes the demo rows that migration 012 used to insert.
+--
+-- Migration 012 originally loaded 50 hand-picked rows (Google DNS,
+-- Cloudflare, RFC 1918, …) as part of `migrate`. Every database —
+-- production included — therefore carried those rows whether the
+-- operator wanted them or not, because the seed was a migration
+-- rather than a choice. A database that skipped seeding still
+-- answered /lookup for 8.8.8.8, which reads as "populated" when it
+-- holds nothing but 50 demo addresses.
+--
+-- Migration 012 no longer inserts anything; the demo rows are opt-in
+-- via `node dist/cli.js seed:demo`. This migration brings databases
+-- that already ran the old 012 into the same state a fresh install
+-- reaches.
+--
+-- The DELETE is scoped to country_source = 'seed'. That value was
+-- written only by the demo loader, so it cannot match:
+--   - ETL rows, which carry 'dbip', 'dbip-country' or 'dbip-asn'
+--   - unknown-IP backfill rows, which carry 'multi-provider'
+--   - anything a user added by hand
+--
+-- The WHERE clause is deliberately narrow. A broader delete — say by
+-- range or by IP set — would risk touching real rows that happen to
+-- share a start_ip with a demo row.
+
+DELETE FROM ip_ranges WHERE country_source = 'seed';

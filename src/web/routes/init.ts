@@ -6,6 +6,7 @@ import { verifyCsrfRequest } from "../plugins/csrf";
 import { setSetting, getSetting, markInitialized } from "../../storage/settings";
 import { bootstrapAdmin } from "../admin/bootstrap";
 import { runMigrations } from "../../storage/migrations/runner";
+import { loadDemoSeed } from "../../storage/seed/demoSeed";
 import { runPipeline } from "../../etl/pipeline";
 import { findRunningEtlRun } from "../../etl/runGuard";
 import { recordEtlStart } from "../../storage/mysql";
@@ -369,7 +370,12 @@ export default async function initRoutes(app: FastifyInstance): Promise<void> {
     const mode = body.mode ?? (body.load === "true" ? "demo" : body.load === "false" ? "skip" : undefined);
 
     if (mode === "demo") {
-      // Migration 012 inserts the 50 seed rows via INSERT IGNORE (idempotent).
+      // Load the 50 demo rows for real. This used to only set a flag,
+      // because migration 012 had already inserted them during
+      // `migrate` — which meant "skip the demo data" never actually
+      // skipped anything. Now the rows only exist if they were asked
+      // for.
+      await loadDemoSeed(app.pool);
       await setSetting(app.pool, "seed.loaded", "true");
       return reply.code(302).header("Location", "/init/complete?flash=success").send();
     }

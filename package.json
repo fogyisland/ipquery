@@ -24,6 +24,7 @@
     "format:check": "prettier --check .",
     "dev": "tsx src/cli.ts",
     "start": "node dist/cli.js",
+    "seed:demo": "node dist/cli.js seed:demo",
     "serve:4001": "node -e \"require('child_process').spawnSync(process.execPath,['dist/cli.js','serve'],{env:{...process.env,PORT:'4001'},stdio:'inherit'})\"",
     "shoot:dashboard": "tsx scripts/dev/shoot-dashboard.ts",
     "shoot:ingest": "tsx scripts/dev/shoot-ingest.ts",

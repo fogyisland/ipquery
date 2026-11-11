@@ -354,6 +354,16 @@ async function runInsertStage(pool, runId, rawDir, files, sink) {
 }
 async function runSwapStage(pool, runId) {
     const startedAt = new Date();
+    // Hand-authored rows (the unknown-IP backfill's 'multi-provider'
+    // entries) live in the live ip_ranges table. The staging table was
+    // just rebuilt from the DB-IP files, which will never contain them.
+    // Copy them across BEFORE the rename, or the swap deletes every one
+    // of them — silently, with the run reported as a success.
+    const preserved = await (0, mysql_1.preserveManualRows)(pool);
+    if (preserved.preserved > 0 || preserved.conflicts > 0) {
+        console.log(`[etl] preserved manual rows: ${preserved.preserved} carried over, ` +
+            `${preserved.conflicts} kept the ETL's version`);
+    }
     const result = await (0, mysql_1.atomicSwapRanges)(pool);
     const finishedAt = new Date();
     const row = {

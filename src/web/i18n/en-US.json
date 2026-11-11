@@ -1104,7 +1104,7 @@
     },
     "seed": {
       "title": "Seed IP ranges",
-      "intro": "Pick how to initialise your IP-range data. You can pull real data right now (5-15 min), or load 50 demo rows to walk the wizard through first.",
+      "intro": "Choose how to load your IP-range data. Real data takes 5-15 minutes; demo data is instant but covers only 50 hand-picked addresses — a production install should load real data.",
       "yes": "Yes, load 50 seed IPs",
       "no": "No, skip seed data",
       "submit": "Next",
@@ -1113,7 +1113,7 @@
       "invalidMode": "Invalid option",
       "demo": {
         "label": "Demo data (50 rows)",
-        "hint": "Instant. Hand-picked public DNS / cloud / RFC reserved ranges. Good for trying things out."
+        "hint": "Instant. 50 hand-picked public DNS / cloud / RFC reserved ranges — enough to click through the interface. Development and demos only; a production install should load real data instead."
       },
       "etl": {
         "label": "Real data (DB-IP, recommended)",
@@ -1122,7 +1122,7 @@
       },
       "skip": {
         "label": "Skip",
-        "hint": "Leave the database empty. The cron job will pick it up later."
+        "hint": "Leave the database empty and let the cron job load the real library later. Nothing is inserted either way."
       },
       "retry": "Retry",
       "progress": {

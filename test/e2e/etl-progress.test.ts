@@ -337,9 +337,10 @@ describe("ETL live progress — browser E2E", () => {
       const res = await page.goto(`${baseUrl}/admin/etl/runs/1`, {
         waitUntil: "domcontentloaded",
       });
-      // Unauthenticated access to an admin path is rejected with 403 —
-      // the auth guard renders errors/403.hbs rather than redirecting.
-      expect(res?.status()).toBe(403);
+      // Unauthenticated access to an admin path is answered with 404,
+      // not 403: a 403 would confirm that /admin/* routes exist (see
+      // src/web/plugins/auth.ts). The guard renders errors/404.hbs.
+      expect(res?.status()).toBe(404);
     } finally {
       await context.close();
     }

@@ -14,7 +14,8 @@
     "migrate:status": "node dist/cli.js migrate:status",
     "init": "node dist/cli.js init",
     "update": "node dist/cli.js update",
-    "status": "node dist/cli.js status"
+    "status": "node dist/cli.js status",
+    "seed:demo": "node dist/cli.js seed:demo"
   },
   "dependencies": {
     "@fastify/compress": "^7.0.3",

@@ -13,7 +13,8 @@
 │   ├── mcp/server.js        ←   MCP 服务器（可选，npm run mcp）
 │   ├── storage/
 │   │   ├── schema.sql       ←   基础表结构
-│   │   └── migrations/*.sql ←   001–024，按序执行
+│   │   ├── migrations/*.sql ←   001–025，按序执行
+│   │   └── seed/demo-ranges.sql ← 50 条示例段（仅 `seed:demo` 显式加载，生产不要）
 │   └── web/
 │       ├── views/**/*.hbs   ←   页面模板（@fastify/view 需要）
 │       ├── assets/**/*      ←   静态资源（@fastify/static 需要）
@@ -30,7 +31,6 @@
 ├── install.sh               ← 装依赖 + 建目录 + 生成 .env + 迁移
 ├── init-runbook.md          ← 首次启动操作单
 ├── MANIFEST.md              ← 本文件
-├── seed-ip-ranges.sql       ← 种子数据母本（人工审阅版）
 ├── logs/                    ← 服务日志（按部署约定定位置）
 └── (systemd unit / pm2 配置文件，按需)
 ```
@@ -56,7 +56,7 @@
 | `data/raw/`                                    | `mkdir`                                          | ✅   | ETL 下载 DB-IP CSV 的落地点                                |
 | `install.sh`                                   | `up/`                                            | ✅   | 部署脚本                                                   |
 | `init-runbook.md` / `MANIFEST.md`              | `up/`                                            | ⭕   | 文档                                                       |
-| `up/seed-ip-ranges.sql` **直接执行**           | —                                                | ❌   | 它是母本；真正加载的是 `migrations/012_seed_ip_ranges.sql` |
+| `dist/storage/seed/demo-ranges.sql` **直接执行** | —                                              | ❌   | 示例数据；只能由 `node dist/cli.js seed:demo` 显式加载（**生产环境不要加载**） |
 
 ## 三、不需要上服务器的东西
 
