@@ -50,6 +50,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 管理界面内联脚本外提为独立文件，以符合 CSP
 - 移除 Docker 部署（改用 Makefile + 原生 Node）
 - 测试脚本拆分：`test:unit` / `test:integration` / `test:e2e`
+- **部署文档补实测数据**: `docs/setup.md` 新增「ETL 全量导入的实测开销」与
+  「源文件完整性校验」两节，并按实测值更新部署清单（`ip_ranges` 约 3.0 GB / 815 万行、
+  全量 ETL 约 21 分钟、原始 CSV.gz 约 93 MB、数据盘 >= 20 GB、内存 >= 2 GB）
 
 ### Fixed
 
@@ -67,6 +70,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Admin 页面 htmx 缺失**: `layouts/admin.hbs` 未引入 `htmx.min.js`，导致管理端全部
   `hx-get` 轮询失效——ETL 进度条不刷新、运行详情不自动更新、`/admin` 与 `/admin/queries`
   的 30 秒自动刷新静默失效。现已在 admin layout 引入 htmx
+- **ETL 静默降级为残缺数据**: 下载阶段按「文件是否存在」决定是否复用，且只要有任一文件
+  存在就完全跳过下载。被中断的下载会在磁盘上留下半截的 `.gz`，被当作有效缓存直接解析，
+  报 `unexpected end of file`；更糟的是缺文件的那些源会被解析阶段静默跳过，整轮 ETL
+  仍报告 `success`，并把残缺数据 swap 上线覆盖完整数据。现改为逐份判断：校验 gzip
+  完整性（magic + trailer ISIZE），损坏的文件删除并重下，缺失／损坏／解析出 0 行
+  一律判失败并保留旧数据；下载时也比对 `Content-Length`，半成品不落盘
+- **ETL 进度条跨文件回退**: 插入进度计数原在每个文件循环内清零，切换到下一个源时
+  进度条掉回 0%，现改为跨文件累计
+- **ETL 多余一遍解压**: swap 之后为统计行数会把三个 CSV 全部重新解析一遍（第三遍
+  gunzip），且任一瞬态 IO 错误都会把已经上线的运行标记为 `failed`。现改用插入阶段
+  的行数统计，并移除了这次重解析
 - **ETL 进度条被覆盖**: 进度条容器原在 `hx-swap="outerHTML"` 的 section 内，
   5 秒一次的 `/live` 局部刷新会把整个 section 连同进度条一并替换掉。现移至 section 之外
 - **回灌提示**: 预览 cookie 失效／过期时，此前会渲染成全零的“成功”摘要，现显示明确提示
