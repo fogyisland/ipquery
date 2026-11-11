@@ -4,6 +4,7 @@ import * as fsp from "node:fs/promises";
 import * as path from "node:path";
 import * as https from "node:https";
 import { pipeline } from "node:stream/promises";
+import * as zlib from "node:zlib";
 
 // DB-IP distributes its free data as monthly gzipped CSVs at
 // https://download.db-ip.com/free/dbip-{city,country,asn}-lite-YYYY-MM.csv.gz.
@@ -71,6 +72,96 @@ export interface DownloadAttempt {
   finishedAt: Date | null;
 }
 
+/**
+ * Inflate a gzip file and return the number of uncompressed bytes,
+ * without holding the decompressed data in memory. Throws if the
+ * member is truncated or corrupt.
+ */
+async function countInflatedBytes(filePath: string): Promise<number> {
+  const gunzip = zlib.createGunzip();
+  const source = fs.createReadStream(filePath);
+  let total = 0;
+  // Count the DECOMPRESSED bytes: they come out of the gunzip stream,
+  // not the source stream.
+  gunzip.on("data", (chunk: string | Buffer) => {
+    total += typeof chunk === "string" ? Buffer.byteLength(chunk) : chunk.length;
+  });
+  const finished = new Promise<void>((resolve, reject) => {
+    gunzip.on("end", () => resolve());
+    gunzip.on("error", reject);
+    source.on("error", reject);
+  });
+  source.pipe(gunzip);
+  await finished;
+  return total;
+}
+
+/**
+ * Verify that a cached `.csv.gz` on disk is a complete, readable gzip
+ * member — not a half-written file left behind by an interrupted run.
+ *
+ * Two independent checks, because either one alone has a blind spot:
+ *
+ *  1. **gzip magic** (`1f 8b`) — catches a file that isn't gzip at all
+ *     (e.g. an HTML error page saved by a proxy).
+ *  2. **Trailer ISIZE** — the last 4 bytes of a gzip member hold the
+ *     uncompressed length modulo 2^32. Inflating the file and
+ *     comparing the byte count against that trailer catches truncation
+ *     (the common case: the process died mid-download), because a
+ *     truncated member either fails to inflate at all or inflates to
+ *     fewer bytes than the trailer claims.
+ *
+ * The trailer check needs the whole file inflated, which is expensive
+ * for an 87 MB file — so the magic check runs first as a cheap reject,
+ * and the inflate streams (memory stays flat) rather than buffering.
+ *
+ * Returns `null` when the file is intact, or a human-readable reason
+ * string when it is not.
+ */
+export async function validateGzFile(filePath: string): Promise<string | null> {
+  let handle: fs.promises.FileHandle | null = null;
+  try {
+    handle = await fsp.open(filePath, "r");
+    const { size } = await handle.stat();
+    if (size < 18) {
+      // Smallest valid gzip member is 20 bytes (10-byte header + 8-byte
+      // trailer); anything under 18 is definitely not a complete member.
+      return `file is too small to be a gzip member (${size} bytes)`;
+    }
+    const magic = Buffer.alloc(2);
+    await handle.read(magic, 0, 2, 0);
+    if (magic[0] !== 0x1f || magic[1] !== 0x8b) {
+      return "file does not start with the gzip magic bytes (not a .gz file)";
+    }
+    const trailer = Buffer.alloc(4);
+    await handle.read(trailer, 0, 4, size - 4);
+    const expectedSize = trailer.readUInt32LE(0);
+    await handle.close();
+    handle = null;
+
+    // Inflate in streaming mode and count the bytes. Streaming keeps
+    // memory flat (the city-lite file inflates to ~300 MB) and zlib
+    // validates the gzip trailer itself, so a truncated member throws
+    // here ("unexpected end of file"). The explicit count comparison
+    // catches the rarer case where the trailer is intact but the
+    // payload was swapped.
+    const inflatedBytes = await countInflatedBytes(filePath);
+    if (inflatedBytes !== expectedSize) {
+      return `gzip trailer claims ${expectedSize} bytes but the file inflates to ${inflatedBytes}`;
+    }
+    return null;
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    // zlib validates the gzip trailer itself during inflate and throws
+    // "incorrect header check" / "incorrect data check" / "unexpected
+    // end of file" — all of them mean the member is truncated or
+    // corrupt.
+    return `gzip integrity check failed (truncated or corrupt trailer): ${msg}`;
+  } finally {
+    if (handle) await handle.close().catch(() => {});
+  }
+}
+
 /** Build the candidate month list: newest first, walking back N months. */
 export function candidateMonths(now: Date, lookback: number): string[] {
   const out: string[] = [];
@@ -104,14 +195,18 @@ export function downloadToFile(
   url: string,
   destPath: string,
   onProgress?: DownloadProgressFn,
+  /** Test seam: the HTTPS client. Defaults to node:https; tests inject a
+   *  stub that serves a truncated body so the Content-Length integrity
+   *  check can be exercised without a real server. */
+  getImpl: typeof https.get = https.get,
 ): Promise<number> {
   return new Promise((resolve, reject) => {
-    const req = https.get(url, (res) => {
+    const req = getImpl(url, (res) => {
       const status = res.statusCode ?? 0;
       // Follow one redirect level (DB-IP occasionally moves CDN edges).
       if (status >= 300 && status < 400 && res.headers.location) {
         res.resume(); // drain
-        downloadToFile(res.headers.location, destPath, onProgress).then(resolve, reject);
+        downloadToFile(res.headers.location, destPath, onProgress, getImpl).then(resolve, reject);
         return;
       }
       if (status < 200 || status >= 300) {
@@ -139,6 +234,29 @@ export function downloadToFile(
         () => {
           // Final flush so the UI sees the exact total.
           if (onProgress) onProgress(bytes, bytesTotal);
+          // Integrity check: a truncated response still resolves the
+          // stream cleanly (the socket closed early), so 2xx alone does
+          // NOT mean we got the whole file. Compare against
+          // Content-Length when the server sent one. A mismatch means
+          // the file on disk is unusable — delete it so the next run
+          // re-downloads instead of parsing a half-written .gz.
+          if (bytesTotal !== null && Number.isFinite(bytesTotal) && bytes !== bytesTotal) {
+            // Remove the half-written file before rejecting, so the
+            // next run does not find a corrupt cached file.
+            fs.promises
+              .unlink(destPath)
+              .catch(() => {
+                /* best-effort: the file may already be gone */
+              })
+              .finally(() => {
+                reject(
+                  new Error(
+                    `incomplete download for ${url}: got ${bytes} bytes, expected ${bytesTotal}`,
+                  ),
+                );
+              });
+            return;
+          }
           resolve(bytes);
         },
         (err: Error) => reject(err),
