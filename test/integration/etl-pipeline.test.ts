@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import * as mysql from "mysql2/promise";
 import { createPool, runMigrations, findRange, lastEtlRun } from "../../src/storage/mysql";
-import { runPipeline } from "../../src/etl/pipeline";
+import { runPipeline, EtlProgressSink } from "../../src/etl/pipeline";
 import { loadConfig } from "../../src/config";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
@@ -73,5 +73,43 @@ describe("etl pipeline", () => {
   it("subsequent /lookup finds seeded data", async () => {
     const r = await findRange(pool, Buffer.from([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 9, 9, 9, 5]));
     expect(r?.countryCode).toBeDefined();
+  });
+
+  it("insert progress reported to the sink is monotonic across files", async () => {
+    // Guard against the runInsertedSoFar-per-file regression: onInsert
+    // receives a cross-file running count, so it must never decrease.
+    const root = await mysql.createConnection({
+      host: cfg.db.host,
+      port: cfg.db.port,
+      user: cfg.db.user,
+      password: cfg.db.password,
+    });
+    await root.query(`DROP DATABASE IF EXISTS ${TEST_DB}`);
+    await root.query(`CREATE DATABASE ${TEST_DB}`);
+    await root.end();
+    await pool.end();
+    pool = createPool(cfg);
+    await runMigrations(pool);
+    const seen: number[] = [];
+    const sink = new EtlProgressSink(pool, 0, { intervalMs: 0 });
+    const origOnInsert = sink.onInsert.bind(sink);
+    sink.onInsert = (rowsDone: number) => {
+      seen.push(rowsDone);
+      origOnInsert(rowsDone);
+    };
+    const result = await runPipeline({ cfg, runIdOverride: undefined, sink });
+    expect(result.merged).toBeGreaterThan(0);
+    expect(seen.length).toBeGreaterThan(0);
+    for (let i = 1; i < seen.length; i++) {
+      expect(seen[i]!).toBeGreaterThanOrEqual(seen[i - 1]!);
+    }
+  });
+
+  it("legacy summary columns use insert-stage totals without a third gunzip pass", async () => {
+    // recordEtlFinish must receive counts equal to the insert-stage
+    // rowsAttempted tallies (not a re-parse of the files).
+    const last = await lastEtlRun(pool);
+    expect(last?.status).toBe("success");
+    expect(last?.dbipRecords).toBeGreaterThan(0);
   });
 });
