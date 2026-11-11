@@ -75,9 +75,14 @@ describe("admin polling routes have their own rate-limit budget", () => {
       expect(res.status, `admin poll #${i + 1}`).toBe(200);
     }
 
-    // The public API route still has its full budget left.
+    // The public API route still has its full budget left. The status
+    // is 404 rather than 200 because this database holds no ip_ranges
+    // rows — the demo rows are opt-in now — but the point of the
+    // assertion is "not refused", not "found": a 429 would mean the
+    // admin polling ate into the public API's budget.
     const lookup = await request(app.server).get("/lookup").query({ ip: "8.8.8.8" });
-    expect(lookup.status).toBe(200);
+    expect(lookup.status).not.toBe(429);
+    expect(lookup.status).toBe(404);
   });
 
   it("serves the ETL live and progress endpoints repeatedly without 429", async () => {
