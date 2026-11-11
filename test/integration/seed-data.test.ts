@@ -3,10 +3,15 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import * as mysql from "mysql2/promise";
 import { createTestDb, dropTestDb, type TestDb } from "../helpers/db";
 import { runMigrations } from "../../src/storage/migrations/runner";
+import { loadDemoSeed } from "../../src/storage/seed/demoSeed";
 
 let td: TestDb;
 beforeAll(async () => {
   td = await createTestDb("seed");
+  // The demo rows are opt-in: migration 012 only adds the index now, so
+  // the rows have to be loaded explicitly — the same way the CLI's
+  // `seed:demo` command and the setup wizard's demo option do it.
+  await loadDemoSeed(td.pool);
 });
 afterAll(async () => {
   await dropTestDb(td);
@@ -30,7 +35,7 @@ async function findSeedByIp(startIpHex4: string) {
   return rows[0];
 }
 
-describe("seed ip_ranges migration (012)", () => {
+describe("demo seed rows", () => {
   it("seeds exactly 50 rows", async () => {
     const [rows] = await td.pool.query<mysql.RowDataPacket[]>(
       `SELECT COUNT(*) AS n FROM ip_ranges WHERE country_source = 'seed'`,
@@ -73,6 +78,21 @@ describe("seed ip_ranges migration (012)", () => {
       `SELECT COUNT(*) AS n FROM ip_ranges WHERE country_source = 'seed'`,
     );
     expect(Number(rows[0].n)).toBe(50);
+  });
+
+  it("a migrated database has no demo rows until they are asked for", async () => {
+    // The regression this change exists to prevent: migration 012 used
+    // to insert the demo rows, so every production database carried
+    // them whether the operator wanted them or not.
+    const fresh = await createTestDb("seed_fresh");
+    try {
+      const [rows] = await fresh.pool.query<mysql.RowDataPacket[]>(
+        `SELECT COUNT(*) AS n FROM ip_ranges WHERE country_source = 'seed'`,
+      );
+      expect(Number(rows[0].n)).toBe(0);
+    } finally {
+      await dropTestDb(fresh);
+    }
   });
 
   it("uniq_seed index exists on (start_ip, end_ip, country_source)", async () => {

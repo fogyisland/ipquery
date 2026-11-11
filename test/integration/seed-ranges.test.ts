@@ -15,12 +15,13 @@
 // is what surfaced it — ipquery_lookup returned "not found" for
 // 8.8.8.8 even though 8.8.8.8 was in the seed data.
 //
-// This test runs the real migrations against a fresh database and
-// checks that the seeded addresses are actually findable, so the byte
-// order can't silently drift again.
+// This test runs the real migrations against a fresh database, loads
+// the opt-in demo rows, and checks that the seeded addresses are
+// actually findable, so the byte order can't silently drift again.
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import * as mysql from "mysql2/promise";
 import { createPool, runMigrations, findRange } from "../../src/storage/mysql";
+import { loadDemoSeed } from "../../src/storage/seed/demoSeed";
 import { parseIp } from "../../src/ip";
 import { loadConfig } from "../../src/config";
 
@@ -43,6 +44,10 @@ describe("seeded ranges are reachable", () => {
     await root.end();
     pool = createPool(cfg);
     await runMigrations(pool);
+    // The demo rows are opt-in since the seed/ETL-preservation change:
+    // migration 012 no longer inserts them, so a test that wants them
+    // has to ask for them the same way the CLI and the wizard do.
+    await loadDemoSeed(pool);
   });
 
   afterAll(async () => {
