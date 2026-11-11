@@ -72,5 +72,6 @@ node dist/cli.js serve                                                    # 起�
 ## 相关
 
 - 详细版部署手册：[`../docs/setup.md`](../docs/setup.md)
+- 源码部署方式（拷贝整个仓库、服务器上编译）：[`../docs/source-deploy.md`](../docs/source-deploy.md)
 - 命令总览：`node dist/cli.js --help`
 - 迁移状态：`node dist/cli.js migrate:status`（每行都该是 `applied`）

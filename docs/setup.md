@@ -83,10 +83,19 @@ node -e "console.log(require('crypto').randomBytes(48).toString('base64'))"
 node -e "console.log(require('crypto').randomBytes(48).toString('base64'))"
 ```
 
-> **`SESSION_SECRET` / `CSRF_SECRET` 的强制时机**：`NODE_ENV=production` 时缺任意一项，
-> `buildServer()` 直接抛 `refusing to start in production: missing required env vars`，
-> 不会静默降级到内置默认值。开发/测试环境（`NODE_ENV` 未设或为 `development`/`test`）
-> 会回落到占位值，以便首次运行向导能跑起来 —— **但生产环境务必设成两把独立的随机串**。
+> **`SESSION_SECRET` / `CSRF_SECRET` 的强制时机**：
+>
+> - **系统已初始化**（`settings.initialized_at` 有值）时缺任意一项，`buildServer()`
+>   直接抛 `refusing to start in <env>: missing required env vars: ...`，
+>   不会静默降级到内置默认值。已初始化的系统正是开始签发真实登录 Cookie 的地方，
+>   用仓库里写死的 `"dev-only-secret-change-me"` 签名等于把会话密钥公开。
+> - **系统尚未初始化**时允许用占位值启动，让首次运行向导能跑起来 ——
+>   向导不采集密钥（它管的是数据库、站点、种子模式和��员账号），
+>   此时若拒绝启动，`/init` 就永远打不开，安装无法完成。
+> - 环境判定：`NODE_ENV` 未设或不是 `development`/`test` 时，一律按生产对待。
+>   （项目里没有任何地方会设置 `NODE_ENV`，所以"未设"就是生产的默认状态。）
+>
+> 开发/测试环境（`NODE_ENV=development` 或 `test`）完全跳过这个检查。
 
 生产环境额外设置：
 

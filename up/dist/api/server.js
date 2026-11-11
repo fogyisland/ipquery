@@ -111,22 +111,33 @@ function isPublicApiPath(url) {
     return PUBLIC_API_PATHS.has(pathOnly);
 }
 async function buildServer(cfg, opts) {
-    // Fail-fast on missing secrets in production. NODE_ENV=production
-    // (or any value other than "development"/"test"/unset) requires
-    // real CSRF_SECRET and SESSION_SECRET. In dev/test we fall back
-    // to a placeholder so first-run setup still works — the cookie
-    // plugin already uses a similar dev fallback.
-    const env = process.env.NODE_ENV ?? "development";
-    if (env === "production") {
-        const missing = [];
-        if (!cfg.web.csrfSecret)
-            missing.push("CSRF_SECRET");
-        if (!cfg.web.sessionSecret)
-            missing.push("SESSION_SECRET");
-        if (missing.length > 0) {
-            throw new Error(`refusing to start in production: missing required env vars: ${missing.join(", ")}`);
-        }
-    }
+    // Fail-fast on missing secrets.
+    //
+    // The rule: in production (NODE_ENV=production, or unset — which is
+    // the common case, because nothing sets NODE_ENV by default), a
+    // missing SESSION_SECRET or CSRF_SECRET is fatal.
+    //
+    // Why this matters: the cookie plugin below falls back to a hardcoded
+    // placeholder when both secrets are empty, so without the check a
+    // real server would silently sign its session cookies with a
+    // well-known constant.
+    //
+    // The check is DEFERRED past the migrations and the setup guard,
+    // because the first-run wizard at /init is reachable before the
+    // operator has configured anything — and it does not collect secrets
+    // (it covers the database, the site, the seed mode and the admin
+    // account). Refusing to boot would make the wizard unreachable and
+    // leave the install unfinishable. So the rule is:
+    //
+    //   - the system is NOT initialized yet → the wizard may run with the
+    //     placeholder secret; there are no sessions to protect
+    //   - the system IS initialized → the secrets must be real, because
+    //     every login cookie depends on them
+    //
+    // The guard below therefore runs after registerInitGuard() has
+    // determined the initialization state.
+    const env = process.env.NODE_ENV ?? "production";
+    const isProduction = env !== "development" && env !== "test";
     const app = (0, fastify_1.default)({
         logger: {
             level: process.env.LOG_LEVEL ?? "info",
@@ -219,6 +230,22 @@ async function buildServer(cfg, opts) {
     // every subsequent boot. The wizard re-runs it at seed time regardless.
     await (0, runner_1.runMigrations)(app.pool);
     await (0, initGuard_1.registerInitGuard)(app);
+    // Now that the setup guard knows whether the system is initialized,
+    // the secret requirement can be applied precisely. See the comment
+    // above: an un-initialized install is allowed to run the wizard with
+    // the placeholder secret; an initialized one is not — because that is
+    // where real session cookies start being signed.
+    if (isProduction && !app.requireSetup) {
+        const missing = [];
+        if (!cfg.web.csrfSecret)
+            missing.push("CSRF_SECRET");
+        if (!cfg.web.sessionSecret)
+            missing.push("SESSION_SECRET");
+        if (missing.length > 0) {
+            throw new Error(`refusing to start in ${env}: missing required env vars: ${missing.join(", ")}. ` +
+                `Set them in .env (and restart), or set NODE_ENV=development to run without secrets.`);
+        }
+    }
     await app.register(cookie_1.default, {
         secret: cfg.web.sessionSecret || cfg.web.csrfSecret || "dev-only-secret-change-me",
     });
