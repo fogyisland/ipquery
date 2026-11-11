@@ -19,7 +19,12 @@ make install build run    # local node + uses local MySQL
 
 The first run downloads data sources and populates the database (~10 min). Subsequent runs take the daily cron.
 
-Full step-by-step bootstrap (Web wizard and headless CLI, with a checklist for production) is in [`docs/init.md`](docs/init.md).
+Full step-by-step bootstrap (Web wizard and headless CLI, with a checklist for production) is in [`docs/setup.md`](docs/setup.md).
+
+Two deployment paths, both documented:
+
+- **Release bundle** — copy `up/` to the server, `npm ci --omit=dev`, done. No compiler on the server. See [`up/README.md`](up/README.md) and [`up/BAOTA.md`](up/BAOTA.md) for Baota/aaPanel.
+- **Source tree** — copy the whole repository, `npm install && npm run build` on the server. See [`docs/source-deploy.md`](docs/source-deploy.md).
 
 ## Endpoints
 

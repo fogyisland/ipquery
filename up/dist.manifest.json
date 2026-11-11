@@ -1,7 +1,7 @@
 {
   "formatVersion": 1,
   "fileCount": 347,
-  "totalBytes": 1669016,
+  "totalBytes": 1670925,
   "files": {
     "api/errorHandler.d.ts": {
       "bytes": 1191,
@@ -56,12 +56,12 @@
       "sha256": "f5c12e524283257f6d846e169fb219002665c81fa75fbaee26b32f34fefded7a"
     },
     "api/server.js": {
-      "bytes": 13078,
-      "sha256": "98fe783151502ca6b14335ae6fc3e81b94e663293d63fd76bcb320dbd00c48af"
+      "bytes": 14575,
+      "sha256": "75a15f4f21d41ae37ae8efcf9aad915fff7e633e6996e53146cd4db4bd7733bc"
     },
     "api/server.js.map": {
-      "bytes": 5665,
-      "sha256": "3de78e8279b71681dd0974708d2c802956d6aeb9b7899f5e9951c5aa99260c6d"
+      "bytes": 6077,
+      "sha256": "a99a9cce0a5725f182e2c8faf1643128dfdc97785046ce3863f757f11dfd547d"
     },
     "cli.d.ts": {
       "bytes": 31,

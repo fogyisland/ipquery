@@ -100,7 +100,12 @@ COOKIE_SECURE=true
 node -e "console.log(require('crypto').randomBytes(48).toString('base64'))"
 ```
 
-两个密钥**必须不同**。缺任一服务直接拒启（fail-fast，不静默降级）。
+两个密钥**必须不同**。缺任一服务直接拒启（fail-fast，不静默降级）——
+只要系统已经初始化过（`/init` 走完），少一个密钥服务就起不来，报
+`refusing to start in production: missing required env vars`。
+
+> `NODE_ENV` 不设就是生产（项目里没有任何地方会设它）。设成 `development`
+> 会跳过密钥检查，**只在本地开发时用**，服务器上不要设。
 
 改完再跑一次迁移（第一次 `install.sh` 因为占位密码会停在这一步）：
 
