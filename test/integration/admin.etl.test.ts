@@ -128,13 +128,14 @@ describe("admin ETL", () => {
     }
   });
 
-  it("non-admin -> 403", async () => {
+  it("non-admin -> 404", async () => {
     const user = await createUser(app.pool, { email: "u@x.com", passwordHash: "h", displayName: "U" });
     const userSid = generateToken(16);
     await createSession(app.pool, userSid, user.id, new Date(Date.now() + 3600_000));
     const r = await request(app.server)
       .get("/admin/etl/runs")
       .set("Cookie", "sid=" + userSid);
-    expect(r.status).toBe(403);
-  });
+    // The admin guard answers a non-admin with 404, not 403: a 403 would
+    // confirm that /admin/* routes exist (see src/web/plugins/auth.ts).
+    expect(r.status).toBe(404);  });
 });

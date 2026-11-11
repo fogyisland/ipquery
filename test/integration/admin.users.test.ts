@@ -58,14 +58,15 @@ describe("admin users", () => {
     expect(r.text).toContain("u@x.com");
   });
 
-  it("non-admin -> 403", async () => {
+  it("non-admin -> 404", async () => {
     const userSid = generateToken(16);
     await createSession(app.pool, userSid, userUid, new Date(Date.now() + 3600_000));
     const r = await request(app.server)
       .get("/admin/users")
       .set("Cookie", "sid=" + userSid);
-    expect(r.status).toBe(403);
-  });
+    // The admin guard answers a non-admin with 404, not 403: a 403 would
+    // confirm that /admin/* routes exist (see src/web/plugins/auth.ts).
+    expect(r.status).toBe(404);  });
 
   it("disable + enable user", async () => {
     const { cookie, token } = await csrfOf();

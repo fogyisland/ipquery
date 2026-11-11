@@ -161,7 +161,10 @@ describe("admin /admin/etl/runs/:id", () => {
     const r = await request(app.server)
       .get("/admin/etl/runs/" + finishedRunId)
       .set("Cookie", "sid=" + userSid);
-    expect(r.status).toBe(403);
+    // 404, not 403: the auth guard answers a non-admin /admin/* request
+    // with "not found" so the admin console is not a free directory
+    // listing for every registered user (see src/web/plugins/auth.ts).
+    expect(r.status).toBe(404);
   });
 });
 
@@ -204,6 +207,7 @@ describe("admin /admin/etl/runs/:id/live", () => {
     const r = await request(app.server)
       .get("/admin/etl/runs/" + runningRunId + "/live")
       .set("Cookie", "sid=" + userSid);
-    expect(r.status).toBe(403);
+    // 404, not 403 — same anti-enumeration rule as the detail route.
+    expect(r.status).toBe(404);
   });
 });
