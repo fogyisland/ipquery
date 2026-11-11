@@ -354,16 +354,16 @@ async function runInsertStage(
   sink?: EtlProgressSink,
 ): Promise<EtlRunInsertRow[]> {
   const rows: EtlRunInsertRow[] = [];
+  // Track a running inserted count across files so the UI bar moves
+  // monotonically. It must live OUTSIDE the per-file loop: resetting it
+  // per file made the bar drop to 0% when moving on to dbip-country.
+  let runInsertedSoFar = 0;
   for (const f of files) {
     const startedAt = new Date();
     const t0 = Date.now();
     const totals = { attempted: 0, inserted: 0, duplicates: 0, batchCount: 0 };
     let batch: IpRangeRow[] = [];
     const fullPath = path.join(rawDir, f.filename);
-    // Track a running inserted count across files so the UI bar
-    // moves monotonically. Per-file totals.reset() would look like
-    // the bar dropped to 0% between files.
-    let runInsertedSoFar = 0;
     for await (const rec of f.parse(fullPath).records) {
       batch.push(toIpRangeRow(rec, f.source, f.fillCols));
       if (batch.length >= 1000) {
@@ -481,7 +481,13 @@ async function markStageFailed(pool: mysql.Pool, runId: number, errorMsg: string
 // swap). Within insert, files are processed in priority order so the
 // highest-priority data fills the table first and lower-priority files
 // only backfill via COALESCE.
-export async function runPipeline(opts: { cfg: AppConfig; runId?: number }): Promise<PipelineResult> {
+export async function runPipeline(opts: {
+  cfg: AppConfig;
+  runId?: number;
+  /** Test seam: inject a sink so assertions can observe onInsert
+   *  progress without patching the module. Defaults to a fresh sink. */
+  sink?: EtlProgressSink;
+}): Promise<PipelineResult> {
   const { cfg } = opts;
   const pool = await ensurePool(cfg);
   // Cross-process exclusion. Two concurrent ETL runs would race on
@@ -509,7 +515,7 @@ export async function runPipeline(opts: { cfg: AppConfig; runId?: number }): Pro
  *  ETL run lock; this function owns the stages. */
 async function runPipelineLocked(
   pool: mysql.Pool,
-  opts: { cfg: AppConfig; runId?: number },
+  opts: { cfg: AppConfig; runId?: number; sink?: EtlProgressSink },
 ): Promise<PipelineResult> {
   const { cfg } = opts;
   // If the caller already created a row via recordEtlStart (e.g. the init
@@ -519,7 +525,7 @@ async function runPipelineLocked(
   const runId = opts.runId ?? (await recordEtlStart(pool));
   const rawDir = path.join(cfg.etl.dataDir, "raw");
   const now = new Date();
-  const sink = new EtlProgressSink(pool, runId);
+  const sink = opts.sink ?? new EtlProgressSink(pool, runId);
 
   try {
     // 1) Decide which files we have on disk. If none are present, try
@@ -653,22 +659,19 @@ async function runPipelineLocked(
     sink.setStage("done");
     await sink.flush();
 
-    // Aggregate row counts for the legacy etl_runs summary columns. Walk
-    // each file once more to count emitted records; the page cache keeps
-    // this cheap.
-    const counts = new Map<Source, number>();
-    for (const f of present) {
-      const fullPath = path.join(rawDir, f.filename);
-      let n = 0;
-      for await (const _ of f.parse(fullPath).records) {
-        void _;
-        n++;
-      }
-      counts.set(f.source, n);
-    }
-    const dbipRecords = counts.get("dbip") ?? 0;
-    const dbipCountryRecords = counts.get("dbip-country") ?? 0;
-    const dbipAsnRecords = counts.get("dbip-asn") ?? 0;
+    // Aggregate row counts for the legacy etl_runs summary columns from
+    // the insert-stage tallies instead of re-parsing every file. The swap
+    // already went live at this point, so re-walking all three CSVs here
+    // bought nothing but a third full gunzip pass — and any transient IO
+    // error in that walk would mark an already-swapped-in run "failed".
+    // rowsAttempted is the emitted-record count per file (every parsed
+    // row reaches the batch buffer), so summing it is equivalent to the
+    // old post-swap counts walk.
+    const countFor = (etlSource: EtlRunDownloadSource): number =>
+      insertRows.filter((r) => r.source === etlSource).reduce((sum, r) => sum + r.rowsAttempted, 0);
+    const dbipRecords = countFor("dbip-city");
+    const dbipCountryRecords = countFor("dbip-country");
+    const dbipAsnRecords = countFor("dbip-asn");
     const total = dbipRecords + dbipCountryRecords + dbipAsnRecords;
     await recordEtlFinish(pool, runId, "success", {
       dbipRecords: total,
