@@ -151,7 +151,7 @@ describe("downloadToFile integrity check", () => {
   // disagree, the server is lying about the size — exactly what a
   // connection dropped mid-transfer looks like to the client.
   const stubGet = (body: string, advertisedLength: number): typeof https.get => {
-    const impl = ((url: string, cb: (res: http.IncomingMessage) => void) => {
+    const impl = ((url: string, cb: (_res: http.IncomingMessage) => void) => {
       const res = Readable.from([Buffer.from(body)]) as unknown as http.IncomingMessage;
       (res as unknown as { statusCode: number }).statusCode = 200;
       (res as unknown as { headers: Record<string, string> }).headers = {
@@ -160,8 +160,8 @@ describe("downloadToFile integrity check", () => {
       setImmediate(() => cb(res));
       // downloadToFile only needs `on` and `setTimeout` on the request.
       const req = new EventEmitter() as EventEmitter & {
-        setTimeout: (ms: number, cb: () => void) => void;
-        destroy: (err?: Error) => void;
+        setTimeout: (_ms: number, _cb: () => void) => void;
+        destroy: (_err?: Error) => void;
       };
       req.setTimeout = () => undefined;
       req.destroy = () => undefined;
@@ -207,5 +207,77 @@ describe("downloadToFile integrity check", () => {
       downloadToFile("https://example.test/x.gz", dest, undefined, stubGet(body, 4)),
     ).rejects.toThrow(/incomplete download/);
     await expect(fs.stat(dest)).rejects.toThrow();
+  });
+});
+
+describe("downloadToFile redirect handling", () => {
+  let tmpDir: string;
+
+  beforeAll(async () => {
+    tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "ipquery-redir-"));
+  });
+
+  afterAll(async () => {
+    await fs.rm(tmpDir, { recursive: true, force: true });
+  });
+
+  /** A stub client that answers the FIRST request with a redirect to
+   *  `location`, and any follow-up request with `body`. */
+  const redirectGet = (
+    location: string,
+    body: string,
+  ): { impl: typeof https.get; targets: string[] } => {
+    const targets: string[] = [];
+    const impl = ((url: string, cb: (_res: http.IncomingMessage) => void) => {
+      targets.push(url);
+      const isFirst = targets.length === 1;
+      const res = Readable.from([Buffer.from(isFirst ? "" : body)]) as unknown as http.IncomingMessage;
+      (res as unknown as { statusCode: number }).statusCode = isFirst ? 302 : 200;
+      (res as unknown as { headers: Record<string, string> }).headers = isFirst
+        ? { location }
+        : { "content-length": String(body.length) };
+      setImmediate(() => cb(res));
+      const req = new EventEmitter() as EventEmitter & {
+        setTimeout: (_ms: number, _cb: () => void) => void;
+        destroy: (_err?: Error) => void;
+      };
+      req.setTimeout = () => undefined;
+      req.destroy = () => undefined;
+      return req as unknown as http.ClientRequest;
+    }) as unknown as typeof https.get;
+    return { impl, targets };
+  };
+
+  it("follows an https redirect and writes the body", async () => {
+    const dest = path.join(tmpDir, "followed.csv.gz");
+    const body = "redirected body";
+    const { impl, targets } = redirectGet("https://cdn.example.test/x.gz", body);
+    const bytes = await downloadToFile("https://example.test/x.gz", dest, undefined, impl);
+    expect(bytes).toBe(body.length);
+    expect(await fs.readFile(dest, "utf-8")).toBe(body);
+    expect(targets).toEqual(["https://example.test/x.gz", "https://cdn.example.test/x.gz"]);
+  });
+
+  it("refuses to follow a redirect to plain http", async () => {
+    // The redirect target comes from the server. A hostile or
+    // compromised upstream could point it at http:// (downgrading the
+    // transfer to plaintext) or at an internal address. We only
+    // follow https.
+    const dest = path.join(tmpDir, "downgrade.csv.gz");
+    const { impl, targets } = redirectGet("http://cdn.example.test/x.gz", "should not arrive");
+    await expect(
+      downloadToFile("https://example.test/x.gz", dest, undefined, impl),
+    ).rejects.toThrow(/non-https redirect/);
+    // The redirect was NOT followed.
+    expect(targets).toEqual(["https://example.test/x.gz"]);
+    await expect(fs.stat(dest)).rejects.toThrow();
+  });
+
+  it("resolves a relative redirect against the current URL", async () => {
+    const dest = path.join(tmpDir, "relative.csv.gz");
+    const body = "relative body";
+    const { impl, targets } = redirectGet("/moved/x.gz", body);
+    await downloadToFile("https://example.test/deep/start.gz", dest, undefined, impl);
+    expect(targets[1]).toBe("https://example.test/moved/x.gz");
   });
 });

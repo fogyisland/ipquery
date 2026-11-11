@@ -3,10 +3,12 @@
 // "Generate N random IPs and ingest them" admin feature.
 //
 // Flow:
-//   1. pickRandomIpsNotInRanges(pool, count) — generates random IPv4s in
-//      the full 0.0.0.0/0 space and keeps ones that are NOT covered by
-//      any existing ip_ranges row. Retries up to MAX_TRIES_PER_IP times
-//      per slot to absorb the ~95% coverage of the public IPv4 space.
+//   1. pickRandomIpsNotInRanges(pool, count) — generates random IPv4s
+//      from the RFC 5737 / RFC 6890 reserved pools (see the comment
+//      block on that function for why not the full 0.0.0.0/0 space) and
+//      keeps ones that are NOT covered by any existing ip_ranges row.
+//      Retries up to DEFAULT_MAX_TRIES times per slot to absorb
+//      duplicates within the reserved pool.
 //   2. For each picked IP, calls processIp() from unknownIpBackfill —
 //      same fan-out + vote + write logic the queue-driven backfill uses,
 //      minus the queue-row bookkeeping.
@@ -34,11 +36,11 @@ import { randomUUID } from "node:crypto";
 export interface RandomGenerationOptions {
   /** How many random IPs to pick. Default 10 — the user asked for 10. */
   count?: number;
-  /** Per-IP timeout for the fan-out (covers slowest provider). */
-  perIpTimeoutMs?: number;
   /** Stop retrying on collision after this many attempts per slot.
-   *  Default 50 — should be plenty for 10 IPs in the full IPv4 space
-   *  where ~95% of random IPs are already covered. */
+   *  Default 50 — the picks come from the RFC 5737 / RFC 6890 reserved
+   *  pools (~4.1M addresses), so collisions inside a 10-IP run are
+   *  effectively impossible; the budget only matters if the pool is
+   *  nearly exhausted. */
   maxTriesPerIp?: number;
   /** The provider-fan-out mutex to use. Defaults to the shared
    *  instance so this flow can't double the request rate against the
@@ -87,7 +89,6 @@ export interface RandomGenerationSummary {
 }
 
 const DEFAULT_COUNT = 10;
-const DEFAULT_TIMEOUT = 8_000;
 const DEFAULT_MAX_TRIES = 50;
 
 /** Run the random-IP generation flow. Returns a summary so the admin
@@ -98,7 +99,6 @@ export async function runRandomGeneration(
   opts: RandomGenerationOptions = {},
 ): Promise<RandomGenerationSummary> {
   const count = opts.count ?? DEFAULT_COUNT;
-  const perIpTimeout = opts.perIpTimeoutMs ?? DEFAULT_TIMEOUT;
   const maxTries = opts.maxTriesPerIp ?? DEFAULT_MAX_TRIES;
   const log = opts.logger ?? console;
 
@@ -179,7 +179,6 @@ export async function runRandomGeneration(
           providers,
           slot.text,
           slot.buffer,
-          perIpTimeout,
           workSummary,
           "random",
           false,
@@ -272,7 +271,7 @@ export async function runRandomGeneration(
 export async function pickRandomIpsNotInRanges(
   pool: Pool,
   count: number,
-  _maxTriesPerSlot: number = DEFAULT_MAX_TRIES,
+  maxTriesPerSlot: number = DEFAULT_MAX_TRIES,
 ): Promise<{ ips: Array<{ text: string; buffer: Buffer }>; exhausted: number; coveredSkips: number }> {
   const out: Array<{ text: string; buffer: Buffer }> = [];
   const seen = new Set<string>();
@@ -280,11 +279,13 @@ export async function pickRandomIpsNotInRanges(
 
   for (let i = 0; i < count; i++) {
     let picked: { text: string; buffer: Buffer } | null = null;
-    // Try up to 10 random reserved picks per slot. The reserved pool is
-    // ~4.1M addresses, so collisions within a single 10-IP run are
-    // effectively impossible. findRange is skipped because the catchall
-    // would match every input — see comment block above.
-    for (let attempt = 0; attempt < 10; attempt++) {
+    // Try up to maxTriesPerSlot random reserved picks per slot. The
+    // reserved pool is ~4.1M addresses, so collisions within a single
+    // 10-IP run are effectively impossible; the retry budget exists for
+    // the pathological case where the pool is exhausted. findRange is
+    // skipped because the catchall would match every input — see the
+    // comment block above.
+    for (let attempt = 0; attempt < maxTriesPerSlot; attempt++) {
       const candidate = randomReservedIpv4();
       if (seen.has(candidate.text)) continue;
       seen.add(candidate.text);

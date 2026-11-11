@@ -92,6 +92,7 @@ describe("migrations legacy upgrade", () => {
       "021",
       "022",
       "023",
+      "024",
     ]);
 
     // The 11 expected tables all still exist after the upgrade.

@@ -8,8 +8,12 @@ import type { NormalizedRecord } from "../../types";
 // DB-IP distributes its free data as separate CSV.gz files, one per
 // information slice. All three cover the same IP ranges (a row in the
 // country-lite file points at the same start/end IPs as the matching row
-// in the city-lite file), so the cross-source `mergeByPriority` merger
-// in ../merger.ts is what stitches them together per segment.
+// in the city-lite file), so they are stitched together per segment by
+// the insert stage, which upserts each file in priority order and lets
+// a lower-priority file fill only the columns the higher-priority one
+// left NULL (INSERT ... ON DUPLICATE KEY UPDATE col = COALESCE(col,
+// VALUES(col))). The per-file column sets are declared by DBIP_FILES in
+// ../pipeline.ts.
 //
 // Column layouts we consume:
 //

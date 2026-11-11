@@ -44,8 +44,6 @@ export interface BackfillOptions {
   /** How many IPs to pull per run. Each IP fans out to all providers so
    *  effective provider-call count is `batchLimit * providers.length`. */
   batchLimit?: number;
-  /** Per-IP timeout for the fan-out (covers slowest provider). */
-  perIpTimeoutMs?: number;
   /** Which flow triggered this run. Recorded into provider_error_log so
    *  the Failure Logs tab can filter by trigger source. Defaults to
    *  'auto' (queue-driven backfill). */
@@ -108,7 +106,6 @@ export interface BackfillSummary {
 }
 
 const DEFAULT_BATCH = 100;
-const DEFAULT_TIMEOUT = 8_000;
 
 /** Per-IP outcome returned by processIp. `merged` carries `newlyInserted`
  *  so the random-IP flow can tell genuinely-new rows apart from
@@ -135,7 +132,6 @@ export async function runBackfill(
   opts: BackfillOptions = {},
 ): Promise<BackfillSummary> {
   const batchLimit = opts.batchLimit ?? DEFAULT_BATCH;
-  const perIpTimeout = opts.perIpTimeoutMs ?? DEFAULT_TIMEOUT;
   const log = opts.logger ?? console;
 
   const startedAt = Date.now();
@@ -200,7 +196,6 @@ export async function runBackfill(
       opts,
       runMode,
       dryRun,
-      perIpTimeout,
       batchId,
       log,
     );
@@ -221,7 +216,6 @@ async function runBackfillLocked(
   opts: BackfillOptions,
   runMode: "auto" | "manual" | "random",
   dryRun: boolean,
-  perIpTimeout: number,
   batchId: string,
   log: Pick<Console, "log" | "warn" | "error">,
 ): Promise<BackfillSummary> {
@@ -241,7 +235,6 @@ async function runBackfillLocked(
           providers,
           row.ipText,
           row.ip,
-          perIpTimeout,
           summary,
           runMode,
           dryRun,
@@ -252,18 +245,28 @@ async function runBackfillLocked(
         // Fire-and-forget probe audit. Same defensive pattern as
         // recordProviderError above — a write failure must never poison
         // the backfill loop.
-        recordRandomProbe(pool, {
-          ipText: row.ipText,
-          ipBinary: row.ip,
-          mode: runMode,
-          outcome: outcome.kind,
-          consensusCountry: consensus?.countryCode ?? null,
-          consensusCity: consensus?.city ?? null,
-          consensusAsn: consensus?.asn ?? null,
-          mergedRunId: outcome.kind === "merged" ? null : null, // no etl_runs row for backfill
-          providers: result.perProvider,
-          batchId,
-        }).catch((err: unknown) => {
+        //
+        // A dry run writes NOTHING: the probe log is an audit trail of
+        // what was actually committed, and a preview that recorded
+        // 'merged' rows would put consensus results in the Recent
+        // Probes list for IPs that were never written to ip_ranges.
+        // The preview's own results live in summary.previewRows.
+        const probeWrite = dryRun
+          ? Promise.resolve()
+          : recordRandomProbe(pool, {
+              ipText: row.ipText,
+              ipBinary: row.ip,
+              mode: runMode,
+              outcome: outcome.kind,
+              consensusCountry: consensus?.countryCode ?? null,
+              consensusCity: consensus?.city ?? null,
+              consensusAsn: consensus?.asn ?? null,
+              // The backfill flow has no etl_runs row to point at.
+              mergedRunId: null,
+              providers: result.perProvider,
+              batchId,
+            });
+        probeWrite.catch((err: unknown) => {
           // Fire-and-forget: a write failure must never poison the
           // backfill loop. Logged rather than swallowed silently — the
           // probe log is the only record of what each provider said, so
@@ -372,7 +375,6 @@ export async function processIp(
   providers: IpGeoProvider[],
   ipText: string,
   ipBuffer: Buffer,
-  _perIpTimeoutMs: number,
   summary: BackfillSummary,
   mode: "auto" | "manual" | "random" = "auto",
   dryRun: boolean = false,
@@ -600,6 +602,20 @@ async function countProviderCallsInWindow(
   // network, other) rather than provider_error_log (which only records
   // errored calls). Reading total = error count previously caused the
   // rate to compute as 100% whenever any error existed in the window.
+  //
+  // Granularity: a window shorter than a day reads the per-minute
+  // table (migration 024) so a 10-minute window really covers 10
+  // minutes. Longer windows keep using the daily table — day buckets
+  // are the right resolution there, and the minute table would be
+  // needlessly large.
+  const useMinuteTable = windowMinutes < 24 * 60;
+  if (useMinuteTable) {
+    const total = await sumFromMinuteTable(pool, providerName, windowMinutes, "calls_total");
+    if (total !== null) return total;
+    // The minute table is missing (database predates migration 024) —
+    // fall through to the daily table rather than losing the breaker
+    // entirely.
+  }
   const [rows] = await pool.query<RowDataPacket[]>(
     `SELECT COALESCE(SUM(calls_total), 0) AS total
        FROM provider_call_counter
@@ -608,6 +624,46 @@ async function countProviderCallsInWindow(
     [providerName, Math.max(1, Math.ceil(windowMinutes / (24 * 60)))],
   );
   return Number(rows[0]?.total ?? 0);
+}
+
+/** The column expressions the minute table can be summed by. A fixed
+ *  map rather than an inline ternary so the interpolated SQL can only
+ *  ever be one of these two literals. */
+const MINUTE_COUNTER_EXPR = {
+  calls_total: "calls_total",
+  failure_columns: "calls_429 + calls_timeout + calls_network_err",
+} as const;
+
+/** Sums one counter column from the per-minute table over a window.
+ *  Returns null when the table does not exist, so the caller can fall
+ *  back to the daily table instead of failing the whole run. */
+async function sumFromMinuteTable(
+  pool: Pool,
+  providerName: string,
+  windowMinutes: number,
+  column: keyof typeof MINUTE_COUNTER_EXPR,
+): Promise<number | null> {
+  // The failure numerator is 429 + timeout + network; `calls_other_err`
+  // is excluded because it also carries abstains (a 200 with no data),
+  // which are not failures.
+  const expr = MINUTE_COUNTER_EXPR[column];
+  try {
+    const [rows] = await pool.query<RowDataPacket[]>(
+      `SELECT COALESCE(SUM(${expr}), 0) AS total
+         FROM provider_call_counter_minute
+        WHERE provider_name = ?
+          AND minute_utc >= (UTC_TIMESTAMP() - INTERVAL ? MINUTE)`,
+      [providerName, Math.max(1, Math.round(windowMinutes))],
+    );
+    return Number(rows[0]?.total ?? 0);
+  } catch (err) {
+    console.warn(
+      `[backfill] minute counter read failed for ${providerName}: ${
+        err instanceof Error ? err.message : String(err)
+      }`,
+    );
+    return null;
+  }
 }
 
 async function countProviderFailuresInWindow(
@@ -621,6 +677,12 @@ async function countProviderFailuresInWindow(
   // are NOT counted as failures — they're tracked separately in
   // calls_other_err at the touchProviderCalled level but here we treat
   // them as "did not produce a result, did not error" and exclude them.
+  const useMinuteTable = windowMinutes < 24 * 60;
+  if (useMinuteTable) {
+    const failures = await sumFromMinuteTable(pool, providerName, windowMinutes, "failure_columns");
+    if (failures !== null) return failures;
+    // Minute table missing — fall through to the daily table.
+  }
   const [rows] = await pool.query<RowDataPacket[]>(
     `SELECT COALESCE(SUM(calls_429 + calls_timeout + calls_network_err), 0) AS total
        FROM provider_call_counter
