@@ -109,9 +109,14 @@ describe("only the public API consumes the global rate-limit budget", () => {
       await request(app.server).get("/init");
     }
 
-    // The API route still has its full budget.
+    // The API route still has its full budget. The status is 404
+    // rather than 200 because this database holds no ip_ranges rows —
+    // the demo rows are opt-in now — but the point of the assertion is
+    // "not refused", not "found": a 429 would mean the page loads
+    // ate into the API's budget.
     const lookup = await request(app.server).get("/lookup").query({ ip: "8.8.8.8" });
-    expect(lookup.status).toBe(200);
+    expect(lookup.status).not.toBe(429);
+    expect(lookup.status).toBe(404);
   });
 
   it("still rate limits the public API", async () => {

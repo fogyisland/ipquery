@@ -23,6 +23,7 @@ import * as mysql from "mysql2/promise";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { createPool, runMigrations, findRange } from "../../src/storage/mysql";
+import { loadDemoSeed } from "../../src/storage/seed/demoSeed";
 import { parseIp } from "../../src/ip";
 import { loadConfig } from "../../src/config";
 
@@ -54,6 +55,9 @@ describe("migration 023 repairs the seed encoding", () => {
     await root.end();
     pool = createPool(cfg);
     await runMigrations(pool);
+    // The demo rows are opt-in now (migration 012 no longer inserts
+    // them), so load them before exercising the repair migration.
+    await loadDemoSeed(pool);
   });
 
   afterAll(async () => {
