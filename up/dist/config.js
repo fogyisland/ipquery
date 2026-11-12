@@ -83,7 +83,7 @@ function loadConfig() {
                 .filter(Boolean),
         },
         api: {
-            port: num(process.env.PORT, 3000),
+            port: num(process.env.PORT, 3880),
             rateLimit: num(process.env.RATE_LIMIT, 60),
         },
         etl: {
@@ -92,7 +92,7 @@ function loadConfig() {
             dataDir: str(process.env.DATA_DIR, "./data"),
         },
         web: {
-            baseUrl: str(process.env.WEB_BASE_URL, "http://localhost:3100"),
+            baseUrl: str(process.env.WEB_BASE_URL, "http://localhost:3880"),
             cookieDomain: str(process.env.COOKIE_DOMAIN, ""),
             cookieSecure: bool(process.env.COOKIE_SECURE, false),
             sessionTtlHours: sessionTtl,

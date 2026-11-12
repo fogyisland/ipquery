@@ -77,9 +77,12 @@ log "data directory ready: $APP_DIR/data/raw"
 if [ ! -f "$APP_DIR/.env" ]; then
   cp "$APP_DIR/.env.example" "$APP_DIR/.env"
   chmod 600 "$APP_DIR/.env" 2>/dev/null || true
-  log "created .env from .env.example — EDIT IT before starting the service"
-  log "  required: DB_* , SESSION_SECRET , CSRF_SECRET , WEB_BASE_URL"
-  log "  generate the two secrets (they must differ):"
+  log "created .env from .env.example"
+  log "  you can leave it as is: the /init wizard writes the port, the base URL,"
+  log "  the two secrets and the database connection for you."
+  log "  fill it in by hand only if you prefer the headless CLI path:"
+  log "    required: DB_* , SESSION_SECRET , CSRF_SECRET , WEB_BASE_URL"
+  log "    generate the two secrets (they must differ):"
   log "    node -e \"console.log(require('crypto').randomBytes(48).toString('base64'))\""
   NEEDS_ENV="yes"
 else
@@ -102,7 +105,7 @@ if (cd "$APP_DIR" && node dist/cli.js migrate); then
 else
   log "migrations could not run — the database is not reachable with the current DB_* values"
   log "  that is fine at this stage: the server starts in setup-only mode and"
-  log "  http://localhost:${PORT:-5001}/init is where the database gets configured."
+  log "  http://localhost:${PORT:-3880}/init is where the database gets configured."
   log "  fill in DB_* in .env first if you would rather skip the wizard."
 fi
 
@@ -119,7 +122,7 @@ cat <<EOF
 [install]     A. in the web wizard (recommended — the server starts even
 [install]        without a database, and the wizard sets it up):
 [install]          node dist/cli.js serve
-[install]          open http://localhost:5001/init
+[install]          open http://localhost:3880/init
 [install]
 [install]     B. on the command line (tests the connection first, then
 [install]        writes it to .env and applies the migrations):
@@ -143,8 +146,8 @@ cat <<EOF
 [install]
 [install] verify:
 [install]        node dist/cli.js migrate:status      # every row 'applied'
-[install]        curl -s localhost:5001/healthz       # {"status":"ok"}
-[install]        curl -s "localhost:5001/lookup?ip=8.8.8.8"
+[install]        curl -s localhost:3880/healthz       # {"status":"ok"}
+[install]        curl -s "localhost:3880/lookup?ip=8.8.8.8"
 [install]
 
 EOF

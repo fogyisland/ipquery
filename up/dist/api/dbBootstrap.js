@@ -68,10 +68,15 @@ exports.describeDbError = describeDbError;
 exports.envFilePath = envFilePath;
 exports.envFileExists = envFileExists;
 exports.writeDbCredentialsToEnv = writeDbCredentialsToEnv;
+exports.generateSecret = generateSecret;
+exports.resolveEnvBootstrap = resolveEnvBootstrap;
+exports.parseEnvFile = parseEnvFile;
+exports.ensureEnvFile = ensureEnvFile;
 exports.databaseIsReachable = databaseIsReachable;
 exports.explainCliDbFailure = explainCliDbFailure;
 exports.repointPool = repointPool;
 exports.probeConnection = probeConnection;
+const crypto = __importStar(require("node:crypto"));
 const fs = __importStar(require("node:fs"));
 const path = __importStar(require("node:path"));
 const mysql_1 = require("../storage/mysql");
@@ -249,6 +254,157 @@ function writeDbCredentialsToEnv(input) {
     return file;
 }
 /**
+ * Generate a random secret.
+ *
+ * 48 random bytes, base64-encoded. The length matters: these sign the
+ * session cookies and the CSRF tokens, so the secret IS the security
+ * boundary. A short or human-chosen secret is a guessable secret.
+ */
+function generateSecret() {
+    return crypto.randomBytes(48).toString("base64");
+}
+/**
+ * The values a .env should have for the keys the wizard owns, computed
+ * from what is already on disk.
+ *
+ * Existing values WIN. The operator may have hand-tuned `PORT` or set
+ * `WEB_BASE_URL` to their real domain before opening the wizard, and
+ * overwriting that with a generated default would undo their work — the
+ * whole point of the wizard is to be safe to run on an install that
+ * already has some configuration.
+ *
+ * Only the keys that are absent, or present but empty, are filled in.
+ */
+function resolveEnvBootstrap(existing, wanted) {
+    const pick = (key, fallback) => {
+        const current = existing[key];
+        return current !== undefined && current.trim() !== "" ? current : fallback;
+    };
+    return {
+        PORT: pick("PORT", String(wanted.port)),
+        WEB_BASE_URL: pick("WEB_BASE_URL", wanted.baseUrl),
+        SESSION_SECRET: pick("SESSION_SECRET", wanted.sessionSecret),
+        CSRF_SECRET: pick("CSRF_SECRET", wanted.csrfSecret),
+    };
+}
+/**
+ * Parse a .env file into a flat key/value map.
+ *
+ * A deliberately small parser rather than a dependency: it only has to
+ * understand the shape this project writes and ships in `.env.example` —
+ * `KEY=value`, optional `#` comments, optional surrounding quotes. It
+ * does NOT evaluate anything, so a `.env` containing shell substitution
+ * is read as the literal text it is.
+ */
+function parseEnvFile(content) {
+    const out = {};
+    for (const rawLine of content.split(/\r?\n/)) {
+        const line = rawLine.trim();
+        if (line === "" || line.startsWith("#"))
+            continue;
+        const match = /^([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$/.exec(line);
+        if (!match)
+            continue;
+        const key = match[1];
+        let value = match[2].trim();
+        if ((value.startsWith('"') && value.endsWith('"') && value.length >= 2) ||
+            (value.startsWith("'") && value.endsWith("'") && value.length >= 2)) {
+            value = value.slice(1, -1);
+        }
+        out[key] = value;
+    }
+    return out;
+}
+/**
+ * Create (or complete) the .env file.
+ *
+ * This is the wizard's step 1: the operator opens /init on a fresh
+ * unpack — where only `.env.example` exists — and the wizard writes a
+ * working `.env` for them. No shell, no `cp`, no editor.
+ *
+ * Three sources feed the result, in order of authority:
+ *
+ *   1. What is already in the file. Never overwritten.
+ *   2. What the operator typed on the form (port, base URL).
+ *   3. What the wizard generated (the two secrets, and the defaults
+ *      for the keys the operator left blank).
+ *
+ * The `.env.example` template is copied verbatim first, so the file keeps
+ * its comments and the full key list — a `.env` that a human can read and
+ * edit later, not a two-line file that only the program understands.
+ *
+ * Returns the path and whether anything was actually written, so the
+ * caller can log accurately instead of claiming a write it did not do.
+ */
+function ensureEnvFile(input) {
+    const file = envFilePath();
+    const existed = fs.existsSync(file);
+    // Two different sources, with different authority:
+    //
+    //   - The EXISTING .env, if there is one. Its values are the
+    //     operator's real configuration and must never be overwritten.
+    //   - The .env.example TEMPLATE, which is only a starting point. Its
+    //     values are placeholders ("PORT=5001" is what the template
+    //     happens to say), NOT a choice the operator made.
+    //
+    // Mixing them up is how the operator's port silently reverted to the
+    // template's default. So the existing file is read first and, when it
+    // exists, its values win outright; only the template path treats the
+    // template's values as defaults to be replaced.
+    const templatePath = path.join(path.dirname(file), ".env.example");
+    const templateExists = fs.existsSync(templatePath);
+    let content = "";
+    if (templateExists) {
+        content = fs.readFileSync(templatePath, "utf8");
+    }
+    else if (existed) {
+        content = fs.readFileSync(file, "utf8");
+    }
+    else {
+        content = ["# Generated by the IPQuery setup wizard.", ""].join("\n");
+    }
+    // The values that must survive whatever happens next.
+    const preserved = existed ? parseEnvFile(fs.readFileSync(file, "utf8")) : {};
+    const resolved = resolveEnvBootstrap(preserved, {
+        port: input.port,
+        baseUrl: input.baseUrl,
+        // A secret that is already in the file is kept. One that is only in
+        // the template (or in neither) is the generated one.
+        sessionSecret: preserved.SESSION_SECRET?.trim() ? preserved.SESSION_SECRET : input.sessionSecret,
+        csrfSecret: preserved.CSRF_SECRET?.trim() ? preserved.CSRF_SECRET : input.csrfSecret,
+    });
+    const lines = content.split(/\r?\n/);
+    const pending = new Map(Object.entries(resolved));
+    const out = [];
+    for (const line of lines) {
+        const match = /^(\s*)([A-Za-z_][A-Za-z0-9_]*)\s*=/.exec(line);
+        const key = match?.[2];
+        if (key && pending.has(key)) {
+            const value = pending.get(key);
+            pending.delete(key);
+            // match[1] is the leading whitespace only — match[0] would be the
+            // whole "KEY=" prefix and would produce "PORT=PORT=3880".
+            const indent = match?.[1] ?? "";
+            out.push(`${indent}${key}=${value}`);
+            continue;
+        }
+        out.push(line);
+    }
+    if (pending.size > 0) {
+        while (out.length > 0 && out[out.length - 1].trim() === "")
+            out.pop();
+        if (out.length > 0)
+            out.push("");
+        out.push("# --- generated by the setup wizard ---");
+        for (const [key, value] of pending) {
+            out.push(`${key}=${value}`);
+        }
+    }
+    fs.writeFileSync(file, out.join("\n"), { encoding: "utf8", mode: 0o600 });
+    tightenEnvPermissions(file);
+    return { path: file, created: !existed };
+}
+/**
  * Make the .env file readable only by its owner.
  *
  * The `mode` option of `fs.writeFileSync` only applies when the file is
@@ -350,7 +506,7 @@ function explainCliDbFailure(err) {
     return (`the database could not be reached: ${describeDbError(err)}\n` +
         "If you have not configured it yet, run the server and use the setup wizard:\n" +
         "  node dist/cli.js serve\n" +
-        "  # then open http://localhost:5001/init and fill in step 2 (database)\n" +
+        "  # then open http://localhost:3880/init and fill in step 2 (database)\n" +
         "Otherwise check the DB_* values in your .env file.");
 }
 // ── Pool re-pointing ────────────────────────────────────────────────

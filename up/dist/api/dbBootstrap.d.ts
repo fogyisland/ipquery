@@ -54,6 +54,75 @@ export declare function envFileExists(): boolean;
  */
 export declare function writeDbCredentialsToEnv(input: DbConnectionInput): string;
 /**
+ * The settings the setup wizard can write into a freshly generated .env.
+ *
+ * `DB_*` is deliberately absent: the database connection is collected in
+ * step 2 and written by `writeDbCredentialsToEnv`, which has to prove the
+ * connection works before it puts anything on disk.
+ */
+export interface EnvBootstrapInput {
+    port: number;
+    baseUrl: string;
+    sessionSecret: string;
+    csrfSecret: string;
+}
+/**
+ * Generate a random secret.
+ *
+ * 48 random bytes, base64-encoded. The length matters: these sign the
+ * session cookies and the CSRF tokens, so the secret IS the security
+ * boundary. A short or human-chosen secret is a guessable secret.
+ */
+export declare function generateSecret(): string;
+/**
+ * The values a .env should have for the keys the wizard owns, computed
+ * from what is already on disk.
+ *
+ * Existing values WIN. The operator may have hand-tuned `PORT` or set
+ * `WEB_BASE_URL` to their real domain before opening the wizard, and
+ * overwriting that with a generated default would undo their work — the
+ * whole point of the wizard is to be safe to run on an install that
+ * already has some configuration.
+ *
+ * Only the keys that are absent, or present but empty, are filled in.
+ */
+export declare function resolveEnvBootstrap(existing: Record<string, string>, wanted: EnvBootstrapInput): Record<string, string>;
+/**
+ * Parse a .env file into a flat key/value map.
+ *
+ * A deliberately small parser rather than a dependency: it only has to
+ * understand the shape this project writes and ships in `.env.example` —
+ * `KEY=value`, optional `#` comments, optional surrounding quotes. It
+ * does NOT evaluate anything, so a `.env` containing shell substitution
+ * is read as the literal text it is.
+ */
+export declare function parseEnvFile(content: string): Record<string, string>;
+/**
+ * Create (or complete) the .env file.
+ *
+ * This is the wizard's step 1: the operator opens /init on a fresh
+ * unpack — where only `.env.example` exists — and the wizard writes a
+ * working `.env` for them. No shell, no `cp`, no editor.
+ *
+ * Three sources feed the result, in order of authority:
+ *
+ *   1. What is already in the file. Never overwritten.
+ *   2. What the operator typed on the form (port, base URL).
+ *   3. What the wizard generated (the two secrets, and the defaults
+ *      for the keys the operator left blank).
+ *
+ * The `.env.example` template is copied verbatim first, so the file keeps
+ * its comments and the full key list — a `.env` that a human can read and
+ * edit later, not a two-line file that only the program understands.
+ *
+ * Returns the path and whether anything was actually written, so the
+ * caller can log accurately instead of claiming a write it did not do.
+ */
+export declare function ensureEnvFile(input: EnvBootstrapInput): {
+    path: string;
+    created: boolean;
+};
+/**
  * True when the configured database answers a ping.
  *
  * Used by the CLI's `serve` command to decide whether to run the ETL and

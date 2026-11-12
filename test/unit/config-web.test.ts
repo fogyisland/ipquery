@@ -39,7 +39,7 @@ describe("web config", () => {
 
   it("default values", () => {
     const cfg = loadConfig();
-    expect(cfg.web.baseUrl).toBe("http://localhost:3100");
+    expect(cfg.web.baseUrl).toBe("http://localhost:3880");
     expect(cfg.web.cookieDomain).toBe("");
     expect(cfg.web.cookieSecure).toBe(false);
     expect(cfg.web.sessionTtlHours).toBe(168);
