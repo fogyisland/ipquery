@@ -2,15 +2,22 @@
 /* ──────────────────────────────────────────────────────────────────────────
    IPQuery — first-run bootstrap console (setup wizard only)
 
-   Aesthetic: a deep-ink product surface with a bounded, elevated frame — the
-   admin console's information architecture, given room to breathe. The rail
-   is structural (the wizard is a seven-step sequence), not decoration.
+   Aesthetic: a light, bounded product surface — a calm white canvas with a
+   bordered frame, mirroring the admin console's information architecture
+   rather than a bare form on a page. The rail is structural (the wizard is
+   a seven-step sequence), not decoration.
 
    Design system (ui-ux-pro-max, "ip geolocation developer infrastructure
-   saas enterprise dark"):
-     palette   ink #070B14 -> card #111A2B, accent #22D3EE, success #22C55E
+   saas enterprise light"):
+     palette   canvas #F6F8FB -> card #FFFFFF, accent #0E7490, success #15803D
      type      Plus Jakarta Sans (UI) / JetBrains Mono (data + micro-labels)
      effects   hairline borders, one soft ambient wash, no second accent
+
+   The palette is LIGHT, deliberately, and it is a fixed light theme rather
+   than one that follows the OS: the wizard is a one-time page an operator
+   reads on a laptop in a bright room, and a surface that flips to near-black
+   when the OS says so is a different product than the one that was designed.
+   The `prefers-color-scheme` blocks at the bottom pin it.
 
    This file loads AFTER base.css / layout.css / forms.css. Every rule that
    re-skins a shared component is scoped to `body.layout-setup` so the auth
@@ -21,41 +28,47 @@
 
 /* ─── Design tokens ─────────────────────────────────────────────────────── */
 :root {
-  /* Surfaces: a single ramp, darkest behind, lightest on top. */
-  --boot-bg: #070b14;
-  --boot-surface: #0c1322;
-  --boot-card: #111a2b;
-  --boot-card-2: #16213a;
+  /* Surfaces: a single ramp, lightest behind, brightest on top. */
+  --boot-bg: #f4f6fa;
+  --boot-surface: #eef2f8;
+  --boot-card: #ffffff;
+  --boot-card-2: #f8fafc;
 
   /* Lines. Hairlines carry the structure; never a heavy border. */
-  --boot-line: #1e2b42;
-  --boot-line-2: #2b3c5a;
-  --boot-line-3: #3b5074;
+  --boot-line: #e2e8f0;
+  --boot-line-2: #cbd5e1;
+  --boot-line-3: #94a3b8;
 
   /* Text ramp, all AA-or-better on the surfaces above. */
-  --boot-text: #f1f5f9;
-  --boot-text-2: #cbd5e1;
-  --boot-muted: #94a3b8;
-  --boot-faint: #64748b;
+  --boot-text: #0f172a;
+  --boot-text-2: #334155;
+  --boot-muted: #64748b;
+  --boot-faint: #94a3b8;
 
-  /* One accent. Cyan is the product's existing signature (admin.css). */
-  --boot-accent: #22d3ee;
-  --boot-accent-ink: #04222b;
-  --boot-accent-soft: rgba(34, 211, 238, 0.1);
-  --boot-accent-line: rgba(34, 211, 238, 0.34);
+  /* One accent. Teal-cyan keeps the product's existing signature (the
+     admin console's cyan) but dark enough to clear AA on white — the
+     admin's #22D3EE would sit at ~1.9:1 here. */
+  --boot-accent: #0e7490;
+  --boot-accent-ink: #ffffff;
+  --boot-accent-soft: rgba(14, 116, 144, 0.08);
+  --boot-accent-line: rgba(14, 116, 144, 0.28);
 
-  --boot-ok: #22c55e;
-  --boot-ok-soft: rgba(34, 197, 94, 0.1);
-  --boot-fail: #f87171;
-  --boot-fail-soft: rgba(248, 113, 113, 0.1);
-  --boot-warn: #fbbf24;
+  --boot-ok: #15803d;
+  --boot-ok-soft: rgba(21, 128, 61, 0.09);
+  --boot-ok-line: rgba(21, 128, 61, 0.3);
+  --boot-fail: #b91c1c;
+  --boot-fail-soft: rgba(185, 28, 28, 0.08);
+  --boot-fail-line: rgba(185, 28, 28, 0.3);
+  --boot-warn: #b45309;
+  --boot-warn-soft: rgba(180, 83, 9, 0.08);
+  --boot-warn-line: rgba(180, 83, 9, 0.3);
   /* Aliases kept so layouts/public.hbs and the error views resolve the same
      tokens they did before the palette change. */
-  --boot-cyan: #22d3ee;
-  --boot-cyan-bright: #22d3ee;
-  --boot-line-strong: #2b3c5a;
-  --boot-paper: #0c1322;
-  --boot-paper-2: #111a2b;
+  --boot-cyan: #0e7490;
+  --boot-cyan-bright: #0891b2;
+  --boot-line-strong: #cbd5e1;
+  --boot-paper: #ffffff;
+  --boot-paper-2: #f8fafc;
 
   --boot-font-sans:
     "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei",
@@ -66,21 +79,21 @@
   --boot-radius: 14px;
   --boot-radius-sm: 10px;
   --boot-shadow:
-    0 1px 2px rgba(0, 0, 0, 0.3), 0 24px 64px -16px rgba(0, 0, 0, 0.7);
+    0 1px 2px rgba(15, 23, 42, 0.05), 0 24px 64px -24px rgba(15, 23, 42, 0.18);
   --boot-ease: cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 /* ─── Shell ─────────────────────────────────────────────────────────────── */
 /* layout.css still gives .layout-setup the old flex/centre/white-card chrome;
    the product frame is a full-bleed grid, so cancel all of it here. The
-   canvas is fixed dark on purpose — this surface is deliberately dark, not a
+   canvas is fixed light on purpose — this surface is deliberately light, not a
    theme that flips with the OS. */
 body.layout-setup {
   display: block;
   padding: 0;
   margin: 0;
   min-height: 100vh;
-  color-scheme: dark;
+  color-scheme: light;
   background: var(--boot-bg);
   color: var(--boot-text);
   font-family: var(--boot-font-sans);
@@ -236,7 +249,7 @@ body.layout-setup .setup-step a:focus-visible {
 }
 
 body.layout-setup .setup-step a:hover {
-  background: rgba(255, 255, 255, 0.04);
+  background: rgba(15, 23, 42, 0.04);
   color: var(--boot-text-2);
 }
 
@@ -372,14 +385,15 @@ body.layout-setup .setup-step.is-active .setup-step-label {
 }
 
 /* A single soft ambient wash behind the frame — the only decoration on the
-   page. Two radial stops, no animation. */
+   page. Two radial stops, no animation. Kept very faint: on a light canvas
+   a wash that reads as "ambient" on ink reads as a smudge on white. */
 .boot-main::before {
   content: "";
   position: absolute;
   inset: 0;
   background:
-    radial-gradient(60rem 30rem at 70% -10%, rgba(34, 211, 238, 0.07), transparent 70%),
-    radial-gradient(40rem 24rem at 20% 110%, rgba(59, 130, 246, 0.06), transparent 70%);
+    radial-gradient(60rem 30rem at 70% -10%, rgba(14, 116, 144, 0.05), transparent 70%),
+    radial-gradient(40rem 24rem at 20% 110%, rgba(37, 99, 235, 0.045), transparent 70%);
   pointer-events: none;
 }
 
@@ -506,7 +520,7 @@ body.layout-setup .setup-step.is-active .setup-step-label {
   gap: 0.625rem;
   margin: 0 0 1.5rem;
   padding: 0.875rem 1rem;
-  border: 1px solid rgba(248, 113, 113, 0.3);
+  border: 1px solid var(--boot-fail-line);
   border-radius: var(--boot-radius-sm);
   background: var(--boot-fail-soft);
 }
@@ -634,8 +648,8 @@ body.layout-setup button[type="submit"],
   text-decoration: none;
   cursor: pointer;
   box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.12) inset,
-    0 8px 24px -8px rgba(34, 211, 238, 0.55);
+    0 1px 0 rgba(255, 255, 255, 0.18) inset,
+    0 8px 24px -10px rgba(14, 116, 144, 0.5);
   transition:
     background 160ms var(--boot-ease),
     box-shadow 160ms var(--boot-ease),
@@ -644,10 +658,10 @@ body.layout-setup button[type="submit"],
 
 body.layout-setup button[type="submit"]:hover,
 .btn-primary:hover {
-  background: #67e8f9;
+  background: #0b5c73;
   box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.16) inset,
-    0 10px 28px -8px rgba(34, 211, 238, 0.7);
+    0 1px 0 rgba(255, 255, 255, 0.2) inset,
+    0 10px 28px -10px rgba(14, 116, 144, 0.55);
 }
 
 body.layout-setup button[type="submit"]:active,
@@ -694,20 +708,20 @@ body.layout-setup .flash {
 }
 
 body.layout-setup .flash-success {
-  border-color: rgba(34, 197, 94, 0.32);
+  border-color: var(--boot-ok-line);
   background: var(--boot-ok-soft);
   color: var(--boot-ok);
 }
 
 body.layout-setup .flash-error {
-  border-color: rgba(248, 113, 113, 0.32);
+  border-color: var(--boot-fail-line);
   background: var(--boot-fail-soft);
   color: var(--boot-fail);
 }
 
 body.layout-setup .flash-warning {
-  border-color: rgba(251, 191, 36, 0.32);
-  background: rgba(251, 191, 36, 0.08);
+  border-color: var(--boot-warn-line);
+  background: var(--boot-warn-soft);
   color: var(--boot-warn);
 }
 
@@ -885,13 +899,13 @@ body.layout-setup .setup-progress-status--running {
 }
 
 body.layout-setup .setup-progress-status--success {
-  border-color: rgba(34, 197, 94, 0.32);
+  border-color: var(--boot-ok-line);
   background: var(--boot-ok-soft);
   color: var(--boot-ok);
 }
 
 body.layout-setup .setup-progress-status--failed {
-  border-color: rgba(248, 113, 113, 0.32);
+  border-color: var(--boot-fail-line);
   background: var(--boot-fail-soft);
   color: var(--boot-fail);
 }
@@ -1049,18 +1063,12 @@ body.layout-setup .boot-status-note {
   }
 }
 
-/* ─── Keep the dark canvas even when the OS is light ────────────────────
-   base.css only paints a dark body under prefers-color-scheme: dark. This
-   surface opts into dark explicitly (color-scheme: dark above), so the
-   light-OS default body background must be overridden too — and the dark-OS
-   media blocks in base.css / forms.css must not reintroduce white inputs. */
-@media (prefers-color-scheme: light) {
-  body.layout-setup {
-    background: var(--boot-bg);
-    color: var(--boot-text);
-  }
-}
-
+/* ─── Keep the light canvas even when the OS is dark ──────────────────────
+   base.css paints a dark body under prefers-color-scheme: dark, and
+   forms.css restyles its inputs to match. This surface opts into light
+   explicitly (color-scheme: light above), so both have to be overridden
+   here — otherwise the wizard's page would be white while its form fields
+   came out dark, or the reverse. */
 @media (prefers-color-scheme: dark) {
   body.layout-setup {
     background: var(--boot-bg);
@@ -1070,7 +1078,7 @@ body.layout-setup .boot-status-note {
   body.layout-setup .boot-form .form-field input,
   body.layout-setup .boot-form .form-field textarea,
   body.layout-setup .boot-form .form-field select {
-    background: var(--boot-bg);
+    background: var(--boot-card);
     color: var(--boot-text);
     border-color: var(--boot-line-2);
   }
@@ -1078,7 +1086,29 @@ body.layout-setup .boot-status-note {
   body.layout-setup .boot-form .form-field input:focus,
   body.layout-setup .boot-form .form-field textarea:focus,
   body.layout-setup .boot-form .form-field select:focus {
-    background: var(--boot-surface);
+    background: var(--boot-card);
+    border-color: var(--boot-accent);
+  }
+}
+
+@media (prefers-color-scheme: light) {
+  body.layout-setup {
+    background: var(--boot-bg);
+    color: var(--boot-text);
+  }
+
+  body.layout-setup .boot-form .form-field input,
+  body.layout-setup .boot-form .form-field textarea,
+  body.layout-setup .boot-form .form-field select {
+    background: var(--boot-card);
+    color: var(--boot-text);
+    border-color: var(--boot-line-2);
+  }
+
+  body.layout-setup .boot-form .form-field input:focus,
+  body.layout-setup .boot-form .form-field textarea:focus,
+  body.layout-setup .boot-form .form-field select:focus {
+    background: var(--boot-card);
     border-color: var(--boot-accent);
   }
 }

@@ -302,6 +302,14 @@ export function parseEnvFile(content: string): Record<string, string> {
       (value.startsWith("'") && value.endsWith("'") && value.length >= 2)
     ) {
       value = value.slice(1, -1);
+    } else {
+      // Unquoted: any `#` opens a trailing comment — dotenv's rule, and
+      // the one the running process reads the file with. This matters
+      // here more than anywhere else: this parser's output is what gets
+      // written back into the .env, so a comment that was not stripped
+      // would be carried into every rewrite.
+      const hash = value.indexOf("#");
+      if (hash >= 0) value = value.slice(0, hash).trim();
     }
     out[key] = value;
   }

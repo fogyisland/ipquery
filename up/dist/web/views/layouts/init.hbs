@@ -2,10 +2,10 @@
 {{!--
   First-run bootstrap console — product-grade shell.
 
-  Layout: a centred, bounded product frame (sidebar + main) on a deep ink
-  canvas, mirroring the admin console's information architecture rather than
-  a bare form on a page. The numbered rail is still structural: the wizard
-  really is a seven-step sequence.
+  Layout: a centred, bounded product frame (sidebar + main) on a light canvas,
+  mirroring the admin console's information architecture rather than a bare form
+  on a page. The numbered rail is still structural: the wizard really is a
+  seven-step sequence.
 
   buildSteps() supplies n, label, href, active and done; labels are already
   translated in the route (pre-translated because `{{req.t}}` is a property
@@ -20,8 +20,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{{title}} - IPQuery</title>
-  <meta name="theme-color" content="#070b14">
-  <meta name="color-scheme" content="dark">
+  <meta name="theme-color" content="#f4f6fa">
+  <meta name="color-scheme" content="light">
   {{!-- The two webfonts above load from Google Fonts. A meta CSP cannot
        grant that: with both a header policy and a meta policy present the
        browser enforces their intersection, so a meta tag can only tighten.

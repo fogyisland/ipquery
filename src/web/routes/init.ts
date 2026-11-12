@@ -157,6 +157,75 @@ async function startBackgroundEtl(app: FastifyInstance): Promise<{ runId: number
 }
 
 /**
+ * The public address the operator is reaching the wizard on.
+ *
+ * The startup-generated .env carries `WEB_BASE_URL=http://localhost:3880`
+ * — a placeholder, because at boot time the server has no way to know
+ * what domain it will be served on. Left alone, that placeholder ends
+ * up in three places the operator will actually read:
+ *
+ *   - the verification and password-reset links in outgoing email, which
+ *     would point a real user at http://localhost:3880/verify?token=...
+ *   - the API endpoint template on the dashboard keys page, which would
+ *     hand remote callers an address they cannot reach.
+ *
+ * So the form suggests the address the browser is actually using.
+ *
+ * **Why reading these headers here is safe, while `trustProxy` is off.**
+ * `trustProxy` decides whether `req.ip` — the peer address — may be
+ * taken from `X-Forwarded-For`. If that header is forged, the forger
+ * picks which rate-limit bucket and which access check they land in,
+ * so the answer has to be yes for everyone. That decision is still the
+ * operator's to make (see up/BAOTA.md).
+ *
+ * This function asks a different question: "what text should we prefill
+ * into a box the operator is looking at?" A forged header can only put
+ * a wrong string in that box, and the operator reads it before saving.
+ * The value never reaches an access-control decision, and it is
+ * validated below — the host must look like a host, and the scheme must
+ * be one of the two we recognise.
+ *
+ * The scheme needs `X-Forwarded-Proto` because behind a TLS-terminating
+ * proxy the connection to Node is plain http even though the public
+ * site is https. Without it every https deployment would be suggested
+ * as `http://`, and the operator would have to know to correct it.
+ *
+ * Returns undefined when the host is unusable — missing, or not shaped
+ * like a host at all.
+ */
+function suggestBaseUrl(req: FastifyRequest): string | undefined {
+  const host = req.headers.host?.trim();
+  if (!host) return undefined;
+
+  // Reject a Host header that is not a plain host[:port]. It lands in
+  // the .env and then in outgoing email, so anything with a scheme, a
+  // path, credentials or a space in it is not a host.
+  if (!/^[A-Za-z0-9.\-]+(:\d{1,5})?$/.test(host)) return undefined;
+
+  // The scheme: the proxy's word first (it knows what the browser used),
+  // then the connection we actually see.
+  //
+  // A forwarded value can be a comma-separated list, because a chain of
+  // proxies appends to it. The FIRST entry is the original client's
+  // scheme — that is the one describing the public address.
+  const forwarded = req.headers["x-forwarded-proto"];
+  const forwardedProto =
+    (Array.isArray(forwarded) ? forwarded[0] : forwarded)
+      ?.split(",")[0]
+      ?.trim()
+      .toLowerCase();
+
+  let protocol: "http" | "https";
+  if (forwardedProto === "https" || forwardedProto === "http") {
+    protocol = forwardedProto;
+  } else {
+    protocol = req.protocol === "https" ? "https" : "http";
+  }
+
+  return `${protocol}://${host}`;
+}
+
+/**
  * Read the current values of the keys the wizard owns out of the .env.
  *
  * Returns the values AND whether secrets are already present, because
@@ -172,12 +241,17 @@ async function startBackgroundEtl(app: FastifyInstance): Promise<{ runId: number
  * and in every proxy log along the way. The server generates them and
  * writes them straight to disk; it never shows them. The form only needs
  * to know that they are there.
+ *
+ * `suggestedBaseUrl` is what the form offers when the .env still holds
+ * the localhost placeholder. It only replaces the placeholder — a base
+ * URL the operator has already set is never second-guessed.
  */
-function readEnvState(port: number, baseUrl: string): {
+function readEnvState(port: number, baseUrl: string, suggestedBaseUrl?: string): {
   env: {
     port: number;
     baseUrl: string;
     hasSecrets: boolean;
+    baseUrlSuggested: boolean;
   };
 } {
   let existing: Record<string, string> = {};
@@ -194,11 +268,25 @@ function readEnvState(port: number, baseUrl: string): {
   const csrfSecret = existing.CSRF_SECRET ?? "";
   const hasSecrets = sessionSecret.trim() !== "" && csrfSecret.trim() !== "";
 
+  const configured = existing.WEB_BASE_URL?.trim();
+  // The generated placeholder is loopback. If that is all we have, the
+  // operator is better served by the address they are actually using.
+  const isPlaceholder =
+    !configured ||
+    /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?(\/.*)?$/i.test(configured);
+
+  const useSuggestion = isPlaceholder && suggestedBaseUrl !== undefined;
+
   return {
     env: {
       port: Number(existing.PORT) || port,
-      baseUrl: existing.WEB_BASE_URL?.trim() || baseUrl,
+      baseUrl: useSuggestion ? suggestedBaseUrl! : configured || baseUrl,
       hasSecrets,
+      // True when the value shown is our guess rather than something the
+      // operator has confirmed. The view uses it to say "check the
+      // scheme" — a guessed https:// on a plain-http deployment would
+      // break every link the site generates.
+      baseUrlSuggested: useSuggestion,
     },
   };
 }
@@ -230,7 +318,11 @@ export default async function initRoutes(app: FastifyInstance): Promise<void> {
   // paste into a chat window, and in any proxy log along the way. The
   // server generates them on submit and never displays them.
   app.get("/init/env", async (req, reply) => {
-    const state = readEnvState(app.cfg.api.port, app.cfg.web.baseUrl);
+    const state = readEnvState(
+      app.cfg.api.port,
+      app.cfg.web.baseUrl,
+      suggestBaseUrl(req),
+    );
     return reply.view("init/env.hbs", {
       layout: "layouts/init",
       title: req.t("setup.env.title"),
@@ -268,7 +360,11 @@ export default async function initRoutes(app: FastifyInstance): Promise<void> {
     }
 
     if (fieldError) {
-      const state = readEnvState(app.cfg.api.port, app.cfg.web.baseUrl);
+      const state = readEnvState(
+        app.cfg.api.port,
+        app.cfg.web.baseUrl,
+        suggestBaseUrl(req),
+      );
       return reply.code(400).view("init/env.hbs", {
         layout: "layouts/init",
         title: req.t("setup.env.title"),
@@ -276,7 +372,17 @@ export default async function initRoutes(app: FastifyInstance): Promise<void> {
         steps: buildSteps(req, 2),
         step: 2,
         total: 7,
-        env: { ...state.env, port, baseUrl },
+        // Echo back what the operator typed, not what we would have
+        // suggested — they are being told their input was wrong, so
+        // replacing it under them would hide what they actually wrote.
+        // The suggestion flag goes with it: a value that came from the
+        // form is not a guess.
+        env: {
+          ...state.env,
+          port,
+          baseUrl: baseUrl === "" ? state.env.baseUrl : baseUrl,
+          baseUrlSuggested: false,
+        },
         envCreated: false,
         error: fieldError,
         req,
@@ -310,7 +416,7 @@ export default async function initRoutes(app: FastifyInstance): Promise<void> {
         steps: buildSteps(req, 2),
         step: 2,
         total: 7,
-        env: { port, baseUrl, hasSecrets: true },
+        env: { port, baseUrl, hasSecrets: true, baseUrlSuggested: false },
         envCreated: result.created,
         error: req.t("setup.env.restartNeeded", { port: String(port) }),
         req,
