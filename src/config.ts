@@ -1,4 +1,20 @@
 // SPDX-License-Identifier: MIT
+// The .env file is GENERATED on first start, from .env.example.
+//
+// The import order below is load-bearing:
+//
+//   1. `./api/envBootstrap` runs and creates .env if it does not exist.
+//   2. `dotenv/config` loads .env into process.env.
+//   3. loadConfig() resolves the config from process.env.
+//
+// The bootstrap has to come first: a .env written after the config was
+// resolved is a file the running process never reads. And it cannot
+// import this module — that would be a cycle — so it carries its own
+// (small) copy of the parsing rules.
+import { bootstrapEnvFile } from "./api/envBootstrap";
+
+bootstrapEnvFile();
+
 import "dotenv/config"; // side-effect import: auto-loads .env into process.env at module load
 import * as cronParser from "node-cron";
 

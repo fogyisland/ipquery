@@ -1048,9 +1048,9 @@
       "stepsLabel": "Configuration steps",
       "progress": "Step {current} of {total}",
       "introTitle": "What happens next",
-      "intro1": "Verify the database connection",
-      "intro2": "Name the site and add a tagline",
-      "intro3": "Create the administrator account",
+      "intro1": "Generate .env: port, public URL and two random secrets",
+      "intro2": "Configure the database connection and migrate the schema",
+      "intro3": "Name the site and create the administrator account",
       "intro4": "Load seed data and finish",
       "connectionTitle": "Connection parameters",
       "siteLede": "Name this installation. You can change it later in Settings.",
@@ -1061,15 +1061,16 @@
     },
     "steps": {
       "1": "Welcome",
-      "2": "Database",
-      "3": "Site",
-      "4": "Admin",
-      "5": "Seed Data",
-      "6": "Finish"
+      "2": "Environment",
+      "3": "Database",
+      "4": "Site",
+      "5": "Administrator",
+      "6": "Seed data",
+      "7": "Finish"
     },
     "welcome": {
       "title": "Welcome",
-      "body": "This wizard will set up IPQuery for first use: site name, database connection, administrator account, and seed data.",
+      "body": "This wizard will set up IPQuery for first use: generate .env, connect the database, create the administrator account and load seed data.",
       "cta": "Start"
     },
     "database": {
@@ -1186,7 +1187,8 @@
       "envHint": ".env stays on this machine and is never committed. The database connection is the next step.",
       "created": ".env has been generated. The database connection is the next step.",
       "submit": "Generate and continue",
-      "restartNeeded": "The settings were written to .env. This process is still listening on the port it started with; restart the service for {port} to take effect."
+      "restartNeeded": "The settings were written to .env. This process is still listening on the port it started with; restart the service for {port} to take effect.",
+      "secretKeptPlaceholder": "Already set (leave blank to keep)"
     }
   }
 }

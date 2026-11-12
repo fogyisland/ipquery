@@ -73,20 +73,26 @@ mkdir -p "$APP_DIR/data/raw"
 log "data directory ready: $APP_DIR/data/raw"
 
 # ── 4. Environment file ────────────────────────────────────────────
+#
+# The .env is NOT created here on purpose.
+#
+# The server generates it on first start, from .env.example, with the
+# port, the base URL and two random secrets. Copying the template here
+# would create a .env with EMPTY secrets — and an empty SESSION_SECRET
+# is worse than a missing one: the file exists, so the "is there a .env"
+# check passes, while every session cookie gets signed with nothing.
+#
+# So the copy step is gone. The first `node dist/cli.js serve` writes the
+# file itself, before it reads any configuration from it.
 
-if [ ! -f "$APP_DIR/.env" ]; then
-  cp "$APP_DIR/.env.example" "$APP_DIR/.env"
-  chmod 600 "$APP_DIR/.env" 2>/dev/null || true
-  log "created .env from .env.example"
-  log "  you can leave it as is: the /init wizard writes the port, the base URL,"
-  log "  the two secrets and the database connection for you."
-  log "  fill it in by hand only if you prefer the headless CLI path:"
-  log "    required: DB_* , SESSION_SECRET , CSRF_SECRET , WEB_BASE_URL"
-  log "    generate the two secrets (they must differ):"
-  log "    node -e \"console.log(require('crypto').randomBytes(48).toString('base64'))\""
-  NEEDS_ENV="yes"
-else
+if [ -f "$APP_DIR/.env" ]; then
+  log "found an existing .env — it will be left alone"
   NEEDS_ENV="no"
+else
+  log "no .env yet — the server will create it from .env.example on first start"
+  log "  (port, public URL and two random secrets; the database connection"
+  log "   is filled in by the /init wizard, or by the 'ipq db' command)"
+  NEEDS_ENV="generated-at-start"
 fi
 
 # ── 5. Migrations ──────────────────────────────────────────────────

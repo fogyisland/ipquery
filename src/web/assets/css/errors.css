@@ -4,7 +4,7 @@
 
    These views render under `layouts/public`, not `layouts/init`. They share
    the wizard's typographic vocabulary — .boot-step-head / .boot-lede /
-   .boot-actions — but not its shell: there is no rail, no six-step sequence,
+   .boot-actions — but not its shell: there is no rail, no seven-step sequence,
    and no 700px worksheet measure.
 
    Keeping this file separate from init.css is deliberate. The wizard pulls
