@@ -10,6 +10,7 @@
   "scripts": {
     "start": "node dist/cli.js",
     "serve": "node dist/cli.js serve",
+    "build": "node scripts/verify-dist.js",
     "migrate": "node dist/cli.js migrate",
     "migrate:status": "node dist/cli.js migrate:status",
     "init": "node dist/cli.js init",
