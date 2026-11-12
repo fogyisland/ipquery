@@ -1170,7 +1170,24 @@
       "db_host_required": "主机必填",
       "db_user_required": "用户必填",
       "db_name_required": "数据库名必填",
-      "db_port_invalid": "端口必须是 1-65535 之间的整数"
+      "db_port_invalid": "端口必须是 1-65535 之间的整数",
+      "base_url_required": "访问地址必填"
+    },
+    "env": {
+      "title": "环境配置",
+      "intro": "这一步会生成 .env 文件 —— 服务的端口、访问地址和两把加密密钥都写在里面。密钥由系统随机生成，不需要你填写。",
+      "portLabel": "监听端口",
+      "portHelp": "服务监听的端口。修改后需要重启服务才会生效。",
+      "baseUrlLabel": "访问地址",
+      "baseUrlHelp": "浏览器访问这个服务用的地址。生产环境请填真实的域名。",
+      "sessionSecretLabel": "会话密钥",
+      "csrfSecretLabel": "CSRF 密钥",
+      "secretAutoHelp": "两把加密密钥将由系统随机生成并直接写入 .env，不需要你填写。",
+      "secretKeepHelp": ".env 里已经有密钥了，保持原样即可。留空表示不修改。",
+      "envHint": ".env 只保存在这台机器上，不会进入版本库。数据库连接在下一步填写。",
+      "created": ".env 已生成。数据库连接在下一步填写。",
+      "submit": "生成并继续",
+      "restartNeeded": "配置已写入 .env。当前进程仍在监听启动时的端口 {port}，重启服务后生效。"
     }
   }
 }

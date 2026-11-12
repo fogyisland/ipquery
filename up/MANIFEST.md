@@ -90,16 +90,16 @@ apk add --no-cache python3 make g++
 | 环境变量        | 默认值                  | 说明                                                                                                      |
 | --------------- | ----------------------- | --------------------------------------------------------------------------------------------------------- |
 | `DATA_DIR`      | `./data`                | 相对路径**相对于进程工作目录**。用 systemd 托管时 `WorkingDirectory` 必须指向安装根目录，否则数据落到别处 |
-| `PORT`          | `5001`                  | 监听端口                                                                                                  |
-| `WEB_BASE_URL`  | `http://localhost:5001` | 生产必须是真实 HTTPS 域名                                                                                 |
+| `PORT`          | `3880`                  | 监听端口                                                                                                  |
+| `WEB_BASE_URL`  | `http://localhost:3880` | 生产必须是真实 HTTPS 域名                                                                                 |
 | `COOKIE_SECURE` | `false`                 | 生产必须 `true`（配合 HTTPS）                                                                             |
 
 ## 六、校验部署是否成功
 
 ```bash
 node dist/cli.js migrate:status      # 每一行都是 applied
-curl -s localhost:5001/healthz       # {"status":"ok"}
-curl -s "localhost:5001/lookup?ip=8.8.8.8"   # 有 country/city 才算数据到位
+curl -s localhost:3880/healthz       # {"status":"ok"}
+curl -s "localhost:3880/lookup?ip=8.8.8.8"   # 有 country/city 才算数据到位
 ```
 
 三条都过，基本部署完成。

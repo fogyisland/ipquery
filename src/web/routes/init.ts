@@ -1,10 +1,20 @@
 // SPDX-License-Identifier: MIT
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import type { RowDataPacket } from "mysql2";
+import * as fs from "node:fs";
 import * as path from "node:path";
 import { verifyCsrfRequest } from "../plugins/csrf";
 import { setSetting, getSetting, markInitialized } from "../../storage/settings";
-import { probeConnection, repointPool, writeDbCredentialsToEnv, envFileExists } from "../../api/dbBootstrap";
+import {
+  probeConnection,
+  repointPool,
+  writeDbCredentialsToEnv,
+  envFileExists,
+  envFilePath,
+  ensureEnvFile,
+  generateSecret,
+  parseEnvFile,
+} from "../../api/dbBootstrap";
 import { bootstrapAdmin } from "../admin/bootstrap";
 import { runMigrations } from "../../storage/migrations/runner";
 import { loadDemoSeed } from "../../storage/seed/demoSeed";
@@ -145,6 +155,50 @@ async function startBackgroundEtl(app: FastifyInstance): Promise<{ runId: number
   return { runId };
 }
 
+/**
+ * Read the current values of the keys the wizard owns out of the .env.
+ *
+ * Returns the values AND whether secrets are already present, because
+ * the form has to say two different things depending on the answer:
+ * "these will be generated for you" versus "these already exist and
+ * will be kept". Silently replacing an operator's session secret would
+ * log everyone out; silently keeping a placeholder would ship a
+ * deployment signing cookies with a value that is in the repository.
+ */
+function readEnvState(port: number, baseUrl: string): {
+  env: {
+    port: number;
+    baseUrl: string;
+    sessionSecret: string;
+    csrfSecret: string;
+    hasSecrets: boolean;
+  };
+} {
+  let existing: Record<string, string> = {};
+  try {
+    const file = envFilePath();
+    if (fs.existsSync(file)) existing = parseEnvFile(fs.readFileSync(file, "utf8"));
+  } catch {
+    // A missing or unreadable .env is not an error here — it is exactly
+    // the fresh-install case this form exists for.
+    existing = {};
+  }
+
+  const sessionSecret = existing.SESSION_SECRET ?? "";
+  const csrfSecret = existing.CSRF_SECRET ?? "";
+  const hasSecrets = sessionSecret.trim() !== "" && csrfSecret.trim() !== "";
+
+  return {
+    env: {
+      port: Number(existing.PORT) || port,
+      baseUrl: existing.WEB_BASE_URL?.trim() || baseUrl,
+      sessionSecret,
+      csrfSecret,
+      hasSecrets,
+    },
+  };
+}
+
 export default async function initRoutes(app: FastifyInstance): Promise<void> {
   // GET /init — landing page. No form, no CSRF required.
   app.get("/init", async (req, reply) => {
@@ -158,6 +212,108 @@ export default async function initRoutes(app: FastifyInstance): Promise<void> {
       flash: getFlash(req, "setup.welcome.title", "setup.welcome.title"),
       req,
     });
+  });
+
+  // GET /init/env — the form that generates the .env.
+  //
+  // This is step 1 of the wizard and it exists so that a fresh install
+  // needs no shell and no editor: unpack, start the server, open the
+  // browser, and the file that holds every setting is written for you.
+  //
+  // The secrets are shown as empty password fields rather than as
+  // generated values. A secret that has been rendered into an HTML page
+  // is in the browser cache, in the "view source" the operator might
+  // paste into a chat window, and in any proxy log along the way. The
+  // server generates them on submit and never displays them.
+  app.get("/init/env", async (req, reply) => {
+    const state = readEnvState(app.cfg.api.port, app.cfg.web.baseUrl);
+    return reply.view("init/env.hbs", {
+      layout: "layouts/init",
+      title: req.t("setup.env.title"),
+      csrfToken: req.csrfToken,
+      steps: buildSteps(req, 1),
+      step: 1,
+      total: 6,
+      env: state.env,
+      envCreated: false,
+      req,
+    });
+  });
+
+  // POST /init/env — write the .env.
+  //
+  // The port and the base URL come from the form; the two secrets are
+  // generated here and never shown to the operator. Existing values win:
+  // an install that already has a .env keeps its port, its base URL and
+  // its secrets, and only the missing pieces are filled in.
+  app.post("/init/env", async (req, reply) => {
+    if (!verifyCsrfRequest(req)) {
+      return renderCsrfError(req, reply, 1);
+    }
+
+    const body = req.body as { port?: string; baseUrl?: string };
+    const portRaw = (body.port ?? "").trim();
+    const baseUrl = (body.baseUrl ?? "").trim();
+
+    let fieldError: string | undefined;
+    const port = portRaw === "" ? app.cfg.api.port : Number(portRaw);
+    if (!Number.isInteger(port) || port < 1 || port > 65535) {
+      fieldError = req.t("setup.errors.db_port_invalid");
+    } else if (baseUrl === "") {
+      fieldError = req.t("setup.errors.base_url_required");
+    }
+
+    if (fieldError) {
+      const state = readEnvState(app.cfg.api.port, app.cfg.web.baseUrl);
+      return reply.code(400).view("init/env.hbs", {
+        layout: "layouts/init",
+        title: req.t("setup.env.title"),
+        csrfToken: req.csrfToken,
+        steps: buildSteps(req, 1),
+        step: 1,
+        total: 6,
+        env: { ...state.env, port, baseUrl },
+        envCreated: false,
+        error: fieldError,
+        req,
+      });
+    }
+
+    const result = ensureEnvFile({
+      port,
+      baseUrl,
+      sessionSecret: generateSecret(),
+      csrfSecret: generateSecret(),
+    });
+
+    app.log.info(
+      { envPath: result.path, created: result.created, port, baseUrl },
+      "setup: the environment file was written",
+    );
+
+    // The port and the base URL are only in effect for the CURRENT
+    // process if they came from a .env that already existed — dotenv
+    // ran at import time. A fresh install therefore keeps listening on
+    // the port it booted with, and the operator is told to restart if
+    // the one they asked for is different. Saying so plainly beats a
+    // silent no-op that looks like the form worked.
+    const portChanged = port !== app.cfg.api.port;
+    if (portChanged) {
+      return reply.view("init/env.hbs", {
+        layout: "layouts/init",
+        title: req.t("setup.env.title"),
+        csrfToken: req.csrfToken,
+        steps: buildSteps(req, 1),
+        step: 1,
+        total: 6,
+        env: { port, baseUrl, sessionSecret: "", csrfSecret: "", hasSecrets: true },
+        envCreated: result.created,
+        error: req.t("setup.env.restartNeeded", { port: String(port) }),
+        req,
+      });
+    }
+
+    return reply.redirect("/init/database");
   });
 
   // GET /init/database — show the current DB config (no password) AND a

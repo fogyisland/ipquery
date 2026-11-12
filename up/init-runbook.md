@@ -58,7 +58,7 @@ bash install.sh
 
 | 方式     | 命令 / 入口                                                                      | 适用                     |
 | -------- | -------------------------------------------------------------------------------- | ------------------------ |
-| Web 向导 | `node dist/cli.js serve` 后浏览器开 `http://localhost:5001/init`                 | 首次部署、想看界面       |
+| Web 向导 | `node dist/cli.js serve` 后浏览器开 `http://localhost:3880/init`                 | 首次部署、想看界面       |
 | CLI 无头 | `make init`（读 `ADMIN_EMAIL` / `ADMIN_PASSWORD` / `ADMIN_NAME` / `ADMIN_SEED`） | Ansible / Terraform / CI |
 | CLI 直调 | `node dist/cli.js init --email <admin> --password '<强口令>' [--seed]`           | 同上，显式传参           |
 

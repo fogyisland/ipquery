@@ -70,7 +70,7 @@ npm run build
 
 ```bash
 node dist/cli.js serve                                                    # 起服务
-# 打开 http://服务器IP:5001/init，走完 6 步向导（第 2 步配数据库）
+# 打开 http://服务器IP:3880/init，走完 6 步向导（第 2 步配数据库）
 node dist/cli.js update                                                   # 灌真实 IP 数据（约 5–15 分钟）
 ```
 

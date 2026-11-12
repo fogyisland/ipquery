@@ -103,10 +103,10 @@ node dist/cli.js serve
 
 ```
 [api] the database could not be reached — running in setup-only mode.
-[api] open http://localhost:5001/init to configure the connection.
+[api] open http://localhost:3880/init to configure the connection.
 ```
 
-浏览器打开 `http://服务器IP:5001/init`，走第 2 步，填 host/port/user/password/库名，
+浏览器打开 `http://服务器IP:3880/init`，走第 2 步，填 host/port/user/password/库名，
 保存。向导会：
 
 1. 测试连接（连不上就不会写盘）
@@ -133,7 +133,7 @@ DB_NAME=ipquery
 SESSION_SECRET=48字节随机
 CSRF_SECRET=另48字节随机
 WEB_BASE_URL=https://你的域名
-PORT=5001
+PORT=3880
 COOKIE_SECURE=true
 ```
 
@@ -214,7 +214,7 @@ node dist/cli.js status
 | Node 版本 | 20 或更高 |
 | 启动选项 | **自定义命令** |
 | 启动命令 | `node dist/cli.js serve` |
-| 端口 | `5001`（必须和 `.env` 里的 `PORT` 一致） |
+| 端口 | `3880`（必须和 `.env` 里的 `PORT` 一致） |
 | 运行用户 | `www` |
 
 > **「启动选项」一定要选「自定义命令」**，然后填 `node dist/cli.js serve`。
@@ -244,7 +244,7 @@ stderr_logfile=/www/wwwlogs/ipquery.err.log
 
 ### 方式 C：宝塔反向代理
 
-宝塔 → 网站 → 添加站点 → 反向代理 → 目标 URL 填 `http://127.0.0.1:5001`。
+宝塔 → 网站 → 添加站点 → 反向代理 → 目标 URL 填 `http://127.0.0.1:3880`。
 
 这样宝塔负责域名和 HTTPS，Node 只管业务。
 
@@ -261,7 +261,7 @@ stderr_logfile=/www/wwwlogs/ipquery.err.log
 **方案 1（推荐）：让宝塔直连 Node，不走反代。**
 
 在宝塔的 Node 项目管理器里直接绑域名，或用 Nginx `proxy_pass` 但**在宝塔的
-「防火墙」里限制 5001 端口只允许本机访问**，同时把限流改为按其他维度。
+「防火墙」里限制 3880 端口只允许本机访问**，同时把限流改为按其他维度。
 
 **方案 2：开启 `trustProxy`。**
 
@@ -287,7 +287,7 @@ cd /www/wwwroot/ipquery
 node dist/cli.js init --email admin@example.com --password '<强口令>'
 ```
 
-或者用 Web 向导（先访问 `http://服务器IP:5001/init`），走完 6 步。
+或者用 Web 向导（先访问 `http://服务器IP:3880/init`），走完 6 步。
 
 > 向导第 5 步是「种子数据」三选一：**生产选「跳过」或「真实数据」**。选「示例数据」会写入 50 条 demo 地址。
 
@@ -300,10 +300,10 @@ node dist/cli.js init --email admin@example.com --password '<强口令>'
 ```bash
 cd /www/wwwroot/ipquery
 
-curl -s localhost:5001/healthz
+curl -s localhost:3880/healthz
 # {"status":"ok"}
 
-curl -s "localhost:5001/lookup?ip=8.8.8.8"
+curl -s "localhost:3880/lookup?ip=8.8.8.8"
 # 应该有 country/city —— 没有就是数据没加载回去跑 update
 
 node dist/cli.js migrate:status
@@ -321,7 +321,7 @@ node dist/cli.js migrate:status
 | 站点 502 | Node 没起来 | 看 Supervisor/项目日志；先 `node dist/cli.js serve` 手动跑看报错 |
 | 启动报 `engines` 不满足 | Node 版本太低 | 换到 20+ |
 | 启动报缺 argon2 | 编译工具链没装 | `apt-get install -y python3 make g++` |
-| 日志说「仅向导模式」 | 数据库连不上 | **正常，服务已起**；开 `http://IP:5001/init` 填连接，保存即生效 |
+| 日志说「仅向导模式」 | 数据库连不上 | **正常，服务已起**；开 `http://IP:3880/init` 填连接，保存即生效 |
 | 页面全是 503 | 仍在仅向导模式 | 同上，先把数据库配上 |
 | 每日 ETL 没跑 | 服务启动时数据库连不上，定时任务当时没排上 | 走完 `/init` 第 2 步后定时任务会自动挂上；或手动 `node dist/cli.js update` |
 | `/lookup` 全是「未找到」 | 没加载真实数据 | `node dist/cli.js update` |

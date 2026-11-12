@@ -1169,7 +1169,24 @@
       "db_host_required": "Host is required",
       "db_user_required": "User is required",
       "db_name_required": "Database name is required",
-      "db_port_invalid": "Port must be an integer between 1 and 65535"
+      "db_port_invalid": "Port must be an integer between 1 and 65535",
+      "base_url_required": "Base URL is required"
+    },
+    "env": {
+      "title": "Environment",
+      "intro": "This step generates the .env file — the service port, the public URL and the two signing secrets all live in it. The secrets are generated for you; you do not need to type them.",
+      "portLabel": "Port",
+      "portHelp": "The port the service listens on. A change takes effect after a restart.",
+      "baseUrlLabel": "Base URL",
+      "baseUrlHelp": "The address you use to reach this service. In production, put your real domain here.",
+      "sessionSecretLabel": "Session secret",
+      "csrfSecretLabel": "CSRF secret",
+      "secretAutoHelp": "Both secrets will be generated and written straight into .env. You do not need to type them.",
+      "secretKeepHelp": ".env already has secrets, so they will be kept. Leave the field empty to keep the current value.",
+      "envHint": ".env stays on this machine and is never committed. The database connection is the next step.",
+      "created": ".env has been generated. The database connection is the next step.",
+      "submit": "Generate and continue",
+      "restartNeeded": "The settings were written to .env. This process is still listening on the port it started with; restart the service for {port} to take effect."
     }
   }
 }

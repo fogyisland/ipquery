@@ -153,11 +153,11 @@ ls dist/web/views/                       # Handlebars 视图
 
 ## 五、配置
 
-```bash
-cp .env.example .env
-chmod 600 .env
-nano .env
-```
+**最省事的做法：不用手工建 `.env`。** 起服务，打开 `/init`，第 1 步会生成
+`.env`（端口、访问地址 + 两把随机密钥），第 2 步填数据库连接。
+详见 [`docs/setup.md`](setup.md) 的第 5 节。
+
+如果你要走无头初始化（`ipq db` 命令、Ansible、CI），先手工准备好：
 
 至少要改这些（**留默认值会起不来或起错**）：
 
@@ -172,7 +172,7 @@ SESSION_SECRET=48字节随机
 CSRF_SECRET=另48字节随机
 
 WEB_BASE_URL=https://你的域名
-PORT=5001
+PORT=3880
 COOKIE_SECURE=true
 ```
 
@@ -274,13 +274,13 @@ cd /www/ipquery
 node dist/cli.js serve
 ```
 
-看到服务监听 5001 后，另开一个终端验证：
+看到服务监听 3880 后，另开一个终端验证：
 
 ```bash
-curl -s localhost:5001/healthz
+curl -s localhost:3880/healthz
 # {"status":"ok"}
 
-curl -s "localhost:5001/lookup?ip=8.8.8.8"
+curl -s "localhost:3880/lookup?ip=8.8.8.8"
 # 有 country/city 才算数据到位
 ```
 
@@ -340,8 +340,8 @@ stderr_logfile=/www/wwwlogs/ipquery.err.log
 - [ ] `SESSION_SECRET` / `CSRF_SECRET` 各自独立随机值
 - [ ] `DATA_DIR` 指向容量足够的磁盘（DB-IP 原始 CSV 约 100 MB）
 - [ ] `node dist/cli.js migrate:status` 每行都是 applied
-- [ ] `curl localhost:5001/healthz` 返回 `{"status":"ok"}`
-- [ ] `curl "localhost:5001/lookup?ip=8.8.8.8"` 有结果
+- [ ] `curl localhost:3880/healthz` 返回 `{"status":"ok"}`
+- [ ] `curl "localhost:3880/lookup?ip=8.8.8.8"` 有结果
 - [ ] `/init` 返回 404（初始化向导已关闭）
 - [ ] 进程被 systemd / Supervisor 托管，不是前台终端
 - [ ] 数据库账号非 root，仅授权本库
