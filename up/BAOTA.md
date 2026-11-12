@@ -72,6 +72,15 @@ bash install.sh
 
 脚本做四件事：装依赖（`npm ci --omit=dev`）、建 `data/raw/`、生成 `.env`、跑迁移。
 
+装完之后可以再跑一次校验，确认上传的副本是完整的：
+
+```bash
+npm run build
+# [verify-dist] release bundle is intact
+```
+
+（发布包里**不需要编译** —— `dist/` 已随包发布，`build` 只是校验副本完整性。）
+
 **第 3 步需要你填数据库凭据**，脚本不会替你猜：
 
 ```bash

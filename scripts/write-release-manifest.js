@@ -28,11 +28,23 @@ const release = {
   license: src.license,
   type: src.type,
   engines: src.engines,
-  // The release's own entry points. The repo's scripts assume a source
-  // tree and a toolchain, so they are not carried over.
+  // The release's own entry points, plus a `build` that is a no-op here.
+  //
+  // `build` exists because the workflow "copy the files, npm install,
+  // npm run build, start it" is what people expect, and a missing
+  // script fails with a bare "Missing script" that gives no hint about
+  // what to do instead. In the release directory `dist/` is ALREADY
+  // compiled and shipped, so there is nothing to compile — the script
+  // verifies the shipped output instead of regenerating it, and fails
+  // loudly if the copy is broken.
+  //
+  // It is NOT the repo's `node scripts/build.js`: that needs the source
+  // tree and a TypeScript toolchain, neither of which the release
+  // carries. See docs/source-deploy.md for the source-tree workflow.
   scripts: {
     start: "node dist/cli.js",
     serve: "node dist/cli.js serve",
+    build: "node scripts/verify-dist.js",
     migrate: "node dist/cli.js migrate",
     "migrate:status": "node dist/cli.js migrate:status",
     init: "node dist/cli.js init",

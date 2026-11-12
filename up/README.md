@@ -9,13 +9,37 @@ cd /opt/ipquery
 bash install.sh
 ```
 
+## `npm run build` 在这里做什么
+
+**不编译。** `dist/` 是编好的、随包发布的，服务器上没有源码，也没有
+TypeScript 工具链，编译不了。
+
+发布包里的 `build` 跑的是 `scripts/verify-dist.js` —— 它**校验**发布副本：
+
+1. 编译产物在不在（`dist/cli.js`、`dist/api/server.js`、`dist/storage/schema.sql`）
+2. 运行期资源在不在（SQL 迁移、Handlebars 视图、静态资源、i18n）
+3. 迁移编号有没有重复或乱序
+4. `dist/` 里的每个文件是否还对得上 `dist.manifest.json` 的 SHA-256
+
+拷贝过程中出了任何问题（tar 包截断、文件没传全、被改过），它会**报错并以
+退出码 1 结束**，而不是让你在一个残缺的副本上起服务。
+
+```bash
+npm run build
+# [verify-dist] 347 files match dist.manifest.json
+# [verify-dist] release bundle is intact — run `node dist/cli.js serve` to start
+```
+
+> 想要**真正的编译**，走源码部署：拷贝整个仓库，`npm install && npm run build`。
+> 见 [`../docs/source-deploy.md`](../docs/source-deploy.md)。
+
 ## 目录里有什么
 
 | 路径                 | 说明                                                                                                        |
 | -------------------- | ----------------------------------------------------------------------------------------------------------- |
 | `dist/`              | **编译好的应用本体**（342 个文件）。`cli.js` 入口、SQL 迁移、Handlebars 视图、静态资源、i18n 文案，全在这里 |
 | `dist.manifest.json` | `dist/` 每个文件的大小 + SHA-256，用于校验部署副本是否被改动过                                              |
-| `package.json`       | **仅运行期**的依赖清单与命令（不含 devDependencies、不含 build/test 脚本）                                  |
+| `package.json`       | **仅运行期**的依赖清单与命令（不含 devDependencies；`build` 是校验而非编译，见下）                            |
 | `package-lock.json`  | 锁定的依赖版本，`npm ci` 靠它复现同一棵树                                                                   |
 | `.env.example`       | 环境变量模板，`install.sh` 会复制成 `.env`                                                                  |
 | `install.sh`         | 装依赖 → 建 `data/raw/` → 生成 `.env` → 跑迁移                                                              |

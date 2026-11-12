@@ -29,6 +29,8 @@
 ├── data/                    ← ETL 原始 CSV 下载目录（DATA_DIR，默认 ./data）
 │   └── raw/
 ├── install.sh               ← 装依赖 + 建目录 + 生成 .env + 迁移
+├── scripts/
+│   └── verify-dist.js       ← `npm run build` 跑的校验脚本（不编译）
 ├── init-runbook.md          ← 首次启动操作单
 ├── MANIFEST.md              ← 本文件
 ├── logs/                    ← 服务日志（按部署约定定位置）
@@ -64,7 +66,7 @@
 | ------------------------------------ | ------------------------------- |
 | `src/`                               | TypeScript 源码，编译后不再需要 |
 | `test/`                              | 测试只在开发机跑                |
-| `scripts/`                           | 构建脚本，服务器不构建          |
+| 仓库根的 `scripts/`                  | 构建脚本，服务器用不到          |
 | `node_modules/` 里的 devDependencies | `npm ci --omit=dev` 不装它们    |
 | `up/` 之外的任何仓库内容             | 开发用                          |
 

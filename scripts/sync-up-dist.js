@@ -120,6 +120,29 @@ function sync() {
       `${(manifest.totalBytes / 1024 / 1024).toFixed(1)} MB`,
   );
   console.log(`[sync-up-dist] manifest: ${path.relative(root, manifestPath)}`);
+
+  // The release's own `build` script lives in up/scripts/ and is
+  // hand-maintained (like install.sh) rather than generated. This
+  // script only syncs dist/, so a rename or a delete would leave
+  // up/package.json pointing at a file that is not there — and the
+  // release would fail with "Missing script" on the server. Check
+  // that the pointer still resolves.
+  const releaseManifestPath = path.join(root, "up", "package.json");
+  if (fs.existsSync(releaseManifestPath)) {
+    const release = JSON.parse(fs.readFileSync(releaseManifestPath, "utf8"));
+    for (const [name, command] of Object.entries(release.scripts ?? {})) {
+      const scriptFile = command.match(/node\s+(\S+\.js)/)?.[1];
+      if (!scriptFile) continue;
+      const abs = path.join(root, "up", scriptFile);
+      if (!fs.existsSync(abs)) {
+        console.error(
+          `[sync-up-dist] up/package.json script "${name}" points at ${scriptFile}, ` +
+            `which does not exist — the release would fail on the server`,
+        );
+        process.exit(1);
+      }
+    }
+  }
 }
 
 function check() {
