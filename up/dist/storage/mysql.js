@@ -35,6 +35,7 @@ var __importStar = (this && this.__importStar) || (function () {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.migrationStatus = exports.getAppliedVersions = exports.runMigrations = exports.MANUAL_SOURCE_TAGS = void 0;
 exports.createPool = createPool;
+exports.createPoolFor = createPoolFor;
 exports.truncateNew = truncateNew;
 exports.insertIntoNew = insertIntoNew;
 exports.insertIntoNewUpsert = insertIntoNewUpsert;
@@ -60,17 +61,28 @@ exports.getEtlRunSwap = getEtlRunSwap;
 const mysql = __importStar(require("mysql2/promise"));
 const ip_1 = require("../ip");
 function createPool(cfg) {
-    return mysql.createPool({
+    return createPoolFor({
         host: cfg.db.host,
         port: cfg.db.port,
         user: cfg.db.user,
         password: cfg.db.password,
         database: cfg.db.database,
-        connectionLimit: cfg.db.poolSize,
+        poolSize: cfg.db.poolSize,
+    });
+}
+function createPoolFor(conn) {
+    return mysql.createPool({
+        host: conn.host,
+        port: conn.port,
+        user: conn.user,
+        password: conn.password,
+        database: conn.database,
+        connectionLimit: conn.poolSize,
         waitForConnections: true,
         multipleStatements: true,
         timezone: "Z",
         dateStrings: false,
+        ...(conn.connectTimeout === undefined ? {} : { connectTimeout: conn.connectTimeout }),
     });
 }
 async function truncateNew(pool) {

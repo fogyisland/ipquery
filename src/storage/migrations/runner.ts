@@ -46,7 +46,23 @@ export async function runMigrations(pool: mysql.Pool): Promise<MigrationResult> 
       newlyApplied.push(version);
     } catch (err) {
       await conn.rollback();
-      throw new Error(`migration ${version} failed: ${(err as Error).message}`);
+      // Wrap the driver error so the message names the migration, but
+      // KEEP the driver's `code` on the wrapper.
+      //
+      // The code is what tells the boot path whether this is "the
+      // database is unreachable" (degrade and serve the wizard) or "the
+      // database is reachable but the schema is broken" (a real failure
+      // that must surface). A plain `new Error(message)` drops it, so
+      // every migration failure would look like an unreachable database
+      // and the server would quietly degrade instead of reporting the
+      // actual problem.
+      const driverCode = (err as { code?: unknown }).code;
+      const wrapped = new Error(`migration ${version} failed: ${(err as Error).message}`);
+      if (typeof driverCode === "string") {
+        (wrapped as { code?: string }).code = driverCode;
+      }
+      (wrapped as { cause?: unknown }).cause = err;
+      throw wrapped;
     } finally {
       conn.release();
     }

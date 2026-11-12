@@ -13,6 +13,7 @@ import { runMigrations } from "../storage/migrations/runner";
 import { registerView } from "../web/plugins/view";
 import { registerI18n } from "../web/plugins/i18n";
 import { registerSecurityHeaders } from "../web/plugins/security";
+import { registerDegradedGate } from "../web/plugins/degradedGate";
 import { registerQueryLogWriter } from "../web/plugins/queryLog";
 import { registerSession } from "../web/plugins/session";
 import { registerAuthGuards } from "../web/plugins/auth";
@@ -22,10 +23,12 @@ import { registerInitGuard } from "../web/plugins/initGuard";
 import { registerSessionPurger } from "../web/plugins/sessionPurger";
 import { registerProbeRetention } from "../web/plugins/probeRetention";
 import { registerRandomGenRunner } from "../web/plugins/randomIpGeneratorRunner";
+import { registerEtlScheduler } from "../web/plugins/etlScheduler";
 import { _resetForTests as resetLoginLimit } from "../web/plugins/loginRateLimit";
 import { createMailer } from "../mailer";
 import healthRoute from "./routes/health";
 import { createGlobalErrorHandler, createNotFoundHandler } from "./errorHandler";
+import { isDbUnreachableError, describeDbError } from "./dbBootstrap";
 import lookupRoute from "./routes/lookup";
 import statsRoute from "./routes/stats";
 import marketingRoute from "../web/routes/marketing";
@@ -42,6 +45,15 @@ declare module "fastify" {
     resetLoginLimit: () => void;
     flushQueryLog: () => Promise<void>;
     randomGenRunner: { tickNow: () => Promise<void>; syncFromSettings: () => Promise<boolean> };
+    /**
+     * True while the server is running in DEGRADED mode: the database
+     * could not be reached at boot, so only the setup wizard is served.
+     *
+     * The wizard clears this once it has saved working credentials and
+     * re-pointed the pool — the transition happens live, without a
+     * restart.
+     */
+    dbDegraded: boolean;
   }
 }
 
@@ -83,6 +95,33 @@ const PUBLIC_API_PATHS = new Set(["/healthz", "/lookup", "/stats"]);
 function isPublicApiPath(url: string): boolean {
   const pathOnly = url.split("?")[0]!;
   return PUBLIC_API_PATHS.has(pathOnly);
+}
+
+/**
+ * Define a re-assignable property on the root Fastify instance.
+ *
+ * Fastify's `decorate` produces a plain data property. That is fine for
+ * things that never change, but the pool and the degraded flag DO change
+ * at runtime (the setup wizard re-points the pool), and the routes live
+ * in a child instance that inherits the parent's properties by prototype
+ * chain. A data property assigned from the child SHADOWS the parent's
+ * copy instead of replacing it, so the two halves of the application end
+ * up using different pools.
+ *
+ * A getter/setter pair has no shadowing problem: every instance reads
+ * through to the same backing variable, and an assignment from any
+ * instance updates it.
+ */
+function defineMutable<T>(app: FastifyInstance, name: string, initial: T): void {
+  let current = initial;
+  Object.defineProperty(app, name, {
+    get: () => current,
+    set: (value: T) => {
+      current = value;
+    },
+    enumerable: true,
+    configurable: true,
+  });
 }
 
 export async function buildServer(
@@ -184,7 +223,30 @@ export async function buildServer(
   });
 
   app.decorate("cfg", cfg);
-  app.decorate("pool", createPool(cfg));
+
+  // The pool and the degraded flag are NOT plain decorators.
+  //
+  // They have to be re-assignable at runtime: the setup wizard re-points
+  // the pool at a different database and lifts the degraded flag once the
+  // operator has supplied working credentials.
+  //
+  // Fastify's `decorate` creates a plain data property on the instance.
+  // The routes live in a CHILD instance (Fastify creates one per
+  // `app.register(plugin)`), and a child inherits the parent's properties
+  // through the prototype chain. Assigning `child.pool = x` therefore
+  // creates an OWN property on the child that SHADOWS the parent's — the
+  // rest of the application would keep using the old pool while the
+  // wizard used the new one. The same shadowing applied to `dbDegraded`,
+  // so lifting the flag in a route handler did nothing.
+  //
+  // A getter/setter pair defined on the root instance fixes both: the
+  // child reads through to the root's backing variable, and an
+  // assignment from anywhere updates that one variable.
+  //
+  // (Fastify's own `decorate` cannot be used here: it refuses to
+  // re-decorate, and it has no getter form.)
+  defineMutable(app, "pool", createPool(cfg));
+  defineMutable(app, "dbDegraded", false);
 
   // Close the database pool LAST.
   //
@@ -219,16 +281,63 @@ export async function buildServer(
   // Migration is idempotent and cheap when everything is already applied (one
   // SELECT against schema_migrations), so this costs a single round trip on
   // every subsequent boot. The wizard re-runs it at seed time regardless.
-  await runMigrations(app.pool);
+  //
+  // If the database cannot be reached AT ALL, the server does not die. A
+  // fresh install has no database credentials yet — that is the whole point
+  // of the wizard — and the wizard lives behind this line. Killing the
+  // process here made the install unfinishable: the operator could not
+  // reach the page that would let them set the credentials, because the
+  // server that would serve it was refusing to start.
+  //
+  // So: an unreachable database degrades the boot instead of ending it.
+  // The server comes up in DEGRADED mode, serves the wizard, and lets the
+  // operator fix the connection from there. The wizard then re-points the
+  // pool and the server continues as normal — no restart required.
+  let dbReachable = true;
+  try {
+    await runMigrations(app.pool);
+  } catch (err) {
+    if (!isDbUnreachableError(err)) {
+      // A migration that ran and then failed on its own SQL is a real
+      // error — the schema is broken, not unreachable. Let it surface.
+      throw err;
+    }
+    dbReachable = false;
+    app.dbDegraded = true;
+    app.log.error(
+      { err, reason: describeDbError(err) },
+      "the database could not be reached — starting in setup-only mode; " +
+        "open /init to configure the connection",
+    );
+  }
 
-  await registerInitGuard(app);
+  // The setup guard is ALWAYS registered — including in degraded mode.
+  //
+  // Two reasons, both about Fastify's lifecycle rules:
+  //
+  //   - `requireSetup` is a decorator, and Fastify refuses to add a
+  //     decorator after the server has started.
+  //   - the guard's request hooks are added with `app.addHook`, and
+  //     Fastify refuses to add a hook after `ready()`.
+  //
+  // So the guard has to be installed at boot, whatever the database
+  // looks like. In degraded mode the initialization state is known
+  // without asking: an install whose database cannot be reached has not
+  // been initialized, so the wizard is open.
+  //
+  // What actually opens the REST of the application in degraded mode is
+  // `app.dbDegraded` — see src/web/plugins/degradedGate.ts.
+  await registerInitGuard(app, { knownInitialized: dbReachable ? undefined : false });
 
   // Now that the setup guard knows whether the system is initialized,
   // the secret requirement can be applied precisely. See the comment
   // above: an un-initialized install is allowed to run the wizard with
   // the placeholder secret; an initialized one is not — because that is
   // where real session cookies start being signed.
-  if (isProduction && !app.requireSetup) {
+  //
+  // A DEGRADED install has not been initialized either — it has not even
+  // been able to reach the database — so it takes the same exemption.
+  if (isProduction && dbReachable && !app.requireSetup) {
     const missing: string[] = [];
     if (!cfg.web.csrfSecret) missing.push("CSRF_SECRET");
     if (!cfg.web.sessionSecret) missing.push("SESSION_SECRET");
@@ -248,24 +357,59 @@ export async function buildServer(
   await registerView(app, { baseUrl: cfg.web.baseUrl });
   await registerI18n(app);
   await registerSecurityHeaders(app, { cookieSecure: cfg.web.cookieSecure });
+  // The degraded gate is registered BEFORE the session/auth/csrf hooks,
+  // and the order is load-bearing.
+  //
+  // Fastify runs onRequest hooks in registration order and the first one
+  // to reply wins. The session hook is an onRequest hook that queries the
+  // database (it loads the session behind the `sid` cookie) — so if the
+  // gate came after it, a request carrying a stale `sid` cookie would
+  // hit the session hook first, that hook would query a dead pool, and the
+  // request would come back 500 instead of the clean 503 that tells the
+  // operator what to do.
+  //
+  // A browser that visited the site before the database went down still
+  // carries the `sid` cookie, so without this ordering every API call
+  // would 500.
+  registerDegradedGate(app);
   await registerSession(app);
-  registerSessionPurger(app, app.pool);
+  // The pool is resolved at call time, not captured: the setup wizard
+  // re-points it at a different database while the server is running,
+  // and these timers would otherwise keep working on the old one.
+  registerSessionPurger(app, () => app.pool);
   // Sweep the per-IP probe audit trail so random_probe_log doesn't grow
   // without bound. Retention window defaults to 30 days and is
   // configurable via the `random_probe_retention_days` setting (0 = keep
   // forever).
-  registerProbeRetention(app, app.pool);
-  const randomGenRunner = registerRandomGenRunner(app, app.pool);
+  registerProbeRetention(app, () => app.pool);
+  const randomGenRunner = registerRandomGenRunner(app, () => app.pool);
+  // The ETL schedule lives in the server, not the CLI, so that it can be
+  // armed AFTER the wizard has configured the database. A server that came
+  // up degraded has no database to run an ETL against, so it must not arm
+  // a timer then — and when the operator fixes the connection, the timer
+  // starts without a restart.
+  registerEtlScheduler(app);
   // Sync the timer against the persisted setting. Default is OFF so
   // no random generation happens until the admin opts in.
-  await randomGenRunner.syncFromSettings();
+  //
+  // This reads from the database, so it cannot run in degraded mode —
+  // there is no database to read from. The runner stays OFF until the
+  // wizard fixes the connection; the wizard calls syncFromSettings()
+  // itself once the pool has been re-pointed.
+  if (dbReachable) {
+    await randomGenRunner.syncFromSettings();
+    // The database is real: arm the ETL schedule.
+    app.startEtlScheduler();
+  } else {
+    app.log.info("skipping the random-generator sync — no database yet");
+  }
   app.decorate("randomGenRunner", randomGenRunner);
   await registerAuthGuards(app);
   await registerCsrf(app);
   app.decorate("resetLoginLimit", resetLoginLimit);
 
   app.decorate("mailer", createMailer(cfg));
-  const queryLogWriter = registerQueryLogWriter(app, app.pool);
+  const queryLogWriter = registerQueryLogWriter(app, () => app.pool);
   app.decorate("flushQueryLog", () => queryLogWriter.flush());
 
   await app.register(healthRoute);

@@ -5,17 +5,57 @@ import type { IpRangeRow, EtlRun, Source } from "../types";
 import { compareBuffers } from "../ip";
 
 export function createPool(cfg: AppConfig): mysql.Pool {
-  return mysql.createPool({
+  return createPoolFor({
     host: cfg.db.host,
     port: cfg.db.port,
     user: cfg.db.user,
     password: cfg.db.password,
     database: cfg.db.database,
-    connectionLimit: cfg.db.poolSize,
+    poolSize: cfg.db.poolSize,
+  });
+}
+
+/**
+ * The five connection values plus the pool size, without the whole
+ * AppConfig.
+ *
+ * `createPool` only ever reads `cfg.db`, so this is the honest shape of
+ * its input. It exists so the setup wizard can build a candidate pool
+ * for a configuration that is not `cfg` yet — without fabricating a
+ * whole AppConfig object to satisfy the signature.
+ */
+export interface PoolConnection {
+  host: string;
+  port: number;
+  user: string;
+  password: string;
+  database: string;
+  poolSize: number;
+  /**
+   * Connect timeout in milliseconds.
+   *
+   * Optional: the normal pool leaves it at the driver's default, because
+   * the long default is right for a server that should wait for a slow
+   * database. The probes that run on the path to serving the wizard
+   * override it with something short — an operator waiting on /init should
+   * not sit through a 30-second TCP timeout.
+   */
+  connectTimeout?: number;
+}
+
+export function createPoolFor(conn: PoolConnection): mysql.Pool {
+  return mysql.createPool({
+    host: conn.host,
+    port: conn.port,
+    user: conn.user,
+    password: conn.password,
+    database: conn.database,
+    connectionLimit: conn.poolSize,
     waitForConnections: true,
     multipleStatements: true,
     timezone: "Z",
     dateStrings: false,
+    ...(conn.connectTimeout === undefined ? {} : { connectTimeout: conn.connectTimeout }),
   });
 }
 

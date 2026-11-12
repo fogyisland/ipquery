@@ -18,18 +18,28 @@ import { loadRetentionDays, purgeOldProbes } from "../../storage/randomProbeLog"
 
 export function registerProbeRetention(
   app: FastifyInstance,
-  pool: Pool,
+  pool: Pool | (() => Pool),
   opts?: { intervalMs?: number },
 ): { purgeNow: () => Promise<number> } {
   const intervalMs = opts?.intervalMs ?? 6 * 60 * 60 * 1000;
   let timer: NodeJS.Timeout | null = null;
 
+  // Resolved at call time: the setup wizard can re-point the pool at a
+  // different database while the server is running, and a captured pool
+  // would keep sweeping the old one.
+  const resolvePool = (): Pool => (typeof pool === "function" ? pool() : pool);
+
   const tick = async (): Promise<number> => {
+    // While the server is in degraded mode there is no database to sweep.
+    // Skipping keeps the log clean instead of repeating the same failure
+    // every tick on a server that is otherwise working fine.
+    if (app.dbDegraded) return 0;
     try {
-      const retentionDays = await loadRetentionDays(pool);
+      const target = resolvePool();
+      const retentionDays = await loadRetentionDays(target);
       if (retentionDays <= 0) return 0;
-      const purged = await purgeOldProbes(pool, retentionDays);
-      if (purged > 0) app.log.info({ purged, retentionDays }, "probeRetention tick");
+      const purged = await purgeOldProbes(target, retentionDays);
+      if (purged > 0) app.log.info({ purged: purged, retentionDays }, "probeRetention tick");
       return purged;
     } catch (err) {
       app.log.error({ err }, "probeRetention tick failed");

@@ -1,42 +1,8 @@
 #!/usr/bin/env node
 "use strict";
-var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    var desc = Object.getOwnPropertyDescriptor(m, k);
-    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
-      desc = { enumerable: true, get: function() { return m[k]; } };
-    }
-    Object.defineProperty(o, k2, desc);
-}) : (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    o[k2] = m[k];
-}));
-var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
-    Object.defineProperty(o, "default", { enumerable: true, value: v });
-}) : function(o, v) {
-    o["default"] = v;
-});
-var __importStar = (this && this.__importStar) || (function () {
-    var ownKeys = function(o) {
-        ownKeys = Object.getOwnPropertyNames || function (o) {
-            var ar = [];
-            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
-            return ar;
-        };
-        return ownKeys(o);
-    };
-    return function (mod) {
-        if (mod && mod.__esModule) return mod;
-        var result = {};
-        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
-        __setModuleDefault(result, mod);
-        return result;
-    };
-})();
 Object.defineProperty(exports, "__esModule", { value: true });
 // SPDX-License-Identifier: MIT
 const commander_1 = require("commander");
-const cron = __importStar(require("node-cron"));
 const config_1 = require("./config");
 const pipeline_1 = require("./etl/pipeline");
 const runGuard_1 = require("./etl/runGuard");
@@ -48,6 +14,7 @@ const bootstrap_1 = require("./web/admin/bootstrap");
 const settings_1 = require("./storage/settings");
 const users_1 = require("./storage/users");
 const download_1 = require("./etl/download");
+const dbBootstrap_1 = require("./api/dbBootstrap");
 const program = new commander_1.Command();
 program.name("ipq").description("IP geolocation aggregator").version("0.1.0");
 program
@@ -77,7 +44,19 @@ program
     .action(async (opts) => {
     const cfg = (0, config_1.loadConfig)();
     console.log((0, config_1.configSummary)(cfg));
-    if (opts.once) {
+    // The ETL needs a database. When the database is not reachable, running
+    // it here would either throw or sit in the driver's connect timeout —
+    // and both happen BEFORE the server starts, which is exactly the
+    // situation the degraded boot exists to survive. The operator's way in
+    // is the wizard at /init, and the wizard is served by the server.
+    //
+    // So: probe first. If the database answers, do the normal thing. If it
+    // does not, skip the ETL and let the server come up in setup-only mode.
+    const dbUp = await (0, dbBootstrap_1.databaseIsReachable)(cfg);
+    if (!dbUp) {
+        console.log("[serve] the database is not reachable — skipping the ETL and starting in setup-only mode.");
+    }
+    if (opts.once && dbUp) {
         try {
             await (0, pipeline_1.runPipeline)({ cfg });
         }
@@ -85,26 +64,24 @@ program
             console.error("initial ETL failed (continuing to serve):", e);
         }
     }
-    cron.schedule(cfg.etl.schedule, async () => {
-        console.log("[cron] triggering ETL");
-        try {
-            await (0, pipeline_1.runPipeline)({ cfg });
-        }
-        catch (e) {
-            // A lock refusal is expected, not an error: the previous run is
-            // simply still going. Say so, rather than logging it as a
-            // failure that an operator has to investigate.
-            if (e instanceof runGuard_1.EtlRunLockedError) {
-                console.log(`[cron] ETL skipped: ${e.message}`);
-            }
-            else {
-                console.error("[cron] ETL failed:", e);
-            }
-        }
-    }, { timezone: cfg.etl.timezone });
+    // The recurring ETL schedule is NOT armed here. It lives in the server
+    // (src/web/plugins/etlScheduler.ts), because it has to be armed at the
+    // moment the database becomes usable — which may be minutes after
+    // boot, when the operator finishes step 2 of the setup wizard. A cron
+    // started from the CLI could not be re-armed at that point without a
+    // restart, so the daily ETL would silently never run on an install
+    // that began without a database.
     const app = await (0, server_1.buildServer)(cfg);
     await app.listen({ port: cfg.api.port, host: "0.0.0.0" });
     console.log(`[api] listening on :${cfg.api.port}`);
+    if (app.dbDegraded) {
+        // Say it plainly on stdout. The operator is looking at a server
+        // that answers 503 everywhere except /init, and they need to know
+        // that the way in is the wizard — not that something is broken.
+        console.log("[api] the database could not be reached — running in setup-only mode.\n" +
+            `[api] open http://localhost:${cfg.api.port}/init to configure the connection.\n` +
+            "[api] the rest of the application answers 503 until you do.");
+    }
 });
 program
     .command("status")
@@ -123,6 +100,91 @@ program
     finally {
         await pool.end();
     }
+});
+program
+    .command("db")
+    .description("Set the database connection and write it to .env (tested before it is persisted)")
+    .option("--host <host>", "database host")
+    .option("--port <port>", "database port")
+    .option("--user <user>", "database user")
+    .option("--password <password>", "database password")
+    .option("--name <name>", "database name")
+    .option("--save", "write the connection to .env (without this, only the connection is tested)", false)
+    .action(async (opts) => {
+    const cfg = (0, config_1.loadConfig)();
+    // Missing values fall back to what is already configured, so
+    // `--host 10.0.0.5` alone is enough to move a working install to
+    // another host. The password falls back to the configured one too —
+    // so changing only the host or the database name does not require
+    // re-typing it.
+    //
+    // The password is deliberately NOT read from the command line by
+    // default: argv lands in the shell history and in `ps` output. Pass
+    // `--password` only when there is no way around it, and prefer
+    // DB_PASSWORD in the environment (which this falls back to through
+    // the config loader).
+    const host = (opts.host ?? cfg.db.host).trim();
+    const user = (opts.user ?? cfg.db.user).trim();
+    const database = (opts.name ?? cfg.db.database).trim();
+    const portRaw = (opts.port ?? String(cfg.db.port)).trim();
+    const port = Number(portRaw);
+    const password = opts.password ?? cfg.db.password;
+    if (!host || !user || !database) {
+        console.error("[db] host, user and database name are required (pass --host, --user, --name)");
+        process.exit(2);
+    }
+    if (!Number.isInteger(port) || port < 1 || port > 65535) {
+        console.error(`[db] --port must be an integer between 1 and 65535 (got "${portRaw}")`);
+        process.exit(2);
+    }
+    const target = { host, port, user, password, database };
+    // Test BEFORE persisting. A .env that cannot connect is worse than
+    // no .env: the next boot dies on it with no way back.
+    console.log(`[db] testing ${user}@${host}:${port}/${database} …`);
+    const probe = await (0, dbBootstrap_1.probeConnection)(target, cfg.db.poolSize);
+    if (!probe.ok) {
+        console.error(`[db] the connection failed: ${probe.reason}`);
+        console.error("[db] nothing was written to .env");
+        process.exit(1);
+    }
+    console.log("[db] the connection works");
+    if (!opts.save) {
+        console.log("[db] --save was not given: nothing was written to .env");
+        return;
+    }
+    // Apply the schema FIRST, and write .env only once it worked.
+    //
+    // The order matters: a connection can succeed and the migration
+    // still fail (no DDL rights, conflicting schema). If .env were
+    // written first, the next `serve` would try to migrate that
+    // database again, fail the same way, and take the server down —
+    // leaving the operator with a dead process and a .env they have
+    // to hand-edit. Migrating first means .env is only ever written
+    // for a database that is known to work.
+    cfg.db.host = host;
+    cfg.db.port = port;
+    cfg.db.user = user;
+    cfg.db.password = password;
+    cfg.db.database = database;
+    const pool = (0, mysql_1.createPool)(cfg);
+    try {
+        const result = await (0, runner_1.runMigrations)(pool);
+        console.log(result.applied.length === 0
+            ? "[db] the schema was already up to date"
+            : `[db] applied ${result.applied.length} migration(s)`);
+    }
+    catch (err) {
+        console.error(`[db] the schema could not be built: ${err.message}`);
+        console.error("[db] nothing was written to .env");
+        process.exitCode = 1;
+        return;
+    }
+    finally {
+        await pool.end();
+    }
+    const envPath = (0, dbBootstrap_1.writeDbCredentialsToEnv)(target);
+    console.log(`[db] connection written to ${envPath}`);
+    console.log("[db] done — the connection is live for the next `serve`");
 });
 program
     .command("migrate")
@@ -286,6 +348,20 @@ program
     console.log(`[download] done: ${results.length} file(s), ${(total / 1024 / 1024).toFixed(1)} MB total`);
 });
 program.parseAsync().catch((err) => {
+    // A database that cannot be reached is the single most common failure
+    // during a first install, and the driver's raw error ("connect
+    // ECONNREFUSED 127.0.0.1:3306") does not tell an operator what to do
+    // about it in the context of this application. Translate it into a
+    // pointer at the setup wizard, which is where the database gets
+    // configured.
+    //
+    // Anything that is NOT a reachability failure is a real error and keeps
+    // its stack trace — a bug should look like a bug.
+    const explanation = (0, dbBootstrap_1.explainCliDbFailure)(err);
+    if (explanation) {
+        console.error(`\n[ipq] ${explanation}\n`);
+        process.exit(1);
+    }
     console.error(err);
     process.exit(1);
 });

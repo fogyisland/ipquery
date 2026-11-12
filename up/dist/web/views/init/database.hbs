@@ -3,17 +3,32 @@
   <h1>{{req.t "setup.database.title"}}</h1>
   <p class="boot-lede">{{req.t "setup.database.intro"}}</p>
 </header>
-<h2 class="boot-section-title">{{req.t "setup.boot.connectionTitle"}}</h2>
-<dl class="boot-kv">
-  <div><dt>{{req.t "setup.database.hostLabel"}}</dt><dd>{{db.host}}</dd></div>
-  <div><dt>{{req.t "setup.database.portLabel"}}</dt><dd>{{db.port}}</dd></div>
-  <div><dt>{{req.t "setup.database.userLabel"}}</dt><dd>{{db.user}}</dd></div>
-  <div><dt>{{req.t "setup.database.dbLabel"}}</dt><dd>{{db.database}}</dd></div>
-</dl>
-<p class="boot-note">{{req.t "setup.database.envHint"}}</p>
+
+{{#if degraded}}
+<div class="boot-alert">
+  <p class="form-error">{{req.t "setup.database.degraded"}}</p>
+</div>
+{{/if}}
+
 {{#if error}}<div class="boot-alert"><p class="form-error">{{error}}</p></div>{{/if}}
+
 <form method="POST" action="/init/database" class="boot-form">
   <input type="hidden" name="csrf" value="{{csrfToken}}">
+
+  <h2 class="boot-section-title">{{req.t "setup.boot.connectionTitle"}}</h2>
+
+  {{> form-field name="host" label=(req.t "setup.database.hostLabel") required=true value=db.host }}
+  {{> form-field name="port" label=(req.t "setup.database.portLabel") required=true value=db.port }}
+  {{> form-field name="user" label=(req.t "setup.database.userLabel") required=true value=db.user }}
+  {{!-- The password is never pre-filled: it is stored in .env, and
+       echoing it back into the HTML would put it in the page source, in
+       the browser's autofill store, and in any "save page" the operator
+       makes. --}}
+  {{> form-field name="password" type="password" label=(req.t "setup.database.passwordLabel") placeholder=(req.t "setup.database.passwordPlaceholder") autocomplete="new-password" }}
+  {{> form-field name="database" label=(req.t "setup.database.dbLabel") required=true value=db.database }}
+
+  <p class="boot-note">{{#if envExists}}{{req.t "setup.database.envHint"}}{{else}}{{req.t "setup.database.envHintFresh"}}{{/if}}</p>
+
   <div class="boot-actions">
     <button type="submit" class="btn-primary">{{req.t "setup.database.test"}}</button>
     <a href="/init" class="boot-back">{{req.t "common.back"}}</a>

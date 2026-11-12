@@ -15,7 +15,7 @@ declare module "fastify" {
         pendingLog?: PendingLookup;
     }
 }
-export declare function registerQueryLogWriter(app: FastifyInstance, pool: Pool, opts?: {
+export declare function registerQueryLogWriter(app: FastifyInstance, pool: Pool | (() => Pool), opts?: {
     flushIntervalMs?: number;
     maxBatch?: number;
 }): {

@@ -5,13 +5,14 @@
 // behavior (routes + guard + bootstrap + login flow). Follows the same
 // beforeAll/afterAll pattern as init-routes.test.ts (drop+create DB, do NOT
 // call markInitialized so we can test the uninitialized path).
-import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import request from "supertest";
 import * as mysql from "mysql2/promise";
 import { loadConfig } from "../../src/config";
 import { runMigrations } from "../../src/storage/migrations/runner";
 import { buildServer } from "../../src/api/server";
 import { getSetting, isInitialized } from "../../src/storage/settings";
+import { isolateEnvFile, type EnvIsolation } from "../helpers/envIsolation";
 
 const TEST_DB = "ipquery_test_setup_wizard_e2e";
 
@@ -26,6 +27,8 @@ let appPre: Awaited<ReturnType<typeof buildServer>>;
 // Post-init: rebuilt after the wizard marks initialized_at; flips
 // initGuard.requireSetup = false.
 let appPost: Awaited<ReturnType<typeof buildServer>>;
+// Keeps the wizard's .env writes out of the developer's project .env.
+let envIsolation: EnvIsolation | undefined;
 
 async function dropAndCreate(): Promise<TestDb> {
   const cfg = loadConfig();
@@ -111,6 +114,10 @@ async function wizardPost(
 }
 
 beforeAll(async () => {
+  // Step 2 of the wizard writes the connection to a .env file. Without
+  // this, it would write the TEST database into the developer's own
+  // project .env and silently replace their working configuration.
+  envIsolation = isolateEnvFile();
   td = await dropAndCreate();
   appPre = await freshApp();
 });
@@ -120,6 +127,7 @@ afterAll(async () => {
   if (appPost) await appPost.close();
   await td.pool.end();
   await dropDb(td.dbName);
+  envIsolation?.restore();
 });
 
 describe("setup wizard E2E", () => {
@@ -131,8 +139,17 @@ describe("setup wizard E2E", () => {
     expect(welcome.status).toBe(200);
     expect(welcome.text).toContain('class="layout-setup"');
 
-    // Step 2 — database
-    const dbPost = await wizardPost(agent, "/init/database", {});
+    // Step 2 — database. The step is a real configuration step: it
+    // collects the connection details, proves they work and re-points the
+    // live pool. So the POST carries them.
+    const cfg = loadConfig();
+    const dbPost = await wizardPost(agent, "/init/database", {
+      host: cfg.db.host,
+      port: String(cfg.db.port),
+      user: cfg.db.user,
+      password: cfg.db.password,
+      database: td.dbName,
+    });
     expect(dbPost.status).toBe(302);
     expect(dbPost.headers["location"]).toMatch(/^\/init\/site/);
 
@@ -250,7 +267,7 @@ describe("setup wizard E2E", () => {
     expect(Number(afterRows[0]!.n)).toBe(50);
   });
 
-  it("DB step failure: probe returns error flash", async () => {
+  it("DB step failure: a connection that does not work is rejected", async () => {
     // Wipe `initialized_at` so the guard doesn't redirect /init requests.
     await td.pool.query(`DELETE FROM settings WHERE k = 'initialized_at'`);
 
@@ -264,50 +281,53 @@ describe("setup wizard E2E", () => {
     cfg.db.database = td.dbName;
     const appFail = await buildServer(cfg);
     try {
-      // Spy on app.pool.getConnection to fail once.
-      const original = appFail.pool.getConnection.bind(appFail.pool);
-      const spy = vi.spyOn(appFail.pool, "getConnection").mockImplementationOnce(async () => {
-        throw new Error("connect ECONNREFUSED");
-      });
-      try {
-        // GET the database page so we have csrf cookies.
-        const page = await request(appFail.server).get("/init/database");
-        const token = extractCsrf(page.text);
-        // POST /init/database should redirect with ?flash=error.
-        const post = await request(appFail.server)
-          .post("/init/database")
-          .set("Cookie", extractCsrfPair(page.headers).cookie)
-          .type("form")
-          .send({ csrf: token });
-        expect(post.status).toBe(302);
-        expect(post.headers["location"]).toBe("/init/database?flash=error");
+      // GET the database page so we have csrf cookies.
+      const page = await request(appFail.server).get("/init/database");
+      const token = extractCsrf(page.text);
+      const { cookie } = extractCsrfPair(page.headers);
 
-        // Follow the redirect; the GET renders the form with the error message.
-        const errPage = await request(appFail.server).get("/init/database?flash=error");
-        expect(errPage.status).toBe(200);
-        // The page must contain the localized `setup.database.failure` text
-        // (zh-CN default locale: "无法连接数据库,请检查 .env 配置并确认服务器已启动。")
-        expect(errPage.text).toContain('class="form-error"');
-        expect(errPage.text).toContain("无法连接数据库");
-      } finally {
-        spy.mockRestore();
-      }
+      // A connection that cannot be reached must be REJECTED, and the
+      // form must come back with a readable reason. (The step used to
+      // redirect with ?flash=error; it now re-renders with the reason
+      // inline, because the operator has to see WHICH value was wrong.)
+      //
+      // The port below is one nothing listens on, so the probe fails for
+      // a genuine reason rather than through a mock.
+      const post = await request(appFail.server)
+        .post("/init/database")
+        .set("Cookie", cookie)
+        .type("form")
+        .send({
+          csrf: token,
+          host: cfg.db.host,
+          port: "59322",
+          user: cfg.db.user,
+          password: cfg.db.password,
+          database: td.dbName,
+        });
+      expect(post.status).toBe(200);
+      expect(post.text).toContain('class="form-error"');
+      // The reason is operator-facing, not a raw driver stack trace.
+      expect(post.text).toMatch(/refused|unreachable|拒绝|无法连接/i);
 
-      // After restoring the spy, the next POST succeeds and the wizard can
-      // continue. Sanity check: restore + ping + redirect to /init/site.
+      // And with a working connection the wizard continues.
       const page2 = await request(appFail.server).get("/init/database");
       const token2 = extractCsrf(page2.text);
+      const { cookie: cookie2 } = extractCsrfPair(page2.headers);
       const post2 = await request(appFail.server)
         .post("/init/database")
-        .set("Cookie", extractCsrfPair(page2.headers).cookie)
+        .set("Cookie", cookie2)
         .type("form")
-        .send({ csrf: token2 });
+        .send({
+          csrf: token2,
+          host: cfg.db.host,
+          port: String(cfg.db.port),
+          user: cfg.db.user,
+          password: cfg.db.password,
+          database: td.dbName,
+        });
       expect(post2.status).toBe(302);
       expect(post2.headers["location"]).toMatch(/^\/init\/site/);
-
-      // Verify original binding is intact (spy fully restored).
-      const conn = await original();
-      conn.release();
     } finally {
       await appFail.close();
     }

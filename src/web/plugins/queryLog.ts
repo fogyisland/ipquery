@@ -22,7 +22,7 @@ declare module "fastify" {
 
 export function registerQueryLogWriter(
   app: FastifyInstance,
-  pool: Pool,
+  pool: Pool | (() => Pool),
   opts?: { flushIntervalMs?: number; maxBatch?: number },
 ): { flush: () => Promise<void> } {
   const flushIntervalMs = opts?.flushIntervalMs ?? 5000;
@@ -30,12 +30,23 @@ export function registerQueryLogWriter(
   let buffer: QueryLogInsertable[] = [];
   let timer: NodeJS.Timeout | null = null;
 
+  // Resolved at call time: the setup wizard can re-point the pool at a
+  // different database while the server is running, and a captured pool
+  // would keep writing query logs to the old one.
+  const resolvePool = (): Pool => (typeof pool === "function" ? pool() : pool);
+
   async function flush(): Promise<void> {
     if (buffer.length === 0) return;
     const slice = buffer;
     buffer = [];
+    // While the server is in degraded mode there is nowhere to write
+    // these rows. Dropping them is correct: the requests they describe
+    // were answered with 503s from the setup-only mode, not real lookups,
+    // so there is nothing to record. Attempting the insert would fail on
+    // every flush and log the same error every five seconds.
+    if (app.dbDegraded) return;
     try {
-      await insertQueryLogs(pool, slice);
+      await insertQueryLogs(resolvePool(), slice);
     } catch (err) {
       app.log.error({ err, count: slice.length }, "queryLog flush failed");
     }

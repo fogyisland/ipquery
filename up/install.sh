@@ -89,12 +89,21 @@ fi
 # ── 5. Migrations ──────────────────────────────────────────────────
 
 # The migrations need a reachable database with the credentials from
-# .env. If the operator has not filled them in yet, this fails — which
-# is correct: running the service against a half-configured database
-# is worse than stopping here.
+# .env. If the operator has not filled them in yet, this fails — and that
+# is NOT fatal for the install: the server starts in setup-only mode and
+# the wizard at /init is where the database gets configured. Dying here
+# would leave the operator with no way to reach that page.
+#
+# So: try, and on failure say what to do next and carry on. The wizard
+# runs the migrations itself once it has working credentials.
 log "applying migrations"
-if ! (cd "$APP_DIR" && node dist/cli.js migrate); then
-  fail "migration failed — check DB_* in .env, that the database exists, and that the user can create tables" 2
+if (cd "$APP_DIR" && node dist/cli.js migrate); then
+  log "migrations applied"
+else
+  log "migrations could not run — the database is not reachable with the current DB_* values"
+  log "  that is fine at this stage: the server starts in setup-only mode and"
+  log "  http://localhost:${PORT:-5001}/init is where the database gets configured."
+  log "  fill in DB_* in .env first if you would rather skip the wizard."
 fi
 
 # ── 6. What remains ────────────────────────────────────────────────
@@ -105,15 +114,30 @@ cat <<EOF
 [install]
 [install] remaining steps:
 [install]
-[install]   1. create the admin account (this also loads the optional
-[install]      seed data and locks /init):
+[install]   The database can be configured either way:
+[install]
+[install]     A. in the web wizard (recommended — the server starts even
+[install]        without a database, and the wizard sets it up):
+[install]          node dist/cli.js serve
+[install]          open http://localhost:5001/init
+[install]
+[install]     B. on the command line (tests the connection first, then
+[install]        writes it to .env and applies the migrations):
+[install]          export DB_HOST=127.0.0.1 DB_PORT=3306 DB_USER=ipquery
+[install]          export DB_NAME=ipquery DB_PASSWORD='<your-password>'
+[install]          node dist/cli.js db --host "\$DB_HOST" --port "\$DB_PORT" \
+[install]              --user "\$DB_USER" --name "\$DB_NAME" --save
+[install]
+[install]     C. by hand, then restart:
+[install]        edit DB_HOST / DB_PORT / DB_USER / DB_PASSWORD / DB_NAME in .env
+[install]        node dist/cli.js migrate
+[install]
+[install]   Then create the admin account (this also loads the optional
+[install]   seed data and locks /init):
 [install]        node dist/cli.js init --email <admin@example.com> --password '<strong-password>'
 [install]
-[install]   2. load the real IP data (DB-IP, about 5-15 minutes):
+[install]   Load the real IP data (DB-IP, about 5-15 minutes):
 [install]        node dist/cli.js update
-[install]
-[install]   3. start the service:
-[install]        node dist/cli.js serve
 [install]
 [install]   .env filled in now: $NEEDS_ENV
 [install]

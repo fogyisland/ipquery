@@ -18,9 +18,20 @@ const sessions_1 = require("../../storage/sessions");
 function registerSessionPurger(app, pool, opts) {
     const intervalMs = opts?.intervalMs ?? 60 * 60 * 1000;
     let timer = null;
+    // The pool may be re-pointed at runtime (the setup wizard swaps it when
+    // the operator supplies working credentials), so resolve it at call
+    // time rather than capturing it. A captured pool would keep sweeping
+    // the old database — or the one that was never reachable.
+    const resolvePool = () => (typeof pool === "function" ? pool() : pool);
     const tick = async () => {
+        // While the server is in degraded mode there is no database to sweep.
+        // The tick would fail, and the failure log would repeat every hour on
+        // a server that is otherwise working fine — noise that makes a healthy
+        // setup-only install look broken. Skip instead.
+        if (app.dbDegraded)
+            return 0;
         try {
-            const n = await (0, sessions_1.purgeExpired)(pool);
+            const n = await (0, sessions_1.purgeExpired)(resolvePool());
             if (n > 0)
                 app.log.info({ purged: n }, "sessionPurger tick");
             return n;
