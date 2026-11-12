@@ -27,7 +27,7 @@ const SITE_NAME_MAX = 128;
 const TAGLINE_MAX = 256;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-// Build the 6-step boot-log indicator. Labels are pre-translated here (Phase B
+// Build the 7-step boot-log indicator. Labels are pre-translated here (Phase B
 // Task 6 finding: avoid {{req.t '...'}} inside {{#each}}). `done` marks every
 // step before the current one so the rail can show [ok] and filled ticks.
 function buildSteps(
@@ -36,11 +36,12 @@ function buildSteps(
 ): Array<{ n: number; label: string; href: string; active: boolean; done: boolean }> {
   const steps: Array<[string, string]> = [
     [req.t("setup.steps.1"), "/init"],
-    [req.t("setup.steps.2"), "/init/database"],
-    [req.t("setup.steps.3"), "/init/site"],
-    [req.t("setup.steps.4"), "/init/admin"],
-    [req.t("setup.steps.5"), "/init/seed"],
-    [req.t("setup.steps.6"), "/init/complete"],
+    [req.t("setup.steps.2"), "/init/env"],
+    [req.t("setup.steps.3"), "/init/database"],
+    [req.t("setup.steps.4"), "/init/site"],
+    [req.t("setup.steps.5"), "/init/admin"],
+    [req.t("setup.steps.6"), "/init/seed"],
+    [req.t("setup.steps.7"), "/init/complete"],
   ];
   return steps.map(([label, href], index) => {
     const n = index + 1;
@@ -58,7 +59,7 @@ function renderCsrfError(req: FastifyRequest, reply: FastifyReply, step: number)
     csrfToken: req.csrfToken,
     steps: buildSteps(req, step),
     step,
-    total: 6,
+    total: 7,
     req,
   });
 }
@@ -164,13 +165,18 @@ async function startBackgroundEtl(app: FastifyInstance): Promise<{ runId: number
  * will be kept". Silently replacing an operator's session secret would
  * log everyone out; silently keeping a placeholder would ship a
  * deployment signing cookies with a value that is in the repository.
+ *
+ * The secret VALUES are deliberately not returned. A secret that reaches
+ * a template is one template edit away from being rendered into an HTML
+ * page — where it lands in the browser cache, in a pasted "view source",
+ * and in every proxy log along the way. The server generates them and
+ * writes them straight to disk; it never shows them. The form only needs
+ * to know that they are there.
  */
 function readEnvState(port: number, baseUrl: string): {
   env: {
     port: number;
     baseUrl: string;
-    sessionSecret: string;
-    csrfSecret: string;
     hasSecrets: boolean;
   };
 } {
@@ -192,8 +198,6 @@ function readEnvState(port: number, baseUrl: string): {
     env: {
       port: Number(existing.PORT) || port,
       baseUrl: existing.WEB_BASE_URL?.trim() || baseUrl,
-      sessionSecret,
-      csrfSecret,
       hasSecrets,
     },
   };
@@ -208,7 +212,7 @@ export default async function initRoutes(app: FastifyInstance): Promise<void> {
       csrfToken: req.csrfToken,
       steps: buildSteps(req, 1),
       step: 1,
-      total: 6,
+      total: 7,
       flash: getFlash(req, "setup.welcome.title", "setup.welcome.title"),
       req,
     });
@@ -231,9 +235,9 @@ export default async function initRoutes(app: FastifyInstance): Promise<void> {
       layout: "layouts/init",
       title: req.t("setup.env.title"),
       csrfToken: req.csrfToken,
-      steps: buildSteps(req, 1),
-      step: 1,
-      total: 6,
+      steps: buildSteps(req, 2),
+      step: 2,
+      total: 7,
       env: state.env,
       envCreated: false,
       req,
@@ -269,9 +273,9 @@ export default async function initRoutes(app: FastifyInstance): Promise<void> {
         layout: "layouts/init",
         title: req.t("setup.env.title"),
         csrfToken: req.csrfToken,
-        steps: buildSteps(req, 1),
-        step: 1,
-        total: 6,
+        steps: buildSteps(req, 2),
+        step: 2,
+        total: 7,
         env: { ...state.env, port, baseUrl },
         envCreated: false,
         error: fieldError,
@@ -303,10 +307,10 @@ export default async function initRoutes(app: FastifyInstance): Promise<void> {
         layout: "layouts/init",
         title: req.t("setup.env.title"),
         csrfToken: req.csrfToken,
-        steps: buildSteps(req, 1),
-        step: 1,
-        total: 6,
-        env: { port, baseUrl, sessionSecret: "", csrfSecret: "", hasSecrets: true },
+        steps: buildSteps(req, 2),
+        step: 2,
+        total: 7,
+        env: { port, baseUrl, hasSecrets: true },
         envCreated: result.created,
         error: req.t("setup.env.restartNeeded", { port: String(port) }),
         req,
@@ -332,9 +336,9 @@ export default async function initRoutes(app: FastifyInstance): Promise<void> {
       layout: "layouts/init",
       title: req.t("setup.database.title"),
       csrfToken: req.csrfToken,
-      steps: buildSteps(req, 2),
-      step: 2,
-      total: 6,
+      steps: buildSteps(req, 3),
+      step: 3,
+      total: 7,
       db: {
         host: app.cfg.db.host,
         port: app.cfg.db.port,
@@ -409,9 +413,9 @@ export default async function initRoutes(app: FastifyInstance): Promise<void> {
         layout: "layouts/init",
         title: req.t("setup.database.title"),
         csrfToken: req.csrfToken,
-        steps: buildSteps(req, 2),
-        step: 2,
-        total: 6,
+        steps: buildSteps(req, 3),
+        step: 3,
+        total: 7,
         db: { host, port, user, database },
         degraded: app.dbDegraded,
         envExists: envFileExists(),
@@ -431,9 +435,9 @@ export default async function initRoutes(app: FastifyInstance): Promise<void> {
         layout: "layouts/init",
         title: req.t("setup.database.title"),
         csrfToken: req.csrfToken,
-        steps: buildSteps(req, 2),
-        step: 2,
-        total: 6,
+        steps: buildSteps(req, 3),
+        step: 3,
+        total: 7,
         db: { host, port, user, database },
         degraded: app.dbDegraded,
         envExists: envFileExists(),
@@ -475,9 +479,9 @@ export default async function initRoutes(app: FastifyInstance): Promise<void> {
         layout: "layouts/init",
         title: req.t("setup.database.title"),
         csrfToken: req.csrfToken,
-        steps: buildSteps(req, 2),
-        step: 2,
-        total: 6,
+        steps: buildSteps(req, 3),
+        step: 3,
+        total: 7,
         db: { host, port, user, database },
         degraded: true,
         envExists: envFileExists(),
@@ -524,17 +528,23 @@ export default async function initRoutes(app: FastifyInstance): Promise<void> {
 
   // GET /init/site — site name + tagline form.
   app.get("/init/site", async (req, reply) => {
+    // The site name lives in the database, so this page needs one. The
+    // wizard is allowed through the degraded gate even without a database
+    // (that is how the operator reaches step 3 in the first place), so
+    // this page can be asked for before step 3 has run. Answering 500
+    // there tells the operator nothing; an empty form with a note that
+    // the database is not connected yet tells them what to do.
     const [siteName, siteTagline] = await Promise.all([
-      getSetting(app.pool, "site.name"),
-      getSetting(app.pool, "site.tagline"),
+      getSetting(app.pool, "site.name").catch(() => null),
+      getSetting(app.pool, "site.tagline").catch(() => null),
     ]);
     return reply.view("init/site.hbs", {
       layout: "layouts/init",
       title: req.t("setup.site.title"),
       csrfToken: req.csrfToken,
-      steps: buildSteps(req, 3),
-      step: 3,
-      total: 6,
+      steps: buildSteps(req, 4),
+      step: 4,
+      total: 7,
       siteName: siteName ?? "",
       siteTagline: siteTagline ?? "",
       flash: getFlash(req, "setup.site.success", "setup.site.error"),
@@ -563,9 +573,9 @@ export default async function initRoutes(app: FastifyInstance): Promise<void> {
         layout: "layouts/init",
         title: req.t("setup.site.title"),
         csrfToken: req.csrfToken,
-        steps: buildSteps(req, 3),
-        step: 3,
-        total: 6,
+        steps: buildSteps(req, 4),
+        step: 4,
+        total: 7,
         siteName: name,
         siteTagline: tagline,
         error: fieldError,
@@ -583,9 +593,9 @@ export default async function initRoutes(app: FastifyInstance): Promise<void> {
       layout: "layouts/init",
       title: req.t("setup.admin.title"),
       csrfToken: req.csrfToken,
-      steps: buildSteps(req, 4),
-      step: 4,
-      total: 6,
+      steps: buildSteps(req, 5),
+      step: 5,
+      total: 7,
       flash: getFlash(req, "setup.admin.success", "setup.admin.error"),
       req,
     });
@@ -618,9 +628,9 @@ export default async function initRoutes(app: FastifyInstance): Promise<void> {
         layout: "layouts/init",
         title: req.t("setup.admin.title"),
         csrfToken: req.csrfToken,
-        steps: buildSteps(req, 4),
-        step: 4,
-        total: 6,
+        steps: buildSteps(req, 5),
+        step: 5,
+        total: 7,
         email,
         displayName,
         error: fieldError,
@@ -637,9 +647,15 @@ export default async function initRoutes(app: FastifyInstance): Promise<void> {
   //   etl   — trigger a real DB-IP ETL run; page renders progress until done
   //   skip  — leave ip_ranges empty; cron will pick it up later
   app.get("/init/seed", async (req, reply) => {
-    const latest = await readLatestRun(app.pool);
+    // Same reasoning as /init/site: the wizard is reachable before the
+    // database is configured, so this page has to survive a pool that
+    // cannot answer. "No run yet" is the honest answer in that case —
+    // there is genuinely no ETL run, because no ETL could have started.
+    const [latest, etlSetting] = await Promise.all([
+      readLatestRun(app.pool).catch(() => null),
+      getSetting(app.pool, "etl.setup.inProgress").catch(() => null),
+    ]);
     const inProgress = latest?.status === "running";
-    const etlSetting = await getSetting(app.pool, "etl.setup.inProgress");
 
     // While a background ETL is in flight, render the progress page and let
     // it auto-refresh until the run finishes.
@@ -648,9 +664,9 @@ export default async function initRoutes(app: FastifyInstance): Promise<void> {
         layout: "layouts/init",
         title: req.t("setup.seed.title"),
         csrfToken: req.csrfToken,
-        steps: buildSteps(req, 5),
-        step: 5,
-        total: 6,
+        steps: buildSteps(req, 6),
+        step: 6,
+        total: 7,
         progress: {
           run: latest,
           // Pre-row state: a click happened but recordEtlStart hasn't been
@@ -666,9 +682,9 @@ export default async function initRoutes(app: FastifyInstance): Promise<void> {
       layout: "layouts/init",
       title: req.t("setup.seed.title"),
       csrfToken: req.csrfToken,
-      steps: buildSteps(req, 5),
-      step: 5,
-      total: 6,
+      steps: buildSteps(req, 6),
+      step: 6,
+      total: 7,
       flash: getFlash(req, "setup.seed.success", "setup.seed.skipped"),
       req,
     });
@@ -725,9 +741,9 @@ export default async function initRoutes(app: FastifyInstance): Promise<void> {
       layout: "layouts/init",
       title: req.t("setup.seed.title"),
       csrfToken: req.csrfToken,
-      steps: buildSteps(req, 5),
-      step: 5,
-      total: 6,
+      steps: buildSteps(req, 6),
+      step: 6,
+      total: 7,
       error: req.t("setup.seed.invalidMode"),
       req,
     });
@@ -735,24 +751,30 @@ export default async function initRoutes(app: FastifyInstance): Promise<void> {
 
   // GET /init/complete — summary page.
   app.get("/init/complete", async (req, reply) => {
+    // The summary reads the database, so it has to survive a pool that
+    // cannot answer. The wizard is reachable before the database is
+    // configured; showing an empty summary is honest, showing a 500 is
+    // just noise.
     const [siteName, seedLoaded] = await Promise.all([
-      getSetting(app.pool, "site.name"),
-      getSetting(app.pool, "seed.loaded"),
+      getSetting(app.pool, "site.name").catch(() => null),
+      getSetting(app.pool, "seed.loaded").catch(() => null),
     ]);
     // The admin email isn't in settings (it lives in users.email). For the
     // summary we look it up from the users table — bootstrapAdmin always
     // created exactly one admin row at this point.
-    const [rows] = await app.pool.query<import("mysql2").RowDataPacket[]>(
-      `SELECT email FROM users WHERE role = 'admin' ORDER BY id ASC LIMIT 1`,
-    );
-    const adminEmail = (rows[0] as { email?: string } | undefined)?.email ?? "";
+    const adminEmail = await app.pool
+      .query<import("mysql2").RowDataPacket[]>(
+        `SELECT email FROM users WHERE role = 'admin' ORDER BY id ASC LIMIT 1`,
+      )
+      .then(([rows]) => (rows[0] as { email?: string } | undefined)?.email ?? "")
+      .catch(() => "");
     return reply.view("init/complete.hbs", {
       layout: "layouts/init",
       title: req.t("setup.complete.title"),
       csrfToken: req.csrfToken,
-      steps: buildSteps(req, 6),
-      step: 6,
-      total: 6,
+      steps: buildSteps(req, 7),
+      step: 7,
+      total: 7,
       summary: {
         siteName: siteName ?? "",
         adminEmail,

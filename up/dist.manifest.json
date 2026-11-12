@@ -1,7 +1,7 @@
 {
   "formatVersion": 1,
-  "fileCount": 357,
-  "totalBytes": 1780660,
+  "fileCount": 360,
+  "totalBytes": 1799437,
   "files": {
     "api/dbBootstrap.d.ts": {
       "bytes": 8065,
@@ -14,6 +14,18 @@
     "api/dbBootstrap.js.map": {
       "bytes": 11263,
       "sha256": "a8592eb7b5de99da5828dea5534703291db068ad2bceaa1a8b8ee98d898d0e45"
+    },
+    "api/envBootstrap.d.ts": {
+      "bytes": 948,
+      "sha256": "c46af8bbd8153c050e08dc60d00f04da14f413e6a36e99d029e1779e9989b540"
+    },
+    "api/envBootstrap.js": {
+      "bytes": 9517,
+      "sha256": "233a2e5327ccf9b7800d81c3f7779a122edff5e8e9d434ee481dd4a262335f02"
+    },
+    "api/envBootstrap.js.map": {
+      "bytes": 5226,
+      "sha256": "6c3cc58224c67aa0fedca3e24ad3e5baec608e485c1a119ee2c282aa4120ee16"
     },
     "api/errorHandler.d.ts": {
       "bytes": 1191,
@@ -92,12 +104,12 @@
       "sha256": "f7e87f1c7dddfc10268643c1dfb6fd56f688d5f703b246f7123d10914736e959"
     },
     "config.js": {
-      "bytes": 5950,
-      "sha256": "2c5e805b82869016e0092730f7a17d685e190e0586d62c2218e97fd1191a6ee1"
+      "bytes": 6599,
+      "sha256": "c9a0409c5cd771574e10b46eb14babb746a3fa700ad97f3107e6819c9f81ffbc"
     },
     "config.js.map": {
-      "bytes": 4699,
-      "sha256": "ae217e478dfd9706ed29f1a57130a9c005a09514c3ddf1589583d69e0a7a2713"
+      "bytes": 4887,
+      "sha256": "a35448c6db23f3ff2d4d8705e970495189082a5f0b793823e8e47dd06aa349ec"
     },
     "etl/download.d.ts": {
       "bytes": 5578,
@@ -800,16 +812,16 @@
       "sha256": "4ddb3fe5565caea3d4ede86598ef2743cc427b1f31d1435fa30410eab995b331"
     },
     "web/assets/css/errors.css": {
-      "bytes": 8813,
-      "sha256": "b9964b3725c9e05740631c3c088464f8b07759bb9c35ec389a72461ca438b17c"
+      "bytes": 8815,
+      "sha256": "15fbe09344fd5e447399fa48b59f669a08005e8697444cfc7cf61aa6d8232b9d"
     },
     "web/assets/css/forms.css": {
       "bytes": 3080,
       "sha256": "b4044d6d01abea3996fd6c3cf6a87b5eef80dd03a6a6cdd1fe0994a4e47c6d2b"
     },
     "web/assets/css/init.css": {
-      "bytes": 28908,
-      "sha256": "d6ecfcc1f99c31c87358521dfe11844ed9a06a0e90b5613789af4cf064b44e59"
+      "bytes": 28910,
+      "sha256": "668e795b43b8f1867cb26ee48f354fc822bb8fbe82e3535d8d48841d64f38542"
     },
     "web/assets/css/layout.css": {
       "bytes": 2066,
@@ -888,8 +900,8 @@
       "sha256": "e725e2a02b806cc9f5bc888bc2d662a5693496433a92d810cae8dd11229a6801"
     },
     "web/i18n/en-US.json": {
-      "bytes": 43719,
-      "sha256": "a03157e44e5140c55d2be3b9962d8a9f1ffe54559ed7adaff2ab95ee7c207f16"
+      "bytes": 43908,
+      "sha256": "72e2a61b62a28aa5cdf267910487159c9ec804d9dbc9a3941778990ff2e20c5b"
     },
     "web/i18n/index.d.ts": {
       "bytes": 309,
@@ -908,8 +920,8 @@
       "sha256": "33cd4e4a9a90a35dc5c3b8308e78a6449754c712719b9f1af35b2e25156641cc"
     },
     "web/i18n/zh-CN.json": {
-      "bytes": 43662,
-      "sha256": "4b1aea7c51accc741b0c399304d8626546c008968ba06834e8a423808179b791"
+      "bytes": 43805,
+      "sha256": "5cb0c952d291bca84fd1cb2d22a1455ed502e5366e6e6d35b9310e2307f0ca84"
     },
     "web/plugins/auditLog.d.ts": {
       "bytes": 368,
@@ -1144,12 +1156,12 @@
       "sha256": "4efd86b0d775793ecc3ebad2419fa5e28f7c9909abad5d993bffec6fd71d9385"
     },
     "web/routes/init.js": {
-      "bytes": 33348,
-      "sha256": "eec9b1765ff4c0d18aa1c0aff40f987f1e6d04faf17040d962dc6a355af42c35"
+      "bytes": 34903,
+      "sha256": "940226b933ce88db768eff982f308ae738e8f5f4bc0f75ede351ca1af1824a39"
     },
     "web/routes/init.js.map": {
-      "bytes": 21881,
-      "sha256": "dba769be63aa47a22bd4835faa40af4f33a8496479a3445d87c509fafa96c8c9"
+      "bytes": 22396,
+      "sha256": "251f16171848528167d83d2db0d8753db908788c177e4ba90b47673b2d7d4312"
     },
     "web/routes/marketing.d.ts": {
       "bytes": 126,
@@ -1308,8 +1320,8 @@
       "sha256": "c9f7784f03e9e2dbf0dcd742622e014976613027ffec9bbbdc32cb6ba3eab4d0"
     },
     "web/views/init/env.hbs": {
-      "bytes": 1902,
-      "sha256": "2f92475107e13f43ed4f68dac4e19b7015b22ff71ce85b4c35282b120d443fb4"
+      "bytes": 1743,
+      "sha256": "2f5258ce3dd5a23fcb91a42c2682a339443668159630fe3eafa170a5d49a5d37"
     },
     "web/views/init/index.hbs": {
       "bytes": 760,
@@ -1340,8 +1352,8 @@
       "sha256": "a20ba1e84b5a519ef7ab61fd74936284522c7fa6a4756d46333213ff43335901"
     },
     "web/views/layouts/init.hbs": {
-      "bytes": 4608,
-      "sha256": "0e1bc4f60623c62122555d51bdf65c57c1ae18d98ed8725dd562e2ec38a5c433"
+      "bytes": 4610,
+      "sha256": "dcd8793f32549951fa6159d94fcf75a86ea00aa75b57f110870b007e52d15f80"
     },
     "web/views/layouts/marketing.hbs": {
       "bytes": 1190,

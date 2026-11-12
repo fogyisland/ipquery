@@ -14,15 +14,19 @@ cd /opt/ipquery
 bash install.sh
 ```
 
-`install.sh` 依次做四件事：
+`install.sh` 依次做三件事：
 
 1. `npm ci --omit=dev` 装运行期依赖
 2. 建 `data/raw/`（ETL 下载 CSV 的落地点）
-3. 没有 `.env` 就从模板生成一份，并提示填哪些项
-4. 跑 `node dist/cli.js migrate` 应用迁移
+3. 跑 `node dist/cli.js migrate` 应用迁移（连不上库时会跳过，不致命）
 
-第 4 步需要 `.env` 里的数据库凭据是真的——模板里的 `rootpass` 是占位符，
-直接跑会报 `ER_ACCESS_DENIED_ERROR`。这是预期行为：脚本不会替你猜密码。
+**`.env` 不由脚本创建** —— 服务第一次启动时会自己从 `.env.example` 生成
+（端口、访问地址 + 两把随机密钥），然后用这份文件配置自己。脚本不复制模板，
+因为复制出来的 `.env` 里密钥是空的：空密钥比没密钥更糟（文件存在，检查通过，
+但每个会话 Cookie 都被空字符串签名）。
+
+迁移那步需要 `.env` 里的数据库凭据是真的——模板里的 `rootpass` 是占位符，
+连不上会报 `ER_ACCESS_DENIED_ERROR`。这是预期行为：脚本不会替你猜密码。
 
 **手工部署**：照 [`MANIFEST.md`](MANIFEST.md) 搬文件——那张表列了服务器上
 需要的**每一个文件**、来源、必需性，以及不需要搬的（`src/`、`test/`、`scripts/`）。
@@ -38,14 +42,12 @@ bash install.sh
    FLUSH PRIVILEGES;
    ```
 
-2. **`.env`**：`install.sh` 已经从 `.env.example` 生成好了，编辑它，至少填
-   `DB_*`、`SESSION_SECRET`、`CSRF_SECRET`、`WEB_BASE_URL`、`PORT`。密钥生成：
+2. **`.env`**：不用管 —— 第一次 `node dist/cli.js serve` 会自动从
+   `.env.example` 生成，端口、访问地址和两把随机密钥都写好了。数据库连接
+   在向导第 3 步填（或者用 `ipq db` 命令填）。
 
-   ```bash
-   node -e "console.log(require('crypto').randomBytes(48).toString('base64'))"
-   ```
-
-   生产环境缺任一密钥服务会直接拒启（fail-fast，不静默降级）。两个密钥必须不同。
+   生产环境缺任一密钥服务会直接拒启（fail-fast，不静默降级）。两个密钥必须
+   不同 —— 自动生成的两把就是不同的。
 
 3. **原生依赖**：`argon2` 需要编译工具链，否则 `npm ci` 会失败：
 
@@ -62,7 +64,7 @@ bash install.sh
 | CLI 无头 | `make init`（读 `ADMIN_EMAIL` / `ADMIN_PASSWORD` / `ADMIN_NAME` / `ADMIN_SEED`） | Ansible / Terraform / CI |
 | CLI 直调 | `node dist/cli.js init --email <admin> --password '<强口令>' [--seed]`           | 同上，显式传参           |
 
-- 向导六步：欢迎 → 数据库 → 站点 → 管理员 → 种子数据 → 完成。
+- 向导七步：欢迎 → 环境 → 数据库 → 站点 → 管理员 → 种子数据 → 完成。
 - 未初始化时除 `/init*`、`/healthz`、`/lookup`、`/stats`、`/assets/*` 外全部 302 到 `/init`；
   初始化完成后 `/init` 返回 404。
 - 种子数据三选一：**示例数据**（50 条精选段，瞬时，**仅开发/演示用**）、
