@@ -171,7 +171,7 @@
       "newPassword": "New password",
       "save": "Save changes",
       "saved": "Profile saved",
-      "savedWithEviction": "Profile saved. {{count}} other session(s) signed out."
+      "savedWithEviction": "Profile saved. {count} other session(s) signed out."
     },
     "hit": "Hit",
     "miss": "Miss",
@@ -745,7 +745,7 @@
         "enabled": "Enabled",
         "save": "Save",
         "delete": "Delete",
-        "test": "Test Lookup",
+        "test": "Test connection",
         "testIp": "Test IP",
         "testResult": "Result",
         "deleteConfirm": "Delete {name}?",
@@ -1074,15 +1074,21 @@
     },
     "database": {
       "title": "Database",
-      "intro": "Current database connection (loaded from .env):",
+      "intro": "Fill in the database connection. It is applied, migrated and applied immediately — no restart needed.",
       "hostLabel": "Host",
       "portLabel": "Port",
       "userLabel": "User",
       "dbLabel": "Database",
-      "test": "Test connection",
-      "envHint": "These values are loaded from .env. To change them, edit .env and restart the server, then return to this page.",
+      "test": "Save and continue",
+      "envHint": "Saving writes these values to .env (local only, never committed) and rebuilds the connection immediately — no restart needed.",
       "success": "Database connection successful",
-      "failure": "Cannot reach the database. Check .env and make sure the server is running."
+      "failure": "Cannot reach the database. Check .env and make sure the server is running.",
+      "passwordLabel": "Password",
+      "passwordPlaceholder": "Database password (leave empty to keep it)",
+      "degraded": "The database could not be reached. The server started in setup-only mode — fill in the connection below; it takes effect immediately, no restart needed.",
+      "failureReason": "Could not connect to the database: {reason}",
+      "migrationFailed": "Connected, but the schema could not be created. Check that the database user may create tables.",
+      "envHintFresh": "There is no .env file yet — one will be created on save (local only, never committed), and the connection is rebuilt immediately. No restart needed."
     },
     "site": {
       "title": "Site",
@@ -1159,7 +1165,11 @@
       "email_invalid": "Invalid email format",
       "db_unreachable": "Database is unreachable",
       "site_name_required": "Site name is required",
-      "displayName_invalid": "Display name must be 1-64 characters"
+      "displayName_invalid": "Display name must be 1-64 characters",
+      "db_host_required": "Host is required",
+      "db_user_required": "User is required",
+      "db_name_required": "Database name is required",
+      "db_port_invalid": "Port must be an integer between 1 and 65535"
     }
   }
 }

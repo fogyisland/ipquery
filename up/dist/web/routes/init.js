@@ -37,6 +37,7 @@ exports.default = initRoutes;
 const path = __importStar(require("node:path"));
 const csrf_1 = require("../plugins/csrf");
 const settings_1 = require("../../storage/settings");
+const dbBootstrap_1 = require("../../api/dbBootstrap");
 const bootstrap_1 = require("../admin/bootstrap");
 const runner_1 = require("../../storage/migrations/runner");
 const demoSeed_1 = require("../../storage/seed/demoSeed");
@@ -165,7 +166,17 @@ async function initRoutes(app) {
             req,
         });
     });
-    // GET /init/database — show current DB config (no password) + Test form.
+    // GET /init/database — show the current DB config (no password) AND a
+    // form that can change it.
+    //
+    // This used to be a read-only page with a "test connection" button, and
+    // the answer to "where do I set the password?" was "edit .env and
+    // restart". That is a terrible answer for a first-run wizard whose whole
+    // job is to make a first run possible: the operator has no credentials
+    // yet, the service cannot start without them, and the page that would
+    // tell them so is behind the service.
+    //
+    // So the page now collects the connection and applies it.
     app.get("/init/database", async (req, reply) => {
         return reply.view("init/database.hbs", {
             layout: "layouts/init",
@@ -180,35 +191,170 @@ async function initRoutes(app) {
                 user: app.cfg.db.user,
                 database: app.cfg.db.database,
             },
+            // True when the server came up without a database. The page says so
+            // loudly, because it changes what the operator has to do: fill in
+            // the form below, rather than "the connection failed, check .env".
+            degraded: app.dbDegraded,
+            // Whether a .env file exists yet. The hint under the form tells the
+            // operator where the credentials will land — and a fresh unpack has
+            // no .env at all (only .env.example), so it needs a different
+            // sentence than "your .env will be updated".
+            envExists: (0, dbBootstrap_1.envFileExists)(),
             flash: getFlash(req, "setup.database.success", "setup.database.failure"),
             error: req.query.flash === "error" ? req.t("setup.database.failure") : undefined,
             req,
         });
     });
-    // POST /init/database — probe app.pool. On success → /init/site.
+    // POST /init/database — take the connection details, prove they work,
+    // apply them, and persist them.
+    //
+    // The order matters:
+    //   1. probe FIRST — never persist credentials that do not connect.
+    //      A .env that cannot connect is worse than no .env, because the
+    //      next boot dies on it with no way back.
+    //   2. re-point the pool — so the rest of the wizard works right now,
+    //      without a restart.
+    //   3. run the migrations — the new database has no schema, and steps
+    //      3-6 all read tables.
+    //   4. write the .env LAST — so the setting survives a restart. The
+    //      password cannot live in the database (the database may be the
+    //      thing that is broken) and must not live in git.
+    //
+    // Steps 3 and 4 are in that order deliberately: a connection can work
+    // and the migration still fail (no DDL rights, conflicting schema).
+    // Writing .env first would leave the next boot trying to migrate the
+    // same broken database and dying on it. See the comment at step 3.
     app.post("/init/database", async (req, reply) => {
         if (!(0, csrf_1.verifyCsrfRequest)(req)) {
             return renderCsrfError(req, reply, 2);
         }
-        let conn;
+        const body = req.body;
+        const host = (body.host ?? "").trim();
+        const user = (body.user ?? "").trim();
+        const database = (body.database ?? "").trim();
+        const password = body.password ?? "";
+        const portRaw = (body.port ?? "").trim();
+        const port = portRaw === "" ? app.cfg.db.port : Number(portRaw);
+        // Validate before touching anything. An empty host or user is a
+        // typo, not a configuration.
+        let fieldError;
+        if (!host)
+            fieldError = req.t("setup.errors.db_host_required");
+        else if (!user)
+            fieldError = req.t("setup.errors.db_user_required");
+        else if (!database)
+            fieldError = req.t("setup.errors.db_name_required");
+        else if (!Number.isInteger(port) || port < 1 || port > 65535)
+            fieldError = req.t("setup.errors.db_port_invalid");
+        if (fieldError) {
+            return reply.view("init/database.hbs", {
+                layout: "layouts/init",
+                title: req.t("setup.database.title"),
+                csrfToken: req.csrfToken,
+                steps: buildSteps(req, 2),
+                step: 2,
+                total: 6,
+                db: { host, port, user, database },
+                degraded: app.dbDegraded,
+                envExists: (0, dbBootstrap_1.envFileExists)(),
+                error: fieldError,
+                req,
+            });
+        }
+        const target = { host, port, user, password, database };
+        // 1. Prove it connects. A failure here is the common case on a
+        // first run, so the message says what to check.
+        const probe = await (0, dbBootstrap_1.probeConnection)(target, app.cfg.db.poolSize);
+        if (!probe.ok) {
+            app.log.warn({ host, port, user, database, reason: probe.reason }, "setup: database probe failed");
+            return reply.view("init/database.hbs", {
+                layout: "layouts/init",
+                title: req.t("setup.database.title"),
+                csrfToken: req.csrfToken,
+                steps: buildSteps(req, 2),
+                step: 2,
+                total: 6,
+                db: { host, port, user, database },
+                degraded: app.dbDegraded,
+                envExists: (0, dbBootstrap_1.envFileExists)(),
+                // The password is intentionally NOT echoed back into the form.
+                error: req.t("setup.database.failureReason", { reason: probe.reason }),
+                req,
+            });
+        }
+        // 2. Re-point the live pool. From here on the rest of the wizard
+        // works against the new database, with no restart.
+        await (0, dbBootstrap_1.repointPool)(app, target);
+        // 3. Bring the schema up on the new database. Steps 3-6 read
+        // tables, and a fresh database has none.
+        //
+        // This runs BEFORE the credentials are written to .env, and the
+        // order matters. A migration can still fail even though the
+        // connection works — the account may lack DDL rights, or the
+        // database may hold a conflicting schema. If .env already pointed
+        // at that database, the NEXT boot would try to migrate it again,
+        // fail the same way, and take the server down with it: the
+        // operator would come back to a dead process and would have to hand
+        // edit .env to recover.
+        //
+        // Migrating first means .env is only ever written for a database
+        // that is known to work. A failure here leaves .env exactly as it
+        // was, and the wizard can be retried.
         try {
-            conn = await app.pool.getConnection();
-            await conn.ping();
+            await (0, runner_1.runMigrations)(app.pool);
         }
         catch (err) {
-            // Sanitize: do not echo a raw mysql error string (could leak DSN/hints).
-            return reply.code(302).header("Location", "/init/database?flash=error").send();
+            app.log.error({ err }, "setup: migrations failed after re-pointing the pool");
+            // The pool now points at a database whose schema could not be
+            // built. Keep the server in degraded mode — the wizard stays
+            // reachable so the operator can correct the account or point at a
+            // different database.
+            app.dbDegraded = true;
+            return reply.view("init/database.hbs", {
+                layout: "layouts/init",
+                title: req.t("setup.database.title"),
+                csrfToken: req.csrfToken,
+                steps: buildSteps(req, 2),
+                step: 2,
+                total: 6,
+                db: { host, port, user, database },
+                degraded: true,
+                envExists: (0, dbBootstrap_1.envFileExists)(),
+                error: req.t("setup.database.migrationFailed"),
+                req,
+            });
         }
-        finally {
-            if (conn) {
-                try {
-                    conn.release();
-                }
-                catch {
-                    /* ignore */
-                }
-            }
-        }
+        // 4. Persist to .env so the setting survives a restart.
+        //
+        // This comes AFTER the migration, deliberately — see step 3. The
+        // database is now known to work, so the credentials on disk cannot
+        // be the reason the next boot fails.
+        const envPath = (0, dbBootstrap_1.writeDbCredentialsToEnv)(target);
+        app.log.info({ envPath, host, port, user, database }, "setup: database credentials written to .env");
+        // The database now works — lift the degraded gate so the rest of the
+        // application is reachable.
+        //
+        // The setup guard is already installed (it has to be: Fastify refuses
+        // to add a decorator or a hook after the server has started). What
+        // the degraded boot could not do was read the initialization state —
+        // and it did not need to: an install whose database could not be
+        // reached has not been initialized, so the wizard is open and
+        // `requireSetup` is already true.
+        //
+        // Flipping `dbDegraded` is what opens the rest of the application:
+        // the gate in src/web/plugins/degradedGate.ts sends everything that is not the
+        // wizard to a 503 until this flag is false.
+        app.dbDegraded = false;
+        // The random-IP runner reads its settings from the database, which
+        // was not available at boot. Now it is.
+        await app.randomGenRunner.syncFromSettings().catch((err) => {
+            app.log.warn({ err }, "setup: random-generator sync failed after connecting");
+        });
+        // The ETL schedule could not be armed at boot — there was no database
+        // to run an ETL against. Now there is. Arming it here is what makes
+        // the daily ETL run on a server that was installed without a database,
+        // with no restart in between.
+        app.startEtlScheduler();
         return reply.code(302).header("Location", "/init/site?flash=success").send();
     });
     // GET /init/site — site name + tagline form.

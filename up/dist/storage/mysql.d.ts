@@ -2,6 +2,34 @@ import * as mysql from "mysql2/promise";
 import type { AppConfig } from "../config";
 import type { IpRangeRow, EtlRun } from "../types";
 export declare function createPool(cfg: AppConfig): mysql.Pool;
+/**
+ * The five connection values plus the pool size, without the whole
+ * AppConfig.
+ *
+ * `createPool` only ever reads `cfg.db`, so this is the honest shape of
+ * its input. It exists so the setup wizard can build a candidate pool
+ * for a configuration that is not `cfg` yet — without fabricating a
+ * whole AppConfig object to satisfy the signature.
+ */
+export interface PoolConnection {
+    host: string;
+    port: number;
+    user: string;
+    password: string;
+    database: string;
+    poolSize: number;
+    /**
+     * Connect timeout in milliseconds.
+     *
+     * Optional: the normal pool leaves it at the driver's default, because
+     * the long default is right for a server that should wait for a slow
+     * database. The probes that run on the path to serving the wizard
+     * override it with something short — an operator waiting on /init should
+     * not sit through a 30-second TCP timeout.
+     */
+    connectTimeout?: number;
+}
+export declare function createPoolFor(conn: PoolConnection): mysql.Pool;
 export declare function truncateNew(pool: mysql.Pool): Promise<void>;
 export declare function insertIntoNew(pool: mysql.Pool, rows: IpRangeRow[]): Promise<void>;
 export interface UpsertCount {

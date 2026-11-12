@@ -20,3 +20,7 @@ scripts/dev/*.trace.zip
 scripts/dev/*.zip
 # Scratch files — local commit-message drafts, never committed
 .superpowers/scratch/
+
+# Vitest JSON reports — written by `--outputFile=…` runs, never committed
+*-result.json
+integration-result.json

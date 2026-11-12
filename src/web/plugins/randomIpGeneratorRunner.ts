@@ -101,7 +101,7 @@ export async function reapProviders(pool: Pool): Promise<number> {
 
 export function registerRandomGenRunner(
   app: FastifyInstance,
-  pool: Pool,
+  pool: Pool | (() => Pool),
   opts: RandomGenRunnerOptions = {},
 ): RandomGenRunnerHandle {
   let intervalMs = opts.intervalMs ?? 60_000;
@@ -111,14 +111,22 @@ export function registerRandomGenRunner(
   let lastRunAtMs = 0; // epoch ms of last completed or attempted tick
   let lastSkippedProvider: string | null = null; // provider name from the last skip
 
+  // The pool can be re-pointed at runtime — the setup wizard swaps it when
+  // the operator supplies working credentials. A captured pool would keep
+  // reading and writing the OLD database (or the one that was never
+  // reachable), so every use below resolves it at call time.
+  const poolRef = pool;
+  const resolvePool = (): Pool => (typeof poolRef === "function" ? poolRef() : poolRef);
+
   const persistSkip = async (reason: string, provider: string | null): Promise<void> => {
     lastSkippedProvider = provider;
     const now = new Date().toISOString();
+    const target = resolvePool();
     await Promise.all([
-      setSetting(pool, LAST_SKIPPED_AT_KEY, now).catch((err) =>
+      setSetting(target, LAST_SKIPPED_AT_KEY, now).catch((err) =>
         app.log.warn({ err }, "random-gen-runner persist skipAt"),
       ),
-      setSetting(pool, LAST_SKIP_REASON_KEY, reason).catch((err) =>
+      setSetting(target, LAST_SKIP_REASON_KEY, reason).catch((err) =>
         app.log.warn({ err }, "random-gen-runner persist skipReason"),
       ),
     ]);
@@ -126,6 +134,11 @@ export function registerRandomGenRunner(
 
   const tick = async (): Promise<void> => {
     if (running) return; // skip overlapping ticks if the previous one is still in flight
+    // While the server is in degraded mode there is no database to read
+    // the settings from or write the run summary to. The tick would fail
+    // at several points and log a warning at each one, every minute —
+    // noise on a server that is otherwise working fine. Skip instead.
+    if (app.dbDegraded) return;
     running = true;
     try {
       // Refresh the provider whitelist FIRST so a provider whose
@@ -133,15 +146,15 @@ export function registerRandomGenRunner(
       // the runner would keep skipping until the 5-minute reap timer
       // happened to fire — a UX papercut.
       try {
-        const reaped = await reapProviders(pool);
+        const reaped = await reapProviders(resolvePool());
         if (reaped > 0) {
           app.log.info({ reaped }, "random-gen-runner tick: re-enabled providers past cooldown");
         }
       } catch (err) {
         app.log.warn({ err }, "random-gen-runner tick: reapProviders failed (continuing)");
       }
-      const config = await loadRandomGenConfig(pool);
-      const configs = await listProviderConfigs(pool);
+      const config = await loadRandomGenConfig(resolvePool());
+      const configs = await listProviderConfigs(resolvePool());
       const providers = buildProvidersFromConfig(configs);
       if (providers.length === 0) {
         app.log.warn("[random-gen-runner] no enabled providers; skipping tick");
@@ -169,7 +182,7 @@ export function registerRandomGenRunner(
       // Reset skip state once we actually proceed past the gate — the
       // previous tick's disabled-provider is no longer relevant.
       lastSkippedProvider = null;
-      const summary = await runRandomGeneration(pool, providers, {
+      const summary = await runRandomGeneration(resolvePool(), providers, {
         count: config.batchSize,
         logger: {
           log: (msg) => app.log.info({ msg }, "random-gen-runner"),
@@ -197,17 +210,17 @@ export function registerRandomGenRunner(
       // Best-effort persistence — if the write fails the tick still
       // counts as a run, the next tick will record its own summary.
       await Promise.all([
-        setSetting(pool, LAST_RUN_KEY, now).catch((err) =>
+        setSetting(resolvePool(), LAST_RUN_KEY, now).catch((err) =>
           app.log.warn({ err }, "random-gen-runner persist lastRunAt"),
         ),
-        setSetting(pool, LAST_SUMMARY_KEY, JSON.stringify(summary)).catch((err) =>
+        setSetting(resolvePool(), LAST_SUMMARY_KEY, JSON.stringify(summary)).catch((err) =>
           app.log.warn({ err }, "random-gen-runner persist lastSummary"),
         ),
         // Clear any prior skip — this tick actually ran.
-        setSetting(pool, LAST_SKIPPED_AT_KEY, "").catch((err) =>
+        setSetting(resolvePool(), LAST_SKIPPED_AT_KEY, "").catch((err) =>
           app.log.warn({ err }, "random-gen-runner clear lastSkippedAt"),
         ),
-        setSetting(pool, LAST_SKIP_REASON_KEY, "").catch((err) =>
+        setSetting(resolvePool(), LAST_SKIP_REASON_KEY, "").catch((err) =>
           app.log.warn({ err }, "random-gen-runner clear lastSkipReason"),
         ),
       ]);
@@ -249,7 +262,7 @@ export function registerRandomGenRunner(
    *  clicks on the admin page see the full provider list. */
   const reapTick = async (): Promise<void> => {
     try {
-      const n = await reapProviders(pool);
+      const n = await reapProviders(resolvePool());
       if (n > 0) app.log.info({ reaped: n }, "random-gen-runner reap timer");
     } catch (err) {
       app.log.warn({ err }, "random-gen-runner reap timer failed");
@@ -271,7 +284,7 @@ export function registerRandomGenRunner(
   };
 
   const reapNow = async (): Promise<number> => {
-    const n = await reapProviders(pool);
+    const n = await reapProviders(resolvePool());
     if (n > 0) app.log.info({ reaped: n }, "random-gen-runner reapNow");
     return n;
   };
@@ -282,8 +295,8 @@ export function registerRandomGenRunner(
    *  timer alone (the next tick will pick up the new settings). */
   const syncFromSettings = async (): Promise<boolean> => {
     const [enabledRaw, config] = await Promise.all([
-      getSetting(pool, ENABLED_KEY),
-      loadRandomGenConfig(pool),
+      getSetting(resolvePool(), ENABLED_KEY),
+      loadRandomGenConfig(resolvePool()),
     ]);
     const enabled = enabledRaw === "1";
     const newIntervalMs = config.intervalSec * 1000;
@@ -313,7 +326,7 @@ export function registerRandomGenRunner(
   // and lets providers auto-recover even when continuous gen is OFF.
   startReapTimer();
   // Initial sync runs after DB is up. Caller is expected to invoke
-  // syncFromSettings() once during boot after pool is ready.
+  // syncFromSettings() once during boot after resolvePool() is ready.
   return { tickNow: tick, syncFromSettings, reapNow };
 }
 

@@ -30,7 +30,7 @@ export interface RandomGenRunnerHandle {
  *  AND auto_reenable_at <= NOW(3), so calling more than once per minute
  *  is harmless. Returns the count re-enabled for the caller's logs. */
 export declare function reapProviders(pool: Pool): Promise<number>;
-export declare function registerRandomGenRunner(app: FastifyInstance, pool: Pool, opts?: RandomGenRunnerOptions): RandomGenRunnerHandle;
+export declare function registerRandomGenRunner(app: FastifyInstance, pool: Pool | (() => Pool), opts?: RandomGenRunnerOptions): RandomGenRunnerHandle;
 /** Read the persisted state for the admin dashboard. Returns nulls
  *  when the runner has never ticked. Cooldown state is computed from
  *  the skip timestamp + the configured cooldown window so the UI

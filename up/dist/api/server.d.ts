@@ -13,6 +13,15 @@ declare module "fastify" {
             tickNow: () => Promise<void>;
             syncFromSettings: () => Promise<boolean>;
         };
+        /**
+         * True while the server is running in DEGRADED mode: the database
+         * could not be reached at boot, so only the setup wizard is served.
+         *
+         * The wizard clears this once it has saved working credentials and
+         * re-pointed the pool — the transition happens live, without a
+         * restart.
+         */
+        dbDegraded: boolean;
     }
 }
 /**

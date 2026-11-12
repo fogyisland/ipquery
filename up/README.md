@@ -69,10 +69,42 @@ npm run build
 ## 部署后的三步
 
 ```bash
+node dist/cli.js serve                                                    # 起服务
+# 打开 http://服务器IP:5001/init，走完 6 步向导（第 2 步配数据库）
+node dist/cli.js update                                                   # 灌真实 IP 数据（约 5–15 分钟）
+```
+
+> **数据库没配好也能起服务。** 首次安装时 `.env` 里通常还没有正确的库口令，
+> 而向导正是用来设置它的 —— 如果服务因为连不上库就退出，向导永远打不开。
+> 所以数据库不可达时服务照常启动，进入「仅向导模式」：`/init` 正常，其余路径
+> 返回 503 或跳回 `/init`。在向导第 2 步填入连接信息并保存后**立即生效，
+> 无需重启**。
+>
+> 顺带一提：**每日 ETL 定时任务也是在这时候才启动的。** 它跟服务在同一个
+> 进程里，所以只有在数据库可用之后才能排程 —— 第 2 步保存成功的那一刻，
+> 定时任务就挂上了。全程不需要重启。
+
+也可以完全走命令行（需要一个能连上数据库的 `.env`）：
+
+```bash
 node dist/cli.js init --email <admin@example.com> --password '<强口令>'   # 建管理员 + 锁 /init
 node dist/cli.js update                                                   # 灌真实 IP 数据（约 5–15 分钟）
 node dist/cli.js serve                                                    # 起服务
 ```
+
+数据库连接本身也可以用命令行配（和向导第 2 步是同一套逻辑：**先测后写**，
+连不上就报错退出、`.env` 一个字节都不动）：
+
+```bash
+export DB_HOST=127.0.0.1 DB_USER=ipquery DB_NAME=ipquery DB_PASSWORD='你的口令'
+node dist/cli.js db --host "$DB_HOST" --user "$DB_USER" --name "$DB_NAME" --save
+# [db] the connection works
+# [db] connection written to /opt/ipquery/.env
+# [db] applied 24 migration(s)
+```
+
+口令**不要写在命令行上** —— 命令行会进 shell 历史，也会出现在 `ps` 输出里。
+用环境变量传（上面就是这么做的）。
 
 ## 三个容易踩的坑
 

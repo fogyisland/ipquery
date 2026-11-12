@@ -18,15 +18,26 @@ import { purgeExpired } from "../../storage/sessions";
 // shutdown and doesn't pin Node alive on its own.
 export function registerSessionPurger(
   app: FastifyInstance,
-  pool: Pool,
+  pool: Pool | (() => Pool),
   opts?: { intervalMs?: number },
 ): { purgeNow: () => Promise<number> } {
   const intervalMs = opts?.intervalMs ?? 60 * 60 * 1000;
   let timer: NodeJS.Timeout | null = null;
 
+  // The pool may be re-pointed at runtime (the setup wizard swaps it when
+  // the operator supplies working credentials), so resolve it at call
+  // time rather than capturing it. A captured pool would keep sweeping
+  // the old database — or the one that was never reachable.
+  const resolvePool = (): Pool => (typeof pool === "function" ? pool() : pool);
+
   const tick = async (): Promise<number> => {
+    // While the server is in degraded mode there is no database to sweep.
+    // The tick would fail, and the failure log would repeat every hour on
+    // a server that is otherwise working fine — noise that makes a healthy
+    // setup-only install look broken. Skip instead.
+    if (app.dbDegraded) return 0;
     try {
-      const n = await purgeExpired(pool);
+      const n = await purgeExpired(resolvePool());
       if (n > 0) app.log.info({ purged: n }, "sessionPurger tick");
       return n;
     } catch (err) {

@@ -23,8 +23,32 @@ function isAllowedUrl(url) {
 function isSetupCompletePath(url, method) {
     return url === SETUP_COMPLETE_PATH && method === "POST";
 }
-async function registerInitGuard(app) {
-    const initialized = await (0, settings_1.isInitialized)(app.pool);
+/**
+ * Register the setup guard.
+ *
+ * Two things happen here, and both must happen at BOOT:
+ *
+ *   1. The `requireSetup` decorator is added. Fastify refuses to add a
+ *      decorator after the server has started (FST_ERR_DEC_AFTER_START),
+ *      so it cannot be added later from a route handler.
+ *
+ *   2. The request hooks are installed. Fastify likewise refuses to add
+ *      a hook after `ready()` (FST_ERR_INSTANCE_ALREADY_LISTENING).
+ *
+ * That is why the DEGRADED boot — where the database cannot be reached
+ * and the initialization state therefore cannot be read — still calls
+ * this function, passing `knownInitialized: false`. The install is by
+ * definition uninitialized when there is no database to ask, so the
+ * answer is known without asking.
+ *
+ * The wizard does NOT re-register the guard once it has connected: the
+ * hooks are already installed and the `requireSetup` flag is already
+ * false for an uninitialized install. What the wizard does flip is
+ * `app.dbDegraded`, which is what actually opens the rest of the
+ * application — see the gate in src/web/plugins/degradedGate.ts.
+ */
+async function registerInitGuard(app, opts) {
+    const initialized = opts?.knownInitialized ?? (await (0, settings_1.isInitialized)(app.pool));
     app.decorate("requireSetup", !initialized);
     app.addHook("onRequest", async (req, reply) => {
         const url = (req.routeOptions?.url ?? req.url);
@@ -47,6 +71,11 @@ async function registerInitGuard(app) {
         // before the user's next request). Skipping on 3xx left the cache stale
         // and `/login` got redirected back to `/init`.
         if (reply.statusCode >= 400)
+            return;
+        // A degraded server has no database to re-read. The wizard sets
+        // `requireSetup` itself in that case — the guard's job here is to
+        // notice that the wizard just completed.
+        if (app.dbDegraded)
             return;
         const fresh = await (0, settings_1.isInitialized)(app.pool);
         app.requireSetup = !fresh;

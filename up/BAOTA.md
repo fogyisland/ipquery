@@ -72,6 +72,9 @@ bash install.sh
 
 脚本做四件事：装依赖（`npm ci --omit=dev`）、建 `data/raw/`、生成 `.env`、跑迁移。
 
+迁移那步在数据库还没配好时**不会中断安装** —— 它会提示一句，然后继续。
+服务启动后进入「仅向导模式」，你在网页上填数据库即可（见下面「配置数据库」）。
+
 装完之后可以再跑一次校验，确认上传的副本是完整的：
 
 ```bash
@@ -81,7 +84,38 @@ npm run build
 
 （发布包里**不需要编译** —— `dist/` 已随包发布，`build` 只是校验副本完整性。）
 
-**第 3 步需要你填数据库凭据**，脚本不会替你猜：
+---
+
+## 四之二、配置数据库
+
+**两种方式，选一种：**
+
+### 方式 A：网页向导（推荐）
+
+数据库口令还没填也不要紧 —— **服务不要求数据库可用**。直接起服务：
+
+```bash
+cd /www/wwwroot/ipquery
+node dist/cli.js serve
+```
+
+日志里出现这一行就是对的：
+
+```
+[api] the database could not be reached — running in setup-only mode.
+[api] open http://localhost:5001/init to configure the connection.
+```
+
+浏览器打开 `http://服务器IP:5001/init`，走第 2 步，填 host/port/user/password/库名，
+保存。向导会：
+
+1. 测试连接（连不上就不会写盘）
+2. 把连接写进 `.env`（本地文件，`chmod 600`，不进版本库）
+3. 重建连接池、跑完迁移
+
+**保存后立即生效，不用重启。** 之后回到第 3 步填密钥。
+
+### 方式 B：手改 `.env`
 
 ```bash
 nano /www/wwwroot/ipquery/.env
@@ -116,13 +150,34 @@ node -e "console.log(require('crypto').randomBytes(48).toString('base64'))"
 > `NODE_ENV` 不设就是生产（项目里没有任何地方会设它）。设成 `development`
 > 会跳过密钥检查，**只在本地开发时用**，服务器上不要设。
 
-改完再跑一次迁移（第一次 `install.sh` 因为占位密码会停在这一步）：
+改完跑一次迁移，然后起服务：
 
 ```bash
 cd /www/wwwroot/ipquery
 node dist/cli.js migrate
 node dist/cli.js migrate:status    # 每行都该是 applied
+node dist/cli.js serve
 ```
+
+### 方式 C：命令行填连接（不想手改文件时）
+
+`db` 命令和向导第 2 步是同一套逻辑：**先测后写**，连不上就报错退出，
+`.env` 一个字节都不会动。
+
+```bash
+cd /www/wwwroot/ipquery
+export DB_HOST=127.0.0.1 DB_PORT=3306 DB_USER=ipquery DB_NAME=ipquery
+export DB_PASSWORD='你设的密码'
+node dist/cli.js db --host "$DB_HOST" --port "$DB_PORT" --user "$DB_USER" \
+  --name "$DB_NAME" --save
+# [db] the connection works
+# [db] connection written to /www/wwwroot/ipquery/.env
+# [db] applied 24 migration(s)
+```
+
+> 口令**不要直接写在命令行上** —— 会进 shell 历史，也会出现在 `ps` 输出里。
+> 用环境变量传（上面就是这么做的）。`.env` 里已有口令、只想换主机或库名时，
+> 口令可以不传，会沿用原来的。
 
 ---
 
@@ -266,6 +321,9 @@ node dist/cli.js migrate:status
 | 站点 502 | Node 没起来 | 看 Supervisor/项目日志；先 `node dist/cli.js serve` 手动跑看报错 |
 | 启动报 `engines` 不满足 | Node 版本太低 | 换到 20+ |
 | 启动报缺 argon2 | 编译工具链没装 | `apt-get install -y python3 make g++` |
+| 日志说「仅向导模式」 | 数据库连不上 | **正常，服务已起**；开 `http://IP:5001/init` 填连接，保存即生效 |
+| 页面全是 503 | 仍在仅向导模式 | 同上，先把数据库配上 |
+| 每日 ETL 没跑 | 服务启动时数据库连不上，定时任务当时没排上 | 走完 `/init` 第 2 步后定时任务会自动挂上；或手动 `node dist/cli.js update` |
 | `/lookup` 全是「未找到」 | 没加载真实数据 | `node dist/cli.js update` |
 | 页面样式全丢 | 限流返回了 429 的 JSON，被当成 CSS | 已修为只限公共 API；确认没有旧版本残留 |
 | ETL 下载失败 | `data/raw` 不可写 | `chown -R www:www data` |

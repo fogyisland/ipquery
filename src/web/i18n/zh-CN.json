@@ -172,7 +172,7 @@
       "newPassword": "新密码",
       "save": "保存修改",
       "saved": "资料已保存",
-      "savedWithEviction": "资料已保存。已退出 {{count}} 个其他会话。"
+      "savedWithEviction": "资料已保存。已退出 {count} 个其他会话。"
     },
     "hit": "命中",
     "miss": "未命中",
@@ -746,7 +746,7 @@
         "enabled": "启用",
         "save": "保存",
         "delete": "删除",
-        "test": "测试查询",
+        "test": "测试连接",
         "testIp": "测试 IP",
         "testResult": "查询结果",
         "deleteConfirm": "确认删除 {name}?",
@@ -1075,15 +1075,21 @@
     },
     "database": {
       "title": "数据库",
-      "intro": "当前数据库连接(从 .env 加载):",
+      "intro": "填写数据库连接信息。保存后会自动建表并继续下一步。",
       "hostLabel": "主机",
       "portLabel": "端口",
       "userLabel": "用户",
       "dbLabel": "数据库名",
-      "test": "测试连接",
-      "envHint": "这些值从 .env 加载。如需修改,请编辑 .env 并重启服务器,然后返回此页。",
+      "test": "保存并继续",
+      "envHint": "保存后会写入 .env（仅本机，不进版本库），并立即重建连接，无需重启服务。",
       "success": "数据库连接成功",
-      "failure": "无法连接数据库,请检查 .env 配置并确认服务器已启动。"
+      "failure": "无法连接数据库,请检查 .env 配置并确认服务器已启动。",
+      "passwordLabel": "密码",
+      "passwordPlaceholder": "数据库密码（留空表示不修改）",
+      "degraded": "数据库连不上。服务已在「仅向导」模式下启动 —— 在下面填入连接信息，保存后立即生效，无需重启。",
+      "failureReason": "无法连接数据库：{reason}",
+      "migrationFailed": "已连接成功，但建表失败。请检查该数据库账号是否有建表权限。",
+      "envHintFresh": "当前还没有 .env 文件 —— 保存后会自动新建（仅本机，不进版本库），并立即重建连接，无需重启服务。"
     },
     "site": {
       "title": "站点",
@@ -1160,7 +1166,11 @@
       "email_invalid": "邮箱格式不正确",
       "db_unreachable": "无法连接数据库",
       "site_name_required": "站点名称必填",
-      "displayName_invalid": "昵称长度应为 1-64 字符"
+      "displayName_invalid": "昵称长度应为 1-64 字符",
+      "db_host_required": "主机必填",
+      "db_user_required": "用户必填",
+      "db_name_required": "数据库名必填",
+      "db_port_invalid": "端口必须是 1-65535 之间的整数"
     }
   }
 }

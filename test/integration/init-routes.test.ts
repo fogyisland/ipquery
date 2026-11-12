@@ -6,12 +6,15 @@ import { loadConfig } from "../../src/config";
 import { runMigrations } from "../../src/storage/migrations/runner";
 import { buildServer } from "../../src/api/server";
 import { getSetting, isInitialized, markInitialized as _markInitialized } from "../../src/storage/settings";
+import { isolateEnvFile, type EnvIsolation } from "../helpers/envIsolation";
 
 const TEST_DB = "ipquery_test_setup_routes";
 
 let td: { pool: mysql.Pool; dbName: string };
 let appPre: Awaited<ReturnType<typeof buildServer>>;
 let appPost: Awaited<ReturnType<typeof buildServer>>;
+// Keeps the wizard's .env writes out of the developer's project .env.
+let envIsolation: EnvIsolation | undefined;
 
 async function dropAndCreate(): Promise<{ pool: mysql.Pool; dbName: string }> {
   const cfg = loadConfig();
@@ -63,6 +66,10 @@ function extractCsrf(html: string): string {
 }
 
 beforeAll(async () => {
+  // Step 2 of the wizard writes the connection to a .env file. Without
+  // this, it would write the TEST database into the developer's own
+  // project .env and silently replace their working configuration.
+  envIsolation = isolateEnvFile();
   td = await dropAndCreate();
   const cfg = loadConfig();
   cfg.db.database = td.dbName;
@@ -74,6 +81,7 @@ afterAll(async () => {
   if (appPost) await appPost.close();
   await td.pool.end();
   await dropDb(td.dbName);
+  envIsolation?.restore();
 });
 
 describe("setup wizard routes", () => {
@@ -100,12 +108,37 @@ describe("setup wizard routes", () => {
   });
 
   it("POST /init/database with valid CSRF redirects to /init/site", async () => {
+    // Step 2 is a real CONFIGURATION step: it collects the connection
+    // details, proves they work, writes them to .env and re-points the
+    // live pool. So the POST has to carry them — an empty form is a
+    // validation error, not a silent pass-through.
+    const agent = request.agent(appPre.server);
+    const page = await agent.get("/init/database");
+    const csrf = extractCsrf(page.text);
+    const cfg = loadConfig();
+    const r = await agent.post("/init/database").type("form").send({
+      csrf,
+      host: cfg.db.host,
+      port: String(cfg.db.port),
+      user: cfg.db.user,
+      password: cfg.db.password,
+      database: td.dbName,
+    });
+    expect(r.status).toBe(302);
+    expect(r.headers["location"]).toMatch(/^\/init\/site/);
+  });
+
+  it("POST /init/database without the connection fields is a validation error", async () => {
+    // The counterpart to the test above: the fields are required. A
+    // submission with no host is a typo, not a configuration — it must
+    // re-render the form with an error instead of redirecting as if it
+    // had worked.
     const agent = request.agent(appPre.server);
     const page = await agent.get("/init/database");
     const csrf = extractCsrf(page.text);
     const r = await agent.post("/init/database").type("form").send({ csrf });
-    expect(r.status).toBe(302);
-    expect(r.headers["location"]).toMatch(/^\/init\/site/);
+    expect(r.status).toBe(200);
+    expect(r.text).toContain('class="form-error"');
   });
 
   it("POST /init/site with valid CSRF saves settings and redirects to /init/admin", async () => {
