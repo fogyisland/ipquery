@@ -122,8 +122,29 @@ node -e "console.log(require('crypto').randomBytes(48).toString('base64'))"
 
 ```ini
 COOKIE_SECURE=true                       # 走 HTTPS 时必须打开
-WEB_BASE_URL=https://ipquery.example.com # 与实际上访问的域名一致，否则重定向出错
+WEB_BASE_URL=https://ipquery.example.com # 与实际上访问的域名一致，否则重置密码出错
 ```
+
+> **`WEB_BASE_URL` 填外网地址，不要填内网地址。**
+>
+> 启动时生成的 `.env` 里，`WEB_BASE_URL` 是一个占位值（`http://localhost:3880`），
+> 那一行后面会带着 `# PLACEHOLDER` 注释提醒你改掉它。向导第 2 步会**自动填好**
+> 你正在用的那个地址 —— 它从请求的 `Host` 头取域名，从 `X-Forwarded-Proto` 取协议，
+> 所以你在 `https://ip.example.com/init/env` 打开这一屏，框里就是
+> `https://ip.example.com`。
+>
+> 这一步必须填对，因为 `WEB_BASE_URL` 会被写进三处别人真正会读的地方：
+>
+> - **验证邮件**里的确认链接
+> - **重置密码邮件**里的重置链接
+> - **密钥页**上展示给调用方的 API 地址
+>
+> 三处都填成 `http://localhost:3880` 的话，收到邮件的人点开是一个他根本
+> 连不上的地址。
+>
+> 协议那一步：反代终止 TLS 的话，Node 看到的连接是 http，浏览器用的却是
+> https。向导读 `X-Forwarded-Proto` 来还原，所以正常情况下它填的就是 https。
+> 万一填错了，手工改成 `https://` 即可 —— 这一栏只是提示，不影响保存。
 
 ---
 

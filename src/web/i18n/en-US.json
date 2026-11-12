@@ -1179,7 +1179,7 @@
       "portLabel": "Port",
       "portHelp": "The port the service listens on. A change takes effect after a restart.",
       "baseUrlLabel": "Base URL",
-      "baseUrlHelp": "The address you use to reach this service. In production, put your real domain here.",
+      "baseUrlHelp": "The public address visitors use to reach this service in a browser, for example https://ip.example.com. It goes into the verification email, the password-reset email and the API address shown on the keys page, so it must not be an internal address or localhost.",
       "sessionSecretLabel": "Session secret",
       "csrfSecretLabel": "CSRF secret",
       "secretAutoHelp": "Both secrets will be generated and written straight into .env. You do not need to type them.",
@@ -1188,7 +1188,8 @@
       "created": ".env has been generated. The database connection is the next step.",
       "submit": "Generate and continue",
       "restartNeeded": "The settings were written to .env. This process is still listening on the port it started with; restart the service for {port} to take effect.",
-      "secretKeptPlaceholder": "Already set (leave blank to keep)"
+      "secretKeptPlaceholder": "Already set (leave blank to keep)",
+      "baseUrlSchemeHint": "If your service runs behind an HTTPS reverse proxy, use the https scheme, not http."
     }
   }
 }

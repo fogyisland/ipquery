@@ -1180,7 +1180,7 @@
       "portLabel": "监听端口",
       "portHelp": "服务监听的端口。修改后需要重启服务才会生效。",
       "baseUrlLabel": "访问地址",
-      "baseUrlHelp": "浏览器访问这个服务用的地址。生产环境请填真实的域名。",
+      "baseUrlHelp": "访客在浏览器里访问这个服务用的外网地址，例如 https://ip.example.com。它会被写进验证邮件、重置密码邮件和密钥页展示的 API 地址，所以不能填内网地址或 localhost。",
       "sessionSecretLabel": "会话密钥",
       "csrfSecretLabel": "CSRF 密钥",
       "secretAutoHelp": "两把加密密钥将由系统随机生成并直接写入 .env，不需要你填写。",
@@ -1189,7 +1189,8 @@
       "created": ".env 已生成。数据库连接在下一步填写。",
       "submit": "生成并继续",
       "restartNeeded": "配置已写入 .env。当前进程仍在监听启动时的端口 {port}，重启服务后生效。",
-      "secretKeptPlaceholder": "已设置（留空保持不变）"
+      "secretKeptPlaceholder": "已设置（留空保持不变）",
+      "baseUrlSchemeHint": "如果你的服务跑在 HTTPS 反向代理后面，协议要填 https（而不是 http）。"
     }
   }
 }

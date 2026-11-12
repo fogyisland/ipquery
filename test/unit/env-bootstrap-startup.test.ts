@@ -165,6 +165,63 @@ describe("bootstrapEnvFile", () => {
     expect(values.SESSION_SECRET).toBeTruthy();
   });
 
+  it("marks the generated base URL as a placeholder", () => {
+    // The server cannot know its own domain at boot time, so the
+    // generated value is a loopback address — a guess, not an answer.
+    // The file has to say so, because WEB_BASE_URL ends up in outgoing
+    // email and in the API address the keys page hands to callers. An
+    // operator who opens the file in an editor should see the same
+    // warning the wizard gives them.
+    bootstrapEnvFile();
+    const content = fs.readFileSync(iso.file, "utf8");
+    const line = content.split(/\r?\n/).find((l) => l.startsWith("WEB_BASE_URL="));
+    expect(line).toBeTruthy();
+    expect(line).toMatch(/#.*PLACEHOLDER/);
+    // A comment must not change the value the process reads.
+    expect(readEnvValues(iso.file).WEB_BASE_URL).toBe("http://localhost:3880");
+  });
+
+  it("does not mark a base URL that came from the environment", () => {
+    // Somebody who set WEB_BASE_URL knows their deployment. Telling
+    // them it is a placeholder would be noise.
+    const previous = process.env.WEB_BASE_URL;
+    process.env.WEB_BASE_URL = "https://geo.example.com";
+    try {
+      bootstrapEnvFile();
+      const content = fs.readFileSync(iso.file, "utf8");
+      const line = content.split(/\r?\n/).find((l) => l.startsWith("WEB_BASE_URL="));
+      expect(line).toBe("WEB_BASE_URL=https://geo.example.com");
+    } finally {
+      if (previous === undefined) delete process.env.WEB_BASE_URL;
+      else process.env.WEB_BASE_URL = previous;
+    }
+  });
+
+  it("reads a value the same way dotenv reads it", () => {
+    // The wizard parses the .env with THIS parser, while the running
+    // process parses it with dotenv. If the two disagree about the same
+    // line, the operator sees one value and the server uses another —
+    // and a trailing comment on WEB_BASE_URL ends up inside the URL.
+    const lines = [
+      "PLAIN=value",
+      "TRAILING=value  # a comment",
+      "QUOTED=\"value with # inside\"",
+      "HASHED=abc#def",
+      "FRAGMENT=https://example.com/page#anchor",
+    ];
+    fs.writeFileSync(iso.file, lines.join("\n"), "utf8");
+
+    // dotenv is the reference implementation — the process reads the file
+    // with it, so matching it is the requirement.
+    const dotenv = require("dotenv") as { parse: (content: string) => Record<string, string> };
+    const expected = dotenv.parse(lines.join("\n"));
+
+    const actual = readEnvValues(iso.file);
+    for (const [key, value] of Object.entries(expected)) {
+      expect(actual[key], `key ${key}`).toBe(value);
+    }
+  });
+
   it("does not throw when the file cannot be written", () => {
     // A boot that dies because it could not write a config file is worse
     // than a boot that starts with the defaults and says so. The

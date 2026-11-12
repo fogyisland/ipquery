@@ -36,7 +36,20 @@ const ENV_FILE_OVERRIDE = "IPQUERY_ENV_FILE";
 /** The port used when neither the environment nor the template says. */
 const DEFAULT_PORT = 3880;
 
-/** The base URL used when neither the environment nor the template says. */
+/**
+ * The base URL used when neither the environment nor the template says.
+ *
+ * This is a PLACEHOLDER, not an answer. At boot time the server has no
+ * way to know what domain it will be served on — it has not seen a
+ * request yet. So the generated file carries the loopback address and
+ * the wizard (step 2) offers the address the operator is actually
+ * browsing, which is derived from the request's Host header.
+ *
+ * The placeholder matters: `WEB_BASE_URL` ends up in the verification
+ * email, the password-reset email and the API endpoint template on the
+ * keys page. Left as a loopback address, all three hand a real user an
+ * address they cannot reach.
+ */
 const DEFAULT_BASE_URL = "http://localhost:3880";
 
 /**
@@ -60,6 +73,13 @@ function envFilePath(): string {
  * Deliberately simple: KEY=VALUE, one per line, `#` starts a comment,
  * optional surrounding quotes are stripped. Values are NOT shell
  * evaluated — a value like `$(rm -rf /)` is data, not a command.
+ *
+ * A trailing `# comment` is stripped from an unquoted value, which is
+ * what dotenv does. The two have to agree: this parser is what the
+ * wizard reads the .env with, and dotenv is what the running process
+ * reads it with. If they disagreed about the same line, the wizard
+ * would hand dotenv a different value than the one the operator sees —
+ * and a trailing comment on `WEB_BASE_URL` would end up inside the URL.
  */
 function parseEnvFile(content: string): Record<string, string> {
   const out: Record<string, string> = {};
@@ -75,6 +95,16 @@ function parseEnvFile(content: string): Record<string, string> {
       (value.startsWith("'") && value.endsWith("'") && value.length >= 2)
     ) {
       value = value.slice(1, -1);
+    } else {
+      // Unquoted: any `#` opens a trailing comment. This is dotenv's
+      // rule, and it is stricter than it looks — `abc#def` parses as
+      // `abc`, and so does a URL with a fragment. Matching dotenv
+      // exactly is the point: this parser is what the wizard reads the
+      // .env with, and dotenv is what the running process reads it
+      // with. If they disagreed about the same line, the operator would
+      // see one value and the server would use another.
+      const hash = value.indexOf("#");
+      if (hash >= 0) value = value.slice(0, hash).trim();
     }
     out[key] = value;
   }
@@ -113,8 +143,17 @@ function tightenEnvPermissions(file: string): void {
  * A rewrite in place, not an append: appending a second `PORT=` line
  * would leave the effective value to dotenv's "first wins" rule, which
  * is not a thing anyone should have to reason about.
+ *
+ * `comments` optionally supplies a trailing comment to append to the
+ * rewritten line. It is used to mark the generated base URL as a
+ * placeholder, so an operator who opens the file in an editor sees the
+ * same thing the wizard tells them: this value is a guess, fix it.
  */
-function applyValues(content: string, pending: Map<string, string>): string {
+function applyValues(
+  content: string,
+  pending: Map<string, string>,
+  comments?: Map<string, string>,
+): string {
   const lines = content.split(/\r?\n/);
   const out: string[] = [];
 
@@ -127,7 +166,8 @@ function applyValues(content: string, pending: Map<string, string>): string {
       // match[1] is the leading whitespace only — match[0] would be the
       // whole "PORT=" prefix and would produce "PORT=PORT=3880".
       const indent = match?.[1] ?? "";
-      out.push(`${indent}${key}=${value}`);
+      const comment = comments?.get(key);
+      out.push(comment ? `${indent}${key}=${value}  # ${comment}` : `${indent}${key}=${value}`);
       continue;
     }
     out.push(line);
@@ -138,7 +178,8 @@ function applyValues(content: string, pending: Map<string, string>): string {
     if (out.length > 0) out.push("");
     out.push("# --- generated on first start ---");
     for (const [key, value] of pending) {
-      out.push(`${key}=${value}`);
+      const comment = comments?.get(key);
+      out.push(comment ? `${key}=${value}  # ${comment}` : `${key}=${value}`);
     }
   }
 
@@ -178,12 +219,10 @@ export function bootstrapEnvFile(): { path: string; created: boolean; error?: st
 
   // The environment wins over the defaults: a container that injects
   // PORT=8080 must not end up with a .env that says 3880.
-  const port = process.env.PORT && process.env.PORT.trim() !== ""
-    ? process.env.PORT.trim()
-    : String(DEFAULT_PORT);
-  const baseUrl = process.env.WEB_BASE_URL && process.env.WEB_BASE_URL.trim() !== ""
-    ? process.env.WEB_BASE_URL.trim()
-    : DEFAULT_BASE_URL;
+  const envPort = process.env.PORT?.trim() ?? "";
+  const port = envPort !== "" ? envPort : String(DEFAULT_PORT);
+  const envBaseUrl = process.env.WEB_BASE_URL?.trim() ?? "";
+  const baseUrl = envBaseUrl !== "" ? envBaseUrl : DEFAULT_BASE_URL;
 
   const pending = new Map<string, string>([
     ["PORT", port],
@@ -192,8 +231,19 @@ export function bootstrapEnvFile(): { path: string; created: boolean; error?: st
     ["CSRF_SECRET", generateSecret()],
   ]);
 
+  // Only the generated placeholder gets the marker. A base URL that came
+  // from the environment was chosen by somebody who knew the deployment —
+  // telling them it is a placeholder would be noise.
+  const comments = new Map<string, string>();
+  if (envBaseUrl === "") {
+    comments.set(
+      "WEB_BASE_URL",
+      "PLACEHOLDER — set this to the public address of this site (the wizard's step 2 offers it)",
+    );
+  }
+
   try {
-    fs.writeFileSync(file, applyValues(content, pending), {
+    fs.writeFileSync(file, applyValues(content, pending, comments), {
       encoding: "utf8",
       mode: 0o600,
     });
