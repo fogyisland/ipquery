@@ -84,6 +84,14 @@ export async function registerView(app: FastifyInstance, cfg: { baseUrl: string 
     if (obj == null || typeof obj !== "object") return undefined;
     return (obj as Record<string, unknown>)[String(key)];
   });
+  // Find one entry of a sortable-column list by its key. The admin views
+  // address a column by name ("id", "email") rather than by index, so the
+  // order of the list stays a server-side concern.
+  Handlebars.registerHelper("lookupColumn", (columns: unknown, key: unknown) => {
+    if (!Array.isArray(columns)) return undefined;
+    const wanted = String(key);
+    return columns.find((c) => (c as { key?: unknown })?.key === wanted);
+  });
   Handlebars.registerHelper(
     "sparkline-path",
     (data: unknown, max: unknown, width: unknown, height: unknown) => {
@@ -129,18 +137,88 @@ export async function registerView(app: FastifyInstance, cfg: { baseUrl: string 
         ? args.slice(0, -1)
         : args
     ) as unknown[];
-    return vals.reduce((m: number, v: unknown) => Math.max(m, Number(v)), 0);
+    // A list argument is spread into the comparison: `Number([3, 0, 0])`
+    // is NaN, not 3, so a caller passing an array got NaN back and every
+    // comparison against it was false. That is why the query-volume
+    // sparkline rendered as a flat line — its `max` was NaN.
+    const numbers: number[] = [];
+    for (const v of vals) {
+      if (Array.isArray(v)) {
+        for (const item of v) numbers.push(Number(item));
+      } else {
+        numbers.push(Number(v));
+      }
+    }
+    return numbers.reduce((m: number, v: number) => (Number.isFinite(v) ? Math.max(m, v) : m), 0);
   });
   Handlebars.registerHelper("array", (...args: unknown[]) => {
+    // Handlebars appends its own options object as the last argument when
+    // the helper is called with hash arguments. That object is recognisable
+    // by `hash` + `data` + `loc` — the old check looked for `fn`, which
+    // only a BLOCK helper's options carry, so the options object leaked
+    // into the resulting array as an extra element.
     const last = args[args.length - 1];
-    const vals = (
-      last && typeof last === "object" && "name" in (last as object) && "fn" in (last as object)
-        ? args.slice(0, -1)
-        : args
-    ) as unknown[];
+    const isHandlebarsOptions = (v: unknown): boolean =>
+      v != null &&
+      typeof v === "object" &&
+      "hash" in (v as object) &&
+      "data" in (v as object) &&
+      "loc" in (v as object);
+    const vals = (isHandlebarsOptions(last) ? args.slice(0, -1) : args) as unknown[];
     return vals;
   });
-  Handlebars.registerHelper("hash", (obj: unknown) => obj);
+  // Build an object from hash arguments: `(hash name='role' label='Role')`
+  // yields `{ name: 'role', label: 'Role' }`.
+  //
+  // Handlebars hands a helper its hash arguments inside `options.hash`,
+  // and the FIRST POSITIONAL argument it passes is that same options
+  // object — not the hash the caller wrote. Returning `options` (what
+  // this used to do) therefore produced an object whose own `name` key
+  // was the helper's own name and whose real arguments were buried
+  // under `.hash`. Every `{{name}}` in a filter bar then rendered
+  // "hash", and every option list came out empty.
+  Handlebars.registerHelper("hash", (options: unknown) => {
+    const opts = options as { hash?: Record<string, unknown> } | undefined;
+    return opts?.hash ?? {};
+  });
+
+  // A proportional bar for the hit / miss / invalid mix of a set of
+  // queries. Plain divs with flex-grow — no chart library, no canvas.
+  // The three counts are the only input; the widths are proportional to
+  // the total, and a zero-count segment collapses to nothing.
+  Handlebars.registerHelper("status-split", (counts: unknown) => {
+    const src = (counts ?? {}) as Record<string, unknown>;
+    // The output is raw markup (the view renders it with triple braces),
+    // so nothing from the request may reach it. The counts are the only
+    // input and they are coerced to finite non-negative integers here —
+    // a negative count would otherwise produce a negative width.
+    const safeCount = (v: unknown): number => {
+      const n = Number(v ?? 0);
+      return Number.isFinite(n) && n > 0 ? Math.floor(n) : 0;
+    };
+    const hit = safeCount(src.hit);
+    const miss = safeCount(src.miss);
+    const invalid = safeCount(src.invalid);
+    const total = hit + miss + invalid;
+
+    if (total <= 0) {
+      return `<div class="status-split" role="img" aria-label="no queries"></div>`;
+    }
+
+    const pct = (n: number): string => ((n / total) * 100).toFixed(3);
+    const seg = (cls: string, n: number, label: string): string =>
+      n > 0
+        ? `<div class="status-split-seg status-split-seg--${cls}" style="width:${pct(n)}%" title="${label}: ${n}"></div>`
+        : "";
+
+    return [
+      `<div class="status-split" role="img" aria-label="hit ${hit}, miss ${miss}, invalid ${invalid}">`,
+      seg("hit", hit, "hit"),
+      seg("miss", miss, "miss"),
+      seg("invalid", invalid, "invalid"),
+      `</div>`,
+    ].join("");
+  });
 
   // Render a stacked-bar chart for a DailyBucket[]. CSS-grid based — matches
   // the NOC console layout (chart-bars / chart-y / chart-bars-track /

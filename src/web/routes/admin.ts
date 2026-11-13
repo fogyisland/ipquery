@@ -50,6 +50,7 @@ import { listAllApiKeys, revokeApiKey, revokeApiKeysBulk } from "../../storage/a
 import { listQueryLogs, streamQueryLogsCsv } from "../../storage/queryLog";
 import { listAuditLog } from "../../storage/auditLog";
 import { getOverview } from "../admin/overview";
+import { buildSortColumns } from "../admin/sortColumns";
 import { getQueryStats } from "../admin/queries";
 import { parseListQuery } from "../admin/queryString";
 import { csvForRows, withBom } from "../admin/csv";
@@ -287,6 +288,12 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
       totalPages: Math.max(1, Math.ceil(total / q.limit)),
       filters: q.filters,
       sort: q.sort,
+      // The header links carry the current filters along, so clicking a
+      // column header narrows the table instead of resetting it.
+      sortColumns: buildSortColumns(["id", "email"], q.sort, {
+        ...q.filters,
+        page: q.page,
+      }),
       req,
       csrfToken: req.csrfToken,
     });
@@ -475,6 +482,10 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
       totalPages: Math.max(1, Math.ceil(total / q.limit)),
       filters: q.filters,
       sort: q.sort,
+      sortColumns: buildSortColumns(["id", "started_at"], q.sort, {
+        ...q.filters,
+        page: q.page,
+      }),
       flash: consumeEtlFlash(req, reply, req.t),
       req,
       csrfToken: req.csrfToken,
@@ -825,6 +836,11 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
       queryString,
       filters: q.filters,
       sort: q.sort,
+      sortColumns: buildSortColumns(
+        ["id", "label", "key_prefix", "created_at"],
+        q.sort,
+        { ...q.filters, page: q.page },
+      ),
       req,
       csrfToken: req.csrfToken,
     });
@@ -947,6 +963,7 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
       queryString,
       filters: q.filters,
       sort: q.sort,
+      sortColumns: buildSortColumns(["id", "ts"], q.sort, { ...q.filters, page: q.page }),
       req,
       csrfToken: req.csrfToken,
     });
@@ -1011,6 +1028,10 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
       queryString,
       filters: q.filters,
       sort: q.sort,
+      sortColumns: buildSortColumns(["id", "created_at"], q.sort, {
+        ...q.filters,
+        page: q.page,
+      }),
       req,
       csrfToken: req.csrfToken,
     });

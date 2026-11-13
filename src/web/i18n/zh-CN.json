@@ -49,7 +49,13 @@
       "settings": "设置",
       "ingest": "API 入库",
       "customProviders": "自定义 Provider",
-      "providers": "数据源"
+      "providers": "数据源",
+      "groups": {
+        "overview": "概览",
+        "data": "数据管道",
+        "traffic": "流量与凭证",
+        "governance": "用户与治理"
+      }
     },
     "logout": "登出",
     "history": "查询历史",
@@ -393,7 +399,11 @@
       "topIps": "热门 IP",
       "topUsers": "活跃用户",
       "since": "起始",
-      "until": "结束"
+      "until": "结束",
+      "hit": "命中",
+      "miss": "未命中",
+      "invalid": "无效",
+      "split": "请求结果分布"
     },
     "settings": {
       "title": "系统设置",

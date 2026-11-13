@@ -24,8 +24,8 @@
   <table class="table">
     <thead>
       <tr>
-        <th><a href="?sort={{ternary (eq sort.col 'id') (ternary (eq sort.dir 'asc') '-id' 'id') (ternary (eq sort.dir 'asc') 'id' '-id')}}">ID</a></th>
-        <th><a href="?sort={{ternary (eq sort.col 'ts') (ternary (eq sort.dir 'asc') '-ts' 'ts') (ternary (eq sort.dir 'asc') 'ts' '-ts')}}">{{@root.req.t 'admin.audit.col.time'}}</a></th>
+        {{> sort-link column=(lookupColumn sortColumns 'id') label='ID'}}
+        {{> sort-link column=(lookupColumn sortColumns 'ts') label=(@root.req.t 'admin.audit.col.time')}}
         <th>{{@root.req.t 'admin.audit.col.ip'}}</th>
         <th>{{@root.req.t 'admin.audit.col.status'}}</th>
         <th>{{@root.req.t 'admin.audit.col.user'}}</th>

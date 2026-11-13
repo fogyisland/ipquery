@@ -15,7 +15,7 @@
   <div class="table-scroll">
     <table class="table">
       <thead>
-        <tr><th></th><th><a href="?sort={{ternary (eq sort.col 'id') (ternary (eq sort.dir 'asc') '-id' 'id') (ternary (eq sort.dir 'asc') 'id' '-id')}}">{{req.t 'admin.users.id'}}</a></th><th><a href="?sort={{ternary (eq sort.col 'email') (ternary (eq sort.dir 'asc') '-email' 'email') (ternary (eq sort.dir 'asc') 'email' '-email')}}">{{req.t 'admin.users.email'}}</a></th><th>{{req.t 'admin.users.role'}}</th><th>{{req.t 'admin.users.status'}}</th><th>{{req.t 'admin.users.created'}}</th><th>{{req.t 'common.actions'}}</th></tr>
+        <tr><th></th>{{> sort-link column=(lookupColumn sortColumns 'id') label=(req.t 'admin.users.id')}}{{> sort-link column=(lookupColumn sortColumns 'email') label=(req.t 'admin.users.email')}}<th>{{req.t 'admin.users.role'}}</th><th>{{req.t 'admin.users.status'}}</th><th>{{req.t 'admin.users.created'}}</th><th>{{req.t 'common.actions'}}</th></tr>
       </thead>
       <tbody>
         {{#each users}}

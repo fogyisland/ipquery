@@ -18,8 +18,8 @@
   <table class="table">
     <thead>
       <tr>
-        <th><a href="?sort={{ternary (eq sort.col 'id') (ternary (eq sort.dir 'asc') '-id' 'id') (ternary (eq sort.dir 'asc') 'id' '-id')}}">{{@root.req.t 'admin.auditLog.id'}}</a></th>
-        <th><a href="?sort={{ternary (eq sort.col 'created_at') (ternary (eq sort.dir 'asc') '-created_at' 'created_at') (ternary (eq sort.dir 'asc') 'created_at' '-created_at')}}">{{@root.req.t 'admin.auditLog.time'}}</a></th>
+        {{> sort-link column=(lookupColumn sortColumns 'id') label=(@root.req.t 'admin.auditLog.id')}}
+        {{> sort-link column=(lookupColumn sortColumns 'created_at') label=(@root.req.t 'admin.auditLog.time')}}
         <th>{{@root.req.t 'admin.auditLog.actor'}}</th>
         <th>{{@root.req.t 'admin.auditLog.action'}}</th>
         <th>{{@root.req.t 'admin.auditLog.target'}}</th>
