@@ -51,6 +51,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `ipquery_queue_top`、`ipquery_queries_recent`、`ipquery_queries_daily`），
   供 AI 工具接入。查询日志默认脱敏，需显式传 `includePrivate: true` 才显示邮箱与
   API Key 前缀。见 `docs/mcp.md`
+  - **端到端测试**：此前只测了工具的 handler，**协议层完全没测**——而协议层正是
+    AI 客户端唯一看得见的那一层。现新增 `test/integration/mcp-e2e.test.ts`：起真实的
+    子进程，用 SDK 自带的 Client 走完整 MCP 协议，验证握手与 server 版本、
+    tools/list 的工具清单与 schema、tools/call 的结果形状、**未命中不算错误而无效 IP
+    算错误**这条语义差异、未知工具名会列出可用工具，以及 stdout 保持干净
+    （stdout 归 JSON-RPC 所有，一行 console.log 就能让客户端解析失败）
 - **自定义 Provider**: 通用 HTTP Provider（`GenericHttpProvider`）+ 工厂分发 + 管理界面，
   含 SSRF 防护（拦截 localhost／内网／link-local 地址）。见 migration 021
 - **ETL 实时进度**: ETL 运行期间在管理界面渲染进度条（migration 022 + `/progress` JSON 端点）
