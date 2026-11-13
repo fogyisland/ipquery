@@ -12,6 +12,15 @@
 
 {{#if error}}<div class="boot-alert"><p class="form-error">{{error}}</p></div>{{/if}}
 
+{{!-- The port notice. It is a NOTICE, not an error: the .env has been
+     written, the wizard carries on, and the restart happens once at the
+     end. Showing it as an error would read as "this step failed". --}}
+{{#if flash.notice}}
+<div class="boot-alert">
+  <p class="form-help">{{flash.notice}}</p>
+</div>
+{{/if}}
+
 <form method="POST" action="/init/database" class="boot-form">
   <input type="hidden" name="csrf" value="{{csrfToken}}">
 

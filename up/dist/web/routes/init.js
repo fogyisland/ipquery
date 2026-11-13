@@ -83,14 +83,40 @@ function renderCsrfError(req, reply, step) {
 }
 // Map ?flash=success|error on redirect to a flash object whose message is the
 // translated text for the route-specific key. Returns undefined if no flash.
-function getFlash(req, successKey, errorKey) {
+//
+// `flash=restart` is a third kind: the .env was written with a port that
+// differs from the one this process booted with, so the new port only
+// takes effect after a restart. It is a notice, not a failure — the
+// wizard carries on and the operator restarts once at the end.
+function getFlash(req, successKey, errorKey, vars) {
     const q = req.query;
     const kind = q.flash;
     if (kind === "success")
         return { success: req.t(successKey) };
     if (kind === "error")
         return { error: req.t(errorKey) };
+    if (kind === "restart")
+        return { notice: req.t("setup.env.restartNeeded", vars) };
     return {};
+}
+// The port the .env on disk holds right now.
+//
+// Read from the FILE rather than from the request or the config: the
+// file is what the next boot will use, so it is the only answer to
+// "what port will this service listen on after a restart". Falls back
+// to the running port if the file cannot be read or has no port.
+function readEnvPort(app) {
+    try {
+        const values = (0, dbBootstrap_1.parseEnvFile)(fs.readFileSync((0, dbBootstrap_1.envFilePath)(), "utf8"));
+        const port = values.PORT?.trim();
+        if (port !== undefined && /^\d{1,5}$/.test(port))
+            return port;
+    }
+    catch {
+        // An unreadable .env is the startup generator's problem, not this
+        // page's. Fall through to the running port.
+    }
+    return String(app.cfg.api.port);
 }
 // Read the most recent ETL run row (any status). Returns null if the table is
 // empty (i.e. the wizard has never triggered an ETL during this install).
@@ -241,7 +267,7 @@ function suggestBaseUrl(req) {
  * the localhost placeholder. It only replaces the placeholder — a base
  * URL the operator has already set is never second-guessed.
  */
-function readEnvState(port, baseUrl, suggestedBaseUrl) {
+function readEnvState(baseUrl, suggestedBaseUrl) {
     let existing = {};
     try {
         const file = (0, dbBootstrap_1.envFilePath)();
@@ -264,7 +290,6 @@ function readEnvState(port, baseUrl, suggestedBaseUrl) {
     const useSuggestion = isPlaceholder && suggestedBaseUrl !== undefined;
     return {
         env: {
-            port: Number(existing.PORT) || port,
             baseUrl: useSuggestion ? suggestedBaseUrl : configured || baseUrl,
             hasSecrets,
             // True when the value shown is our guess rather than something the
@@ -301,7 +326,7 @@ async function initRoutes(app) {
     // paste into a chat window, and in any proxy log along the way. The
     // server generates them on submit and never displays them.
     app.get("/init/env", async (req, reply) => {
-        const state = readEnvState(app.cfg.api.port, app.cfg.web.baseUrl, suggestBaseUrl(req));
+        const state = readEnvState(app.cfg.web.baseUrl, suggestBaseUrl(req));
         return reply.view("init/env.hbs", {
             layout: "layouts/init",
             title: req.t("setup.env.title"),
@@ -316,27 +341,34 @@ async function initRoutes(app) {
     });
     // POST /init/env — write the .env.
     //
-    // The port and the base URL come from the form; the two secrets are
-    // generated here and never shown to the operator. Existing values win:
-    // an install that already has a .env keeps its port, its base URL and
-    // its secrets, and only the missing pieces are filled in.
+    // The base URL comes from the form; the port comes from the running
+    // config; the two secrets are generated here and never shown to the
+    // operator. Existing values win: an install that already has a .env
+    // keeps its port, its base URL and its secrets, and only the missing
+    // pieces are filled in.
+    //
+    // There is no port FIELD. The port the Node process listens on is an
+    // internal detail whenever a reverse proxy is in front — the operator
+    // never needs to type it, and the value in .env is generated. Having
+    // it as a form field only invited a mistake: an operator would enter
+    // the PUBLIC port (443), which is the PROXY's port, not Node's, and
+    // then the two would fight over it.
     app.post("/init/env", async (req, reply) => {
         if (!(0, csrf_1.verifyCsrfRequest)(req)) {
             return renderCsrfError(req, reply, 1);
         }
         const body = req.body;
-        const portRaw = (body.port ?? "").trim();
         const baseUrl = (body.baseUrl ?? "").trim();
+        // The port is never taken from the form. If an old bookmark or a
+        // stale tab still submits one, it is ignored — the running config
+        // is the authority on which port this process uses.
+        const port = app.cfg.api.port;
         let fieldError;
-        const port = portRaw === "" ? app.cfg.api.port : Number(portRaw);
-        if (!Number.isInteger(port) || port < 1 || port > 65535) {
-            fieldError = req.t("setup.errors.db_port_invalid");
-        }
-        else if (baseUrl === "") {
+        if (baseUrl === "") {
             fieldError = req.t("setup.errors.base_url_required");
         }
         if (fieldError) {
-            const state = readEnvState(app.cfg.api.port, app.cfg.web.baseUrl, suggestBaseUrl(req));
+            const state = readEnvState(app.cfg.web.baseUrl, suggestBaseUrl(req));
             return reply.code(400).view("init/env.hbs", {
                 layout: "layouts/init",
                 title: req.t("setup.env.title"),
@@ -351,7 +383,6 @@ async function initRoutes(app) {
                 // form is not a guess.
                 env: {
                     ...state.env,
-                    port,
                     baseUrl: baseUrl === "" ? state.env.baseUrl : baseUrl,
                     baseUrlSuggested: false,
                 },
@@ -367,26 +398,32 @@ async function initRoutes(app) {
             csrfSecret: (0, dbBootstrap_1.generateSecret)(),
         });
         app.log.info({ envPath: result.path, created: result.created, port, baseUrl }, "setup: the environment file was written");
-        // The port and the base URL are only in effect for the CURRENT
-        // process if they came from a .env that already existed — dotenv
-        // ran at import time. A fresh install therefore keeps listening on
-        // the port it booted with, and the operator is told to restart if
-        // the one they asked for is different. Saying so plainly beats a
-        // silent no-op that looks like the form worked.
+        // The wizard always advances.
+        //
+        // This used to re-render THIS step with a "restart needed" notice
+        // whenever the port differed from the boot port, and the wizard
+        // dead-ended there: the operator clicked "generate and continue",
+        // the page came back identical, and there was no forward path. The
+        // only way out was to type the boot port back — losing the setting
+        // they had just entered.
+        //
+        // The dead-end was a symptom of a worse mistake: the port was a
+        // FORM FIELD at all. The port the Node process listens on is an
+        // internal detail whenever a reverse proxy is in front, and having
+        // it editable invited an operator to enter the PUBLIC port (443) —
+        // which is the proxy's port, not Node's — and then have the two
+        // fight over it. The port now comes from the running config and is
+        // never editable here.
+        //
+        // There is still a case for telling the operator that the .env on
+        // disk says something the running process does not: an install
+        // whose .env was hand-edited before the wizard ever ran. But that
+        // is not a reason to block the wizard, so the notice rides along to
+        // the next step as a flash instead of a wall.
         const portChanged = port !== app.cfg.api.port;
         if (portChanged) {
-            return reply.view("init/env.hbs", {
-                layout: "layouts/init",
-                title: req.t("setup.env.title"),
-                csrfToken: req.csrfToken,
-                steps: buildSteps(req, 2),
-                step: 2,
-                total: 7,
-                env: { port, baseUrl, hasSecrets: true, baseUrlSuggested: false },
-                envCreated: result.created,
-                error: req.t("setup.env.restartNeeded", { port: String(port) }),
-                req,
-            });
+            app.log.warn({ bootPort: app.cfg.api.port, requestedPort: port }, "setup: the port in the .env differs from the running port; it takes effect after a restart");
+            return reply.redirect("/init/database?flash=restart");
         }
         return reply.redirect("/init/database");
     });
@@ -424,7 +461,13 @@ async function initRoutes(app) {
             // no .env at all (only .env.example), so it needs a different
             // sentence than "your .env will be updated".
             envExists: (0, dbBootstrap_1.envFileExists)(),
-            flash: getFlash(req, "setup.database.success", "setup.database.failure"),
+            flash: getFlash(req, "setup.database.success", "setup.database.failure", {
+                // The port the .env now holds — what the operator asked for.
+                port: readEnvPort(app),
+                // The port this process is actually on. dotenv ran at import
+                // time, so a changed port cannot take effect until a restart.
+                bootPort: String(app.cfg.api.port),
+            }),
             error: req.query.flash === "error" ? req.t("setup.database.failure") : undefined,
             req,
         });

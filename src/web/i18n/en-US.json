@@ -1180,9 +1180,7 @@
     },
     "env": {
       "title": "Environment",
-      "intro": "This step generates the .env file — the service port, the public URL and the two signing secrets all live in it. The secrets are generated for you; you do not need to type them.",
-      "portLabel": "Port",
-      "portHelp": "The port the service listens on. A change takes effect after a restart.",
+      "intro": "This step generates the .env file — the public URL and the two signing secrets all live in it. The secrets are generated for you; you do not need to type them.",
       "baseUrlLabel": "Base URL",
       "baseUrlHelp": "The public address visitors use to reach this service in a browser, for example https://ip.example.com. It goes into the verification email, the password-reset email and the API address shown on the keys page, so it must not be an internal address or localhost.",
       "sessionSecretLabel": "Session secret",
@@ -1192,7 +1190,7 @@
       "envHint": ".env stays on this machine and is never committed. The database connection is the next step.",
       "created": ".env has been generated. The database connection is the next step.",
       "submit": "Generate and continue",
-      "restartNeeded": "The settings were written to .env. This process is still listening on the port it started with; restart the service for {port} to take effect.",
+      "restartNeeded": "The settings were written to .env and the port is now {port}. This process is still listening on {bootPort}, the port it started with — restart the service for the change to take effect. You can keep going through the wizard and restart once at the end.",
       "secretKeptPlaceholder": "Already set (leave blank to keep)",
       "baseUrlSchemeHint": "If your service runs behind an HTTPS reverse proxy, use the https scheme, not http."
     }

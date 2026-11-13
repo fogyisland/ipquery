@@ -84,6 +84,21 @@ export declare function generateSecret(): string;
  * whole point of the wizard is to be safe to run on an install that
  * already has some configuration.
  *
+ * The exception is the loopback PLACEHOLDER. The startup generator
+ * writes `WEB_BASE_URL=http://localhost:3880` into a fresh .env
+ * because at boot time the server has seen no request and cannot know
+ * its own domain. That value is a guess, not a choice, and it used to
+ * win over the operator's confirmed address — so the wizard showed
+ * them their value, they clicked "generate and continue", and the
+ * placeholder stayed in the file. `WEB_BASE_URL` ends up in the
+ * verification email, the password-reset email and the API address on
+ * the keys page: left as a loopback address, all three hand a real
+ * user an address they cannot reach.
+ *
+ * So a loopback base URL is treated as "not yet chosen" and the
+ * operator's value replaces it. Any other existing value — a real
+ * domain, an IP, anything they typed — is left alone.
+ *
  * Only the keys that are absent, or present but empty, are filled in.
  */
 export declare function resolveEnvBootstrap(existing: Record<string, string>, wanted: EnvBootstrapInput): Record<string, string>;

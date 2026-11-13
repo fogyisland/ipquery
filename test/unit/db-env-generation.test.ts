@@ -108,6 +108,47 @@ describe("resolveEnvBootstrap", () => {
     const resolved = resolveEnvBootstrap({ SESSION_SECRET: "   " }, wanted);
     expect(resolved.SESSION_SECRET).toBe("generated-session");
   });
+
+  it("replaces the loopback placeholder with the operator's address", () => {
+    // The startup generator writes WEB_BASE_URL=http://localhost:3880
+    // because at boot time the server cannot know its own domain. That
+    // is a GUESS, not a choice — and it used to win over the address the
+    // operator had just confirmed in the wizard. The result was a .env
+    // still pointing at loopback, with the verification email, the
+    // password-reset email and the keys-page API address all handing
+    // out an address nobody outside the machine can reach.
+    for (const placeholder of [
+      "http://localhost:3880",
+      "http://localhost",
+      "https://localhost:8443",
+      "http://127.0.0.1:3880",
+      "http://[::1]:3880",
+      "http://localhost:3880/base",
+    ]) {
+      const resolved = resolveEnvBootstrap(
+        { WEB_BASE_URL: placeholder },
+        { ...wanted, baseUrl: "https://ip.pudafo.com" },
+      );
+      expect(resolved.WEB_BASE_URL, `placeholder ${placeholder}`).toBe("https://ip.pudafo.com");
+    }
+  });
+
+  it("keeps a real address the operator already chose", () => {
+    // The opposite rule: a value that is NOT a placeholder was chosen by
+    // somebody. The wizard must not overwrite it with whatever it is
+    // offering right now.
+    for (const real of [
+      "https://ip.pudafo.com",
+      "http://192.168.1.10:3880",
+      "https://geo.example.com/sub",
+    ]) {
+      const resolved = resolveEnvBootstrap(
+        { WEB_BASE_URL: real },
+        { ...wanted, baseUrl: "https://offered.example.com" },
+      );
+      expect(resolved.WEB_BASE_URL, `real ${real}`).toBe(real);
+    }
+  });
 });
 
 describe("ensureEnvFile", () => {
