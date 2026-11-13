@@ -185,7 +185,7 @@
     "lastQuery.empty": "No lookups yet — try /try",
     "lastQuery.unknown": "No range matched",
     "lastQuery.asn": "ASN",
-    "lastQuery.country": "Country",
+    "lastQuery.country": "Country/Region",
     "lastQuery.at": "at",
     "lastQuery.cta": "Open the live lookup",
     "lastQuery.miss": "no match",
@@ -605,7 +605,7 @@
         "detailCols": {
           "provider": "Provider",
           "status": "Status",
-          "country": "Country",
+          "country": "Country/Region",
           "city": "City",
           "asn": "ASN",
           "duration": "Duration",
@@ -776,7 +776,7 @@
           "help": "Below is what this run would write. Confirm to ingest.",
           "cols": {
             "ip": "IP",
-            "country": "Country",
+            "country": "Country/Region",
             "city": "City",
             "asn": "ASN",
             "providers": "Providers",
@@ -802,7 +802,7 @@
     "metaLatency": "median latency",
     "ipgrid": {
       "demoLabel": "Sample query",
-      "country": "Country",
+      "country": "Country/Region",
       "region": "Region",
       "city": "City",
       "asn": "ASN"
@@ -931,12 +931,18 @@
     "sub": "No signup. No key. Click a sample chip below to start.",
     "chipsLabel": "Try these:",
     "hint": "Tip: paste straight into the input. The result appears below.",
-    "country": "Country",
+    "country": "Country/Region",
     "region": "Region",
     "city": "City",
     "isp": "ISP",
     "asn": "ASN",
-    "reproCurl": "Reproduce with curl"
+    "coordinates": "Coordinates",
+    "reproCurl": "Reproduce with curl",
+    "map": {
+      "title": "Location",
+      "ariaLabel": "Map showing the location of {ip} in {country}",
+      "unavailable": "This coordinate could not be drawn on the map. The values are listed above."
+    }
   },
   "status": {
     "eyebrow": "Status",

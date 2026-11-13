@@ -8,6 +8,7 @@ const tokens_1 = require("../auth/tokens");
 const password_1 = require("../auth/password");
 const sessions_1 = require("../../storage/sessions");
 const csrf_1 = require("../plugins/csrf");
+const country_names_1 = require("../../country-names");
 async function dashboardRoutes(app) {
     // /dashboard/* is already gated by the auth guard in src/web/plugins/auth.ts:
     // unauthenticated requests are redirected to /login?next=... before this
@@ -19,11 +20,18 @@ async function dashboardRoutes(app) {
             (0, queryLog_1.countQueriesByStatusSince)(app.pool, new Date(Date.now() - 7 * 86400_000), { userId: req.user.id }),
             (0, queryLog_1.getLastUserQuery)(app.pool, req.user.id),
         ]);
+        // `country_name` is NULL for every ETL-loaded row, so the name comes
+        // from the ISO 3166-1 table instead. Localised, because this is the
+        // user's own dashboard.
+        const lastQueryNames = (0, country_names_1.countryNamesFor)(lastQuery?.countryCode ?? null);
+        const lastQueryCountryName = lastQuery?.countryName ||
+            (req.locale === "zh-CN" ? lastQueryNames?.zh : lastQueryNames?.en) ||
+            null;
         return reply.view("dashboard/index.hbs", {
             layout: "layouts/dashboard",
             title: req.t("dashboard.title"),
             counts,
-            lastQuery,
+            lastQuery: lastQuery ? { ...lastQuery, countryName: lastQueryCountryName } : null,
             req,
         });
     });

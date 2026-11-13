@@ -186,7 +186,7 @@
     "lastQuery.empty": "还没有查询记录 — 去 /try 试试",
     "lastQuery.unknown": "无匹配段",
     "lastQuery.asn": "ASN",
-    "lastQuery.country": "国家",
+    "lastQuery.country": "国家/地区",
     "lastQuery.at": "于",
     "lastQuery.cta": "前往在线试查",
     "lastQuery.miss": "未命中",
@@ -606,7 +606,7 @@
         "detailCols": {
           "provider": "数据源",
           "status": "状态",
-          "country": "国家",
+          "country": "国家/地区",
           "city": "城市",
           "asn": "ASN",
           "duration": "耗时",
@@ -803,7 +803,7 @@
     "metaLatency": "中位延迟",
     "ipgrid": {
       "demoLabel": "示例查询",
-      "country": "国家",
+      "country": "国家/地区",
       "region": "地区",
       "city": "城市",
       "asn": "ASN"
@@ -932,12 +932,18 @@
     "sub": "无需注册,无需 Key。点击下面的示例 IP 快速体验。",
     "chipsLabel": "试试这些:",
     "hint": "提示:输入框可直接粘贴,结果会显示在下方。",
-    "country": "国家",
+    "country": "国家/地区",
     "region": "地区",
     "city": "城市",
     "isp": "运营商",
     "asn": "ASN",
-    "reproCurl": "用 curl 复现"
+    "coordinates": "坐标",
+    "reproCurl": "用 curl 复现",
+    "map": {
+      "title": "位置",
+      "ariaLabel": "{ip} 的位置地图,位于{country}",
+      "unavailable": "该坐标无法绘制到地图上,坐标值见上表。"
+    }
   },
   "status": {
     "eyebrow": "服务状态",

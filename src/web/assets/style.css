@@ -346,6 +346,14 @@
   --m-font-mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace;
   --m-font-display:
     "IBM Plex Serif", "Source Serif Pro", Georgia, "Songti SC", "STSong", "Times New Roman", serif;
+  /* World map (inline SVG). Kept as tokens so the dark theme below can
+     re-point them without a second set of rules. */
+  --m-map-ocean: #eaf2fb;
+  --m-map-land: #cbd9ea;
+  --m-map-outline: #a9c0d8;
+  --m-map-graticule: #c2d4e8;
+  --m-map-marker: #0066ff;
+  --m-map-marker-halo: rgba(0, 102, 255, 0.22);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -362,6 +370,12 @@
     --m-accent-soft-2: rgba(56, 189, 248, 0.22);
     --m-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
     --m-shadow-md: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px rgba(0, 0, 0, 0.5);
+    --m-map-ocean: #0d1524;
+    --m-map-land: #22314a;
+    --m-map-outline: #33496b;
+    --m-map-graticule: #1c2a40;
+    --m-map-marker: #38bdf8;
+    --m-map-marker-halo: rgba(56, 189, 248, 0.28);
   }
 }
 
@@ -1213,6 +1227,10 @@
   flex-direction: column;
   gap: 12px;
   position: relative;
+  /* The panel has one short line in it. Stretching it to the height of
+     the data column left a large empty block of dark ink, so it keeps
+     its own height and sits at the top of the row. */
+  align-self: start;
 }
 .m-result-curl-label {
   font-family: var(--m-font-mono);
@@ -1246,6 +1264,67 @@
 }
 .m-result-curl-copy:hover {
   background: rgba(255, 255, 255, 0.06);
+}
+
+/* ============================================================
+   WORLD MAP — inline SVG, server-rendered
+   ============================================================
+   The colours are variables so the dark theme follows the rest of
+   the page: the dark block above redefines them, and the map picks
+   them up without a second set of rules. */
+.m-result-map {
+  grid-column: 1 / -1;
+  padding: 20px 28px 28px;
+  border-top: 1px solid var(--m-border);
+  background: var(--m-surface-2);
+}
+.m-result-map-label {
+  display: block;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--m-ink-3);
+  margin-bottom: 12px;
+}
+.m-map-svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: var(--m-radius-sm);
+  background: var(--m-map-ocean);
+  border: 1px solid var(--m-border);
+}
+.m-map-ocean {
+  fill: var(--m-map-ocean);
+}
+.m-map-land {
+  fill: var(--m-map-land);
+  stroke: var(--m-map-outline);
+  stroke-width: 0.5;
+  stroke-linejoin: round;
+}
+.m-map-graticule path {
+  fill: none;
+  stroke: var(--m-map-graticule);
+  stroke-width: 0.5;
+  stroke-dasharray: 2 4;
+}
+/* The halo is a wide, translucent ring under the dot — it reads as a
+   "ping" without animating, and it stays visible against both the
+   land fill and the ocean fill. */
+.m-map-marker-halo {
+  fill: var(--m-map-marker-halo);
+}
+.m-map-marker-dot {
+  fill: var(--m-map-marker);
+  stroke: var(--m-surface);
+  stroke-width: 1;
+}
+.m-result-map-note {
+  margin: 0;
+  font-size: 13px;
+  color: var(--m-ink-2);
 }
 
 /* ============================================================
@@ -1876,6 +1955,12 @@
   }
   .m-about-hero h1 {
     font-size: 30px;
+  }
+  .m-result-map {
+    padding: 16px 16px 20px;
+  }
+  .m-result-data {
+    padding: 20px;
   }
 }
 @media (prefers-reduced-motion: reduce) {

@@ -7,6 +7,7 @@ import { generateApiKey, hashToken } from "../auth/tokens";
 import { hashPassword, verifyPassword, validatePassword } from "../auth/password";
 import { destroyAllForUserExcept } from "../../storage/sessions";
 import { verifyCsrfRequest } from "../plugins/csrf";
+import { countryNamesFor } from "../../country-names";
 
 export default async function dashboardRoutes(app: FastifyInstance): Promise<void> {
   // /dashboard/* is already gated by the auth guard in src/web/plugins/auth.ts:
@@ -19,11 +20,19 @@ export default async function dashboardRoutes(app: FastifyInstance): Promise<voi
       countQueriesByStatusSince(app.pool, new Date(Date.now() - 7 * 86400_000), { userId: req.user!.id }),
       getLastUserQuery(app.pool, req.user!.id),
     ]);
+    // `country_name` is NULL for every ETL-loaded row, so the name comes
+    // from the ISO 3166-1 table instead. Localised, because this is the
+    // user's own dashboard.
+    const lastQueryNames = countryNamesFor(lastQuery?.countryCode ?? null);
+    const lastQueryCountryName =
+      lastQuery?.countryName ||
+      (req.locale === "zh-CN" ? lastQueryNames?.zh : lastQueryNames?.en) ||
+      null;
     return reply.view("dashboard/index.hbs", {
       layout: "layouts/dashboard",
       title: req.t("dashboard.title"),
       counts,
-      lastQuery,
+      lastQuery: lastQuery ? { ...lastQuery, countryName: lastQueryCountryName } : null,
       req,
     });
   });
