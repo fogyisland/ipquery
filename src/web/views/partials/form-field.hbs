@@ -11,5 +11,11 @@
     <input type="{{#if type}}{{type}}{{else}}text{{/if}}" name="{{name}}" id="{{name}}" value="{{value}}" {{#if required}}required{{/if}} {{#if placeholder}}placeholder="{{placeholder}}"{{/if}} {{#if autocomplete}}autocomplete="{{autocomplete}}"{{/if}}>
   {{/if}}
   {{#if help}}<p class="form-help">{{help}}</p>{{/if}}
-  {{#if error}}<p class="form-error">{{error}}</p>{{/if}}
+  {{!-- A field-level error only. `{{#if fieldError}}` cannot leak: an
+       unqualified `{{#if error}}` inside a partial resolves against the
+       PARENT context when the partial's own context has no `error` — so
+       a page-level error (say, the wizard's "restart needed" notice)
+       would be repeated under every single field. The name is scoped on
+       purpose. --}}
+  {{#if fieldError}}<p class="form-error">{{fieldError}}</p>{{/if}}
 </div>

@@ -261,6 +261,21 @@ export function generateSecret(): string {
  * whole point of the wizard is to be safe to run on an install that
  * already has some configuration.
  *
+ * The exception is the loopback PLACEHOLDER. The startup generator
+ * writes `WEB_BASE_URL=http://localhost:3880` into a fresh .env
+ * because at boot time the server has seen no request and cannot know
+ * its own domain. That value is a guess, not a choice, and it used to
+ * win over the operator's confirmed address — so the wizard showed
+ * them their value, they clicked "generate and continue", and the
+ * placeholder stayed in the file. `WEB_BASE_URL` ends up in the
+ * verification email, the password-reset email and the API address on
+ * the keys page: left as a loopback address, all three hand a real
+ * user an address they cannot reach.
+ *
+ * So a loopback base URL is treated as "not yet chosen" and the
+ * operator's value replaces it. Any other existing value — a real
+ * domain, an IP, anything they typed — is left alone.
+ *
  * Only the keys that are absent, or present but empty, are filled in.
  */
 export function resolveEnvBootstrap(
@@ -273,10 +288,39 @@ export function resolveEnvBootstrap(
   };
   return {
     PORT: pick("PORT", String(wanted.port)),
-    WEB_BASE_URL: pick("WEB_BASE_URL", wanted.baseUrl),
+    WEB_BASE_URL: pickBaseUrl(existing.WEB_BASE_URL, wanted.baseUrl),
     SESSION_SECRET: pick("SESSION_SECRET", wanted.sessionSecret),
     CSRF_SECRET: pick("CSRF_SECRET", wanted.csrfSecret),
   };
+}
+
+/**
+ * Is this base URL the loopback placeholder the startup generator
+ * writes, rather than an address somebody chose?
+ *
+ * Loopback in any of its spellings, with or without a port, with or
+ * without a path. A bare `localhost` and a `127.0.0.1` are the same
+ * thing for this purpose: both are "the server talking to itself".
+ */
+function isLoopbackBaseUrl(value: string | undefined): boolean {
+  if (value === undefined) return true;
+  const trimmed = value.trim();
+  if (trimmed === "") return true;
+  return /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?(\/.*)?$/i.test(trimmed);
+}
+
+/**
+ * The base URL the .env should end up with.
+ *
+ * The operator's confirmed value wins over a loopback placeholder, and
+ * an existing real address wins over the operator's value — the
+ * existing one is what the site is actually serving under.
+ */
+function pickBaseUrl(existing: string | undefined, wanted: string): string {
+  const current = existing?.trim();
+  if (current === undefined || current === "") return wanted;
+  if (isLoopbackBaseUrl(current)) return wanted;
+  return current;
 }
 
 /**

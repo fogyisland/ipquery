@@ -24,3 +24,7 @@ scripts/dev/*.zip
 # Vitest JSON reports — written by `--outputFile=…` runs, never committed
 *-result.json
 integration-result.json
+
+# Local verification scratch installs — an isolated copy of the build with
+# its own .env (which holds generated secrets). Never committed.
+verify-tmp/
