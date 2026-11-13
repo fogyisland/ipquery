@@ -91,6 +91,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **后台界面深度优化**: 后台控制台从「能用」向「好用」推进一批改动。
+  改动集中在三处：
+  1. **侧栏重新分组**: 原来 10 个入口平铺在一个列表里，现按「概览 / 数据 / 流量 /
+     治理」分成 4 组，每组带一个内联 SVG 图标（16px、`currentColor`、无 emoji）。
+     激活态由圆点改为左侧 2px 竖条（rail），子页面（如 `/admin/users/1`）现在
+     会让所属入口保持高亮——此前用的是精确匹配，进二级页就灭了。
+     `/admin/audit` 与 `/admin/audit-log` 前缀相同，两者同时亮起，现改为精确匹配
+  2. **表头排序可用**: 表头的排序链接此前**会丢掉当前筛选参数**（筛完再点表头，
+     筛选被清空）。现由路由层用 `buildSortColumns`（`src/web/admin/sortColumns.ts`）
+     预计算链接，链接形如 `?role=admin&page=1&sort=-id`。排序方向以箭头指示，
+     当前列在 `<th>` 上带 `aria-sort="ascending|descending"`，未排序列显示淡色 `↑↓`
+  3. **查询日志页补上统计**: `/admin/queries` 现在有三张状态卡（命中／未命中／
+     无效）与一条按比例分段的结果分布条。分布条是纯 CSS 的 flex 分段，
+     无图表库、无 canvas、无脚本；计数经 helper 归零保护，负数与 NaN 不会
+     产出负宽度
 - **反向代理下的限流（`TRUST_PROXY`）**: 限流按 `req.ip` 计数，而 `req.ip` 默认是
   连接的对端地址 —— 走反代时那是 `127.0.0.1`，**所有访客挤进同一个桶**，一个访客
   就能把所有人的额度用光（60 次/分钟是全体共享的）。新增 `TRUST_PROXY` 环境变量
@@ -116,6 +131,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **后台筛选栏从来就没渲染对过**: `/admin/users`、`/admin/keys`、`/admin/audit-log`
+  三个页面的筛选栏，每个 `<select>` 的 `name` 都是 `hash`（helper 的名字），
+  标签是空的，选项列表也是空的——**这三页的筛选功能自上线起就没有生效过**，
+  而且页面照常渲染，没有任何报错。根因是三个 Handlebars helper 的老毛病：
+  1. **`hash` helper 返回的是 Handlebars 的 options 对象**，而不是调用方写的
+     hash 参数。options 对象顶层就有 `name` 属性，值是 helper 自己的名字
+     （"hash"），真正的参数埋在 `.hash` 里。于是 `{{name}}` 渲染成 "hash"，
+     `{{label}}` 渲染成空。现改为 `(options) => options.hash ?? {}`
+  2. **`array` helper 的参数切片判据错了**：它靠 `"fn" in last` 识别 Handlebars
+     的 options 对象并切掉，但 `fn` 只有 block helper 的 options 才有——普通
+     helper 的 options 只有 `hash`/`data`/`loc`。于是 options 对象没被切掉，
+     混进了数组，当成一个多余的筛选项。判据改为识别 `hash`+`data`+`loc`
+  3. **`max` helper 收到数组参数时返回 NaN**：`Number([3,0,0])` 是 NaN 而不是 3，
+     于是每个与它的比较都是 false。这正是 `/admin/queries` 的 24 小时
+     sparkline **一直是一条死线**的原因。现改为展开数组，并忽略非有限值
+  新增 `test/unit/filter-bar.test.ts`（5 项）固化这三处：用**真实的** view
+  plugin 渲染真实的 `filter-bar` partial，断言 select 的 name 是 `role` 而
+  不是 `hash`、标签非空、选项齐全。测试在旧实现下会失败（已实测：4/5 失败）
 - **结果面板的深色块留白**: `/try` 结果右侧的「用 curl 复现」只有一行命令，
   却因为网格默认拉伸而跟左侧数据区等高，于是一大块深色墨水悬在那里。
   现改为按自身高度排列（`align-self: start`）

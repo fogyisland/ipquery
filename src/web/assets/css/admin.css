@@ -197,6 +197,67 @@
   color: var(--text-3);
   padding: 0 var(--sp-5) var(--sp-2);
 }
+/* The admin section is split into labelled blocks (概览 / 数据管道 /
+   流量与凭证 / 用户与治理). The block label is a second, smaller tier of
+   heading under the group's own label — the group label says "管理",
+   the block label says which part of it you are looking at. */
+.sidebar-group-block {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin-bottom: var(--sp-3);
+}
+.sidebar-group-block:last-child {
+  margin-bottom: 0;
+}
+.sidebar-block-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  color: var(--text-3);
+  padding: var(--sp-2) var(--sp-5) var(--sp-1) calc(var(--sp-5) + 22px);
+  /* The label sits under an indented icon, so it indents to match. */
+  opacity: 0.75;
+}
+
+/* Icon slot — a 16px line icon drawn inline as SVG. The old design used a
+   6px dot as the active marker; the icon takes that slot, and the active
+   state moved to a left rail (see .sidebar-link.active below) because a
+   dot next to an icon reads as a second, redundant indicator. */
+.sidebar-icon {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0.72;
+  transition:
+    opacity 80ms ease,
+    color 80ms ease;
+}
+.sidebar-link:hover .sidebar-icon {
+  opacity: 0.95;
+}
+.sidebar-link.active .sidebar-icon {
+  opacity: 1;
+  color: var(--accent);
+}
+
+/* Links without an icon (the personal section, the login/signup slot) must
+   still line their labels up with the icon-bearing admin links — otherwise
+   the column starts at two different x positions and reads as ragged.
+   The template marks those links with `sidebar-icon--empty`, which reserves
+   the same 16px slot the icon occupies. */
+.sidebar-icon--empty {
+  width: 16px;
+  height: 16px;
+  flex: none;
+}
+
 .sidebar-link {
   display: flex;
   align-items: center;
@@ -223,13 +284,19 @@
     color 80ms ease,
     background 80ms ease;
 }
+/* The 6px dot that used to sit before every label is gone: the SVG icon
+   now occupies that slot, and two indicators on one row read as noise.
+   The active state is a 2px rail on the left edge instead — it is a
+   straight vertical line, so a column of ten links can be scanned in one
+   glance, which a 6px dot could not be. */
 .sidebar-link::before {
   content: "";
-  width: 6px;
-  height: 6px;
+  position: absolute;
+  left: 0;
+  top: 4px;
+  bottom: 4px;
+  width: 2px;
   background: transparent;
-  border-radius: 50%;
-  flex-shrink: 0;
   transition:
     background 80ms ease,
     box-shadow 80ms ease;
@@ -249,7 +316,7 @@
 }
 
 /* CTA variant — used as a single "switch context" link, not a full menu.
-   Visually different: no dot indicator, accent color, mono arrow prefix. */
+   Visually different: no active rail, accent color, mono arrow prefix. */
 .sidebar-link--cta {
   color: var(--accent);
   font-family: var(--font-mono);
@@ -258,6 +325,10 @@
 .sidebar-link--cta::before {
   background: transparent !important;
   box-shadow: none !important;
+}
+.sidebar-link--cta:hover {
+  background: var(--surface-2);
+  color: var(--accent);
 }
 .sidebar-link-arrow {
   display: inline-block;
@@ -576,6 +647,42 @@ code {
 }
 .table thead th a:hover {
   color: var(--text);
+}
+
+/* Sortable column headers.
+   The arrow is always present but dimmed when the column is not the
+   active sort: a header that only grows an arrow once you have already
+   sorted by it hides the affordance until after the click, and a column
+   whose arrow appears and disappears shifts the label sideways. Keeping
+   the slot reserved keeps every header label on the same x position. */
+.th-sort {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+}
+.th-sort-arrow {
+  font-size: 11px;
+  line-height: 1;
+  color: var(--accent);
+  /* The arrow glyphs sit at different optical widths (↑ / ↓ / ↕); give
+     them a fixed box so the label does not jitter between states. */
+  display: inline-block;
+  width: 10px;
+  text-align: center;
+}
+.th-sort-arrow--idle {
+  color: var(--text-3);
+  opacity: 0.45;
+}
+.th-sort--active {
+  color: var(--accent);
+}
+.th-sort--active:hover {
+  color: var(--accent);
+}
+.table thead th[aria-sort="ascending"],
+.table thead th[aria-sort="descending"] {
+  color: var(--accent);
 }
 .table tbody tr {
   border-bottom: 1px solid var(--border);
@@ -1101,6 +1208,56 @@ dl.settings-dl dd {
 }
 .chart-swatch--invalid {
   background: var(--danger);
+}
+
+/* ─── Status split bar ──────────────────────────────────────────────────
+   A single horizontal bar showing the hit / miss / invalid mix of a
+   set of queries. Proportional width is the point — a pie or a set of
+   separate bars would each need reading against the others, while one
+   bar lets you see the ratio at a glance. Built from plain divs: no
+   chart library, no canvas, no script. */
+.status-split {
+  display: flex;
+  width: 100%;
+  height: 10px;
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--surface-3);
+}
+.status-split-seg {
+  height: 100%;
+  min-width: 0;
+  transition: flex-grow 120ms ease;
+}
+.status-split-seg--hit {
+  background: var(--success);
+}
+.status-split-seg--miss {
+  background: var(--warning);
+}
+.status-split-seg--invalid {
+  background: var(--danger);
+}
+/* A segment too thin to see still needs to be findable — the tooltip
+   carries the numbers, and the legend below lists them explicitly. */
+.status-split-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-4);
+  margin-top: var(--sp-3);
+  font-size: 12px;
+  color: var(--text-2);
+}
+.status-split-legend li {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+}
+.status-split-legend b {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--text);
+  font-weight: 600;
 }
 
 .chart-empty {

@@ -26,8 +26,8 @@
   <table class="table">
     <thead>
       <tr>
-        <th><a href="?sort={{ternary (eq sort.col 'id') (ternary (eq sort.dir 'asc') '-id' 'id') (ternary (eq sort.dir 'asc') 'id' '-id')}}">ID</a></th>
-        <th><a href="?sort={{ternary (eq sort.col 'started_at') (ternary (eq sort.dir 'asc') '-started_at' 'started_at') (ternary (eq sort.dir 'asc') 'started_at' '-started_at')}}">{{req.t 'admin.etl.col.started'}}</a></th>
+        {{> sort-link column=(lookupColumn sortColumns 'id') label='ID'}}
+        {{> sort-link column=(lookupColumn sortColumns 'started_at') label=(req.t 'admin.etl.col.started')}}
         <th>{{req.t 'admin.etl.col.status'}}</th>
         <th>{{req.t 'admin.etl.col.merged'}}</th>
         <th>{{req.t 'admin.etl.col.finished'}}</th>

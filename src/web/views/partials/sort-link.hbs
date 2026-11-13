@@ -1,0 +1,18 @@
+{{! SPDX-License-Identifier: MIT }}
+{{! A sortable column header.
+    expects: column (a SortColumn from src/web/admin/sortColumns.ts),
+              label  (the visible column title) }}
+<th{{#if column.isActive}} aria-sort="{{#if (eq column.dir 'asc')}}ascending{{else}}descending{{/if}}"{{else}} aria-sort="none"{{/if}}>
+  <a href="{{column.href}}" class="th-sort{{#if column.isActive}} th-sort--active{{/if}}">
+    <span>{{label}}</span>
+    {{#if column.isActive}}
+      {{#if (eq column.dir 'asc')}}
+        <span class="th-sort-arrow" aria-hidden="true">&uarr;</span>
+      {{else}}
+        <span class="th-sort-arrow" aria-hidden="true">&darr;</span>
+      {{/if}}
+    {{else}}
+      <span class="th-sort-arrow th-sort-arrow--idle" aria-hidden="true">&uarr;&darr;</span>
+    {{/if}}
+  </a>
+</th>

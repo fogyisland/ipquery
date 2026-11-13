@@ -105,6 +105,7 @@
 
 {{#if parses.length}}
 <h3>{{req.t 'admin.etl.runDetail.parses'}}</h3>
+<div class="table-scroll">
 <table class="table">
   <thead>
     <tr>
@@ -139,10 +140,12 @@
     {{/each}}
   </tbody>
 </table>
+</div>
 {{/if}}
 
 {{#if inserts.length}}
 <h3>{{req.t 'admin.etl.runDetail.inserts'}}</h3>
+<div class="table-scroll">
 <table class="table">
   <thead>
     <tr>
@@ -167,6 +170,7 @@
     {{/each}}
   </tbody>
 </table>
+</div>
 {{/if}}
 
 {{!-- ── Error banners ── --}}
