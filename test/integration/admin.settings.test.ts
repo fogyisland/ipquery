@@ -55,8 +55,22 @@ describe("admin settings", () => {
     expect(r.text).toMatch(/super&#8230;|super…|…cdefgh|…efgh|cdefgh|efgh/);
   });
 
-  it("POST /admin/settings/etl-restart works", async () => {
-    // GET first so the server sets the csrf cookie on the response jar.
+  it("shows whether the reverse-proxy header is trusted", async () => {
+    // The trustProxy state is a deployment fact with a silent failure
+    // mode: if it is off while a proxy is in front, every visitor shares
+    // one rate-limit bucket and nothing looks broken until one visitor
+    // exhausts everybody's quota. The operator has to be able to confirm
+    // the state from the settings page instead of grepping the .env.
+    const r = await request(app.server)
+      .get("/admin/settings")
+      .set("Cookie", "sid=" + adminSid);
+    expect(r.status).toBe(200);
+    // The default in this test config is off, so the page must say so.
+    expect(r.text).toMatch(/信任反代头|Trust proxy header/);
+    expect(r.text).not.toMatch(/TRUST_PROXY=true/);
+  });
+
+  it("POST /admin/settings/etl-restart works", async () => {    // GET first so the server sets the csrf cookie on the response jar.
     const getRes = await request(app.server)
       .get("/admin/settings")
       .set("Cookie", "sid=" + adminSid);

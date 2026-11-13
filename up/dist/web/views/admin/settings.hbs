@@ -27,6 +27,16 @@
     <span class="metric-strip-label">{{req.t 'admin.settings.metricStrip.apiPort'}}</span>
     <span class="metric-strip-value">{{config.api.port}}</span>
   </div>
+  {{!-- Whether req.ip may come from X-Forwarded-For. This is a
+       deployment fact, not a setting: it decides whether the rate
+       limiter counts each visitor separately or lumps the whole
+       internet into one bucket behind a reverse proxy. An operator
+       looking at this strip should be able to confirm it at a glance
+       rather than have to grep the .env. --}}
+  <div class="metric-strip-item">
+    <span class="metric-strip-label">{{req.t 'admin.settings.metricStrip.trustProxy'}}</span>
+    <span class="metric-strip-value">{{#if config.api.trustProxy}}{{req.t 'admin.settings.trustProxy.on'}}{{else}}{{req.t 'admin.settings.trustProxy.off'}}{{/if}}</span>
+  </div>
   <div class="metric-strip-item">
     <span class="metric-strip-label">{{req.t 'admin.settings.poolStatus.threadsConnected'}}</span>
     <span class="metric-strip-value">{{#if pool.Threads_connected}}{{pool.Threads_connected}}{{else}}—{{/if}}</span>

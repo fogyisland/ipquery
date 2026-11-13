@@ -168,6 +168,27 @@ async function buildServer(cfg, opts) {
     const env = process.env.NODE_ENV ?? "production";
     const isProduction = env !== "development" && env !== "test";
     const app = (0, fastify_1.default)({
+        // `trustProxy` decides whether `req.ip` — the TCP peer address — may
+        // be taken from `X-Forwarded-For` instead.
+        //
+        // With it OFF (the default), `req.ip` is the peer address. Behind a
+        // reverse proxy the peer is `127.0.0.1` for every single visitor, so
+        // every IP-keyed counter — the rate limiter, which keys on `req.ip` —
+        // collapses into one shared bucket. One visitor can then spend
+        // everybody else's quota.
+        //
+        // With it ON, `req.ip` is the left-most entry of `X-Forwarded-For`,
+        // which is the real visitor address. That header is attacker-
+        // controlled: whoever can reach this port can send any value they
+        // like and pick their own rate-limit bucket. So this may ONLY be
+        // turned on when the Node port is reachable from the reverse proxy
+        // and from nowhere else.
+        //
+        // This is why it is an explicit env flag rather than a constant: the
+        // safe answer depends on a fact about the deployment that the code
+        // cannot see. `TRUST_PROXY=true` is the operator saying "the only
+        // thing that can reach port 3880 is my reverse proxy".
+        trustProxy: cfg.api.trustProxy,
         logger: {
             level: process.env.LOG_LEVEL ?? "info",
             serializers: {

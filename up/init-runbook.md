@@ -85,7 +85,8 @@ bash install.sh
 - [ ] 数据库账号非 root，仅授权本库；`.env` 权限收紧（`chmod 600`），不进版本库
 - [ ] `SESSION_SECRET` / `CSRF_SECRET` 只写本机 `.env`，任何提交文件不得含真实凭据
 - [ ] systemd / pm2 / NSSM 托管服务进程，不靠前台终端
-- [ ] 反代转发 `X-Forwarded-For`，否则限流把所有人算成一个 IP
+- [ ] 反代**覆盖**转发 `X-Forwarded-For`（`proxy_set_header X-Forwarded-For $remote_addr;`），
+      `.env` 里 `TRUST_PROXY=true`，且 3880 只允许本机访问 —— 否则限流把所有人算成一个 IP
 - [ ] `DATA_DIR` 指向容量足够磁盘（DB-IP 原始 CSV 约 100+ MB）
 - [ ] `node dist/cli.js migrate:status` 全部 `applied`
 - [ ] `/init` 已返回 404（确认初始化锁定生效）

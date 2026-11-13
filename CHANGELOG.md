@@ -49,6 +49,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **反向代理下的限流（`TRUST_PROXY`）**: 限流按 `req.ip` 计数，而 `req.ip` 默认是
+  连接的对端地址 —— 走反代时那是 `127.0.0.1`，**所有访客挤进同一个桶**，一个访客
+  就能把所有人的额度用光（60 次/分钟是全体共享的）。新增 `TRUST_PROXY` 环境变量
+  （默认 `false`），打开后 `req.ip` 取自 `X-Forwarded-For`，每个访客各自计数。
+  前提是 Node 端口只有反代能访问 —— 那个头是访客可以自己构造的，能直连就能
+  伪造它、挑一个自己的限流桶。反代那边必须**覆盖**转发
+  （`proxy_set_header X-Forwarded-For $remote_addr;`）而不是追加
+  （`$proxy_add_x_forwarded_for`）：追加会把访客伪造的头留在最左边，而 `trustProxy`
+  读的正是最左边那一项。开关状态显示在 `/admin/settings` 顶部指标条上
 - **ETL 守卫测试不再依赖网络**: `etl-guards.test.ts` 只写了 city 一个 fixture，
   而 ETL 现在会按份判断缓存、缺失即重下——于是这个测试会真的去下载约 93 MB 的
   DB-IP 数据并插入约 120 万行，撑爆 90s 超时，还留下「运行中」的 ETL 行连累

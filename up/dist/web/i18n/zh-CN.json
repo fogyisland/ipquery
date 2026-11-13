@@ -405,9 +405,14 @@
       },
       "metricStrip": {
         "apiPort": "API 端口",
+        "trustProxy": "信任反代头",
         "threadsConnected": "当前连接",
         "maxUsedConnections": "峰值连接",
         "etlLastRun": "ETL 上次运行"
+      },
+      "trustProxy": {
+        "on": "是",
+        "off": "否"
       },
       "secret": {
         "show": "显示",

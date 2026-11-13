@@ -58,7 +58,7 @@ export interface AppConfig {
     poolSize: number;
   };
   maxmind: { licenseKey?: string; editions: string[] };
-  api: { port: number; rateLimit: number };
+  api: { port: number; rateLimit: number; trustProxy: boolean };
   etl: { schedule: string; timezone: string; dataDir: string };
   web: WebConfig;
   smtp: SmtpConfig;
@@ -112,6 +112,7 @@ export function loadConfig(): AppConfig {
     api: {
       port: num(process.env.PORT, 3880),
       rateLimit: num(process.env.RATE_LIMIT, 60),
+      trustProxy: bool(process.env.TRUST_PROXY, false),
     },
     etl: {
       schedule,
@@ -157,7 +158,7 @@ export function configSummary(cfg: AppConfig): string {
     `[config] db=${cfg.db.host}:${cfg.db.port}/${cfg.db.database}`,
     `[config] maxmind key=${cfg.maxmind.licenseKey ? redactSecret(cfg.maxmind.licenseKey) : "(none)"}`,
     `[config] editions=${cfg.maxmind.editions.join(",")}`,
-    `[config] api port=${cfg.api.port} rateLimit=${cfg.api.rateLimit}/min`,
+    `[config] api port=${cfg.api.port} rateLimit=${cfg.api.rateLimit}/min trustProxy=${cfg.api.trustProxy}`,
     `[config] etl schedule="${cfg.etl.schedule}" tz=${cfg.etl.timezone} dataDir=${cfg.etl.dataDir}`,
     `[config] web baseUrl=${cfg.web.baseUrl} cookieSecure=${cfg.web.cookieSecure}`,
     `[config] smtp host=${cfg.smtp.host || "(console)"} from=${cfg.smtp.from}`,

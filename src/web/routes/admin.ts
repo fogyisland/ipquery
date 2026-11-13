@@ -1132,7 +1132,11 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
         poolSize: cfg.db.poolSize,
         password: cfg.db.password ? redactSecret(cfg.db.password) : "",
       },
-      api: { port: cfg.api.port, rateLimit: cfg.api.rateLimit },
+      api: {
+        port: cfg.api.port,
+        rateLimit: cfg.api.rateLimit,
+        trustProxy: cfg.api.trustProxy,
+      },
       etl: { schedule: cfg.etl.schedule, timezone: cfg.etl.timezone, dataDir: cfg.etl.dataDir },
       web: {
         baseUrl: cfg.web.baseUrl,

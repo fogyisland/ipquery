@@ -41,6 +41,7 @@ export interface AppConfig {
     api: {
         port: number;
         rateLimit: number;
+        trustProxy: boolean;
     };
     etl: {
         schedule: string;
