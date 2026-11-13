@@ -9,6 +9,7 @@ exports.doLookupCore = doLookupCore;
 const ip_1 = require("./ip");
 const mysql_1 = require("./storage/mysql");
 const unknownIpQueue_1 = require("./storage/unknownIpQueue");
+const country_names_1 = require("./country-names");
 async function doLookupCore(pool, log, ip) {
     const buf = (0, ip_1.parseIp)(ip);
     if (!buf) {
@@ -37,9 +38,17 @@ async function doLookupCore(pool, log, ip) {
     }
     const lastRun = await (0, mysql_1.lastSuccessfulEtl)(pool);
     const etag = lastRun ? lastRun.toISOString() : "never";
+    // `country_name` is NULL for every row the ETL loads: DB-IP's free CSVs
+    // carry a country code only, and MaxMind — the one source with a name
+    // column — has never run through the pipeline (it needs a licence key
+    // this project doesn't have). Fall back to the ISO 3166-1 name for the
+    // code, so the API answers "Hong Kong" rather than a bare "HK" with a
+    // null name. An unknown code still yields no name: inventing one for
+    // a code we don't recognise would be worse than admitting we don't.
+    const countryName = row.countryName ?? (0, country_names_1.englishCountryName)(row.countryCode) ?? undefined;
     return {
         ip,
-        country: { code: row.countryCode, name: row.countryName, source: row.countrySource ?? "maxmind" },
+        country: { code: row.countryCode, name: countryName, source: row.countrySource ?? "maxmind" },
         region: row.region,
         city: row.city ? { name: row.city, source: row.citySource ?? "maxmind" } : undefined,
         postalCode: row.postalCode,

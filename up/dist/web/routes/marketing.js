@@ -5,6 +5,9 @@ const mysql_1 = require("../../storage/mysql");
 const ip_1 = require("../../ip");
 const mysql_2 = require("../../storage/mysql");
 const csrf_1 = require("../plugins/csrf");
+const geo_map_1 = require("../maps/geo-map");
+const render_map_1 = require("../maps/render-map");
+const country_names_1 = require("../../country-names");
 async function marketingRoutes(app) {
     // Marketing redesign: all 5 public pages render inside layouts/marketing
     // (light commercial chrome, top nav + footer). isHome/isDocs/isTry/
@@ -128,7 +131,24 @@ async function marketingRoutes(app) {
             });
         }
         const ipLookupUrl = `${app.viewBaseUrl}/lookup?ip=${encodeURIComponent(ip)}`;
-        const countryName = row.countryName || row.countryCode || "";
+        // `country_name` is NULL for every ETL-loaded row (DB-IP's free CSVs
+        // carry a code only), so the name has to come from the ISO 3166-1
+        // table. Chinese visitors get the Chinese name — a Hong Kong address
+        // should read "香港", not "Hong Kong" or a bare "HK".
+        const countryNames = (0, country_names_1.countryNamesFor)(row.countryCode);
+        const countryName = row.countryName ||
+            (req.locale === "zh-CN" ? countryNames?.zh : countryNames?.en) ||
+            row.countryCode ||
+            "";
+        // The map is server-rendered inline SVG — no tile server, no client
+        // script, no third party seeing the visitor's IP.
+        const location = row.latitude !== undefined && row.longitude !== undefined
+            ? { lat: row.latitude, lon: row.longitude, source: row.geoSource ?? "maxmind" }
+            : undefined;
+        const map = (0, render_map_1.renderWorldMap)(location ? { lat: location.lat, lon: location.lon } : undefined, {
+            label: req.t("try.map.ariaLabel", { ip, country: countryName }),
+            source: location?.source ?? "maxmind",
+        });
         return reply.view("marketing/try.hbs", {
             layout: "layouts/marketing",
             title: req.t("nav.try"),
@@ -153,7 +173,19 @@ async function marketingRoutes(app) {
                 asn: row.asn !== undefined
                     ? { number: row.asn, org: row.asnOrg, source: row.asnSource ?? "maxmind" }
                     : undefined,
+                location: location
+                    ? {
+                        lat: location.lat,
+                        lon: location.lon,
+                        source: location.source,
+                        // Formatted here for the same reason as the heading: the
+                        // longitude/latitude suffix depends on the sign.
+                        latText: (0, geo_map_1.formatCoordinate)(location.lat, "lat"),
+                        lonText: (0, geo_map_1.formatCoordinate)(location.lon, "lon"),
+                    }
+                    : undefined,
             },
+            map: map ? { svg: map.svg } : undefined,
             req,
         });
     });

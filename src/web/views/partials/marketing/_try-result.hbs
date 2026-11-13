@@ -1,6 +1,9 @@
 {{! SPDX-License-Identifier: MIT }}
 {{! Result panel for /try: 2-column (data + curl repro).
-     Used in marketing/try.hbs only. }}
+     Used in marketing/try.hbs only.
+     The map is server-rendered inline SVG — `map` is a sibling of
+     `result` in the route's view context, so this partial reaches it
+     through Handlebars' parent-context fallback. }}
 <div class="m-result-panel">
   <div class="m-result-data">
     <div class="m-result-data-head">
@@ -9,15 +12,29 @@
     </div>
     <dl class="m-result-fields">
       <dt>{{req.t "try.country"}}</dt>
-      <dd>{{#if result.country.name}}{{result.country.name}}{{else}}<code>{{result.country.code}}</code>{{/if}}<span class="m-source-tag">{{result.country.source}}</span></dd>
+      <dd>{{#if result.country.name}}{{result.country.name}} <code>{{result.country.code}}</code>{{else}}<code>{{result.country.code}}</code>{{/if}}<span class="m-source-tag">{{result.country.source}}</span></dd>
       {{#if result.region}}<dt>{{req.t "try.region"}}</dt><dd>{{result.region}}</dd>{{/if}}
       {{#if result.city}}<dt>{{req.t "try.city"}}</dt><dd>{{result.city.name}}<span class="m-source-tag">{{result.city.source}}</span></dd>{{/if}}
       {{#if result.isp}}<dt>{{req.t "try.isp"}}</dt><dd>{{result.isp.name}}<span class="m-source-tag">{{result.isp.source}}</span></dd>{{/if}}
       {{#if result.asn}}<dt>{{req.t "try.asn"}}</dt><dd><code>AS{{result.asn.number}}</code> {{result.asn.org}}<span class="m-source-tag">{{result.asn.source}}</span></dd>{{/if}}
+      {{#if result.location}}<dt>{{req.t "try.coordinates"}}</dt><dd><code>{{result.location.latText}}</code> <code>{{result.location.lonText}}</code><span class="m-source-tag">{{result.location.source}}</span></dd>{{/if}}
     </dl>
   </div>
   <aside class="m-result-curl">
     <span class="m-result-curl-label">{{req.t "try.reproCurl"}}</span>
     <code><span class="tok-key">curl</span> <span class="tok-str">"{{result.ipLookupUrl}}"</span></code>
   </aside>
+  {{#if map}}
+    <div class="m-result-map">
+      <span class="m-result-map-label">{{req.t "try.map.title"}}</span>
+      {{{map.svg}}}
+    </div>
+  {{else if result.location}}
+    {{!-- Coordinates exist but the position could not be projected —
+         show the numbers rather than an empty frame. --}}
+    <div class="m-result-map m-result-map--plain">
+      <span class="m-result-map-label">{{req.t "try.map.title"}}</span>
+      <p class="m-result-map-note">{{req.t "try.map.unavailable"}}</p>
+    </div>
+  {{/if}}
 </div>

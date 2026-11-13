@@ -1,7 +1,7 @@
 {
   "formatVersion": 1,
-  "fileCount": 360,
-  "totalBytes": 1825709,
+  "fileCount": 372,
+  "totalBytes": 1937761,
   "files": {
     "api/dbBootstrap.d.ts": {
       "bytes": 8916,
@@ -110,6 +110,18 @@
     "config.js.map": {
       "bytes": 4985,
       "sha256": "c9079d46e9ae2fe5a1c0433364025d9983327520c6cbf632eab6de20e63534fa"
+    },
+    "country-names.d.ts": {
+      "bytes": 1383,
+      "sha256": "33c36cabfcafa481866fbec826ff740190ef64207990828a7da0747704ba519c"
+    },
+    "country-names.js": {
+      "bytes": 15270,
+      "sha256": "c5422d6499ef59f2368d1fafd4735b0e07ecec4857f0b20b7b2f4d907132616a"
+    },
+    "country-names.js.map": {
+      "bytes": 16352,
+      "sha256": "fae6860c19bb0ec707107af56a203bdb846bc1bae5d29c605efec49cbf560f97"
     },
     "etl/download.d.ts": {
       "bytes": 5578,
@@ -344,12 +356,12 @@
       "sha256": "a92db0b217b75f1effe270907698e42f08b2650077e23a1c01a1b35cb13398eb"
     },
     "lookup-core.js": {
-      "bytes": 2467,
-      "sha256": "739e592f319484c9cde421e3bf6beea403aa0c620ad407468341690acca22963"
+      "bytes": 3158,
+      "sha256": "1d6ff37bea7581df6dcb745d87ed6f0d22345a51bfb508d9be63d1d8e2ceaed2"
     },
     "lookup-core.js.map": {
-      "bytes": 2166,
-      "sha256": "36956eaa75818ae0850ce779cff58a14e0385012352c993a15dda7609761af34"
+      "bytes": 2353,
+      "sha256": "02c63ab26cfd664800d42b1a77874cdafd4f5e60d686e840eb05d1bee8c66792"
     },
     "mailer.d.ts": {
       "bytes": 262,
@@ -856,8 +868,8 @@
       "sha256": "fa094566d956d504292008a7d44366f714b4e7c74b1e9b71eee8689efee59ec0"
     },
     "web/assets/style.css": {
-      "bytes": 38782,
-      "sha256": "5c88cfb3efa386f0639514571fdaf5d5023eeb08d4ea556842f54e2a42c128dc"
+      "bytes": 41149,
+      "sha256": "0c6dda302e6f158ed73bb517451698a737d0fca3b97dc09f79abdee17a6a33e9"
     },
     "web/assets/tab-nav.js": {
       "bytes": 2290,
@@ -900,8 +912,8 @@
       "sha256": "e725e2a02b806cc9f5bc888bc2d662a5693496433a92d810cae8dd11229a6801"
     },
     "web/i18n/en-US.json": {
-      "bytes": 44286,
-      "sha256": "b40b44bec34338f374dcf8852d2b8ff8ac8272f31e54996ab73214c4e97778ac"
+      "bytes": 44569,
+      "sha256": "b399d7b73d0fdc8cd33a358eb4c7e81b17f849d1d0f3d4b0db4184f0f906ffa0"
     },
     "web/i18n/index.d.ts": {
       "bytes": 309,
@@ -920,8 +932,44 @@
       "sha256": "33cd4e4a9a90a35dc5c3b8308e78a6449754c712719b9f1af35b2e25156641cc"
     },
     "web/i18n/zh-CN.json": {
-      "bytes": 44127,
-      "sha256": "8f5803b4eeebfe529d8db22695b7a1d5ab2b5b0fb340be7813bef3b5b7583047"
+      "bytes": 44367,
+      "sha256": "247a47b57dad7ea459c7c99398e09d21cdcdf91a879ff9d3bad9bdff2a10948f"
+    },
+    "web/maps/geo-map.d.ts": {
+      "bytes": 1050,
+      "sha256": "211eeabf4a4265c5f3327a060e3c206485fbdf64d1547aa97bc2d65cb04efdeb"
+    },
+    "web/maps/geo-map.js": {
+      "bytes": 2309,
+      "sha256": "a723f915fae7ae9756995d5f7f44f1ae9aea1bc25d27c8dd7c889c485462e5f9"
+    },
+    "web/maps/geo-map.js.map": {
+      "bytes": 1445,
+      "sha256": "8fb76368a9afd5f5516481e4d73b840ffe21528ce0306614b4d9b61839a27fc4"
+    },
+    "web/maps/land-path.d.ts": {
+      "bytes": 40,
+      "sha256": "6f9420797c49b10031a8563a2ca165f625bcc3d51d081fe5ac52efeb48d5c42a"
+    },
+    "web/maps/land-path.js": {
+      "bytes": 60184,
+      "sha256": "686f67d2b7a4af2d0f0608ef8fc1742cc9898d54ab1eacd419d932cda58069ca"
+    },
+    "web/maps/land-path.js.map": {
+      "bytes": 491,
+      "sha256": "cf837d4742ca0367de1f75db5820f57acd45ef9f9c2b18ab23bba857148571f1"
+    },
+    "web/maps/render-map.d.ts": {
+      "bytes": 711,
+      "sha256": "00c274aee0259860459a80a4ddb376f62799d6308cea9ab3ca1ed7ddc43230b1"
+    },
+    "web/maps/render-map.js": {
+      "bytes": 2733,
+      "sha256": "c37824b3ef4e4420d54b5065986d7fcbedb3ea4582e399f4ab4ebc6d55ae2611"
+    },
+    "web/maps/render-map.js.map": {
+      "bytes": 1326,
+      "sha256": "cbe73368556a0b7efa4f7b923c56b375991426538eaf44cb1710a5dcfdb45d00"
     },
     "web/plugins/auditLog.d.ts": {
       "bytes": 368,
@@ -1144,12 +1192,12 @@
       "sha256": "6a5edc81839782ca27f72fc7212a9c66e43e0bcae3b5db642ecab3ce4d6edea9"
     },
     "web/routes/dashboard.js": {
-      "bytes": 11010,
-      "sha256": "6ca25f459a7ba95f6e9b083007ec637bf9b92d05c9b3c0cb372149890406221f"
+      "bytes": 11590,
+      "sha256": "987a6ed6dfed266138f5c5b79ce766edb6658de5f28d805b9ed93a3ceacab625"
     },
     "web/routes/dashboard.js.map": {
-      "bytes": 9448,
-      "sha256": "59012679bd4bb5c216ef59045c2e278100588d05a5477ebfcaeb3c40c19f0bb4"
+      "bytes": 9815,
+      "sha256": "a1f408bd64b383615879984e35584b18b9ca7cdf010d52d390c41655785a27ca"
     },
     "web/routes/init.d.ts": {
       "bytes": 121,
@@ -1168,12 +1216,12 @@
       "sha256": "9a78be19d6bf02c4762626c62766415d1119b665a8b17b94d87632cde15bfa59"
     },
     "web/routes/marketing.js": {
-      "bytes": 6592,
-      "sha256": "889cfb524ba51d1e234a49961cc0b759b7833bbdc5758bcdb51ac6435aea6221"
+      "bytes": 8460,
+      "sha256": "4b04a6131ad56ff62e21fdb2a5437a6372947d071fefbb646d9ebec50e40572c"
     },
     "web/routes/marketing.js.map": {
-      "bytes": 5790,
-      "sha256": "823594a97488ad869078022ff729dd299fee9d20ff0012707017e797b1461274"
+      "bytes": 6991,
+      "sha256": "64e036258381fb8828463fbef52d0acf87fee4c2866a3a80da4ac7e6ef88b87c"
     },
     "web/views/admin/audit-log.hbs": {
       "bytes": 2467,
@@ -1424,8 +1472,8 @@
       "sha256": "2c0a6273df3aec7f0b8542aef663879e4fdaec800a81e12159bd2b9a08e694d6"
     },
     "web/views/partials/marketing/_try-result.hbs": {
-      "bytes": 1380,
-      "sha256": "3ff1c593cda9529268fa12b7c3866fc3661de30099733431466f86c2f1009a87"
+      "bytes": 2354,
+      "sha256": "9c3d75e3b9449d8e406fe76c98a1896bd935051f3e96d76f2f59e5b38349fda3"
     },
     "web/views/partials/pagination.hbs": {
       "bytes": 465,

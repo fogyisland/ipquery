@@ -5,6 +5,9 @@ import { lastEtlRun, recentEtlRuns } from "../../storage/mysql";
 import { parseIp, isValidIp } from "../../ip";
 import { findRange } from "../../storage/mysql";
 import { verifyCsrfRequest } from "../plugins/csrf";
+import { formatCoordinate } from "../maps/geo-map";
+import { renderWorldMap } from "../maps/render-map";
+import { countryNamesFor } from "../../country-names";
 
 export default async function marketingRoutes(app: FastifyInstance): Promise<void> {
   // Marketing redesign: all 5 public pages render inside layouts/marketing
@@ -133,7 +136,29 @@ export default async function marketingRoutes(app: FastifyInstance): Promise<voi
       });
     }
     const ipLookupUrl = `${app.viewBaseUrl}/lookup?ip=${encodeURIComponent(ip)}`;
-    const countryName = row.countryName || row.countryCode || "";
+    // `country_name` is NULL for every ETL-loaded row (DB-IP's free CSVs
+    // carry a code only), so the name has to come from the ISO 3166-1
+    // table. Chinese visitors get the Chinese name — a Hong Kong address
+    // should read "香港", not "Hong Kong" or a bare "HK".
+    const countryNames = countryNamesFor(row.countryCode);
+    const countryName =
+      row.countryName ||
+      (req.locale === "zh-CN" ? countryNames?.zh : countryNames?.en) ||
+      row.countryCode ||
+      "";
+    // The map is server-rendered inline SVG — no tile server, no client
+    // script, no third party seeing the visitor's IP.
+    const location =
+      row.latitude !== undefined && row.longitude !== undefined
+        ? { lat: row.latitude, lon: row.longitude, source: row.geoSource ?? "maxmind" }
+        : undefined;
+    const map = renderWorldMap(
+      location ? { lat: location.lat, lon: location.lon } : undefined,
+      {
+        label: req.t("try.map.ariaLabel", { ip, country: countryName }),
+        source: location?.source ?? "maxmind",
+      },
+    );
     return reply.view("marketing/try.hbs", {
       layout: "layouts/marketing",
       title: req.t("nav.try"),
@@ -159,7 +184,19 @@ export default async function marketingRoutes(app: FastifyInstance): Promise<voi
           row.asn !== undefined
             ? { number: row.asn, org: row.asnOrg, source: row.asnSource ?? "maxmind" }
             : undefined,
+        location: location
+          ? {
+              lat: location.lat,
+              lon: location.lon,
+              source: location.source,
+              // Formatted here for the same reason as the heading: the
+              // longitude/latitude suffix depends on the sign.
+              latText: formatCoordinate(location.lat, "lat"),
+              lonText: formatCoordinate(location.lon, "lon"),
+            }
+          : undefined,
       },
+      map: map ? { svg: map.svg } : undefined,
       req,
     });
   });

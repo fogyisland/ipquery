@@ -112,6 +112,52 @@ describe("doLookupCore", () => {
     expect(result.etag).toBe("2026-11-01T00:00:00.000Z");
   });
 
+  it("falls back to the ISO country name when the row has no country_name", async () => {
+    // This is the real shape of the data: DB-IP's CSVs carry a country
+    // code only, so `country_name` is NULL for every ETL-loaded row.
+    // Without the fallback the API answers `"name": null`, and the web
+    // UI shows a bare "HK" under a heading that says "country".
+    const { pool } = stubPool([
+      [[rawRangeRow({ country_code: "HK", country_name: null })], []],
+      [[], []],
+    ]);
+    const log = stubLogger();
+
+    const result = await doLookupCore(pool as never, log, "8.8.8.8");
+
+    expect(result.country).toEqual({ code: "HK", name: "Hong Kong", source: "maxmind" });
+  });
+
+  it("keeps the name null for a country code it does not know", async () => {
+    // "ZZ" is the ISO user-assigned code the ETL uses for unknown rows.
+    // Inventing a name for it would be worse than admitting we don't
+    // have one.
+    const { pool } = stubPool([
+      [[rawRangeRow({ country_code: "ZZ", country_name: null })], []],
+      [[], []],
+    ]);
+    const log = stubLogger();
+
+    const result = await doLookupCore(pool as never, log, "8.8.8.8");
+
+    expect(result.country.code).toBe("ZZ");
+    expect(result.country.name).toBeUndefined();
+  });
+
+  it("prefers the row's own country_name over the ISO fallback", async () => {
+    // If a data source ever does supply a name, that wins — it is more
+    // specific than the standard table.
+    const { pool } = stubPool([
+      [[rawRangeRow({ country_code: "HK", country_name: "Hong Kong SAR" })], []],
+      [[], []],
+    ]);
+    const log = stubLogger();
+
+    const result = await doLookupCore(pool as never, log, "8.8.8.8");
+
+    expect(result.country.name).toBe("Hong Kong SAR");
+  });
+
   it("uses 'never' as the etag when no ETL run has succeeded yet", async () => {
     const { pool } = stubPool([
       [[rawRangeRow()], []],

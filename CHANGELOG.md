@@ -11,10 +11,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **IP 地图展示**: `/try` 的查询结果附带一张世界地图，标出该 IP 的位置。
+  坐标字段其实早就在库里（`ip_ranges.latitude` / `longitude`）也早就在
+  `LookupResult.location` 里，只是**从来没有被渲染过**——查得到经纬度，却看不到
+  自己在哪。地图完全由服务端渲染成内联 SVG：
+  1. **不引入地图库**。项目没有 Leaflet / Mapbox / MapLibre，也不打算为了
+     一张图加一个几百 KB 的依赖。Natural Earth 110m 陆地轮廓被一次性投影成
+     静态常量（`src/web/maps/land-path.ts`），运行时零依赖
+  2. **不接外部瓦片服务**。瓦片服务器会拿到访客的 IP 地址，而这一页的全部
+     意义就是「查一个 IP」——把访客的 IP 交给第三方是本末倒置，也需要放宽 CSP
+  3. **不用内联脚本**。CSP 是 `script-src 'self'`，客户端地图库无论如何都要
+     外链一个 .js；服务端出图让页面保持零脚本
+  4. **等距圆柱投影**：经纬两个轴都是线性的，标记位置可以用纯算术算出来，
+     不需要投影库反解。墨卡托投影的 y 项非线性，且在两极发散
+  5. **伪多边形被剔除**：Natural Earth 数据里有两个跨日期变更线的退化环
+     （宽 360 度、高不到 1 度），投影后是两条横贯地图的假线。它们的
+     长宽比是 490 与 363，而下一个最狭长的真实环是 16——阈值就落在
+     这个断层里（见生成脚本 `MAX_ASPECT_RATIO`）
+  6. 坐标同时以可读文本给出（`35.68°N`、`139.65°E`），并带数据来源标签
+- **国家/地区名称**: 新增 ISO 3166-1 alpha-2 国家/地区名表（`src/country-names.ts`，
+  249 项，中英文各一套），并接入查询核心、Web 试查页与用户仪表盘。
+  修掉一个此前一直存在但没人注意的问题：`ip_ranges.country_name` **全表为 NULL**——
+  DB-IP 的免费 CSV 只有国家代码没有国名（city-lite 的列是
+  `start,end,continent,country,region,city,lat,lon`），而唯一带国名列的 MaxMind
+  从未进过 ETL 流水线（它需要一份本项目没有的 license key）。于是香港的地址
+  只能回答 `HK`，标题还写着「国家」——把一个地区说成了国家。
+  1. **API 不再返回 `"name": null`**。`GET /lookup` 与 MCP 的 `ipquery_lookup`
+     现在对 HK 返回 `"name": "Hong Kong"`
+  2. **界面按语言显示**。中文访客看到「香港」，英文访客看到「Hong Kong」，
+     代码 `HK` 一并保留
+  3. **香港、澳门、台湾各有自己的代码**（HK / MO / TW），按自己的名字显示，
+     不并入中国
+  4. **标签改为「国家/地区」**（英文 `Country/Region`），出现在试查页、首页示例、
+     仪表盘最近查询与后台的探测／回填明细里
+  5. 未知代码（如 ETL 用的 `ZZ`）仍回落为代码本身——给不认识的代码编一个名字，
+     比承认不知道更糟
 - **MCP 服务**: stdio 传输的 Model Context Protocol 服务器（`npm run mcp`），7 个只读工具
-  （`ipquery_lookup`、`ipquery_queue_stats`、`ipquery_etl_status`、`ipquery_queue_top`、
-  `ipquery_queries_recent`、`ipquery_queries_daily`），供 AI 工具接入。查询日志默认脱敏，
-  需显式传 `includePrivate: true` 才显示邮箱与 API Key 前缀。见 `docs/mcp.md`
+  （`ipquery_lookup`、`ipquery_stats`、`ipquery_queue_stats`、`ipquery_etl_status`、
+  `ipquery_queue_top`、`ipquery_queries_recent`、`ipquery_queries_daily`），
+  供 AI 工具接入。查询日志默认脱敏，需显式传 `includePrivate: true` 才显示邮箱与
+  API Key 前缀。见 `docs/mcp.md`
 - **自定义 Provider**: 通用 HTTP Provider（`GenericHttpProvider`）+ 工厂分发 + 管理界面，
   含 SSRF 防护（拦截 localhost／内网／link-local 地址）。见 migration 021
 - **ETL 实时进度**: ETL 运行期间在管理界面渲染进度条（migration 022 + `/progress` JSON 端点）
@@ -74,6 +110,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **结果面板的深色块留白**: `/try` 结果右侧的「用 curl 复现」只有一行命令，
+  却因为网格默认拉伸而跟左侧数据区等高，于是一大块深色墨水悬在那里。
+  现改为按自身高度排列（`align-self: start`）
 - **种子数据导入完成后又回到种子页**: 操作员看着 15 分钟的 DB-IP 导入跑完，
   页面回到那三个选项（导入／演示／跳过），看起来像「什么都没发生」，
   于是又点了一次导入。三个缺陷叠在一起：
