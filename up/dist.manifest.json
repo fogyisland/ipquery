@@ -1,7 +1,7 @@
 {
   "formatVersion": 1,
   "fileCount": 360,
-  "totalBytes": 1811425,
+  "totalBytes": 1814247,
   "files": {
     "api/dbBootstrap.d.ts": {
       "bytes": 8065,
@@ -80,12 +80,12 @@
       "sha256": "2cf62cef5b2ffb6034c27d59a2bb1a9bdde2115a402bfd9f243bc9337ad111f0"
     },
     "api/server.js": {
-      "bytes": 21310,
-      "sha256": "e63c0cddd4c3e7e74785e3df0fae66cbd5213a3bb307d797144ac929ae80fa47"
+      "bytes": 22562,
+      "sha256": "814ef3c00f7a61987364ea8fb0770d3d134a30195ffb636b077a3fb366c27bb3"
     },
     "api/server.js.map": {
-      "bytes": 8235,
-      "sha256": "0e7bb59e64c92dfaa60e1c09524660472ec5a0cfafc3a472e4cdfff6457bb251"
+      "bytes": 8527,
+      "sha256": "f6aa507ba6a9ffc7969021b93cf45d4bc2d10625caa4b338a15d0c7aebbd0c63"
     },
     "cli.d.ts": {
       "bytes": 31,
@@ -100,16 +100,16 @@
       "sha256": "c4dd13616a522c8c5434b9ac758043f8b85b94c1fb3a96a010810675fec98b10"
     },
     "config.d.ts": {
-      "bytes": 1310,
-      "sha256": "f7e87f1c7dddfc10268643c1dfb6fd56f688d5f703b246f7123d10914736e959"
+      "bytes": 1339,
+      "sha256": "4ada451f9f7590391c3cce921f6bb6995d4f823ee2a87f62bd1c6ce265df5966"
     },
     "config.js": {
-      "bytes": 6599,
-      "sha256": "c9a0409c5cd771574e10b46eb14babb746a3fa700ad97f3107e6819c9f81ffbc"
+      "bytes": 6694,
+      "sha256": "52d0280b5c0caef9beb0860816474dbdc5e2f8133ce4ff5bea5bb85c67e6a130"
     },
     "config.js.map": {
-      "bytes": 4887,
-      "sha256": "a35448c6db23f3ff2d4d8705e970495189082a5f0b793823e8e47dd06aa349ec"
+      "bytes": 4985,
+      "sha256": "c9079d46e9ae2fe5a1c0433364025d9983327520c6cbf632eab6de20e63534fa"
     },
     "etl/download.d.ts": {
       "bytes": 5578,
@@ -900,8 +900,8 @@
       "sha256": "e725e2a02b806cc9f5bc888bc2d662a5693496433a92d810cae8dd11229a6801"
     },
     "web/i18n/en-US.json": {
-      "bytes": 44199,
-      "sha256": "62d4f1b5cce0e476e264697363aa347dfcd5f97c60f3dee03936c0b4a8ffac5e"
+      "bytes": 44315,
+      "sha256": "7009770669b2c7c98b4423168db5ff67308eff2ecad494d81d04d1ad166cff95"
     },
     "web/i18n/index.d.ts": {
       "bytes": 309,
@@ -920,8 +920,8 @@
       "sha256": "33cd4e4a9a90a35dc5c3b8308e78a6449754c712719b9f1af35b2e25156641cc"
     },
     "web/i18n/zh-CN.json": {
-      "bytes": 44069,
-      "sha256": "27e934c4be85fcbfa5501698032721550f16724feea34dd9052bd6bc395061ff"
+      "bytes": 44183,
+      "sha256": "f9feb3c0aa169bc8e8ba8a3b48e148571a25546bd66712148fa1a75c59a5f984"
     },
     "web/plugins/auditLog.d.ts": {
       "bytes": 368,
@@ -1120,12 +1120,12 @@
       "sha256": "62752ec826ec66799efb98bbd9eeb3409e8efea5fa17e006460ee9a7b8982056"
     },
     "web/routes/admin.js": {
-      "bytes": 107987,
-      "sha256": "b556018d3b5d432c7111c4cdb760a453ddb1cfa8459c5e49f83ddc1efde18209"
+      "bytes": 108080,
+      "sha256": "d1961b3403d46e0e2272a0954b21d3f8144cf8e1783f8f2a853f56c981f36897"
     },
     "web/routes/admin.js.map": {
-      "bytes": 87712,
-      "sha256": "a0f7c90019d8e8a169ef39477bd66abe8c543dd95cd4d003c5213b3298e12970"
+      "bytes": 87757,
+      "sha256": "3f63c27a08bd973d2d65f9d8d8f568cd63ec013d1b3e45d0ec612bcc115dc27d"
     },
     "web/routes/auth.d.ts": {
       "bytes": 121,
@@ -1220,8 +1220,8 @@
       "sha256": "744cade547b9e55983fcd95005f782c1a8271fba466c284834ecc03925673073"
     },
     "web/views/admin/settings.hbs": {
-      "bytes": 16564,
-      "sha256": "3a2fddbf06a02c174458516fd3b93da1c832dfac261d8c4a041c5d5e30e8345d"
+      "bytes": 17252,
+      "sha256": "fa0026832a7aff66d67b5af4247f12a0b392d58dd00a948877337c4de8d8f15c"
     },
     "web/views/admin/unknown-ips-backfill-confirm.hbs": {
       "bytes": 861,

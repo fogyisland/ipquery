@@ -404,9 +404,14 @@
       },
       "metricStrip": {
         "apiPort": "API port",
+        "trustProxy": "Trust proxy header",
         "threadsConnected": "Threads connected",
         "maxUsedConnections": "Max used",
         "etlLastRun": "Last ETL run"
+      },
+      "trustProxy": {
+        "on": "on",
+        "off": "off"
       },
       "secret": {
         "show": "Show",

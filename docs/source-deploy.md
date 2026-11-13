@@ -352,7 +352,8 @@ stderr_logfile=/www/wwwlogs/ipquery.err.log
 - [ ] `/init` 返回 404（初始化向导已关闭）
 - [ ] 进程被 systemd / Supervisor 托管，不是前台终端
 - [ ] 数据库账号非 root，仅授权本库
-- [ ] 反代转发了 `X-Forwarded-For`，且 `RATE_LIMIT` 已按并发量调高
+- [ ] 反代**覆盖**转发了 `X-Forwarded-For`（`proxy_set_header X-Forwarded-For $remote_addr;`），
+      `.env` 里 `TRUST_PROXY=true`，且 Node 端口只有反代能访问；否则 `RATE_LIMIT` 需按并发量调高
 
 ---
 

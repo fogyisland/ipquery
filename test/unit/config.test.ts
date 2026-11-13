@@ -44,4 +44,28 @@ describe("config", () => {
   it("redactSecret leaves short strings fully masked", () => {
     expect(redactSecret("short")).toBe("*****");
   });
+
+  it("does not trust the proxy header unless told to", () => {
+    // The default has to be the safe one: `X-Forwarded-For` is
+    // attacker-controlled, and trusting it by default would hand every
+    // visitor the right to pick their own rate-limit bucket.
+    delete process.env.TRUST_PROXY;
+    expect(loadConfig().api.trustProxy).toBe(false);
+  });
+
+  it("trusts the proxy header when TRUST_PROXY is set", () => {
+    for (const value of ["true", "1"]) {
+      process.env.TRUST_PROXY = value;
+      expect(loadConfig().api.trustProxy).toBe(true);
+    }
+  });
+
+  it("treats any other TRUST_PROXY value as off", () => {
+    // Not "on" means off. The flag turns on a header that an attacker
+    // can forge, so an ambiguous value must resolve to the safe side.
+    for (const value of ["false", "0", "yes", "", "TRUE"]) {
+      process.env.TRUST_PROXY = value;
+      expect(loadConfig().api.trustProxy, `TRUST_PROXY=${value}`).toBe(false);
+    }
+  });
 });

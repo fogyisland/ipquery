@@ -123,7 +123,35 @@ node -e "console.log(require('crypto').randomBytes(48).toString('base64'))"
 ```ini
 COOKIE_SECURE=true                       # 走 HTTPS 时必须打开
 WEB_BASE_URL=https://ipquery.example.com # 与实际上访问的域名一致，否则重置密码出错
+TRUST_PROXY=true                         # 走反向代理时才打开，见下
 ```
+
+> **`TRUST_PROXY`：走反向代理时才打开。**
+>
+> 限流按 IP 计数，而 `req.ip` 默认是**连接的对端地址**。没有反代时，
+> 对端就是访客本人，没问题；**有反代时**，对端是反代进程的地址
+> （`127.0.0.1`），于是**所有访客挤进同一个桶** —— 一个访客就能把所有人的
+> 额度用光（60 次/分钟是全体共享的）。
+>
+> 打开 `TRUST_PROXY=true` 之后，`req.ip` 取自 `X-Forwarded-For`，每个访客
+> 各自计数。
+>
+> **前提：Node 端口必须只有反代能访问。** `X-Forwarded-For` 是访客可以
+> 自己构造的头 —— 任何人能直接连上 3880，就能伪造它、挑一个自己的限流桶。
+> 所以这一项要配合防火墙（只允许本机访问端口）。
+>
+> 反代那边要**覆盖**而不是追加这个头：
+>
+> ```nginx
+> proxy_set_header X-Forwarded-For $remote_addr;   # 覆盖，不是 $proxy_add_x_forwarded_for
+> proxy_set_header X-Forwarded-Proto $scheme;
+> proxy_set_header Host $host;
+> ```
+>
+> 追加（`$proxy_add_x_forwarded_for`）会把访客自己伪造的头留在最左边，
+> 而 `trustProxy` 读的正是最左边那一项 —— 那等于把限流桶的选择权交给访客。
+>
+> 没有反代就保持 `false`（默认值），不用改。
 
 > **`WEB_BASE_URL` 填外网地址，不要填内网地址。**
 >
@@ -467,7 +495,8 @@ gzip -t data/raw/*.csv.gz && echo "all intact"
       —— 向导和 `db` 命令在写完 `.env` 后会自动 chmod，但手工编辑过的 `.env`
       不会被自动收紧，仍需手工确认（`ls -l .env`）
 - [ ] 用 systemd / pm2 / NSSM 托管 `node dist/cli.js serve`，不要靠前台终端
-- [ ] 反代（Nginx / Caddy）转发 `X-Forwarded-For`，否则限流把所有人算成一个 IP
+- [ ] 反代（Nginx / Caddy）**覆盖**转发 `X-Forwarded-For`，且 `.env` 里
+      `TRUST_PROXY=true` —— 否则限流把所有人算成一个 IP；反代之外不得能直接访问端口
 - [ ] `DATA_DIR` 指向容量足够的磁盘（DB-IP 原始 CSV.gz 约 93 MB）
 - [ ] 数据库数据盘 >= 20 GB（全量导入后 `ip_ranges` 约 3.0 GB / 815 万行）
 - [ ] 内存 >= 2 GB（全量 ETL 峰值在插入 city 阶段，1 GB 机器可能被 OOM kill）

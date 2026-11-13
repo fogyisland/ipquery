@@ -271,7 +271,7 @@ stderr_logfile=/www/wwwlogs/ipquery.err.log
 
 ### ⚠️ 反向代理下的限流（重要）
 
-**当前代码没有开启 `trustProxy`。** Fastify 默认 `trustProxy: false`，此时 `req.ip`
+**默认 `TRUST_PROXY=false`。** 此时 Fastify 的 `trustProxy` 是关的，`req.ip`
 拿到的是**连接的对端地址**——也就是宝塔反代进程的地址（`127.0.0.1`），不是真实访客。
 
 后果：限流按 IP 计数，而所有访客共享同一个 `127.0.0.1`，于是**一个访客就能把
@@ -284,13 +284,33 @@ stderr_logfile=/www/wwwlogs/ipquery.err.log
 在宝塔的 Node 项目管理器里直接绑域名，或用 Nginx `proxy_pass` 但**在宝塔的
 「防火墙」里限制 3880 端口只允许本机访问**，同时把限流改为按其他维度。
 
-**方案 2：开启 `trustProxy`。**
+**方案 2：开启 `trustProxy`。**（代码已实现，**默认关闭，需要你显式打开**）
 
-需要在 `src/api/server.ts` 的 `Fastify({...})` 里加 `trustProxy: true`，然后重新
-构建发布包。这会**信任 `X-Forwarded-For`**——只有在你能保证只有宝塔能访问到
-Node 端口时才能这么做，否则外部可以伪造该头绕过限流。
+在 `.env` 里加一行：
 
-> 这项改动我还没做。它需要你的确认（见本文档末尾），因为它同时影响安全性。
+```ini
+TRUST_PROXY=true
+```
+
+这会让 `req.ip` 取自 `X-Forwarded-For`，于是每个访客各自计数。
+
+> **前提：3880 端口必须只有宝塔能访问到。**
+> `X-Forwarded-For` 是访客可以自己构造的头。任何人能直接连上 3880，
+> 就能伪造这个头、挑一个自己的限流桶，绕过限流。所以这一项必须配合
+> 宝塔防火墙（只允许本机访问 3880）或安全组规则。
+
+**宝塔的 Nginx 配置也要改一处** —— 让反代**覆盖**而不是**追加**这个头：
+
+```nginx
+proxy_set_header X-Forwarded-For $remote_addr;   # 覆盖
+proxy_set_header X-Forwarded-Proto $scheme;
+proxy_set_header Host $host;
+```
+
+> 为什么不用默认的 `$proxy_add_x_forwarded_for`（追加）？追加会把访客自己
+> 伪造的头留在最左边，而 `trustProxy` 读的正是最左边那一项 —— 追加等于
+> 把限流桶的选择权交给访客。覆盖成 `$remote_addr` 之后，值一定是宝塔看到的
+> 真实来源地址。
 
 > **注意：向导第 2 步读 `X-Forwarded-Proto`，和这件事无关。**
 > `trustProxy` 决定的是 `req.ip`（对端地址）能不能取自 `X-Forwarded-For` ——
@@ -366,6 +386,7 @@ node dist/cli.js migrate:status
 - [ ] `SESSION_SECRET` / `CSRF_SECRET` 独立随机值，不复用
 - [ ] `COOKIE_SECURE=true`，`WEB_BASE_URL` 是真实 HTTPS 域名
 - [ ] systemd / Supervisor 托管，不靠前台终端
-- [ ] 反代转发 `X-Forwarded-For`
+- [ ] 反代**覆盖**转发 `X-Forwarded-For`（`proxy_set_header X-Forwarded-For $remote_addr;`），
+      且 `.env` 里 `TRUST_PROXY=true`，且 3880 只允许本机访问
 - [ ] `DATA_DIR` 指向容量足够的磁盘（DB-IP 原始 CSV 约 100+ MB）
 - [ ] `/init` 已返回 404
