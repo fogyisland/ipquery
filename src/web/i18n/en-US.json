@@ -1150,7 +1150,7 @@
         "error": "Error",
         "autoRefresh": "This page auto-refreshes every 3 seconds. You can close it during the import.",
         "continue": "Continue",
-        "successHint": "Import complete. Click continue to finish setup."
+        "successHint": "Import complete. Moving on to the next step."
       }
     },
     "complete": {
