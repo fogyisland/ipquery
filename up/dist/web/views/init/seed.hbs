@@ -43,6 +43,12 @@
 
     {{#if (eq progress.run.status "success")}}
       <p class="boot-status-note">{{req.t "setup.seed.progress.successHint"}}</p>
+      {{!-- The GET handler advances to the next step once the run has
+           succeeded, so this panel is what the operator sees in the
+           moment between the import finishing and the page reloading.
+           The refresh is what makes that happen; the button below is
+           the same door, for anyone who would rather not wait. --}}
+      <meta http-equiv="refresh" content="3">
       <form method="POST" action="/init/seed" class="boot-form">
         <input type="hidden" name="csrf" value="{{csrfToken}}">
         <input type="hidden" name="mode" value="etl-done">

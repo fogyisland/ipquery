@@ -152,8 +152,15 @@ async function startBackgroundEtl(app) {
         return { busy: true };
     // Pre-create the run row so the progress page can find it the instant the
     // client lands on /init/seed after the redirect.
+    //
+    // The run row IS the "an ETL is in flight" signal. There used to be a
+    // second signal — the `etl.setup.inProgress` setting — and the two were
+    // written by different code paths (this task vs. the ETL pipeline), so
+    // they could disagree. A server restart between the two left the
+    // setting stuck at "true" and stranded the operator on a progress
+    // panel for a run that had finished hours ago. One source of truth,
+    // written where the work happens, cannot drift like that.
     const runId = await (0, mysql_1.recordEtlStart)(app.pool);
-    await (0, settings_1.setSetting)(app.pool, "etl.setup.inProgress", "true");
     // Fire-and-forget. The setup wizard should NEVER block on this — full
     // DB-IP city-lite ingest takes 5-15 minutes. setImmediate moves the task
     // out of the current microtask so the response handler returns first.
@@ -172,9 +179,16 @@ async function startBackgroundEtl(app) {
             }
             catch (err) {
                 app.log.error({ err, runId }, "setup: background ETL failed");
-            }
-            finally {
-                await (0, settings_1.setSetting)(app.pool, "etl.setup.inProgress", "false").catch(() => undefined);
+                // Close the run row out. runPipeline marks the run itself on the
+                // paths it controls, but a failure BEFORE it gets that far — the
+                // download throwing, the process being killed — would leave the
+                // row 'running' forever. The seed page reads that row as "still
+                // importing", so the operator would watch a spinner that never
+                // ends and could never retry. Marking it failed turns that into
+                // the retry panel, which has a way out.
+                await (0, mysql_1.recordEtlFinish)(app.pool, runId, "failed", {
+                    errorMessage: err instanceof Error ? err.message : String(err),
+                }).catch(() => undefined);
             }
         })();
     });
@@ -747,14 +761,34 @@ async function initRoutes(app) {
         // database is configured, so this page has to survive a pool that
         // cannot answer. "No run yet" is the honest answer in that case —
         // there is genuinely no ETL run, because no ETL could have started.
-        const [latest, etlSetting] = await Promise.all([
-            readLatestRun(app.pool).catch(() => null),
-            (0, settings_1.getSetting)(app.pool, "etl.setup.inProgress").catch(() => null),
-        ]);
-        const inProgress = latest?.status === "running";
-        // While a background ETL is in flight, render the progress page and let
-        // it auto-refresh until the run finishes.
-        if (inProgress || etlSetting === "true") {
+        //
+        // The `etl.setup.inProgress` flag used to gate the progress panel
+        // here. It duplicated the run's own status, and the two were written
+        // by different code paths: the flag by the wizard's background task,
+        // the status by the ETL pipeline. They could disagree — and a server
+        // restart between the two left the flag at "true" forever, stranding
+        // the operator on a progress panel for a run that had long finished.
+        //
+        // The run row is the single source of truth now. It is written in
+        // the same transaction as the work it describes, so it cannot
+        // outlive or understate the run.
+        const latest = await readLatestRun(app.pool).catch(() => null);
+        // A run that is in flight — or one that finished — gets the progress
+        // panel. A finished run STAYS on the panel: the operator watched a
+        // 15-minute import finish, and having the page silently turn back
+        // into the three-option form reads as "nothing happened" and invites
+        // them to run it again. The panel's 继续 button is the way forward.
+        //
+        // A SUCCESSFUL run also advances on its own. The operator asked for
+        // the data to be imported and the import is done — the seed step has
+        // nothing left to ask them. Leaving them on the seed page to click
+        // through is the step behaving as if it were still pending.
+        if (latest !== null && latest.status !== "failed") {
+            if (latest.status === "success") {
+                // Record the outcome so the summary on the next step is honest.
+                await (0, settings_1.setSetting)(app.pool, "seed.loaded", "true").catch(() => undefined);
+                return reply.code(302).header("Location", "/init/complete?flash=success").send();
+            }
             return reply.view("init/seed.hbs", {
                 layout: "layouts/init",
                 title: req.t("setup.seed.title"),
@@ -767,7 +801,24 @@ async function initRoutes(app) {
                     // Pre-row state: a click happened but recordEtlStart hasn't been
                     // observed yet (sub-second window). Show "starting…" instead of a
                     // blank spinner.
-                    starting: !latest,
+                    starting: false,
+                },
+                req,
+            });
+        }
+        // A failed run gets the retry panel — the operator needs to choose
+        // between the demo rows and a fresh ETL, not a silent form.
+        if (latest !== null && latest.status === "failed") {
+            return reply.view("init/seed.hbs", {
+                layout: "layouts/init",
+                title: req.t("setup.seed.title"),
+                csrfToken: req.csrfToken,
+                steps: buildSteps(req, 6),
+                step: 6,
+                total: 7,
+                progress: {
+                    run: latest,
+                    starting: false,
                 },
                 req,
             });

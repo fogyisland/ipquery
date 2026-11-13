@@ -1151,7 +1151,7 @@
         "error": "错误信息",
         "autoRefresh": "本页面每 3 秒自动刷新。导入过程中可随时关闭。",
         "continue": "继续",
-        "successHint": "导入已完成,点击继续完成初始化。"
+        "successHint": "导入已完成,正在进入下一步。"
       }
     },
     "complete": {
