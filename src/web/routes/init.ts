@@ -904,8 +904,19 @@ export default async function initRoutes(app: FastifyInstance): Promise<void> {
       // `migrate` — which meant "skip the demo data" never actually
       // skipped anything. Now the rows only exist if they were asked
       // for.
-      await loadDemoSeed(app.pool);
+      //
+      // The loader is a no-op when the table already holds real ETL
+      // data, so a re-submitted wizard step (or a double-click) cannot
+      // mix 50 demo addresses into a production-sized library. Either
+      // way the step is complete from the operator's point of view — the
+      // table has data — so it still reports success. The skip itself is
+      // logged rather than surfaced: the wizard has already moved past
+      // this decision.
+      const seeded = await loadDemoSeed(app.pool);
       await setSetting(app.pool, "seed.loaded", "true");
+      if (seeded.skipped) {
+        req.log.info({ skipReason: seeded.skipReason }, "[init] demo seed skipped");
+      }
       return reply.code(302).header("Location", "/init/complete?flash=success").send();
     }
 

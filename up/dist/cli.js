@@ -238,7 +238,12 @@ program
         // with them by accident.
         await (0, runner_1.runMigrations)(pool);
         const result = await (0, demoSeed_1.loadDemoSeed)(pool);
-        console.log(`[seed:demo] ${result.total} demo rows present (${result.added} newly added)`);
+        if (result.skipped) {
+            console.log(`[seed:demo] skipped — ${result.skipReason}`);
+        }
+        else {
+            console.log(`[seed:demo] ${result.total} demo rows present (${result.added} newly added)`);
+        }
     }
     finally {
         await pool.end();
@@ -304,14 +309,21 @@ program
         // reported in the log line: migration 012 had already inserted
         // the demo rows during `migrate`, so the flag changed nothing
         // about what was in the database.
+        //
+        // The loader refuses to add demo rows to a table that already
+        // holds real data (`--reinit` against a populated production
+        // database is the case that matters), so report that rather than
+        // printing a seed line that implies rows went in.
+        let seedNote = "no";
         if (opts.seed) {
-            await (0, demoSeed_1.loadDemoSeed)(pool);
+            const seeded = await (0, demoSeed_1.loadDemoSeed)(pool);
+            seedNote = seeded.skipped ? `skipped (${seeded.skipReason})` : `${seeded.added} added`;
         }
         if (!already) {
             await (0, settings_1.markInitialized)(pool);
             markedInitial = true;
         }
-        console.log(`initialized admin=${opts.email} (id=${r.id}), seed=${opts.seed ? "yes" : "no"}, marked_initialized=${markedInitial ? "yes" : "no"}`);
+        console.log(`initialized admin=${opts.email} (id=${r.id}), seed=${seedNote}, marked_initialized=${markedInitial ? "yes" : "no"}`);
     }
     finally {
         await pool.end();

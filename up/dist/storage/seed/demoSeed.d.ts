@@ -6,6 +6,11 @@ export interface DemoSeedResult {
     total: number;
     /** Rows the load actually added. */
     added: number;
+    /** True when the load was skipped because the table already held
+     *  non-demo rows. `added` is 0 in that case. */
+    skipped?: boolean;
+    /** Why the load was skipped, for the caller to log. */
+    skipReason?: string;
 }
 /** Locates the demo-ranges.sql file.
  *

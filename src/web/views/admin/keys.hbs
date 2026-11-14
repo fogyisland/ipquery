@@ -3,7 +3,7 @@
 
 {{> filter-bar action='/admin/keys' filters=(array
   (hash name='revoked' label=(req.t 'admin.keys.col.revoked') options=(array (hash value='yes' label=(req.t 'admin.keys.option-revoked-yes')) (hash value='no' label=(req.t 'admin.keys.option-revoked-no'))))
-) values=filters csvUrl='/admin/keys.csv' anyLabel=(req.t 'common.any') filterLabel=(req.t 'common.filter') exportLabel=(req.t 'common.exportCsv')}}
+) values=filters csvUrl=csvUrl anyLabel=(req.t 'common.any') filterLabel=(req.t 'common.filter') exportLabel=(req.t 'common.exportCsv')}}
 
 {{!-- Bulk action bar: lives outside the table so it can sit alongside
      pagination. The form's action is /admin/keys/revoke-bulk (CSRF-gated).

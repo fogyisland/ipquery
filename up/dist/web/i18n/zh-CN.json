@@ -49,7 +49,13 @@
       "settings": "设置",
       "ingest": "API 入库",
       "customProviders": "自定义 Provider",
-      "providers": "数据源"
+      "providers": "数据源",
+      "groups": {
+        "overview": "概览",
+        "data": "数据管道",
+        "traffic": "流量与凭证",
+        "governance": "用户与治理"
+      }
     },
     "logout": "登出",
     "history": "查询历史",
@@ -201,6 +207,11 @@
       "email": "邮箱",
       "role": "角色",
       "status": "状态",
+      "statusLabels": {
+        "statusDisabled": "已停用",
+        "statusVerified": "已验证",
+        "statusUnverified": "未验证"
+      },
       "created": "创建时间",
       "disabled": "已禁用",
       "verified": "已验证",
@@ -225,7 +236,9 @@
         "disable": "禁用",
         "verify": "标记已验证",
         "resetPassword": "重置密码",
-        "delete": "删除"
+        "delete": "删除",
+        "confirmResetPassword": "确定要重置密码吗？该用户当前的密码会立刻失效。",
+        "confirmDisable": "确定要停用该用户吗？该用户将无法登录。"
       },
       "delete.confirm": "确定删除该用户?所有相关数据将被清除。",
       "delete.confirm.title": "确认删除用户",
@@ -393,7 +406,11 @@
       "topIps": "热门 IP",
       "topUsers": "活跃用户",
       "since": "起始",
-      "until": "结束"
+      "until": "结束",
+      "hit": "命中",
+      "miss": "未命中",
+      "invalid": "无效",
+      "split": "请求结果分布"
     },
     "settings": {
       "title": "系统设置",

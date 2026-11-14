@@ -24,6 +24,22 @@ describe("web i18n t()", () => {
     expect(t("zh-CN", "nonexistent.key")).toBe("nonexistent.key");
   });
 
+  it("resolves admin user status labels without shadowing the column title", () => {
+    // The status pills and the table header both live under
+    // `admin.users.status*`. If the labels are nested at exactly
+    // `admin.users.status`, t() returns the object, sees a non-string,
+    // and falls back to printing the literal key as the column title.
+    expect(t("zh-CN", "admin.users.status")).toBe("状态");
+    expect(t("zh-CN", "admin.users.statusLabels.statusDisabled")).toBe("已停用");
+    expect(t("zh-CN", "admin.users.statusLabels.statusVerified")).toBe("已验证");
+    expect(t("zh-CN", "admin.users.statusLabels.statusUnverified")).toBe("未验证");
+
+    expect(t("en-US", "admin.users.status")).toBe("Status");
+    expect(t("en-US", "admin.users.statusLabels.statusDisabled")).toBe("Disabled");
+    expect(t("en-US", "admin.users.statusLabels.statusVerified")).toBe("Verified");
+    expect(t("en-US", "admin.users.statusLabels.statusUnverified")).toBe("Unverified");
+  });
+
   it("interpolates {var} placeholders", () => {
     // zh-CN.json: "greeting.hello": "你好,{name}"
     expect(t("zh-CN", "greeting.hello", { name: "张三" })).toBe("你好,张三");

@@ -29,6 +29,11 @@ export interface DemoSeedResult {
   total: number;
   /** Rows the load actually added. */
   added: number;
+  /** True when the load was skipped because the table already held
+   *  non-demo rows. `added` is 0 in that case. */
+  skipped?: boolean;
+  /** Why the load was skipped, for the caller to log. */
+  skipReason?: string;
 }
 
 /** Locates the demo-ranges.sql file.
@@ -73,6 +78,38 @@ export async function loadDemoSeed(pool: Pool): Promise<DemoSeedResult> {
     );
     return Number(rows[0]?.n ?? 0);
   };
+  // Rows that did NOT come from this file — i.e. a real ETL import.
+  const countRealRows = async (): Promise<number> => {
+    const [rows] = await pool.query<RowDataPacket[]>(
+      "SELECT COUNT(*) AS n FROM ip_ranges WHERE country_source IS NULL OR country_source <> ?",
+      [DEMO_SOURCE],
+    );
+    return Number(rows[0]?.n ?? 0);
+  };
+
+  // The demo rows are only for an EMPTY database. INSERT IGNORE makes
+  // re-running this idempotent for the demo rows themselves, but it says
+  // nothing about a database that already holds real address data: the 50
+  // demo rows do not collide with the ETL's ranges on uniq_start_end, so
+  // they would be inserted alongside 8 million real rows. A lookup for
+  // 8.8.8.8 would then answer from the demo row ("Mountain View") instead
+  // of from the real library — the exact "populated but wrong" state this
+  // module exists to prevent.
+  //
+  // So: if the table already holds rows that did not come from here, do
+  // nothing and say why. Re-running `seed:demo`, `ipq init --seed` or the
+  // wizard's demo step on a populated database is a no-op.
+  const realRows = await countRealRows();
+  if (realRows > 0) {
+    return {
+      total: await countDemoRows(),
+      added: 0,
+      skipped: true,
+      skipReason:
+        `ip_ranges already holds ${realRows} non-demo row(s); ` +
+        "demo data is only loaded into an empty table",
+    };
+  }
 
   const before = await countDemoRows();
   await pool.query(fs.readFileSync(seedFile, "utf8"));

@@ -2731,3 +2731,52 @@ dl.settings-dl dd {
 .push-right {
   margin-left: auto;
 }
+
+/* ─── User detail action row ─────────────────────────────────────────────
+   The per-user actions used to be five bare elements in document flow:
+   four forms and a link, each with its own inline-form margin, so they
+   wrapped unevenly and the destructive one looked exactly like the rest.
+   One flex row with consistent spacing, and the danger action separated
+   by a hairline so it is not reached for by accident. */
+.detail-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+  margin-top: var(--sp-4);
+  padding-top: var(--sp-4);
+  border-top: 1px solid var(--border);
+}
+.detail-actions .inline-form {
+  margin: 0;
+}
+/* Push the destructive action to the far end of the row. */
+.detail-actions .btn-danger {
+  margin-left: auto;
+}
+@media (max-width: 640px) {
+  .detail-actions .btn-danger {
+    margin-left: 0;
+  }
+}
+
+/* ─── Disabled controls ──────────────────────────────────────────────────
+   There was no :disabled rule anywhere in the stylesheets, so a disabled
+   button rendered identically to an enabled one: the bulk-action buttons
+   on /admin/users are now disabled until a row is selected, and without
+   this they would look like they swallowed the click. */
+.button:disabled,
+.btn-primary:disabled,
+.btn-secondary:disabled,
+.btn-danger:disabled,
+button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.button:disabled:hover,
+.btn-primary:disabled:hover,
+.btn-secondary:disabled:hover,
+button:disabled:hover {
+  /* Cancel the hover treatment inherited from the base button rules. */
+  background: inherit;
+}

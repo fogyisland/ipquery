@@ -206,6 +206,11 @@
       "email": "Email",
       "role": "Role",
       "status": "Status",
+      "statusLabels": {
+        "statusDisabled": "Disabled",
+        "statusVerified": "Verified",
+        "statusUnverified": "Unverified"
+      },
       "created": "Created",
       "disabled": "Disabled",
       "verified": "Verified",
@@ -230,7 +235,9 @@
         "disable": "Disable",
         "verify": "Mark verified",
         "resetPassword": "Reset password",
-        "delete": "Delete"
+        "delete": "Delete",
+        "confirmResetPassword": "Reset this user's password? Their current password stops working immediately.",
+        "confirmDisable": "Disable this user? They will no longer be able to sign in."
       },
       "delete.confirm": "Delete this user? All related data will be removed.",
       "delete.confirm.title": "Delete user?",
