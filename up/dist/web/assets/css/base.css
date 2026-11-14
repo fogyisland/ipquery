@@ -12,7 +12,14 @@
   box-sizing: border-box;
 }
 :root {
-  color-scheme: light dark;
+  /* Pinned to light, not `light dark`. The product is one light product:
+     the wizard, the public pages, the sign-in form, the admin console and
+     the personal dashboard all render on a light canvas. Letting the OS
+     preference repaint `body` underneath a light shell produced pages
+     whose text and inputs changed colour while the chrome around them
+     did not. `color-scheme: light` also keeps native form controls and
+     scrollbars on the light rendering the design assumes. */
+  color-scheme: light;
 }
 body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
@@ -43,14 +50,4 @@ td {
   padding: 0.5rem 0.75rem;
   text-align: left;
   border-bottom: 1px solid #e5e5e5;
-}
-@media (prefers-color-scheme: dark) {
-  body {
-    background: #1a1a1a;
-    color: #e5e5e5;
-  }
-  th,
-  td {
-    border-color: #333;
-  }
 }

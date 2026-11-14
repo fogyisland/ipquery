@@ -30,7 +30,7 @@
       {{#each rows}}
       <tr>
         <td class="table-num">{{this.id}}</td>
-        <td class="table-num">{{formatRelative this.created_at}}</td>
+        <td class="table-num">{{formatRelative @root.req this.created_at}}</td>
         <td>{{this.actor_email}}</td>
         <td>{{> pill kind='info' text=this.action}}</td>
         <td>{{#if this.target_type}}{{this.target_type}}#{{this.target_id}}{{else}}—{{/if}}</td>

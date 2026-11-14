@@ -54,14 +54,14 @@
       <div class="provider-health-stat">
         <span class="provider-health-stat-label">{{@root.req.t 'admin.unknownIps.healthCard.lastSuccess'}}</span>
         <span class="provider-health-stat-value">
-          {{#if this.lastUsedAt}}<span title="{{formatDate this.lastUsedAt}}">{{formatRelative this.lastUsedAt}}</span>
+          {{#if this.lastUsedAt}}<span title="{{formatDate this.lastUsedAt}}">{{formatRelative @root.req this.lastUsedAt}}</span>
           {{else}}<span class="admin-tag admin-tag--muted">{{@root.req.t 'admin.unknownIps.healthCard.noSuccess'}}</span>{{/if}}
         </span>
       </div>
       <div class="provider-health-stat">
         <span class="provider-health-stat-label">{{@root.req.t 'admin.unknownIps.healthCard.lastError'}}</span>
         <span class="provider-health-stat-value">
-          {{#if this.lastErrorAt}}<span title="{{this.lastErrorReason}}" class="provider-health-error-text">{{formatRelative this.lastErrorAt}}</span>
+          {{#if this.lastErrorAt}}<span title="{{this.lastErrorReason}}" class="provider-health-error-text">{{formatRelative @root.req this.lastErrorAt}}</span>
           {{else}}<span class="admin-tag admin-tag--ok">{{@root.req.t 'admin.unknownIps.healthCard.noError'}}</span>{{/if}}
         </span>
       </div>

@@ -88,7 +88,7 @@
 
     <div class="card">
       <p class="card-title">{{req.t 'admin.dashboard.lastSuccess'}}</p>
-      <p class="card-value card-value--small">{{#if overview.etl.lastSuccessAt}}{{formatRelative overview.etl.lastSuccessAt}}{{else}}{{req.t 'admin.dashboard.never'}}{{/if}}</p>
+      <p class="card-value card-value--small">{{#if overview.etl.lastSuccessAt}}{{formatRelative req overview.etl.lastSuccessAt}}{{else}}{{req.t 'admin.dashboard.never'}}{{/if}}</p>
     </div>
   </div>
 
@@ -100,7 +100,7 @@
     <div class="activity-feed">
       {{#each overview.recentActivity}}
       <div class="activity-row">
-        <span class="activity-time">{{formatRelative this.created_at}}</span>
+        <span class="activity-time">{{formatRelative @root.req this.created_at}}</span>
         <span class="pill pill-info">{{this.action}}</span>
         <span>{{this.actor_email}}</span>
         {{#if this.target_type}}<span>&rarr; {{this.target_type}}#{{this.target_id}}</span>{{/if}}

@@ -63,7 +63,7 @@
         <ul class="m-run-list">
           {{#each recentRuns}}
             <li>
-              <span><code>{{formatRelative this.startedAt}}</code> · {{this.mergedRecords}} rows</span>
+              <span><code>{{formatRelative @root.req this.startedAt}}</code> · {{this.mergedRecords}} rows</span>
               <span class="m-run-pill m-run-pill--{{#if (eq this.status 'success')}}ok{{else if (eq this.status 'failed')}}bad{{else}}running{{/if}}">{{this.status}}</span>
             </li>
           {{/each}}

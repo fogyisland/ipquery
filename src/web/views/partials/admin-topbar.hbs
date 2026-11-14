@@ -1,0 +1,21 @@
+{{!-- SPDX-License-Identifier: MIT --}}
+{{!-- Admin topbar. The breadcrumb is resolved server-side from the same
+     nav model as the sidebar (see src/web/admin/nav.ts), so a section can
+     never disagree with the highlighted sidebar link. --}}
+<header class="admin-topbar">
+  <div class="admin-topbar-context">
+    <span class="admin-topbar-product">{{req.t 'admin.product'}}</span>
+    {{#if adminNavLocation}}
+      <span class="admin-topbar-sep" aria-hidden="true">/</span>
+      <span class="admin-topbar-group">{{adminNavLabel @root.req adminNavLocation.group.labelKey}}</span>
+      <span class="admin-topbar-sep" aria-hidden="true">/</span>
+      <span class="admin-topbar-current" aria-current="page">{{adminNavLabel @root.req adminNavLocation.item.labelKey}}</span>
+    {{/if}}
+  </div>
+  <div class="admin-topbar-meta">
+    <span class="admin-topbar-status"><span class="admin-topbar-status-dot" aria-hidden="true"></span>{{req.t 'admin.topbar.operational'}}</span>
+    <span class="admin-topbar-divider" aria-hidden="true"></span>
+    <span class="admin-topbar-account">{{req.session.email}}</span>
+    <a class="admin-topbar-link" href="/">{{req.t 'admin.topbar.viewSite'}}</a>
+  </div>
+</header>

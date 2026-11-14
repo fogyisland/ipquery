@@ -2,73 +2,93 @@
 /* ──────────────────────────────────────────────────────────────────────────
    IPQuery — admin + dashboard stylesheet
    ──────────────────────────────────────────────────────────────────────────
-   Aesthetic: Network Operations Console (NOC).
+   Aesthetic: a commercial, light operations console.
 
-   Subject grounding: IPQuery is an IP intelligence tool. Its users —
-   backend engineers, ops, security analysts — live in terminals, BGP
-   tools, Grafana dark mode, and Wireshark. They want a console that
-   feels like the systems they already know, not a marketing site.
+   Subject grounding: IPQuery is an IP intelligence service sold to teams
+   that run it themselves. Its operator is an admin who has to answer
+   "is the data fresh, who is calling us, and what changed?" — not a
+   terminal session. The console therefore borrows the bounded, paper-like
+   surface of the first-run wizard and the public error pages, while the
+   data itself (IPs, IDs, counts, timestamps) keeps a monospace voice.
 
    Visual identity:
-     · dark canvas (deep ink, like a terminal)
-     · monospace for ALL data (IPs, numbers, IDs, timestamps)
-     · single terminal-cyan accent (#22d3ee), nothing else loud
-     · hairline 1px borders, no border-radius — flat panel edges
-     · compact density — NOC consoles show a lot in a small area
-     · live "ping" status indicators with subtle glow
-     · IP addresses rendered as oversized mono glyphs on key surfaces
+     · fixed light canvas, white cards, one deep teal accent
+     · hairline borders, soft rounded corners, restrained elevation
+     · a persistent product topbar with a breadcrumb and live status
+     · four navigation groups organised by the operator's task
+     · monospace reserved for data, not for headings and labels
 
-   The signature element: a horizontal "trace" line that ties together
-   activity over time, with cyan markers. The user always knows the
-   system is alive without ever looking at a spinner.
+   The palette is pinned light. A console that flips to near-black when the
+   OS preference changes is two different products; this one is not.
 
    Class catalog below must stay tight — every selector is referenced
    from a partial or admin/*.hbs view. Don't add unused classes.
    ────────────────────────────────────────────────────────────────────────── */
 
 /* ─── Design tokens ─────────────────────────────────────────────────────── */
+/* Fixed LIGHT commercial palette.
+
+   The console used to be a dark "network operations" theme that flipped with
+   the OS `prefers-color-scheme`. Two problems: the same product showed two
+   different interfaces depending on the operator's laptop settings, and its
+   terminal-cyan-on-near-black contrast did not match the light, bounded
+   setup wizard or the public error pages. A paid B2B console needs one
+   recognisable surface everywhere.
+
+   This is now the SAME family as init.css: canvas #F4F6F9, white cards,
+   one deep teal accent (#0E7490), hairline borders and soft elevation. The
+   palette is pinned to light — `color-scheme: light` also keeps native form
+   controls and scrollbars from turning dark under a dark OS theme.
+
+   No webfont is loaded here. The admin CSP is same-origin only (see
+   src/web/plugins/security.ts); a system stack with an optional Inter /
+   Plus Jakarta Sans already installed locally keeps every page self-contained. */
 :root {
-  /* Surface scale — darkest at the bottom of the panel stack */
-  --bg: #0a0e14; /* canvas */
-  --surface: #11161d; /* card */
-  --surface-2: #161c24; /* interactive / nested */
-  --surface-3: #1d2530; /* hover */
+  color-scheme: light;
 
-  --border: #1f2630;
-  --border-2: #2a333f;
-  --border-3: #3a4554;
+  /* Surface scale — lightest behind, brightest on top */
+  --bg: #f4f6f9; /* canvas */
+  --surface: #ffffff; /* card */
+  --surface-2: #f8fafc; /* interactive / nested */
+  --surface-3: #eef2f7; /* hover */
 
-  --text: #e6edf3;
-  --text-2: #8a96a3;
-  --text-3: #5c6773;
+  --border: #e3e8ef;
+  --border-2: #d3dae4;
+  --border-3: #b9c3d0;
 
-  /* Cyan accent — terminal cyan, the only loud color */
-  --accent: #22d3ee;
-  --accent-dim: #0891b2;
-  --accent-glow: rgba(34, 211, 238, 0.18);
-  --accent-line: rgba(34, 211, 238, 0.35);
+  --text: #0f172a;
+  --text-2: #475569;
+  --text-3: #7b8798;
 
-  /* Status colors — tuned for dark background */
-  --success: #34d399;
-  --success-glow: rgba(52, 211, 153, 0.18);
-  --warning: #fbbf24;
-  --warning-glow: rgba(251, 191, 36, 0.18);
-  --danger: #f87171;
-  --danger-glow: rgba(248, 113, 113, 0.18);
+  /* One accent. #0E7490 clears AA on white; the old #22D3EE did not. */
+  --accent: #0e7490;
+  --accent-dim: #0c5f77;
+  --accent-soft: rgba(14, 116, 144, 0.08);
+  --accent-glow: rgba(14, 116, 144, 0.1);
+  --accent-line: rgba(14, 116, 144, 0.28);
+  --on-accent: #ffffff;
 
-  --muted: #475569;
+  /* Status colors — dark enough to read on tinted light backgrounds */
+  --success: #15803d;
+  --success-glow: rgba(21, 128, 61, 0.08);
+  --warning: #b45309;
+  --warning-glow: rgba(180, 83, 9, 0.08);
+  --danger: #dc2626;
+  --danger-glow: rgba(220, 38, 38, 0.08);
+  --danger-dim: #b91c1c;
+  --on-danger: #ffffff;
 
-  /* Subtle backdrop grid — like a network topology grid */
-  --grid-line: rgba(120, 144, 168, 0.04);
+  --muted: #64748b;
 
-  /* Typography */
+  /* A barely-there grid: structure, not decoration */
+  --grid-line: rgba(15, 23, 42, 0.022);
+
   --font-sans:
-    -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "PingFang SC",
-    "Microsoft YaHei", sans-serif;
+    Inter, "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, "PingFang SC", "Microsoft YaHei", "Noto Sans SC", sans-serif;
   --font-mono:
     ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", "Roboto Mono", monospace;
 
-  /* Spacing */
   --sp-1: 4px;
   --sp-2: 8px;
   --sp-3: 12px;
@@ -77,32 +97,14 @@
   --sp-6: 32px;
   --sp-7: 48px;
 
-  /* Borders — flat, terminal-like */
-  --radius: 2px;
-  --radius-sm: 2px;
+  /* Commercial surfaces are softly rounded, not sharp terminal panels */
+  --radius: 8px;
+  --radius-sm: 6px;
   --hairline: 1px solid var(--border);
 
-  /* Shadows — minimal, replaced by borders */
-  --shadow-glow: 0 0 0 1px var(--accent-line);
-}
-@media (prefers-color-scheme: light) {
-  :root {
-    --bg: #f3f5f8;
-    --surface: #ffffff;
-    --surface-2: #f8fafc;
-    --surface-3: #eef2f6;
-    --border: #d8dee5;
-    --border-2: #c4ccd5;
-    --border-3: #aab4bf;
-    --text: #0a0e14;
-    --text-2: #4b5563;
-    --text-3: #6b7280;
-    --accent: #0891b2;
-    --accent-dim: #0e7490;
-    --accent-glow: rgba(8, 145, 178, 0.12);
-    --accent-line: rgba(8, 145, 178, 0.3);
-    --grid-line: rgba(10, 14, 20, 0.04);
-  }
+  /* Elevation replaces the dark theme's glow outlines */
+  --shadow-card: 0 1px 2px rgba(16, 24, 40, 0.04), 0 10px 28px -18px rgba(16, 24, 40, 0.28);
+  --shadow-glow: 0 0 0 3px var(--accent-glow);
 }
 
 /* ─── Shell ─────────────────────────────────────────────────────────────── */
@@ -127,24 +129,118 @@
 
 .dashboard-shell {
   display: grid;
-  grid-template-columns: 232px 1fr;
+  grid-template-columns: 252px minmax(0, 1fr);
   gap: 0;
   max-width: none;
   margin: 0;
   padding: 0;
   min-height: 100vh;
 }
+/* The admin shell adds a full-width product topbar above the page. The
+   dashboard and public shells keep the original two-column grid: only
+   layouts/admin.hbs renders .admin-workspace. */
+.admin-workspace {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
 .dashboard-main {
   min-width: 0;
   padding: var(--sp-6) var(--sp-6) var(--sp-7);
   max-width: 1400px;
+  width: 100%;
+}
+
+/* ─── Admin topbar ──────────────────────────────────────────────────────── */
+.admin-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-4);
+  min-height: 56px;
+  padding: 0 var(--sp-6);
+  background: var(--surface);
+  border-bottom: var(--hairline);
+  position: sticky;
+  top: 0;
+  z-index: 5;
+}
+.admin-topbar-context,
+.admin-topbar-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  min-width: 0;
+}
+.admin-topbar-product {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--text);
+  white-space: nowrap;
+}
+.admin-topbar-group {
+  font-size: 12px;
+  color: var(--text-2);
+  white-space: nowrap;
+}
+.admin-topbar-current {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent);
+  white-space: nowrap;
+}
+.admin-topbar-sep,
+.admin-topbar-divider {
+  color: var(--border-3);
+  flex: none;
+}
+.admin-topbar-divider {
+  width: 1px;
+  height: 18px;
+  background: var(--border);
+}
+.admin-topbar-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-family: var(--font-mono);
+  color: var(--success);
+  white-space: nowrap;
+}
+.admin-topbar-status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--success);
+  box-shadow: 0 0 0 3px var(--success-glow);
+}
+.admin-topbar-account {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 220px;
+}
+.admin-topbar-link {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent);
+  text-decoration: none;
+  white-space: nowrap;
+}
+.admin-topbar-link:hover {
+  text-decoration: underline;
 }
 
 /* ─── Sidebar ───────────────────────────────────────────────────────────── */
 .sidebar {
   background: var(--surface);
   border-right: var(--hairline);
-  padding: var(--sp-5) 0;
+  padding: var(--sp-5) 0 var(--sp-4);
   display: flex;
   flex-direction: column;
   gap: var(--sp-5);
@@ -155,26 +251,53 @@
   overflow-y: auto;
 }
 .sidebar-brand {
-  font-family: var(--font-mono);
   font-weight: 700;
   font-size: 15px;
   letter-spacing: -0.02em;
-  color: var(--accent);
+  color: var(--text);
   text-decoration: none;
   padding: 0 var(--sp-5);
   display: flex;
   align-items: center;
-  gap: var(--sp-2);
-}
-.sidebar-brand::before {
-  content: "▌";
-  color: var(--accent);
-  font-size: 18px;
-  line-height: 1;
+  gap: var(--sp-3);
 }
 .sidebar-brand:hover {
   text-decoration: none;
-  color: var(--accent);
+  color: var(--text);
+}
+.sidebar-brand-mark {
+  width: 32px;
+  height: 32px;
+  flex: none;
+  border-radius: 9px;
+  display: grid;
+  place-items: center;
+  background: var(--accent);
+  color: #ffffff;
+  box-shadow: 0 4px 12px -4px var(--accent-line);
+}
+.sidebar-brand-mark svg {
+  width: 21px;
+  height: 21px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.sidebar-brand-text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.15;
+}
+.sidebar-brand-sub {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-3);
+  margin-top: 2px;
 }
 
 .sidebar-nav {
@@ -186,39 +309,31 @@
 .sidebar-group {
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  gap: 2px;
 }
 .sidebar-group-label {
-  font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 600;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
+  letter-spacing: 0.02em;
   color: var(--text-3);
   padding: 0 var(--sp-5) var(--sp-2);
 }
-/* The admin section is split into labelled blocks (概览 / 数据管道 /
-   流量与凭证 / 用户与治理). The block label is a second, smaller tier of
-   heading under the group's own label — the group label says "管理",
-   the block label says which part of it you are looking at. */
 .sidebar-group-block {
   display: flex;
   flex-direction: column;
-  gap: 1px;
-  margin-bottom: var(--sp-3);
+  gap: 2px;
+  margin-bottom: var(--sp-2);
 }
 .sidebar-group-block:last-child {
   margin-bottom: 0;
 }
 .sidebar-block-label {
-  font-family: var(--font-mono);
   font-size: 10px;
-  font-weight: 500;
-  letter-spacing: 0.08em;
+  font-weight: 600;
+  letter-spacing: 0.06em;
   color: var(--text-3);
-  padding: var(--sp-2) var(--sp-5) var(--sp-1) calc(var(--sp-5) + 22px);
-  /* The label sits under an indented icon, so it indents to match. */
-  opacity: 0.75;
+  padding: var(--sp-3) var(--sp-5) var(--sp-1) calc(var(--sp-5) + 26px);
+  opacity: 0.9;
 }
 
 /* Icon slot — a 16px line icon drawn inline as SVG. The old design used a
@@ -231,16 +346,16 @@
   flex: none;
   fill: none;
   stroke: currentColor;
-  stroke-width: 1.4;
+  stroke-width: 1.5;
   stroke-linecap: round;
   stroke-linejoin: round;
-  opacity: 0.72;
+  opacity: 0.7;
   transition:
-    opacity 80ms ease,
-    color 80ms ease;
+    opacity 120ms ease,
+    color 120ms ease;
 }
 .sidebar-link:hover .sidebar-icon {
-  opacity: 0.95;
+  opacity: 1;
 }
 .sidebar-link.active .sidebar-icon {
   opacity: 1;
@@ -261,45 +376,25 @@
 .sidebar-link {
   display: flex;
   align-items: center;
-  gap: var(--sp-3);
-  padding: 7px var(--sp-5);
+  gap: 10px;
+  padding: 8px var(--sp-4);
+  margin: 0 var(--sp-3);
   color: var(--text-2);
   text-decoration: none;
   font-size: 13px;
   font-weight: 500;
   border: 0;
+  border-radius: var(--radius-sm);
   background: transparent;
   text-align: left;
   cursor: pointer;
-  /* `width: 100%` under the default `content-box` measures the padding OUT of
-     the 100%: a 389px column plus 24px of padding on each side made every
-     link 437px wide on a 390px viewport. In the desktop grid the extra width
-     was clipped by the sidebar; full-bleed on mobile it became horizontal
-     scroll. border-box makes 100% mean the visible width. */
   box-sizing: border-box;
-  width: 100%;
+  width: calc(100% - var(--sp-4) * 2);
   font-family: inherit;
   position: relative;
   transition:
-    color 80ms ease,
-    background 80ms ease;
-}
-/* The 6px dot that used to sit before every label is gone: the SVG icon
-   now occupies that slot, and two indicators on one row read as noise.
-   The active state is a 2px rail on the left edge instead — it is a
-   straight vertical line, so a column of ten links can be scanned in one
-   glance, which a 6px dot could not be. */
-.sidebar-link::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  top: 4px;
-  bottom: 4px;
-  width: 2px;
-  background: transparent;
-  transition:
-    background 80ms ease,
-    box-shadow 80ms ease;
+    color 120ms ease,
+    background 120ms ease;
 }
 .sidebar-link:hover {
   background: var(--surface-2);
@@ -307,24 +402,32 @@
   text-decoration: none;
 }
 .sidebar-link.active {
-  background: var(--surface-2);
+  background: var(--accent-soft);
   color: var(--accent);
+  font-weight: 600;
 }
 .sidebar-link.active::before {
+  content: "";
+  position: absolute;
+  left: calc(var(--sp-3) * -1);
+  top: 6px;
+  bottom: 6px;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
   background: var(--accent);
-  box-shadow: 0 0 8px var(--accent-glow);
+}
+.sidebar-link.active .sidebar-icon {
+  color: var(--accent);
+  opacity: 1;
 }
 
-/* CTA variant — used as a single "switch context" link, not a full menu.
-   Visually different: no active rail, accent color, mono arrow prefix. */
+/* CTA variant — used as a single "switch context" link, not a full menu. */
 .sidebar-link--cta {
   color: var(--accent);
-  font-family: var(--font-mono);
-  font-weight: 500;
+  font-weight: 600;
 }
 .sidebar-link--cta::before {
   background: transparent !important;
-  box-shadow: none !important;
 }
 .sidebar-link--cta:hover {
   background: var(--surface-2);
@@ -365,12 +468,13 @@
   background: transparent;
   color: var(--text-2);
   border: 0;
-  border-radius: 0;
   font-family: inherit;
   font-size: 13px;
   font-weight: 500;
   letter-spacing: 0;
-  padding: 7px var(--sp-5);
+  padding: 8px var(--sp-4);
+  margin: 0 var(--sp-3);
+  border-radius: var(--radius-sm);
 }
 .layout-admin button.sidebar-link:hover,
 .layout-dashboard button.sidebar-link:hover,
@@ -389,7 +493,7 @@
 .layout-admin button.btn-primary,
 .layout-dashboard button.btn-primary,
 .layout-app button.btn-primary {
-  color: #062028;
+  color: var(--on-accent);
 }
 
 .sidebar-footer {
@@ -435,6 +539,17 @@
     padding: var(--sp-5) var(--sp-4) var(--sp-6);
     min-width: 0;
   }
+  .admin-topbar {
+    padding: 0 var(--sp-4);
+  }
+  .admin-topbar-status,
+  .admin-topbar-divider,
+  .admin-topbar-account {
+    display: none;
+  }
+  .admin-topbar-group {
+    display: none;
+  }
 }
 
 /* ─── Headings & typography ─────────────────────────────────────────────── */
@@ -454,25 +569,22 @@
 .layout-admin h1,
 .layout-dashboard h1,
 .layout-app h1 {
-  font-size: 22px;
+  font-size: 24px;
   margin: 0 0 var(--sp-5);
 }
 .layout-admin h2,
 .layout-dashboard h2,
 .layout-app h2 {
-  font-size: 18px;
-  margin: var(--sp-6) 0 var(--sp-4);
+  font-size: 20px;
+  margin: 0 0 var(--sp-5);
 }
 .layout-admin h3,
 .layout-dashboard h3,
 .layout-app h3 {
   font-size: 13px;
-  font-family: var(--font-mono);
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--text-2);
+  font-weight: 700;
+  color: var(--text);
   margin: var(--sp-6) 0 var(--sp-3);
-  font-weight: 600;
 }
 .layout-admin h3:first-of-type,
 .layout-dashboard h3:first-of-type,
@@ -495,18 +607,20 @@
 .layout-app code,
 code {
   font-family: var(--font-mono);
-  font-size: 0.92em;
+  font-size: 0.9em;
   background: var(--surface-2);
   border: var(--hairline);
-  padding: 1px 6px;
+  padding: 2px 6px;
   border-radius: var(--radius-sm);
-  color: var(--accent);
+  color: var(--text);
 }
 
 /* ─── Card primitive ────────────────────────────────────────────────────── */
 .card {
   background: var(--surface);
   border: var(--hairline);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-card);
   padding: var(--sp-5);
   position: relative;
 }
@@ -514,31 +628,26 @@ code {
   margin-top: var(--sp-4);
 }
 .card-title {
-  font-family: var(--font-mono);
   font-size: 11px;
-  font-weight: 500;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--text-3);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--text-2);
   margin: 0 0 var(--sp-3);
 }
 .card-value {
   font-family: var(--font-mono);
-  font-size: 32px;
-  font-weight: 600;
+  font-size: 30px;
+  font-weight: 700;
   color: var(--text);
   margin: 0;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.03em;
   font-variant-numeric: tabular-nums;
-  line-height: 1.1;
+  line-height: 1.15;
 }
 .card-sub {
-  font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-3);
   margin: var(--sp-2) 0 0;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
 }
 .card-value--small {
   font-size: 18px;
@@ -561,13 +670,11 @@ code {
   align-items: center;
   gap: var(--sp-2);
   padding: 7px 14px;
-  font-family: var(--font-mono);
   font-size: 12px;
-  font-weight: 500;
-  letter-spacing: 0.02em;
+  font-weight: 600;
   border: var(--hairline);
-  border-radius: var(--radius);
-  background: var(--surface-2);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
   color: var(--text);
   text-decoration: none;
   cursor: pointer;
@@ -584,25 +691,68 @@ code {
 }
 .btn-primary {
   background: var(--accent);
-  color: #062028;
+  color: var(--on-accent);
   border-color: var(--accent);
   font-weight: 600;
 }
 .btn-primary:hover {
   background: var(--accent-dim);
   border-color: var(--accent-dim);
-  color: #fff;
+  color: var(--on-accent);
   text-decoration: none;
 }
 .btn-danger {
   background: var(--danger);
-  color: #1a0808;
+  color: var(--on-danger);
   border-color: var(--danger);
 }
+/* forms.css styles `button[type="submit"]` on its own; that selector is
+   more specific than `.btn-primary` / `.button`, so every form's submit
+   button would keep the old cyan terminal skin while its siblings moved
+   to the teal accent. Re-skin the submit button to the same token set
+   the class-based rules use, so the console has one accent colour. */
+.layout-admin button[type="submit"],
+.layout-dashboard button[type="submit"],
+.layout-app button[type="submit"] {
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0;
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  border: var(--hairline);
+  color: var(--text);
+  padding: 7px 14px;
+}
+.layout-admin button[type="submit"].btn-primary,
+.layout-dashboard button[type="submit"].btn-primary,
+.layout-app button[type="submit"].btn-primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--on-accent);
+}
+.layout-admin button[type="submit"].btn-primary:hover,
+.layout-dashboard button[type="submit"].btn-primary:hover,
+.layout-app button[type="submit"].btn-primary:hover {
+  background: var(--accent-dim);
+  border-color: var(--accent-dim);
+}
+.layout-admin button[type="submit"].btn-secondary:hover,
+.layout-dashboard button[type="submit"].btn-secondary:hover,
+.layout-app button[type="submit"].btn-secondary:hover {
+  background: var(--surface-3);
+  border-color: var(--border-3);
+}
+.layout-admin button[type="submit"]:disabled,
+.layout-dashboard button[type="submit"]:disabled,
+.layout-app button[type="submit"]:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
 .btn-danger:hover {
-  background: #dc2626;
-  border-color: #dc2626;
-  color: #fff;
+  background: var(--danger-dim);
+  border-color: var(--danger-dim);
+  color: var(--on-danger);
   text-decoration: none;
 }
 
@@ -612,6 +762,9 @@ code {
   border-collapse: collapse;
   font-size: 13px;
   background: var(--surface);
+  border: var(--hairline);
+  border-radius: var(--radius);
+  overflow: hidden;
 }
 
 /* Nine views render <table class="table"> straight into the page, with no
@@ -630,12 +783,10 @@ code {
   -webkit-overflow-scrolling: touch;
 }
 .table thead th {
-  font-family: var(--font-mono);
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--text-3);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--text-2);
   text-align: left;
   padding: var(--sp-3) var(--sp-4);
   border-bottom: 1px solid var(--border-2);
@@ -739,9 +890,8 @@ code {
 .layout-dashboard input[type="number"],
 .layout-dashboard select,
 .layout-dashboard textarea {
-  font-family: var(--font-mono);
   font-size: 13px;
-  background: var(--bg);
+  background: var(--surface);
   border: var(--hairline);
   border-radius: var(--radius);
   padding: 8px 10px;
@@ -762,11 +912,8 @@ code {
 .layout-admin label,
 .layout-dashboard label {
   display: block;
-  font-family: var(--font-mono);
-  font-size: 11px;
-  font-weight: 500;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  font-size: 12px;
+  font-weight: 600;
   color: var(--text-2);
   margin: 0 0 var(--sp-2);
 }
@@ -777,11 +924,10 @@ code {
   align-items: center;
   gap: 6px;
   padding: 2px 8px;
-  font-family: var(--font-mono);
-  font-size: 10px;
+  font-family: var(--font-sans);
+  font-size: 12px;
   font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  letter-spacing: 0.01em;
   border: 1px solid;
   border-radius: 999px;
   background: transparent;
@@ -793,7 +939,6 @@ code {
   height: 6px;
   border-radius: 50%;
   background: currentColor;
-  box-shadow: 0 0 6px currentColor;
 }
 .pill-success {
   color: var(--success);
@@ -829,6 +974,7 @@ code {
   padding: var(--sp-3) var(--sp-4);
   background: var(--surface);
   border: var(--hairline);
+  border-radius: var(--radius);
   flex-wrap: wrap;
 }
 .filter-select {
@@ -843,10 +989,10 @@ code {
 
 /* ─── Flash ─────────────────────────────────────────────────────────────── */
 .flash {
-  font-family: var(--font-mono);
   font-size: 13px;
   padding: var(--sp-3) var(--sp-4);
   border: var(--hairline);
+  border-radius: var(--radius-sm);
   margin-bottom: var(--sp-4);
   border-left-width: 3px;
 }
@@ -886,7 +1032,7 @@ code {
 }
 .pagination .current {
   background: var(--accent);
-  color: #062028;
+  color: var(--on-accent);
   border-color: var(--accent);
 }
 
@@ -898,11 +1044,9 @@ dl.settings-dl {
   margin: 0;
 }
 dl.settings-dl dt {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  font-weight: 500;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
   color: var(--text-2);
 }
 dl.settings-dl dd {
@@ -1003,16 +1147,15 @@ dl.settings-dl dd {
 }
 .dash-welcome h2 {
   margin: 0 0 var(--sp-2);
-  font-size: 24px;
-  font-weight: 600;
-  letter-spacing: -0.02em;
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -0.025em;
   color: var(--text);
 }
 .dash-welcome-sub {
   margin: 0;
   color: var(--text-2);
-  font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: 13px;
 }
 .dash-welcome-actions {
   display: flex;
@@ -1021,12 +1164,10 @@ dl.settings-dl dd {
 }
 
 .dash-section-title {
-  font-family: var(--font-mono);
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--text-3);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  color: var(--text);
   margin: var(--sp-5) 0 var(--sp-3);
   display: flex;
   align-items: center;
@@ -1038,7 +1179,7 @@ dl.settings-dl dd {
   height: 6px;
   background: var(--accent);
   border-radius: 50%;
-  box-shadow: 0 0 6px var(--accent);
+  flex: none;
 }
 .dash-section-title:first-of-type {
   margin-top: var(--sp-3);
@@ -1374,12 +1515,10 @@ dl.settings-dl dd {
   border-left: 3px solid var(--accent);
 }
 .endpoint-card-title {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--text-2);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  color: var(--text);
   margin: 0 0 var(--sp-2);
 }
 .endpoint-card-sub {
@@ -1477,28 +1616,42 @@ dl.settings-dl dd {
 .metric-strip-item {
   background: var(--surface);
   border: var(--hairline);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-card);
   padding: var(--sp-3) var(--sp-4);
   display: flex;
   flex-direction: column;
   gap: 4px;
   min-height: 60px;
+  min-width: 0;
 }
 .metric-strip-label {
-  font-family: var(--font-mono);
-  font-size: 10px;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
   color: var(--text-3);
 }
 .metric-strip-value {
-  font-family: var(--font-mono);
   font-size: 18px;
   font-weight: 600;
   color: var(--text);
   font-variant-numeric: tabular-nums;
+  /* A card may hold a pill plus a relative timestamp; both must wrap
+   * inside the card instead of pushing the grid wider. */
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+  min-width: 0;
 }
 .metric-strip-value .pill {
-  font-size: 9px;
+  font-size: 11px;
+  white-space: nowrap;
+}
+.metric-strip-value .form-field-hint {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  white-space: nowrap;
 }
 
 /* Tabs */
@@ -1510,14 +1663,13 @@ dl.settings-dl dd {
   margin: var(--sp-5) 0 var(--sp-4);
 }
 .settings-tab-link {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: var(--text-2);
   display: inline-flex;
   align-items: center;
   padding: 10px 16px;
-  font-family: var(--font-mono);
-  font-size: 11px;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--text-3);
   text-decoration: none;
   border-bottom: 2px solid transparent;
   margin-bottom: -1px;
@@ -1556,11 +1708,10 @@ dl.settings-dl dd {
   border-bottom: none;
 }
 .settings-tab-pane .form-field-label {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--text-2);
+font-size: 12px;
+font-weight: 600;
+letter-spacing: 0.01em;
+color: var(--text-2);
 }
 .settings-tab-pane .form-field-input {
   display: flex;
@@ -1763,12 +1914,11 @@ dl.settings-dl dd {
   border-bottom: var(--hairline);
 }
 .runner-card-head h3 {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  color: var(--text);
   margin: 0;
-  font-family: var(--font-mono);
-  font-size: 11px;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--text-2);
 }
 .runner-card-body {
   display: grid;
@@ -1790,11 +1940,10 @@ dl.settings-dl dd {
   line-height: 1.2;
 }
 .runner-stat-label {
-  font-family: var(--font-mono);
-  font-size: 10px;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--text-3);
+font-size: 11px;
+font-weight: 600;
+letter-spacing: 0.01em;
+color: var(--text-3);
 }
 .runner-card-actions,
 .runner-card-queue {
@@ -1810,10 +1959,9 @@ dl.settings-dl dd {
   padding-bottom: var(--sp-3);
 }
 .runner-card-queue-label {
-  font-family: var(--font-mono);
-  font-size: 10px;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
   color: var(--text-3);
   margin-right: var(--sp-2);
 }
@@ -1916,11 +2064,10 @@ dl.settings-dl dd {
   border: var(--hairline);
 }
 .provider-health-stat-label {
-  font-family: var(--font-mono);
-  font-size: 10px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--text-3);
+font-size: 11px;
+font-weight: 600;
+letter-spacing: 0.01em;
+color: var(--text-3);
 }
 .provider-health-stat-value {
   font-family: var(--font-mono);
@@ -1995,12 +2142,11 @@ dl.settings-dl dd {
   margin-top: var(--sp-4);
 }
 .circuit-breaker-card h3 {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  color: var(--text);
   margin: 0 0 var(--sp-2);
-  font-family: var(--font-mono);
-  font-size: 11px;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--text-2);
 }
 .circuit-breaker-help {
   font-size: 12px;
@@ -2023,11 +2169,10 @@ dl.settings-dl dd {
   gap: 4px;
 }
 .circuit-breaker-row label span {
-  font-family: var(--font-mono);
-  font-size: 10px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--text-3);
+font-size: 11px;
+font-weight: 600;
+letter-spacing: 0.01em;
+color: var(--text-3);
 }
 
 /* ─── Scheduler card (continuous random-IP ingest) ──────────────────── */
@@ -2050,12 +2195,11 @@ dl.settings-dl dd {
   border-bottom: var(--hairline);
 }
 .scheduler-card-head h3 {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  color: var(--text);
   margin: 0 0 var(--sp-1);
-  font-family: var(--font-mono);
-  font-size: 11px;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--text-2);
 }
 .scheduler-card-sub {
   margin: 0;
@@ -2109,11 +2253,10 @@ dl.settings-dl dd {
   gap: 4px;
 }
 .scheduler-card-grid label span {
-  font-family: var(--font-mono);
-  font-size: 10px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--text-3);
+font-size: 11px;
+font-weight: 600;
+letter-spacing: 0.01em;
+color: var(--text-3);
 }
 .scheduler-card-grid select,
 .scheduler-card-grid input[type="number"] {
@@ -2165,11 +2308,10 @@ dl.settings-dl dd {
   gap: 2px;
 }
 .scheduler-stat-label {
-  font-family: var(--font-mono);
-  font-size: 10px;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--text-3);
+font-size: 11px;
+font-weight: 600;
+letter-spacing: 0.01em;
+color: var(--text-3);
 }
 .scheduler-stat-value {
   font-family: var(--font-mono);
@@ -2192,12 +2334,11 @@ dl.settings-dl dd {
    verdict: green = ok+country, amber = throttled, red = error/timeout,
    muted = empty/no country. */
 .probe-log-heading {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  color: var(--text);
   margin: var(--sp-5) 0 var(--sp-2);
-  font-family: var(--font-mono);
-  font-size: 11px;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--text-2);
 }
 .probe-log-help {
   margin: 0 0 var(--sp-3);
@@ -2220,11 +2361,10 @@ dl.settings-dl dd {
   gap: 4px;
 }
 .probe-log-filters label span {
-  font-family: var(--font-mono);
-  font-size: 10px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--text-3);
+font-size: 11px;
+font-weight: 600;
+letter-spacing: 0.01em;
+color: var(--text-3);
 }
 .probe-log-filters select {
   background: var(--bg);
@@ -2241,15 +2381,14 @@ dl.settings-dl dd {
   border: var(--hairline);
 }
 .probe-log-table thead th {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: var(--text-2);
   text-align: left;
   padding: var(--sp-2) var(--sp-3);
   background: var(--surface-2);
   border-bottom: var(--hairline);
-  font-family: var(--font-mono);
-  font-size: 10px;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--text-3);
 }
 .probe-log-table tbody td {
   padding: var(--sp-2) var(--sp-3);
@@ -2297,12 +2436,11 @@ dl.settings-dl dd {
   margin-top: var(--sp-1);
 }
 .probe-log-detail summary {
-  font-family: var(--font-mono);
-  font-size: 10px;
-  color: var(--text-3);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: var(--text-2);
   cursor: pointer;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
 }
 .probe-log-detail summary:hover {
   color: var(--accent);
@@ -2323,11 +2461,11 @@ dl.settings-dl dd {
   text-align: left;
 }
 .probe-detail-table th {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: var(--text-2);
   background: var(--surface-3);
-  color: var(--text-3);
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  font-size: 10px;
 }
 .probe-detail-batch {
   margin: var(--sp-2) 0 0;
@@ -2363,10 +2501,9 @@ dl.settings-dl dd {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  font-family: var(--font-mono);
-  font-size: 10px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
   color: var(--text-3);
 }
 .failure-logs-filters select {
@@ -2409,9 +2546,9 @@ dl.settings-dl dd {
   border-color: rgba(245, 158, 11, 0.35);
 }
 .admin-tag--ok {
-  background: rgba(34, 197, 94, 0.12);
-  color: #22c55e;
-  border-color: rgba(34, 197, 94, 0.35);
+  background: rgba(21, 128, 61, 0.08);
+  color: var(--success);
+  border-color: rgba(21, 128, 61, 0.25);
 }
 .admin-tag--muted {
   background: var(--surface-2);
@@ -2492,10 +2629,10 @@ dl.settings-dl dd {
   padding: var(--sp-3) var(--sp-4);
 }
 .etl-stage-card-title {
-  font: 11px var(--font-mono);
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--text-2);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  color: var(--text);
   margin-bottom: 6px;
 }
 .etl-stage-card-value {
@@ -2524,10 +2661,10 @@ dl.settings-dl dd {
   white-space: pre-wrap;
 }
 .etl-live-pulse {
-  font: 11px var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
   color: var(--accent);
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
 }
 /* Live progress bars — server-rendered initial state, JS keeps them
    moving on every /progress JSON poll. Bar fill uses a CSS custom
@@ -2565,18 +2702,18 @@ dl.settings-dl dd {
   white-space: nowrap;
 }
 .etl-progress-stage {
-  margin-top: 12px;
-  font: 11px var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
   color: var(--text-3);
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
+  margin-top: 12px;
 }
 .etl-progress-stage[data-stage="insert"],
 .etl-progress-stage[data-stage="swap"] {
   color: var(--accent);
 }
 .etl-progress-stage[data-stage="done"] {
-  color: var(--success, #2a8a4a);
+  color: var(--success);
 }
 .etl-skip-details {
   font: 11px var(--font-mono);
@@ -2605,9 +2742,9 @@ dl.settings-dl dd {
   gap: 2px;
 }
 .provider-health-window-label {
-  font: 10px var(--font-mono);
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
   color: var(--text-3);
 }
 .provider-health-window-value {

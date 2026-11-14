@@ -75,7 +75,14 @@ describe("ipq init", () => {
       [TSX_BIN, CLI_SRC, "init", "--email", "admin@x.com", "--password", "longpassword1", "--seed"],
       { env: makeEnv() },
     );
-    expect(stdout).toMatch(/initialized admin=admin@x\.com \(id=\d+\), seed=yes, marked_initialized=yes/);
+    // The CLI reports how many demo rows the seed loader actually added,
+    // not a bare yes/no: the loader skips when the table already holds
+    // non-demo rows, so the count is the honest signal. Assert the shape
+    // of the contract ("N added") rather than the row count — the count
+    // itself is asserted separately against the table below.
+    expect(stdout).toMatch(
+      /initialized admin=admin@x\.com \(id=\d+\), seed=\d+ added, marked_initialized=yes/,
+    );
 
     expect(await isInitialized(pool)).toBe(true);
 

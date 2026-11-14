@@ -51,10 +51,10 @@
       "customProviders": "自定义 Provider",
       "providers": "数据源",
       "groups": {
-        "overview": "概览",
+        "monitor": "监控与流量",
         "data": "数据管道",
-        "traffic": "流量与凭证",
-        "governance": "用户与治理"
+        "access": "访问与身份",
+        "system": "系统与治理"
       }
     },
     "logout": "登出",
@@ -200,6 +200,11 @@
   },
   "admin": {
     "title": "管理后台",
+    "product": "IPQuery 控制台",
+    "topbar": {
+      "operational": "服务运行中",
+      "viewSite": "查看站点"
+    },
     "users": {
       "title": "用户管理",
       "search": "按邮箱搜索",

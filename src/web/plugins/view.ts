@@ -5,7 +5,9 @@ import * as Handlebars from "handlebars";
 import * as path from "node:path";
 import * as fs from "node:fs";
 import { formatDistanceToNow } from "date-fns";
-import { zhCN } from "date-fns/locale";
+import { zhCN, enUS } from "date-fns/locale";
+import { ADMIN_NAV_GROUPS, findAdminNav, isAdminNavActive } from "../admin/nav";
+import type { AdminNavItem } from "../admin/nav";
 
 type ReplyView = (
   page: string,
@@ -30,16 +32,21 @@ function promoteLayout(
   return raw(page, cleanData, mergedOpts);
 }
 
-/** Inject `path` (request URL pathname, no query string) into template
- *  context. The sidebar partial uses this to know whether it's rendering
- *  inside an admin page or a personal page, so it can collapse the other
- *  section to a CTA. */
+/** Inject `path` (request URL pathname, no query string) and the resolved
+ *  admin navigation location into template context.
+ *
+ *  The sidebar partial uses `path` to know whether it's rendering inside an
+ *  admin page or a personal page, so it can collapse the other section to a
+ *  CTA. `adminNav` is the same navigation data used by the breadcrumb: one
+ *  source of truth for both, so a link can never be in two groups at once. */
 function injectPath(reply: FastifyReply, data: Record<string, unknown> | undefined): void {
   const url = reply.request.url;
   const qIdx = url.indexOf("?");
   const path = qIdx >= 0 ? url.slice(0, qIdx) : url;
   if (data) {
     data.path = path;
+    data.adminNavGroups = ADMIN_NAV_GROUPS;
+    data.adminNavLocation = findAdminNav(path);
     if (data.req && typeof data.req === "object") {
       (data.req as Record<string, unknown>).path = path;
     }
@@ -49,22 +56,64 @@ function injectPath(reply: FastifyReply, data: Record<string, unknown> | undefin
 export async function registerView(app: FastifyInstance, cfg: { baseUrl: string }): Promise<void> {
   const viewsDir = path.join(__dirname, "..", "views");
 
-  Handlebars.registerHelper("t", function (this: unknown, key: string, opts: unknown) {
+  /** Translate a key. The locale lives on the request (`req.locale`, derived
+   *  from the `lang` cookie by the i18n plugin), so the request is the
+   *  only reliable source of the reader's language. Templates call
+   *  `{{req.t 'key'}}`; this helper accepts the request as an argument for
+   *  the cases where a dynamic key has to be resolved. */
+  Handlebars.registerHelper("t", function (this: unknown, req: unknown, key: unknown, opts: unknown) {
     const hash = (opts as { hash?: Record<string, string | number> } | undefined)?.hash ?? {};
-    const locale = (this as { locale?: string })?.locale ?? "zh-CN";
+    const resolvedKey = typeof key === "string" ? key : "";
+    if (!resolvedKey) return "";
+    const translator = (req as { t?: (k: string, v?: Record<string, string | number>) => string } | undefined)
+      ?.t;
+    if (typeof translator === "function") return translator.call(req, resolvedKey, hash);
+    const locale = (req as { locale?: string } | undefined)?.locale ?? "zh-CN";
     const tFn = (
       globalThis as { __ipqT?: (l: string, k: string, v?: Record<string, string | number>) => string }
     ).__ipqT;
-    return tFn ? tFn(locale, key, hash) : key;
+    return tFn ? tFn(locale, resolvedKey, hash) : resolvedKey;
   });
 
   Handlebars.registerHelper("eq", (a: unknown, b: unknown) => a === b);
   Handlebars.registerHelper("ne", (a: unknown, b: unknown) => a !== b);
-  Handlebars.registerHelper(
-    "startsWith",
-    (str: unknown, prefix: unknown) =>
-      typeof str === "string" && typeof prefix === "string" && str.startsWith(prefix),
+  Handlebars.registerHelper("startsWith", (str: unknown, prefix: unknown) =>
+    typeof str === "string" && typeof prefix === "string" && str.startsWith(prefix),
   );
+  /** Active state is resolved by the same path rules as the breadcrumb:
+   *  exact for /admin and /admin/audit, prefix with a slash boundary for
+   *  every section that owns detail pages. `item` is a nav model object, so
+   *  the template cannot accidentally pass a stale href or match mode. */
+  Handlebars.registerHelper("isAdminNavActive", (item: unknown, path: unknown) => {
+    const navItem = item as AdminNavItem | undefined;
+    if (!navItem) return false;
+    return isAdminNavActive(
+      typeof path === "string" ? path : "",
+      navItem.matchPath ?? navItem.href,
+      navItem.match,
+    );
+  });
+  /** Resolve a label key from the admin nav model.
+   *
+   *  Handlebars cannot call a context method (`req.t`) with a dynamic path
+   *  argument, so the template hands the request object to this helper and
+   *  the helper calls `req.t` itself. Going through `req.t` — rather than
+   *  re-deriving the locale from `globalThis.__ipqT` — is what keeps the
+   *  nav in the reader's language: `req.t` closes over `req.locale`, which
+   *  the i18n plugin derived from the `lang` cookie. */
+  Handlebars.registerHelper("adminNavLabel", function (this: unknown, req: unknown, key: unknown) {
+    const resolvedKey = typeof key === "string" ? key : "";
+    if (!resolvedKey) return "";
+    const translator = (req as { t?: (k: string) => string } | undefined)?.t;
+    if (typeof translator === "function") return translator.call(req, resolvedKey);
+    // Fall back to the request's own locale when `t` is not attached, which
+    // only happens in unit-rendered templates.
+    const locale = (req as { locale?: string } | undefined)?.locale ?? "zh-CN";
+    const tFn = (
+      globalThis as { __ipqT?: (l: string, k: string, v?: Record<string, string | number>) => string }
+    ).__ipqT;
+    return tFn ? tFn(locale, resolvedKey) : resolvedKey;
+  });
   Handlebars.registerHelper("not", (v: unknown) => !v);
   Handlebars.registerHelper("and", (a: unknown, b: unknown) => Boolean(a) && Boolean(b));
   Handlebars.registerHelper("or", (a: unknown, b: unknown) => Boolean(a) || Boolean(b));
@@ -119,11 +168,19 @@ export async function registerView(app: FastifyInstance, cfg: { baseUrl: string 
     const date = typeof d === "string" ? new Date(d) : d;
     return date.toISOString().replace("T", " ").slice(0, 19);
   });
-  Handlebars.registerHelper("formatRelative", (d: Date | string | null | undefined) => {
-    if (!d) return "";
-    const date = typeof d === "string" ? new Date(d) : d;
-    return formatDistanceToNow(date, { addSuffix: true, locale: zhCN });
-  });
+  /** Format a timestamp as "3 minutes ago". The relative wording follows the
+   *  reader's language, so the request is passed in for its locale — the
+   *  same reason `adminNavLabel` goes through `req.t`. */
+  Handlebars.registerHelper(
+    "formatRelative",
+    (req: unknown, d: Date | string | null | undefined) => {
+      if (!d) return "";
+      const date = typeof d === "string" ? new Date(d) : d;
+      const locale = (req as { locale?: string } | undefined)?.locale;
+      const localeOption = locale === "en-US" ? enUS : zhCN;
+      return formatDistanceToNow(date, { addSuffix: true, locale: localeOption });
+    },
+  );
   Handlebars.registerHelper("year", () => new Date().getFullYear());
   Handlebars.registerHelper("ternary", (cond: unknown, a: unknown, b: unknown) => (cond ? a : b));
   Handlebars.registerHelper("percent", (n: unknown, digits?: unknown) => {

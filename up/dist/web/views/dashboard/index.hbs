@@ -35,7 +35,7 @@
       {{else}}
         <span class="ip-status ip-status--invalid">● {{req.t "dashboard.lastQuery.invalid"}}</span>
       {{/if}}
-      <span>{{req.t "dashboard.lastQuery.at"}}: {{formatRelative lastQuery.ts}}</span>
+      <span>{{req.t "dashboard.lastQuery.at"}}: {{formatRelative req lastQuery.ts}}</span>
     </p>
   {{else}}
     <p class="ip-hero ip-hero--empty">— — — —</p>
