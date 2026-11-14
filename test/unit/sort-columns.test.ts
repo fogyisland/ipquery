@@ -9,7 +9,7 @@
 // grew back to every row. The links must now carry the rest of the
 // query with them.
 import { describe, it, expect } from "vitest";
-import { buildSortColumns } from "../../src/web/admin/sortColumns";
+import { buildSortColumns, buildQueryString } from "../../src/web/admin/sortColumns";
 
 /** Pull the query string out of a generated href. */
 function queryOf(href: string): URLSearchParams {
@@ -85,5 +85,35 @@ describe("buildSortColumns", () => {
     const cols = buildSortColumns(["id"], null, { search: "a&b=c" });
     const q = queryOf(cols[0]!.href);
     expect(q.get("search")).toBe("a&b=c");
+  });
+});
+
+describe("buildQueryString", () => {
+  it("carries the filters into an export link", () => {
+    // The bug: the export link was a bare "/admin/users.csv", so a
+    // filtered table exported every row.
+    const qs = buildQueryString({ role: "admin", verified: "1" });
+    expect(qs).toBe("role=admin&verified=1");
+  });
+
+  it("drops the page for an export", () => {
+    // The export covers the whole filtered set; a page number in it
+    // would be meaningless at best and would export one page at worst.
+    const qs = buildQueryString({ role: "admin", page: 2 }, ["page"]);
+    expect(qs).toBe("role=admin");
+  });
+
+  it("drops empty and undefined values rather than emitting name=", () => {
+    const qs = buildQueryString({ role: "", disabled: undefined, verified: "0" });
+    expect(qs).toBe("verified=0");
+  });
+
+  it("returns an empty string when nothing survives", () => {
+    expect(buildQueryString({}, ["page"])).toBe("");
+  });
+
+  it("percent-encodes values that need it", () => {
+    const qs = buildQueryString({ search: "a b&c" });
+    expect(qs).toBe("search=a+b%26c");
   });
 });

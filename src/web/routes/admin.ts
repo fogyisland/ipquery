@@ -50,7 +50,7 @@ import { listAllApiKeys, revokeApiKey, revokeApiKeysBulk } from "../../storage/a
 import { listQueryLogs, streamQueryLogsCsv } from "../../storage/queryLog";
 import { listAuditLog } from "../../storage/auditLog";
 import { getOverview } from "../admin/overview";
-import { buildSortColumns } from "../admin/sortColumns";
+import { buildSortColumns, buildQueryString } from "../admin/sortColumns";
 import { getQueryStats } from "../admin/queries";
 import { parseListQuery } from "../admin/queryString";
 import { csvForRows, withBom } from "../admin/csv";
@@ -280,12 +280,28 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
     );
     const total = Number((totalRows[0] as { c: number }).c);
 
+    // The table shows one page of `q.limit` rows but the view had no
+    // pagination control at all, so every row past the first page was
+    // unreachable — the admin saw a silently truncated list and no
+    // indication that more existed. The query string carries the
+    // filters across a page change; without it, "next" would reset the
+    // table to the unfiltered set.
+    const queryString = buildQueryString({ ...q.filters, sort: q.sort?.col ? `${q.sort.dir === "desc" ? "-" : ""}${q.sort.col}` : undefined });
+    // The export always covers the whole filtered set, so `page` is
+    // dropped — exporting page 2 of 5 and calling it "the export" would
+    // be worse than not exporting at all.
+    const csvUrl = `/admin/users.csv?${buildQueryString({ ...q.filters, sort: q.sort?.col ? `${q.sort.dir === "desc" ? "-" : ""}${q.sort.col}` : undefined }, ["page"])}`;
+
     return reply.view("admin/users-list.hbs", {
       layout: "layouts/admin",
       title: req.t("admin.users.title"),
       users: rows,
       page: q.page,
+      limit: q.limit,
+      total,
       totalPages: Math.max(1, Math.ceil(total / q.limit)),
+      queryString,
+      csvUrl,
       filters: q.filters,
       sort: q.sort,
       // The header links carry the current filters along, so clicking a
@@ -826,6 +842,9 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
     if (q.filters.userId) queryParts.push(`userId=${encodeURIComponent(q.filters.userId)}`);
     if (q.sort) queryParts.push(`sort=${q.sort.dir === "desc" ? "-" : ""}${q.sort.col}`);
     const queryString = queryParts.join("&");
+    // Same reasoning as /admin/audit-log: export the filtered set, not
+    // the current page.
+    const csvUrl = `/admin/keys.csv?${queryString}`;
     return reply.view("admin/keys.hbs", {
       layout: "layouts/admin",
       title: req.t("admin.keys.title"),
@@ -834,6 +853,7 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
       totalPages,
       userId: q.filters.userId ?? "",
       queryString,
+      csvUrl,
       filters: q.filters,
       sort: q.sort,
       sortColumns: buildSortColumns(
@@ -1019,6 +1039,10 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
     if (q.filters.until) queryParts.push(`until=${encodeURIComponent(q.filters.until)}`);
     if (q.sort) queryParts.push(`sort=${q.sort.dir === "desc" ? "-" : ""}${q.sort.col}`);
     const queryString = queryParts.join("&");
+    // The export covers every matching row, not the current page, so
+    // `page` is not part of it — but the filters must be, or the button
+    // on a filtered table downloads the unfiltered log.
+    const csvUrl = `/admin/audit-log.csv?${queryString}`;
     return reply.view("admin/audit-log.hbs", {
       layout: "layouts/admin",
       title: req.t("admin.auditLog.title"),
@@ -1026,6 +1050,7 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
       page: q.page,
       totalPages,
       queryString,
+      csvUrl,
       filters: q.filters,
       sort: q.sort,
       sortColumns: buildSortColumns(["id", "created_at"], q.sort, {

@@ -145,6 +145,53 @@ describe("demo data is opt-in", () => {
     await pool.query("DELETE FROM ip_ranges WHERE country_source = 'seed'");
     expect(await countBySource("seed")).toBe(0);
   });
+
+  // The demo rows are only for an EMPTY database. INSERT IGNORE makes a
+  // re-run idempotent for the demo rows themselves, but it does nothing
+  // about a table that already holds real address data: the demo ranges
+  // do not collide with the ETL's on uniq_start_end, so all 50 would be
+  // inserted alongside them. A lookup for 8.8.8.8 would then answer from
+  // the demo row ("Mountain View") instead of from the real library —
+  // populated, and wrong.
+  it("loadDemoSeed skips a table that already holds real rows", async () => {
+    await pool.query("DELETE FROM ip_ranges");
+    // A real-looking row that does NOT overlap any demo range.
+    const real = Buffer.concat([Buffer.from([11, 0, 0, 0]), Buffer.alloc(12)]);
+    const realEnd = Buffer.concat([Buffer.from([11, 255, 255, 255]), Buffer.alloc(12)]);
+    await pool.query(
+      `INSERT INTO ip_ranges (start_ip, end_ip, range_size, country_code, country_source)
+       VALUES (?, ?, 16777216, 'GB', 'dbip-city')`,
+      [real, realEnd],
+    );
+
+    const result = await loadDemoSeed(pool);
+
+    expect(result.skipped).toBe(true);
+    expect(result.added).toBe(0);
+    expect(result.skipReason).toContain("non-demo");
+    expect(await countBySource("seed")).toBe(0);
+    // The real row is untouched.
+    expect(await countBySource("dbip-city")).toBe(1);
+  });
+
+  it("loadDemoSeed still loads into an empty table", async () => {
+    await pool.query("DELETE FROM ip_ranges");
+    const result = await loadDemoSeed(pool);
+    expect(result.skipped).toBeFalsy();
+    expect(result.added).toBe(50);
+    expect(await countBySource("seed")).toBe(50);
+  });
+
+  it("loadDemoSeed stays idempotent once the demo rows are in", async () => {
+    await pool.query("DELETE FROM ip_ranges");
+    await loadDemoSeed(pool);
+    const second = await loadDemoSeed(pool);
+    // The demo rows are not "real" rows, so the guard does not fire — the
+    // INSERT IGNORE path handles it, and nothing is added.
+    expect(second.skipped).toBeFalsy();
+    expect(second.added).toBe(0);
+    expect(await countBySource("seed")).toBe(50);
+  });
 });
 
 describe("ETL preserves hand-authored rows", () => {

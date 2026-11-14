@@ -7,7 +7,6 @@
   <dt>{{req.t "admin.users.col.created"}}</dt><dd>{{formatDate user.createdAt}}</dd>
   <dt>{{req.t "admin.users.col.lastLogin"}}</dt><dd>{{formatRelative user.lastLoginAt}}</dd>
 </dl>
-{{#if flash.success}}<div class="flash flash-success">{{flash.success}}</div>{{/if}}
 
 {{#if tempPassword}}
   <div class="flash flash-warning" id="temp-password-banner">
@@ -17,20 +16,42 @@
   </div>
 {{/if}}
 
-<form method="POST" action="/admin/users/{{user.id}}/enable" class="inline-form">
-  <input type="hidden" name="csrf" value="{{req.csrfToken}}" />
-  <button type="submit">{{req.t "admin.users.action.enable"}}</button>
-</form>
-<form method="POST" action="/admin/users/{{user.id}}/disable" class="inline-form">
-  <input type="hidden" name="csrf" value="{{req.csrfToken}}" />
-  <button type="submit">{{req.t "admin.users.action.disable"}}</button>
-</form>
-<form method="POST" action="/admin/users/{{user.id}}/verify-email" class="inline-form">
-  <input type="hidden" name="csrf" value="{{req.csrfToken}}" />
-  <button type="submit">{{req.t "admin.users.action.verify"}}</button>
-</form>
-<form method="POST" action="/admin/users/{{user.id}}/reset-password" class="inline-form">
-  <input type="hidden" name="csrf" value="{{req.csrfToken}}" />
-  <button type="submit">{{req.t "admin.users.action.resetPassword"}}</button>
-</form>
-<a href="/admin/users/{{user.id}}/delete/confirm" class="inline-form">{{req.t "admin.users.action.delete"}}</a>
+{{!-- Only the action that applies is offered. Showing "启用" to an
+     already-enabled user and "停用" to a disabled one presents one
+     control that is guaranteed to do nothing, which reads as a broken
+     button rather than an unavailable one. --}}
+<div class="detail-actions">
+  {{#if user.isDisabled}}
+    <form method="POST" action="/admin/users/{{user.id}}/enable" class="inline-form">
+      <input type="hidden" name="csrf" value="{{req.csrfToken}}" />
+      <button type="submit" class="button">{{req.t "admin.users.action.enable"}}</button>
+    </form>
+  {{else}}
+    <form method="POST" action="/admin/users/{{user.id}}/disable" class="inline-form"
+          data-confirm="{{req.t 'admin.users.action.confirmDisable'}}">
+      <input type="hidden" name="csrf" value="{{req.csrfToken}}" />
+      <button type="submit" class="button button-secondary">{{req.t "admin.users.action.disable"}}</button>
+    </form>
+  {{/if}}
+
+  {{#unless user.emailVerified}}
+    <form method="POST" action="/admin/users/{{user.id}}/verify-email" class="inline-form">
+      <input type="hidden" name="csrf" value="{{req.csrfToken}}" />
+      <button type="submit" class="button button-secondary">{{req.t "admin.users.action.verify"}}</button>
+    </form>
+  {{/unless}}
+
+  {{!-- Resetting a password logs the user out and replaces a credential
+       they may be using right now. It used to fire on the first click
+       with no warning at all. --}}
+  <form method="POST" action="/admin/users/{{user.id}}/reset-password" class="inline-form"
+        data-confirm="{{req.t 'admin.users.action.confirmResetPassword'}}">
+    <input type="hidden" name="csrf" value="{{req.csrfToken}}" />
+    <button type="submit" class="button button-secondary">{{req.t "admin.users.action.resetPassword"}}</button>
+  </form>
+
+  {{!-- A destructive action is not a navigation. It is styled as a
+       danger button so it does not sit in the same visual register as
+       "标记已验证", and the confirm page asks before anything happens. --}}
+  <a href="/admin/users/{{user.id}}/delete/confirm" class="button btn-danger">{{req.t "admin.users.action.delete"}}</a>
+</div>

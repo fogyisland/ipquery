@@ -1,8 +1,16 @@
 {{!-- SPDX-License-Identifier: MIT --}}
+{{!-- Query volume console. The metric strip answers "how much traffic is
+     there and how healthy is it" at a glance; the split bar shows the
+     hit / miss / invalid mix, which is the part an operator actually
+     watches — a rising miss count means the address database has stale
+     gaps, a rising invalid count means callers are sending garbage. --}}
 <section hx-get="/admin/queries" hx-trigger="every 30s" hx-swap="outerHTML" hx-select="section">
 <h2>{{req.t 'admin.queries.title'}}</h2>
 
-<form method="GET" action="/admin/queries" class="filter-bar">
+{{!-- hx-preserve: the section is re-fetched every 30s with
+     hx-swap="outerHTML". Without this, a date the operator is in the
+     middle of picking is discarded by the refresh. --}}
+<form method="GET" action="/admin/queries" class="filter-bar" hx-preserve="true">
   <label class="filter-label">{{req.t 'admin.queries.since'}}
     <input type="date" name="since" class="filter-select" value="{{filters.since}}">
   </label>
@@ -10,8 +18,24 @@
     <input type="date" name="until" class="filter-select" value="{{filters.until}}">
   </label>
   <button type="submit" class="button">{{req.t 'common.filter'}}</button>
-  <a class="button button-secondary" href="/admin/queries.csv?{{#if filters.since}}since={{filters.since}}&{{/if}}{{#if filters.until}}until={{filters.until}}{{/if}}">{{req.t 'common.exportCsv'}}</a>
+  <a class="button button-secondary" href="/admin/queries.csv?{{#if filters.since}}since={{filters.since}}{{#if filters.until}}&{{/if}}{{/if}}{{#if filters.until}}until={{filters.until}}{{/if}}">{{req.t 'common.exportCsv'}}</a>
 </form>
+
+<h3 class="dash-section-title">{{req.t 'admin.queries.total'}}</h3>
+<div class="dashboard-grid dashboard-grid--three">
+  <div class="card stat-card stat-card--hit">
+    <p class="card-title">{{@root.req.t 'admin.queries.hit'}}</p>
+    <p class="card-value">{{stats.byStatus.hit}}</p>
+  </div>
+  <div class="card stat-card stat-card--miss">
+    <p class="card-title">{{@root.req.t 'admin.queries.miss'}}</p>
+    <p class="card-value">{{stats.byStatus.miss}}</p>
+  </div>
+  <div class="card stat-card stat-card--invalid">
+    <p class="card-title">{{@root.req.t 'admin.queries.invalid'}}</p>
+    <p class="card-value">{{stats.byStatus.invalid}}</p>
+  </div>
+</div>
 
 <div class="dashboard-grid">
   <div class="card">
@@ -19,6 +43,20 @@
     <p class="card-value">{{stats.total}}</p>
     <p class="card-sub">{{@root.req.t 'admin.queries.hitRate'}} {{percent hitRate 0}}</p>
     {{> sparkline data=stats.hourly max=(max stats.hourly 1) }}
+  </div>
+
+  <div class="card">
+    <h3 class="card-title">{{@root.req.t 'admin.queries.split'}}</h3>
+    {{!-- Triple braces: the helper returns markup, and a two-brace
+         expression would escape it into visible HTML source. The helper
+         builds the string from numbers only — no request value reaches
+         the output. --}}
+    {{{status-split stats.byStatus}}}
+    <ul class="status-split-legend">
+      <li><span class="chart-swatch chart-swatch--hit"></span>{{@root.req.t 'admin.queries.hit'}} <b>{{stats.byStatus.hit}}</b></li>
+      <li><span class="chart-swatch chart-swatch--miss"></span>{{@root.req.t 'admin.queries.miss'}} <b>{{stats.byStatus.miss}}</b></li>
+      <li><span class="chart-swatch chart-swatch--invalid"></span>{{@root.req.t 'admin.queries.invalid'}} <b>{{stats.byStatus.invalid}}</b></li>
+    </ul>
   </div>
 </div>
 
@@ -44,19 +82,24 @@
 
   <div class="card">
     <h3 class="card-title">{{@root.req.t 'admin.queries.topUsers'}}</h3>
-    <table class="table">
-      <thead><tr><th>User</th><th class="table-num">n</th></tr></thead>
-      <tbody>
-        {{#each stats.topUsers}}
-        <tr>
-          <td>{{this.user_email}}</td>
-          <td class="table-num">{{this.n}}</td>
-        </tr>
-        {{else}}
-        <tr><td colspan="2">&mdash;</td></tr>
-        {{/each}}
-      </tbody>
-    </table>
+    {{!-- The scroll wrapper: a table laid straight into the page has an
+         automatic layout width it cannot shrink below, and the longest
+         email in the list is what sets that width. --}}
+    <div class="table-scroll">
+      <table class="table">
+        <thead><tr><th>User</th><th class="table-num">n</th></tr></thead>
+        <tbody>
+          {{#each stats.topUsers}}
+          <tr>
+            <td>{{this.user_email}}</td>
+            <td class="table-num">{{this.n}}</td>
+          </tr>
+          {{else}}
+          <tr><td colspan="2">&mdash;</td></tr>
+          {{/each}}
+        </tbody>
+      </table>
+    </div>
   </div>
 </div>
 </section>

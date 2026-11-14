@@ -82,3 +82,38 @@ export function buildSortColumns(
     };
   });
 }
+
+/**
+ * Build a query string that preserves the current state of a list view —
+ * filters, sort direction and page — for a link that is NOT a sort
+ * toggle: the CSV export and the pagination links.
+ *
+ * WHY THIS IS HERE
+ *
+ * The CSV export used to receive a bare `/admin/users.csv`. Clicking
+ * "导出 CSV" on a filtered table downloaded **every** row: the filter
+ * was in the page URL, not in the export link, so the export ran
+ * unfiltered. The pagination links had the mirror-image problem on
+ * /admin/users — the route never computed a queryString at all, so page
+ * 2 was unreachable.
+ *
+ * Both need exactly the same thing: the current parameters, re-serialised
+ * without the ones that belong to a specific link. `omit` names those.
+ *
+ * @param params The current parameters to carry over.
+ * @param omit   Keys to drop — `page` for an export (which always returns
+ *               the full filtered set), `sort` for a link that sets its own.
+ * @returns The query string WITHOUT a leading "?", or "" when empty.
+ */
+export function buildQueryString(
+  params: Record<string, string | number | undefined>,
+  omit: readonly string[] = [],
+): string {
+  const search = new URLSearchParams();
+  for (const [name, value] of Object.entries(params)) {
+    if (value === undefined || value === "") continue;
+    if (omit.includes(name)) continue;
+    search.set(name, String(value));
+  }
+  return search.toString();
+}

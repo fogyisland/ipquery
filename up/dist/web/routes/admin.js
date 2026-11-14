@@ -53,6 +53,7 @@ const apiKeys_1 = require("../../storage/apiKeys");
 const queryLog_1 = require("../../storage/queryLog");
 const auditLog_1 = require("../../storage/auditLog");
 const overview_1 = require("../admin/overview");
+const sortColumns_1 = require("../admin/sortColumns");
 const queries_1 = require("../admin/queries");
 const queryString_1 = require("../admin/queryString");
 const csv_1 = require("../admin/csv");
@@ -245,14 +246,35 @@ async function adminRoutes(app) {
         const [rows] = await app.pool.query(`SELECT * FROM users ${whereSql} ${orderBy} LIMIT ? OFFSET ?`, [...params, q.limit, offset]);
         const [totalRows] = await app.pool.query(`SELECT COUNT(*) AS c FROM users ${whereSql}`, params);
         const total = Number(totalRows[0].c);
+        // The table shows one page of `q.limit` rows but the view had no
+        // pagination control at all, so every row past the first page was
+        // unreachable — the admin saw a silently truncated list and no
+        // indication that more existed. The query string carries the
+        // filters across a page change; without it, "next" would reset the
+        // table to the unfiltered set.
+        const queryString = (0, sortColumns_1.buildQueryString)({ ...q.filters, sort: q.sort?.col ? `${q.sort.dir === "desc" ? "-" : ""}${q.sort.col}` : undefined });
+        // The export always covers the whole filtered set, so `page` is
+        // dropped — exporting page 2 of 5 and calling it "the export" would
+        // be worse than not exporting at all.
+        const csvUrl = `/admin/users.csv?${(0, sortColumns_1.buildQueryString)({ ...q.filters, sort: q.sort?.col ? `${q.sort.dir === "desc" ? "-" : ""}${q.sort.col}` : undefined }, ["page"])}`;
         return reply.view("admin/users-list.hbs", {
             layout: "layouts/admin",
             title: req.t("admin.users.title"),
             users: rows,
             page: q.page,
+            limit: q.limit,
+            total,
             totalPages: Math.max(1, Math.ceil(total / q.limit)),
+            queryString,
+            csvUrl,
             filters: q.filters,
             sort: q.sort,
+            // The header links carry the current filters along, so clicking a
+            // column header narrows the table instead of resetting it.
+            sortColumns: (0, sortColumns_1.buildSortColumns)(["id", "email"], q.sort, {
+                ...q.filters,
+                page: q.page,
+            }),
             req,
             csrfToken: req.csrfToken,
         });
@@ -423,6 +445,10 @@ async function adminRoutes(app) {
             totalPages: Math.max(1, Math.ceil(total / q.limit)),
             filters: q.filters,
             sort: q.sort,
+            sortColumns: (0, sortColumns_1.buildSortColumns)(["id", "started_at"], q.sort, {
+                ...q.filters,
+                page: q.page,
+            }),
             flash: consumeEtlFlash(req, reply, req.t),
             req,
             csrfToken: req.csrfToken,
@@ -720,6 +746,9 @@ async function adminRoutes(app) {
         if (q.sort)
             queryParts.push(`sort=${q.sort.dir === "desc" ? "-" : ""}${q.sort.col}`);
         const queryString = queryParts.join("&");
+        // Same reasoning as /admin/audit-log: export the filtered set, not
+        // the current page.
+        const csvUrl = `/admin/keys.csv?${queryString}`;
         return reply.view("admin/keys.hbs", {
             layout: "layouts/admin",
             title: req.t("admin.keys.title"),
@@ -728,8 +757,10 @@ async function adminRoutes(app) {
             totalPages,
             userId: q.filters.userId ?? "",
             queryString,
+            csvUrl,
             filters: q.filters,
             sort: q.sort,
+            sortColumns: (0, sortColumns_1.buildSortColumns)(["id", "label", "key_prefix", "created_at"], q.sort, { ...q.filters, page: q.page }),
             req,
             csrfToken: req.csrfToken,
         });
@@ -849,6 +880,7 @@ async function adminRoutes(app) {
             queryString,
             filters: q.filters,
             sort: q.sort,
+            sortColumns: (0, sortColumns_1.buildSortColumns)(["id", "ts"], q.sort, { ...q.filters, page: q.page }),
             req,
             csrfToken: req.csrfToken,
         });
@@ -909,6 +941,10 @@ async function adminRoutes(app) {
         if (q.sort)
             queryParts.push(`sort=${q.sort.dir === "desc" ? "-" : ""}${q.sort.col}`);
         const queryString = queryParts.join("&");
+        // The export covers every matching row, not the current page, so
+        // `page` is not part of it — but the filters must be, or the button
+        // on a filtered table downloads the unfiltered log.
+        const csvUrl = `/admin/audit-log.csv?${queryString}`;
         return reply.view("admin/audit-log.hbs", {
             layout: "layouts/admin",
             title: req.t("admin.auditLog.title"),
@@ -916,8 +952,13 @@ async function adminRoutes(app) {
             page: q.page,
             totalPages,
             queryString,
+            csvUrl,
             filters: q.filters,
             sort: q.sort,
+            sortColumns: (0, sortColumns_1.buildSortColumns)(["id", "created_at"], q.sort, {
+                ...q.filters,
+                page: q.page,
+            }),
             req,
             csrfToken: req.csrfToken,
         });
