@@ -5,7 +5,7 @@
   <dt>{{req.t "admin.users.col.verified"}}</dt><dd>{{#if user.emailVerified}}&#10003;{{else}}&#10007;{{/if}}</dd>
   <dt>{{req.t "admin.users.col.disabled"}}</dt><dd>{{#if user.isDisabled}}&#10003;{{else}}&mdash;{{/if}}</dd>
   <dt>{{req.t "admin.users.col.created"}}</dt><dd>{{formatDate user.createdAt}}</dd>
-  <dt>{{req.t "admin.users.col.lastLogin"}}</dt><dd>{{formatRelative user.lastLoginAt}}</dd>
+  <dt>{{req.t "admin.users.col.lastLogin"}}</dt><dd>{{formatRelative req user.lastLoginAt}}</dd>
 </dl>
 
 {{#if tempPassword}}

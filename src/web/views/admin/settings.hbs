@@ -50,7 +50,7 @@
     <span class="metric-strip-value">
       {{#if etlLastRun}}
         {{> pill kind=etlStatusKind text=etlStatusText}}
-        <span class="form-field-hint" title="{{formatDate etlLastRun.startedAt}}">{{formatRelative etlLastRun.startedAt}}</span>
+        <span class="form-field-hint" title="{{formatDate etlLastRun.startedAt}}">{{formatRelative req etlLastRun.startedAt}}</span>
       {{else}}
         <span class="form-field-hint">{{etlStatusText}}</span>
       {{/if}}
@@ -251,7 +251,7 @@
     <div class="form-field-action">
       {{#if etlLastRun}}
         {{> pill kind=etlStatusKind text=etlStatusText}}
-        <span class="form-field-hint" title="{{formatDate etlLastRun.startedAt}}">{{formatRelative etlLastRun.startedAt}}</span>
+        <span class="form-field-hint" title="{{formatDate etlLastRun.startedAt}}">{{formatRelative req etlLastRun.startedAt}}</span>
       {{else}}
         <span class="form-field-hint">{{etlStatusText}}</span>
       {{/if}}

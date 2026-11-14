@@ -32,9 +32,9 @@
     ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
 }
 
-/* The public shell is light chrome with a dark sidebar. Fix the scheme to
-   light so an OS dark-mode preference does not repaint the body out from
-   under the card. */
+/* The public shell is light chrome throughout, sidebar included. Fix the
+   scheme to light so an OS dark-mode preference does not repaint the body
+   out from under the card. */
 body.layout-public {
   color-scheme: light;
   background: var(--err-card-2);

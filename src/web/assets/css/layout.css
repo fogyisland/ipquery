@@ -42,6 +42,26 @@
   justify-content: center;
   min-height: 100vh;
 }
+/* The sign-in surface is part of the light product, like every other shell.
+   base.css repaints the body under `prefers-color-scheme: dark` and
+   forms.css restyles the inputs to match — without this the page would
+   come out as a dark form wearing a teal button meant for the light
+   console. Fix the scheme and restate the surface so both rules are
+   overridden here. */
+body.layout-auth {
+  color-scheme: light;
+  background: #f4f6f9;
+  color: #16212b;
+}
+@media (prefers-color-scheme: dark) {
+  body.layout-auth .form-field input,
+  body.layout-auth .form-field select,
+  body.layout-auth .form-field textarea {
+    background: #ffffff;
+    color: #16212b;
+    border-color: #d8dee3;
+  }
+}
 .auth-container {
   max-width: 400px;
   width: 100%;
@@ -54,61 +74,8 @@
   min-height: 100vh;
   padding: 2rem 1rem;
 }
-.setup-container {
-  max-width: 640px;
-  width: 100%;
-  padding: 2rem;
-  background: #fff;
-  border: 1px solid #e5e5e5;
-  border-radius: 8px;
-}
-.setup-stepper {
-  list-style: none;
-  display: flex;
-  gap: 0.5rem;
-  padding: 0;
-  margin: 0 0 1.5rem;
-  flex-wrap: wrap;
-}
-.setup-step {
-  flex: 1 1 auto;
-  min-width: 80px;
-  padding: 0.5rem;
-  border-radius: 4px;
-  background: #f5f5f5;
-  text-align: center;
-}
-.setup-step a {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-  text-decoration: none;
-  color: inherit;
-}
-.setup-step-n {
-  font-weight: 700;
-  font-size: 0.875rem;
-}
-.setup-step-label {
-  font-size: 0.875rem;
-}
-.setup-step.active {
-  background: #0066cc;
-  color: #fff;
-}
-.setup-step.active a {
-  color: #fff;
-}
-@media (prefers-color-scheme: dark) {
-  .setup-container {
-    background: #1e1e1e;
-    border-color: #444;
-  }
-  .setup-step {
-    background: #2a2a2a;
-  }
-  .setup-step.active {
-    background: #22d3ee;
-    color: #062028;
-  }
-}
+/* The `.setup-*` rules that used to live here are gone. init.css owns
+   them now — with a `body.layout-setup` prefix, which beats the bare
+   selectors this file used and keeps the wizard on one stylesheet. The
+   old block also carried a terminal-cyan active step and a dark-mode
+   branch that no longer matched any rendered markup. */

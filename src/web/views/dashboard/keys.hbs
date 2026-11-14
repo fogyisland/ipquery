@@ -36,7 +36,7 @@
       <tr>
         <td>{{this.label}}</td>
         <td><code>{{this.keyPrefix}}</code></td>
-        <td>{{formatRelative this.lastUsedAt}}</td>
+        <td>{{formatRelative @root.req this.lastUsedAt}}</td>
         <td>{{formatDate this.createdAt}}</td>
         <td>
           {{#if (not this.revokedAt)}}

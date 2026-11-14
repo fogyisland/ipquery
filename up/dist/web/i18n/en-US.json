@@ -51,10 +51,10 @@
       "customProviders": "Custom Providers",
       "providers": "Providers",
       "groups": {
-        "overview": "Overview",
-        "data": "Data pipeline",
-        "traffic": "Traffic & keys",
-        "governance": "Users & governance"
+        "monitor": "Monitoring",
+        "data": "Data Pipeline",
+        "access": "Access & Identity",
+        "system": "System & Governance"
       }
     },
     "logout": "Log out",
@@ -199,6 +199,11 @@
   },
   "admin": {
     "title": "Admin",
+    "product": "IPQuery Console",
+    "topbar": {
+      "operational": "Operational",
+      "viewSite": "View site"
+    },
     "users": {
       "title": "Users",
       "search": "Search by email",

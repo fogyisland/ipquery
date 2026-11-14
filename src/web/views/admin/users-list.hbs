@@ -27,7 +27,7 @@
           <td>
             {{#if this.is_disabled}}{{> pill kind='danger' text=(@root.req.t 'admin.users.statusLabels.statusDisabled')}}{{else}}{{#if this.email_verified}}{{> pill kind='success' text=(@root.req.t 'admin.users.statusLabels.statusVerified')}}{{else}}{{> pill kind='warning' text=(@root.req.t 'admin.users.statusLabels.statusUnverified')}}{{/if}}{{/if}}
           </td>
-          <td class="table-num">{{formatRelative this.created_at}}</td>
+          <td class="table-num">{{formatRelative @root.req this.created_at}}</td>
           <td class="table-actions"><a class="button button-small" href="/admin/users/{{this.id}}">{{@root.req.t 'common.view'}}</a></td>
         </tr>
         {{/each}}

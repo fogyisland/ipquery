@@ -2,23 +2,24 @@
 {{!-- Sidebar navigation. Context-aware: on /dashboard the personal section
      expands and the admin section (if user is admin) collapses to a single
      "enter admin console" CTA. On /admin the inverse — admin section
-     expands and personal section is the CTA. This matches the rule that
-     the user only sees menus relevant to where they are.
+     expands and personal section is the CTA.
 
-     The admin section is grouped by responsibility (概览 / 数据管道 /
-     流量与凭证 / 用户与治理) — ten flat links gave no sense of where a
-     page belonged, so an operator had to read every label to find one.
-
-     Icons are inline SVG rather than emoji: emoji render differently on
-     every platform and carry their own colour, which fights the
-     monochrome palette the console runs on.
+     The admin links are NOT written here. `adminNavGroups` is injected by
+     registerView from src/web/admin/nav.ts, which is also the source for
+     the topbar breadcrumb. One list, one grouping, one active-state rule.
+     Icons are static SVG inner markup in that model (rendered with triple
+     braces), not request data.
 --}}
 <aside class="sidebar">
-  <a class="sidebar-brand" href="/">IPQuery</a>
+  <a class="sidebar-brand" href="/">
+    <span class="sidebar-brand-mark" aria-hidden="true">
+      <svg viewBox="0 0 28 28" focusable="false"><circle cx="14" cy="14" r="11"/><path d="M3 14h22"/><path d="M14 3c3.2 3 4.8 6.8 4.8 11S17.2 22 14 25"/><path d="M14 3c-3.2 3-4.8 6.8-4.8 11S10.8 22 14 25"/></svg>
+    </span>
+    <span class="sidebar-brand-text">IPQuery<span class="sidebar-brand-sub">Console</span></span>
+  </a>
   <nav class="sidebar-nav">
     {{!-- Public links removed from in-app sidebar — the topnav on marketing
-         pages already exposes home/try/docs/status/about. Inside the app
-         shell we only show the user/admin section that's actually relevant. --}}
+         pages already exposes home/try/docs/status/about. --}}
 
     {{#if req.session.userId}}
       {{#if (startsWith req.path '/admin')}}
@@ -33,68 +34,17 @@
         {{#if (eq req.session.role 'admin')}}
           <div class="sidebar-group sidebar-group--admin">
             <div class="sidebar-group-label">{{req.t 'sidebar.group.admin'}}</div>
-
-            {{!-- Each group is its own labelled block. The link's `active`
-                 class is computed by path prefix, so a detail page
-                 (/admin/users/42) still highlights its section entry
-                 (/admin/users) — an exact-match test left the operator
-                 with no position indicator on every sub-page. --}}
-            <div class="sidebar-group-block">
-              <div class="sidebar-block-label">{{req.t 'nav.admin.groups.overview'}}</div>
-              <a href="/admin" class="sidebar-link {{#if (eq req.path '/admin')}}active{{/if}}" aria-current="{{#if (eq req.path '/admin')}}page{{/if}}">
-                <svg class="sidebar-icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M2.5 11.5a8 8 0 1 1 11 0"/><path d="M8 11.5V8"/><path d="M5.5 9.5a4.5 4.5 0 1 1 5 0"/></svg>
-                <span>{{req.t 'nav.admin.dashboard'}}</span>
-              </a>
-            </div>
-
-            <div class="sidebar-group-block">
-              <div class="sidebar-block-label">{{req.t 'nav.admin.groups.data'}}</div>
-              <a href="/admin/etl/runs" class="sidebar-link {{#if (startsWith req.path '/admin/etl')}}active{{/if}}" aria-current="{{#if (startsWith req.path '/admin/etl')}}page{{/if}}">
-                <svg class="sidebar-icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M2.5 4.5h4l1.5 2h5.5"/><path d="M2.5 9.5h4l1.5 2h5.5"/></svg>
-                <span>{{req.t 'nav.admin.etl'}}</span>
-              </a>
-              <a href="/admin/ingest" class="sidebar-link {{#if (startsWith req.path '/admin/ingest')}}active{{/if}}" aria-current="{{#if (startsWith req.path '/admin/ingest')}}page{{/if}}">
-                <svg class="sidebar-icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M8 2.5v7"/><path d="M5 7l3 3 3-3"/><path d="M2.5 12.5h11"/></svg>
-                <span>{{req.t 'nav.admin.ingest'}}</span>
-              </a>
-              <a href="/admin/providers" class="sidebar-link {{#if (startsWith req.path '/admin/providers')}}active{{/if}}" aria-current="{{#if (startsWith req.path '/admin/providers')}}page{{/if}}">
-                <svg class="sidebar-icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M6 2.5v4"/><path d="M10 2.5v4"/><path d="M4 6.5h8v3a4 4 0 0 1-4 4 4 4 0 0 1-4-4z"/></svg>
-                <span>{{req.t 'nav.admin.providers'}}</span>
-              </a>
-            </div>
-
-            <div class="sidebar-group-block">
-              <div class="sidebar-block-label">{{req.t 'nav.admin.groups.traffic'}}</div>
-              <a href="/admin/queries" class="sidebar-link {{#if (startsWith req.path '/admin/queries')}}active{{/if}}" aria-current="{{#if (startsWith req.path '/admin/queries')}}page{{/if}}">
-                <svg class="sidebar-icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M2.5 13.5h11"/><path d="M4.5 10.5v-4"/><path d="M8 10.5v-7"/><path d="M11.5 10.5v-5"/></svg>
-                <span>{{req.t 'nav.admin.queries'}}</span>
-              </a>
-              <a href="/admin/keys" class="sidebar-link {{#if (startsWith req.path '/admin/keys')}}active{{/if}}" aria-current="{{#if (startsWith req.path '/admin/keys')}}page{{/if}}">
-                <svg class="sidebar-icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><circle cx="5.5" cy="8" r="2.5"/><path d="M8 8h5.5"/><path d="M11.5 8v2.5"/><path d="M13.5 8v1.5"/></svg>
-                <span>{{req.t 'nav.admin.keys'}}</span>
-              </a>
-            </div>
-
-            <div class="sidebar-group-block">
-              <div class="sidebar-block-label">{{req.t 'nav.admin.groups.governance'}}</div>
-              <a href="/admin/users" class="sidebar-link {{#if (startsWith req.path '/admin/users')}}active{{/if}}" aria-current="{{#if (startsWith req.path '/admin/users')}}page{{/if}}">
-                <svg class="sidebar-icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><circle cx="6" cy="5.5" r="2.5"/><path d="M2 13.5c0-2.2 1.8-3.5 4-3.5s4 1.3 4 3.5"/><path d="M11 3.5a2.5 2.5 0 0 1 0 5"/><path d="M12 13.5c0-1.5-.5-2.5-1.3-3.1"/></svg>
-                <span>{{req.t 'nav.admin.users'}}</span>
-              </a>
-              <a href="/admin/audit" class="sidebar-link {{#if (eq req.path '/admin/audit')}}active{{/if}}" aria-current="{{#if (eq req.path '/admin/audit')}}page{{/if}}">
-                <svg class="sidebar-icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M8 2.5l5 2v3.5c0 3-2.1 5-5 5.5-2.9-.5-5-2.5-5-5.5V4.5z"/><path d="M6 8l1.5 1.5L10.5 6.5"/></svg>
-                <span>{{req.t 'nav.admin.audit'}}</span>
-              </a>
-              <a href="/admin/audit-log" class="sidebar-link {{#if (startsWith req.path '/admin/audit-log')}}active{{/if}}" aria-current="{{#if (startsWith req.path '/admin/audit-log')}}page{{/if}}">
-                <svg class="sidebar-icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M4 2.5h6l3 3v8a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-10a1 1 0 0 1 1-1z"/><path d="M5.5 7h5"/><path d="M5.5 9.5h5"/><path d="M5.5 12h3"/></svg>
-                <span>{{req.t 'nav.admin.auditLog'}}</span>
-              </a>
-              <a href="/admin/settings" class="sidebar-link {{#if (startsWith req.path '/admin/settings')}}active{{/if}}" aria-current="{{#if (startsWith req.path '/admin/settings')}}page{{/if}}">
-                <svg class="sidebar-icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><circle cx="8" cy="8" r="2"/><path d="M8 1.5v1.8"/><path d="M8 12.7v1.8"/><path d="M1.5 8h1.8"/><path d="M12.7 8h1.8"/><path d="M3.4 3.4l1.3 1.3"/><path d="M11.3 11.3l1.3 1.3"/><path d="M12.6 3.4l-1.3 1.3"/><path d="M4.7 11.3l-1.3 1.3"/></svg>
-                <span>{{req.t 'nav.admin.settings'}}</span>
-              </a>
-            </div>
-
+            {{#each adminNavGroups}}
+              <div class="sidebar-group-block">
+                <div class="sidebar-block-label">{{adminNavLabel @root.req this.labelKey}}</div>
+                {{#each this.items}}
+                  <a href="{{this.href}}" class="sidebar-link {{#if (isAdminNavActive this @root.req.path)}}active{{/if}}" aria-current="{{#if (isAdminNavActive this @root.req.path)}}page{{/if}}">
+                    <svg class="sidebar-icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false">{{{this.icon}}}</svg>
+                    <span>{{adminNavLabel @root.req this.labelKey}}</span>
+                  </a>
+                {{/each}}
+              </div>
+            {{/each}}
           </div>
         {{/if}}
       {{else}}

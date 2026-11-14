@@ -116,7 +116,7 @@
       </div>
       <div class="runner-stat">
         <span class="runner-stat-value">
-          {{#if lastBackfillRunAt}}{{formatRelative lastBackfillRunAt}}{{else}}<span class="admin-tag admin-tag--muted">{{@root.req.t 'admin.unknownIps.runner.noLastRun'}}</span>{{/if}}
+          {{#if lastBackfillRunAt}}{{formatRelative req lastBackfillRunAt}}{{else}}<span class="admin-tag admin-tag--muted">{{@root.req.t 'admin.unknownIps.runner.noLastRun'}}</span>{{/if}}
         </span>
         <span class="runner-stat-label">{{@root.req.t 'admin.unknownIps.runner.lastRun'}}</span>
       </div>
@@ -247,7 +247,7 @@
       <div class="scheduler-stat">
         <span class="scheduler-stat-label">{{@root.req.t 'admin.unknownIps.scheduler.metrics.lastRun'}}</span>
         <span class="scheduler-stat-value">
-          {{#if randomGenState.lastRunAt}}<span title="{{randomGenState.lastRunAt}}">{{formatRelative randomGenState.lastRunAt}}</span>
+          {{#if randomGenState.lastRunAt}}<span title="{{randomGenState.lastRunAt}}">{{formatRelative req randomGenState.lastRunAt}}</span>
           {{else}}<span class="admin-tag admin-tag--muted">{{@root.req.t 'admin.unknownIps.scheduler.metrics.noLastRun'}}</span>{{/if}}
         </span>
       </div>
@@ -311,7 +311,7 @@
     <tbody>
       {{#each recentProbes}}
       <tr class="probe-log-row">
-        <td title="{{formatDate this.ts}}">{{formatRelative this.ts}}</td>
+        <td title="{{formatDate this.ts}}">{{formatRelative @root.req this.ts}}</td>
         <td><code>{{this.ipText}}</code></td>
         <td>
           <div class="probe-log-cells">
@@ -512,7 +512,7 @@
     <tbody>
       {{#each errors}}
       <tr>
-        <td title="{{formatDate this.ts}}">{{formatRelative this.ts}}</td>
+        <td title="{{formatDate this.ts}}">{{formatRelative @root.req this.ts}}</td>
         <td><code>{{this.providerName}}</code></td>
         <td><code>{{this.ipText}}</code></td>
         <td>{{#if (eq this.mode 'auto')}}{{@root.req.t 'admin.unknownIps.failureLogs.modeLabel.auto'}}{{else if (eq this.mode 'manual')}}{{@root.req.t 'admin.unknownIps.failureLogs.modeLabel.manual'}}{{else if (eq this.mode 'random')}}{{@root.req.t 'admin.unknownIps.failureLogs.modeLabel.random'}}{{else}}{{this.mode}}{{/if}}</td>

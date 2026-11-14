@@ -43,6 +43,7 @@ const path = __importStar(require("node:path"));
 const fs = __importStar(require("node:fs"));
 const date_fns_1 = require("date-fns");
 const locale_1 = require("date-fns/locale");
+const nav_1 = require("../admin/nav");
 const wrapped = new WeakSet();
 function promoteLayout(page, data, opts, raw) {
     const mergedOpts = { ...(opts ?? {}) };
@@ -54,16 +55,21 @@ function promoteLayout(page, data, opts, raw) {
         delete cleanData.layout;
     return raw(page, cleanData, mergedOpts);
 }
-/** Inject `path` (request URL pathname, no query string) into template
- *  context. The sidebar partial uses this to know whether it's rendering
- *  inside an admin page or a personal page, so it can collapse the other
- *  section to a CTA. */
+/** Inject `path` (request URL pathname, no query string) and the resolved
+ *  admin navigation location into template context.
+ *
+ *  The sidebar partial uses `path` to know whether it's rendering inside an
+ *  admin page or a personal page, so it can collapse the other section to a
+ *  CTA. `adminNav` is the same navigation data used by the breadcrumb: one
+ *  source of truth for both, so a link can never be in two groups at once. */
 function injectPath(reply, data) {
     const url = reply.request.url;
     const qIdx = url.indexOf("?");
     const path = qIdx >= 0 ? url.slice(0, qIdx) : url;
     if (data) {
         data.path = path;
+        data.adminNavGroups = nav_1.ADMIN_NAV_GROUPS;
+        data.adminNavLocation = (0, nav_1.findAdminNav)(path);
         if (data.req && typeof data.req === "object") {
             data.req.path = path;
         }
@@ -71,15 +77,58 @@ function injectPath(reply, data) {
 }
 async function registerView(app, cfg) {
     const viewsDir = path.join(__dirname, "..", "views");
-    Handlebars.registerHelper("t", function (key, opts) {
+    /** Translate a key. The locale lives on the request (`req.locale`, derived
+     *  from the `lang` cookie by the i18n plugin), so the request is the
+     *  only reliable source of the reader's language. Templates call
+     *  `{{req.t 'key'}}`; this helper accepts the request as an argument for
+     *  the cases where a dynamic key has to be resolved. */
+    Handlebars.registerHelper("t", function (req, key, opts) {
         const hash = opts?.hash ?? {};
-        const locale = this?.locale ?? "zh-CN";
+        const resolvedKey = typeof key === "string" ? key : "";
+        if (!resolvedKey)
+            return "";
+        const translator = req
+            ?.t;
+        if (typeof translator === "function")
+            return translator.call(req, resolvedKey, hash);
+        const locale = req?.locale ?? "zh-CN";
         const tFn = globalThis.__ipqT;
-        return tFn ? tFn(locale, key, hash) : key;
+        return tFn ? tFn(locale, resolvedKey, hash) : resolvedKey;
     });
     Handlebars.registerHelper("eq", (a, b) => a === b);
     Handlebars.registerHelper("ne", (a, b) => a !== b);
     Handlebars.registerHelper("startsWith", (str, prefix) => typeof str === "string" && typeof prefix === "string" && str.startsWith(prefix));
+    /** Active state is resolved by the same path rules as the breadcrumb:
+     *  exact for /admin and /admin/audit, prefix with a slash boundary for
+     *  every section that owns detail pages. `item` is a nav model object, so
+     *  the template cannot accidentally pass a stale href or match mode. */
+    Handlebars.registerHelper("isAdminNavActive", (item, path) => {
+        const navItem = item;
+        if (!navItem)
+            return false;
+        return (0, nav_1.isAdminNavActive)(typeof path === "string" ? path : "", navItem.matchPath ?? navItem.href, navItem.match);
+    });
+    /** Resolve a label key from the admin nav model.
+     *
+     *  Handlebars cannot call a context method (`req.t`) with a dynamic path
+     *  argument, so the template hands the request object to this helper and
+     *  the helper calls `req.t` itself. Going through `req.t` — rather than
+     *  re-deriving the locale from `globalThis.__ipqT` — is what keeps the
+     *  nav in the reader's language: `req.t` closes over `req.locale`, which
+     *  the i18n plugin derived from the `lang` cookie. */
+    Handlebars.registerHelper("adminNavLabel", function (req, key) {
+        const resolvedKey = typeof key === "string" ? key : "";
+        if (!resolvedKey)
+            return "";
+        const translator = req?.t;
+        if (typeof translator === "function")
+            return translator.call(req, resolvedKey);
+        // Fall back to the request's own locale when `t` is not attached, which
+        // only happens in unit-rendered templates.
+        const locale = req?.locale ?? "zh-CN";
+        const tFn = globalThis.__ipqT;
+        return tFn ? tFn(locale, resolvedKey) : resolvedKey;
+    });
     Handlebars.registerHelper("not", (v) => !v);
     Handlebars.registerHelper("and", (a, b) => Boolean(a) && Boolean(b));
     Handlebars.registerHelper("or", (a, b) => Boolean(a) || Boolean(b));
@@ -136,11 +185,16 @@ async function registerView(app, cfg) {
         const date = typeof d === "string" ? new Date(d) : d;
         return date.toISOString().replace("T", " ").slice(0, 19);
     });
-    Handlebars.registerHelper("formatRelative", (d) => {
+    /** Format a timestamp as "3 minutes ago". The relative wording follows the
+     *  reader's language, so the request is passed in for its locale — the
+     *  same reason `adminNavLabel` goes through `req.t`. */
+    Handlebars.registerHelper("formatRelative", (req, d) => {
         if (!d)
             return "";
         const date = typeof d === "string" ? new Date(d) : d;
-        return (0, date_fns_1.formatDistanceToNow)(date, { addSuffix: true, locale: locale_1.zhCN });
+        const locale = req?.locale;
+        const localeOption = locale === "en-US" ? locale_1.enUS : locale_1.zhCN;
+        return (0, date_fns_1.formatDistanceToNow)(date, { addSuffix: true, locale: localeOption });
     });
     Handlebars.registerHelper("year", () => new Date().getFullYear());
     Handlebars.registerHelper("ternary", (cond, a, b) => (cond ? a : b));
