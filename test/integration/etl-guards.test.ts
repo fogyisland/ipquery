@@ -91,6 +91,16 @@ async function writeFixtures(): Promise<void> {
     zlib.gzipSync(Buffer.from("start_ip,end_ip,asn,asn_name\n9.9.9.0,9.9.9.255,64500,Example ISP\n")),
   );
   await fs.writeFile(
+    path.join(rawDir, "china-ipv4.txt"),
+    "1.0.0.0/8\n",
+  );
+  await fs.writeFile(path.join(rawDir, "china-v4.txt"), "1.0.0.0/8\n");
+  await fs.writeFile(path.join(rawDir, "china-v6.txt"), "2001:db8::/32\n");
+  await fs.writeFile(
+    path.join(rawDir, "sapics-user-country.csv"),
+    "2.0.0.0,2.0.0.255,CN\n",
+  );
+  await fs.writeFile(
     path.join(rawDir, "ip2region.xdb"),
     JSON.stringify([{ start: "9.9.9.0", end: "9.9.9.255", country: "英国", city: "London" }]),
   );
@@ -118,7 +128,7 @@ const noDownload = async (): Promise<[]> => [];
 describe("etl guards", () => {
   it("runs end-to-end and populates ip_ranges", async () => {
     await writeFixtures();
-    const result = await runPipeline({ cfg });
+    const result = await runPipeline({ cfg, download: noDownload });
     expect(result.merged).toBeGreaterThan(0);
     const last = await lastEtlRun(pool);
     expect(last?.status).toBe("success");
@@ -158,6 +168,13 @@ describe("etl guards", () => {
     await fs.writeFile(
       path.join(cfg.etl.dataDir, "raw", "dbip-asn.csv.gz"),
       zlib.gzipSync(Buffer.from("start_ip,end_ip,asn,asn_name\n9.9.9.0,9.9.9.255,64500,Example ISP\n")),
+    );
+    await fs.writeFile(path.join(cfg.etl.dataDir, "raw", "china-ipv4.txt"), "1.0.0.0/8\n");
+    await fs.writeFile(path.join(cfg.etl.dataDir, "raw", "china-v4.txt"), "1.0.0.0/8\n");
+    await fs.writeFile(path.join(cfg.etl.dataDir, "raw", "china-v6.txt"), "2001:db8::/32\n");
+    await fs.writeFile(
+      path.join(cfg.etl.dataDir, "raw", "sapics-user-country.csv"),
+      "2.0.0.0,2.0.0.255,CN\n",
     );
 
     await expect(runPipeline({ cfg, download: noDownload })).rejects.toThrow(
@@ -225,19 +242,59 @@ describe("etl guards", () => {
     await fs.rm(blockedCfg.etl.dataDir, { recursive: true, force: true });
   });
 
+  it("github group zero-row warning allows a run when other files emit rows", async () => {
+    await writeFixtures();
+    const rawDir = path.join(cfg.etl.dataDir, "raw");
+    await fs.writeFile(path.join(rawDir, "china-v6.txt"), "# only a comment\n");
+    const result = await runPipeline({ cfg, download: noDownload });
+    expect(result.merged).toBeGreaterThan(0);
+    const [rows] = await pool.query<mysql.RowDataPacket[]>(
+      `SELECT rows_emitted FROM etl_run_parses WHERE run_id = ? AND source = 'runishiwo-v6'`,
+      [result.runId],
+    );
+    expect(Number(rows[0]?.rows_emitted)).toBe(0);
+  });
+
+  it("github group emitted zero fails the run", async () => {
+    await writeFixtures();
+    const rawDir = path.join(cfg.etl.dataDir, "raw");
+    for (const name of [
+      "china-ipv4.txt",
+      "china-v4.txt",
+      "china-v6.txt",
+      "sapics-user-country.csv",
+    ]) {
+      await fs.writeFile(path.join(rawDir, name), "# no usable records\n");
+    }
+    await expect(runPipeline({ cfg, download: noDownload })).rejects.toThrow(/dedup/i);
+  });
+
+  it("insertRowsTotal equals actual inserted rows", async () => {
+    await writeFixtures();
+    const result = await runPipeline({ cfg, download: noDownload });
+    const [rows] = await pool.query<mysql.RowDataPacket[]>(
+      `SELECT insert_rows_total, insert_rows_done FROM etl_runs WHERE id = ?`,
+      [result.runId],
+    );
+    expect(Number(rows[0]?.insert_rows_total)).toBeGreaterThan(0);
+    expect(Number(rows[0]?.insert_rows_done)).toBeLessThanOrEqual(
+      Number(rows[0]?.insert_rows_total),
+    );
+  });
+
   it("a second concurrent run is refused by the ETL run lock", async () => {
     // The advisory lock is what actually excludes two processes. Take it
     // here and confirm the pipeline refuses to start.
     const guard = await acquireEtlRunLock(pool);
     expect(guard.acquired).toBe(true);
     try {
-      await expect(runPipeline({ cfg })).rejects.toThrow(/already in progress|run lock/i);
+      await expect(runPipeline({ cfg, download: noDownload })).rejects.toThrow(/already in progress|run lock/i);
     } finally {
       await guard.lock!.release();
     }
     // With the lock released the pipeline runs again.
     await writeFixtures();
-    const result = await runPipeline({ cfg });
+    const result = await runPipeline({ cfg, download: noDownload });
     expect(result.merged).toBeGreaterThan(0);
   });
 
@@ -287,7 +344,7 @@ describe("etl guards", () => {
     await pool.query("CREATE VIEW ip_ranges_old AS SELECT * FROM ip_ranges");
 
     try {
-      await expect(runPipeline({ cfg })).rejects.toThrow(/swap failed/i);
+      await expect(runPipeline({ cfg, download: noDownload })).rejects.toThrow(/swap failed/i);
 
       // The run must be recorded as failed.
       const last = await lastEtlRun(pool);
