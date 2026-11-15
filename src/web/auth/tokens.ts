@@ -45,6 +45,12 @@ export function generateApiKey(): string {
   return `ipq_${randomBase32(32)}`;
 }
 
+/** MCP tokens carry their own prefix so an operator can tell a token
+ *  from an API key at a glance in a client's config file. */
+export function generateMcpToken(): string {
+  return `ipqt_${randomBase32(32)}`;
+}
+
 /** HMAC-bind a CSRF nonce to the server-side secret. The nonce travels
  *  in the cookie (readable by JS) AND in the form body; the HMAC
  *  lives in a SECOND cookie that's httpOnly + secure. On verify,

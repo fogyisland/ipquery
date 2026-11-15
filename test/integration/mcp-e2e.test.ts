@@ -24,7 +24,7 @@ let transport: StdioClientTransport;
 // Everything the server wrote to stderr, collected as it arrived. The
 // stderr stream is a PassThrough the SDK hands out once the child has
 // started, so the listener has to be attached before the first read.
-let stderrChunks: string[] = [];
+const stderrChunks: string[] = [];
 
 // A /24 in right-aligned 16-byte form — the shape parseIp() writes.
 const RANGE_START = "000000000000000000000000cb007100";

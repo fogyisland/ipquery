@@ -34,7 +34,19 @@ Two deployment paths, both documented:
 
 ## MCP server
 
-AI tools (Claude Code, Cursor, Claude Desktop) can connect to IPQuery directly via MCP: `npm run build && npm run mcp`. See [`docs/mcp.md`](docs/mcp.md) for setup and the 7 read-only tools.
+AI tools (Claude Code, Cursor, Claude Desktop) can connect to IPQuery directly via MCP. See [`docs/mcp.md`](docs/mcp.md) for setup and the 7 read-only tools.
+
+The shortest path to a connected client:
+
+```bash
+npm run build          # compile dist/
+npm install -g .       # put `ipquery-mcp` on PATH
+claude mcp add --scope user ipquery -- ipquery-mcp
+```
+
+The project ships a `.mcp.json` for teammates, but Claude Code needs to approve a project-scoped server once before it connects. A user-scoped registration (above) is connected from the first run.
+
+MCP access is controlled by **MCP tokens**: a user requests one at `/dashboard/mcp-tokens`, an administrator approves it at `/admin/mcp-tokens`. A `lookup`-scoped token reaches `ipquery_lookup` only; an `ops`-scoped token reaches all seven tools, including the ones that read query logs and queue state. Without a token the server runs in local mode (all tools, development only) — set `MCP_REQUIRE_TOKEN=true` to refuse that.
 
 ## Data sources & licenses
 

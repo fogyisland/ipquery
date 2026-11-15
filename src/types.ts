@@ -126,6 +126,35 @@ export interface ApiKey {
   createdAt: Date;
 }
 
+/** Lifecycle of an MCP token request.
+ *  pending  — waiting for an administrator's decision
+ *  approved — usable; may still be revoked later
+ *  rejected — the administrator turned it down
+ *  revoked  — approved, then withdrawn by an administrator */
+export type McpTokenStatus = "pending" | "approved" | "rejected" | "revoked";
+
+/** Which tools the token may reach.
+ *  lookup — ipquery_lookup only
+ *  ops    — every tool, including the operational read-only ones
+ *           (queue depths, query logs, ETL status) */
+export type McpTokenScope = "lookup" | "ops";
+
+export interface McpToken {
+  id: number;
+  userId: number;
+  label: string;
+  tokenPrefix: string;
+  status: McpTokenStatus;
+  scope: McpTokenScope;
+  requestedAt: Date;
+  decidedAt: Date | null;
+  decidedBy: number | null;
+  decisionNote: string | null;
+  lastUsedAt: Date | null;
+  revokedAt: Date | null;
+  createdAt: Date;
+}
+
 export interface Session {
   id: string;
   userId: number;

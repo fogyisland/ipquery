@@ -1,0 +1,126 @@
+{{!-- SPDX-License-Identifier: MIT --}}
+<h2>{{req.t 'admin.mcpTokens.title'}}</h2>
+<p class="dash-welcome-sub">{{req.t 'admin.mcpTokens.intro'}}</p>
+
+{{#if flash.error}}<div class="flash flash-error">{{flash.error}}</div>{{/if}}
+
+<div class="metric-strip">
+  <div class="metric-strip-item">
+    <span class="metric-strip-label">{{req.t 'admin.mcpTokens.status.pending'}}</span>
+    <span class="metric-strip-value">{{counts.pending}}</span>
+  </div>
+  <div class="metric-strip-item">
+    <span class="metric-strip-label">{{req.t 'admin.mcpTokens.status.approved'}}</span>
+    <span class="metric-strip-value">{{counts.approved}}</span>
+  </div>
+  <div class="metric-strip-item">
+    <span class="metric-strip-label">{{req.t 'admin.mcpTokens.status.rejected'}}</span>
+    <span class="metric-strip-value">{{counts.rejected}}</span>
+  </div>
+  <div class="metric-strip-item">
+    <span class="metric-strip-label">{{req.t 'admin.mcpTokens.status.revoked'}}</span>
+    <span class="metric-strip-value">{{counts.revoked}}</span>
+  </div>
+</div>
+
+{{> filter-bar action='/admin/mcp-tokens' filters=(array
+  (hash name='status' label=(req.t 'admin.mcpTokens.col.status') options=(array
+    (hash value='pending' label=(req.t 'admin.mcpTokens.status.pending'))
+    (hash value='approved' label=(req.t 'admin.mcpTokens.status.approved'))
+    (hash value='rejected' label=(req.t 'admin.mcpTokens.status.rejected'))
+    (hash value='revoked' label=(req.t 'admin.mcpTokens.status.revoked'))))
+  (hash name='scope' label=(req.t 'admin.mcpTokens.col.scope') options=(array
+    (hash value='lookup' label=(req.t 'admin.mcpTokens.scope.lookup'))
+    (hash value='ops' label=(req.t 'admin.mcpTokens.scope.ops'))))
+) values=filters anyLabel=(req.t 'common.any') filterLabel=(req.t 'common.filter')}}
+
+{{!-- Bulk action bar: the form posts a comma-separated ids list to
+     /admin/mcp-tokens/bulk (CSRF-gated). The action is carried in a
+     hidden field so one endpoint serves approve / reject / revoke.
+     Only pending tokens can be approved or rejected, and only approved
+     tokens can be revoked, so the checkboxes are rendered accordingly:
+     a revoked token has nothing left to decide. --}}
+<div class="keys-bulk-bar">
+  <form id="mcp-bulk-form" method="POST" action="/admin/mcp-tokens/bulk">
+    <input type="hidden" name="csrf" value="{{csrfToken}}">
+    <input type="hidden" name="action" id="mcp-bulk-action" value="approve">
+    <button type="submit" class="btn-secondary" id="mcp-bulk-approve"
+            data-confirm="{{@root.req.t 'admin.mcpTokens.bulkApproveConfirm'}}">
+      {{@root.req.t 'admin.mcpTokens.bulkApprove'}} (<span id="mcp-bulk-count">0</span>)
+    </button>
+    <button type="submit" class="btn-secondary" id="mcp-bulk-reject"
+            data-confirm="{{@root.req.t 'admin.mcpTokens.bulkRejectConfirm'}}">
+      {{@root.req.t 'admin.mcpTokens.bulkReject'}}
+    </button>
+    <button type="submit" class="btn-secondary" id="mcp-bulk-revoke"
+            data-confirm="{{@root.req.t 'admin.mcpTokens.bulkRevokeConfirm'}}">
+      {{@root.req.t 'admin.mcpTokens.bulkRevoke'}}
+    </button>
+  </form>
+</div>
+
+<div class="table-scroll">
+  <table class="table">
+    <thead>
+      <tr>
+        <th class="table-check"><input type="checkbox" id="mcp-check-all" aria-label="{{@root.req.t 'admin.mcpTokens.bulkSelectAll'}}"></th>
+        {{> sort-link column=(lookupColumn sortColumns 'id') label=(req.t 'admin.mcpTokens.col.id')}}
+        <th>{{req.t 'admin.mcpTokens.col.owner'}}</th>
+        {{> sort-link column=(lookupColumn sortColumns 'label') label=(req.t 'admin.mcpTokens.col.label')}}
+        <th>{{req.t 'admin.mcpTokens.col.scope'}}</th>
+        <th>{{req.t 'admin.mcpTokens.col.status'}}</th>
+        {{> sort-link column=(lookupColumn sortColumns 'token_prefix') label=(req.t 'admin.mcpTokens.col.prefix')}}
+        {{> sort-link column=(lookupColumn sortColumns 'requested_at') label=(req.t 'admin.mcpTokens.col.requested')}}
+        <th>{{req.t 'admin.mcpTokens.col.lastUsed'}}</th>
+        <th>{{req.t 'admin.mcpTokens.action'}}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {{#each tokens}}
+      <tr>
+        <td class="table-check">
+          {{#unless (eq this.status "revoked")}}<input type="checkbox" name="ids" value="{{this.id}}" form="mcp-bulk-form" class="mcp-check-row" aria-label="{{@root.req.t 'admin.mcpTokens.bulkSelectOne' id=this.id}}">{{/unless}}
+        </td>
+        <td class="table-num">{{this.id}}</td>
+        <td>{{this.ownerEmail}}</td>
+        <td>{{this.label}}</td>
+        <td>{{this.scopeLabel}}</td>
+        <td>{{> pill kind=this.pillKind text=this.statusLabel}}</td>
+        <td><code>{{this.tokenPrefix}}</code></td>
+        <td class="table-num">{{formatDate this.requestedAt}}</td>
+        <td class="table-num">{{#if this.lastUsedAt}}{{formatDate this.lastUsedAt}}{{else}}—{{/if}}</td>
+        <td class="table-actions">
+          {{#if (eq this.status "pending")}}
+          <form method="POST" action="/admin/mcp-tokens/{{this.id}}/approve" class="inline-form"
+                data-confirm="{{@root.req.t 'admin.mcpTokens.approveConfirm'}}">
+            <input type="hidden" name="csrf" value="{{@root.csrfToken}}">
+            <button type="submit" class="btn-primary">{{@root.req.t 'admin.mcpTokens.approve'}}</button>
+          </form>
+          <form method="POST" action="/admin/mcp-tokens/{{this.id}}/reject" class="inline-form"
+                data-confirm="{{@root.req.t 'admin.mcpTokens.rejectConfirm'}}">
+            <input type="hidden" name="csrf" value="{{@root.csrfToken}}">
+            <button type="submit" class="btn-secondary">{{@root.req.t 'admin.mcpTokens.reject'}}</button>
+          </form>
+          {{/if}}
+          {{#if (eq this.status "approved")}}
+          <form method="POST" action="/admin/mcp-tokens/{{this.id}}/revoke" class="inline-form"
+                data-confirm="{{@root.req.t 'admin.mcpTokens.revokeConfirm'}}">
+            <input type="hidden" name="csrf" value="{{@root.csrfToken}}">
+            <button type="submit" class="btn-danger">{{@root.req.t 'admin.mcpTokens.revoke'}}</button>
+          </form>
+          {{/if}}
+        </td>
+      </tr>
+      {{/each}}
+    </tbody>
+  </table>
+</div>
+
+{{#unless tokens.length}}
+<p>{{req.t 'admin.mcpTokens.empty'}}</p>
+{{/unless}}
+
+<script src="/assets/keys-bulk.js" defer></script>
+<script src="/assets/mcp-bulk.js" defer></script>
+
+{{> pagination baseUrl="/admin/mcp-tokens" page=page totalPages=totalPages queryString=queryString }}

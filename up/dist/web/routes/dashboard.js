@@ -9,6 +9,27 @@ const password_1 = require("../auth/password");
 const sessions_1 = require("../../storage/sessions");
 const csrf_1 = require("../plugins/csrf");
 const country_names_1 = require("../../country-names");
+const mcpTokens_1 = require("../../storage/mcpTokens");
+const paths_1 = require("../../paths");
+/** Pill colour per MCP token status, so the table reads the same way as
+ *  the other status cells in the console. */
+const MCP_PILL_KIND = {
+    pending: "warning",
+    approved: "success",
+    rejected: "danger",
+    revoked: "muted",
+};
+/** Decorate the token rows with their labels already resolved. The
+ *  template cannot call req.t with a computed key, so the translation
+ *  happens here, where the request locale is known. */
+function decorateTokens(tokens, req) {
+    return tokens.map((token) => ({
+        ...token,
+        scopeLabel: req.t(`dashboard.mcp.scope.${token.scope}`),
+        statusLabel: req.t(`dashboard.mcp.status.${token.status}`),
+        pillKind: MCP_PILL_KIND[token.status] ?? "muted",
+    }));
+}
 async function dashboardRoutes(app) {
     // /dashboard/* is already gated by the auth guard in src/web/plugins/auth.ts:
     // unauthenticated requests are redirected to /login?next=... before this
@@ -143,6 +164,121 @@ async function dashboardRoutes(app) {
             layout: "layouts/dashboard",
             title: req.t("dashboard.keys.revoke.confirm.title"),
             key,
+            req,
+        });
+    });
+    app.get("/dashboard/mcp-tokens", async (req, reply) => {
+        const tokens = decorateTokens(await (0, mcpTokens_1.listMcpTokensForUser)(app.pool, req.user.id), req);
+        // The client snippet needs a concrete server path. It is built from the
+        // project root so the pasted configuration stays valid wherever the
+        // repository lives — an absolute path would tie the user to one machine.
+        const serverPath = `${(0, paths_1.resolveProjectRoot)()}/dist/mcp/server.js`;
+        // The token plaintext is never recoverable, so the snippet is shown
+        // only when the user has an approved token and knows its own value;
+        // otherwise it points at the env var the user must fill in themselves.
+        const approved = tokens.find((t) => t.status === "approved");
+        const clientConfig = approved
+            ? JSON.stringify({
+                mcpServers: {
+                    ipquery: {
+                        type: "stdio",
+                        command: "node",
+                        args: [serverPath],
+                        env: { IPQUERY_MCP_TOKEN: "<在此填入你的 Token>" },
+                    },
+                },
+            }, null, 2)
+            : null;
+        const scopeOptions = [
+            { value: "lookup", label: req.t("dashboard.mcp.scope.lookup") },
+            { value: "ops", label: req.t("dashboard.mcp.scope.ops") },
+        ];
+        return reply.view("dashboard/mcp-tokens.hbs", {
+            layout: "layouts/dashboard",
+            title: req.t("dashboard.mcp.title"),
+            tokens,
+            scopeOptions,
+            scopeSelected: "lookup",
+            clientConfig,
+            req,
+        });
+    });
+    app.post("/dashboard/mcp-tokens", {
+        config: { rateLimit: { max: 10, timeWindow: "1 hour" } },
+    }, async (req, reply) => {
+        if (!(0, csrf_1.verifyCsrfRequest)(req))
+            return reply.code(403).view("errors/csrf.hbs", { layout: "layouts/public", req });
+        const body = req.body;
+        const label = (body.label ?? "").trim();
+        const scope = body.scope === "ops" ? "ops" : "lookup";
+        if (!label || label.length > 64) {
+            const tokens = decorateTokens(await (0, mcpTokens_1.listMcpTokensForUser)(app.pool, req.user.id), req);
+            return reply.code(400).view("dashboard/mcp-tokens.hbs", {
+                layout: "layouts/dashboard",
+                title: req.t("dashboard.mcp.title"),
+                flash: { error: req.t("dashboard.keys.invalidLabel") },
+                tokens,
+                scopeOptions: [
+                    { value: "lookup", label: req.t("dashboard.mcp.scope.lookup") },
+                    { value: "ops", label: req.t("dashboard.mcp.scope.ops") },
+                ],
+                scopeSelected: scope,
+                req,
+            });
+        }
+        const plaintext = (0, tokens_1.generateMcpToken)();
+        await (0, mcpTokens_1.createMcpToken)(app.pool, req.user.id, label, (0, tokens_1.hashToken)(plaintext), plaintext.slice(0, 12), scope);
+        const tokens = decorateTokens(await (0, mcpTokens_1.listMcpTokensForUser)(app.pool, req.user.id), req);
+        return reply.view("dashboard/mcp-tokens.hbs", {
+            layout: "layouts/dashboard",
+            title: req.t("dashboard.mcp.title"),
+            flash: { success: req.t("dashboard.mcp.requestSubmitted") },
+            newTokenPlain: plaintext,
+            tokens,
+            scopeOptions: [
+                { value: "lookup", label: req.t("dashboard.mcp.scope.lookup") },
+                { value: "ops", label: req.t("dashboard.mcp.scope.ops") },
+            ],
+            scopeSelected: scope,
+            req,
+        });
+    });
+    app.post("/dashboard/mcp-tokens/:id/revoke", async (req, reply) => {
+        if (!(0, csrf_1.verifyCsrfRequest)(req))
+            return reply.code(403).view("errors/csrf.hbs", { layout: "layouts/public", req });
+        const id = Number(req.params.id);
+        if (!Number.isFinite(id) || id <= 0) {
+            return reply
+                .code(404)
+                .view("errors/404.hbs", { layout: "layouts/public", title: req.t("error.404.title"), req });
+        }
+        const token = await (0, mcpTokens_1.findMcpTokenById)(app.pool, id);
+        if (!token || token.userId !== req.user.id) {
+            return reply
+                .code(404)
+                .view("errors/404.hbs", { layout: "layouts/public", title: req.t("error.404.title"), req });
+        }
+        req.auditAction = {
+            action: "mcp_token.revoke",
+            targetType: "mcp_token",
+            targetId: id,
+            metadata: { source: "dashboard" },
+        };
+        await (0, mcpTokens_1.revokeMcpToken)(app.pool, id);
+        return reply.code(302).redirect("/dashboard/mcp-tokens");
+    });
+    app.get("/dashboard/mcp-tokens/:id/revoke/confirm", async (req, reply) => {
+        const id = Number(req.params.id);
+        const token = await (0, mcpTokens_1.findMcpTokenById)(app.pool, id);
+        if (!token || token.userId !== req.user.id) {
+            return reply
+                .code(404)
+                .view("errors/404.hbs", { layout: "layouts/public", title: req.t("error.404.title"), req });
+        }
+        return reply.view("dashboard/mcp-token-revoke-confirm.hbs", {
+            layout: "layouts/dashboard",
+            title: req.t("dashboard.mcp.revoke.confirm.title"),
+            token,
             req,
         });
     });

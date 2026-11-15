@@ -46,6 +46,7 @@ const ICON_DOWNLOAD = '<path d="M8 2.5v7"/><path d="M5 7l3 3 3-3"/><path d="M2.5
 const ICON_SOURCE = '<path d="M6 2.5v4"/><path d="M10 2.5v4"/><path d="M4 6.5h8v3a4 4 0 0 1-4 4 4 4 0 0 1-4-4z"/>';
 const ICON_USERS = '<circle cx="6" cy="5.5" r="2.5"/><path d="M2 13.5c0-2.2 1.8-3.5 4-3.5s4 1.3 4 3.5"/><path d="M11 3.5a2.5 2.5 0 0 1 0 5"/><path d="M12 13.5c0-1.5-.5-2.5-1.3-3.1"/>';
 const ICON_KEY = '<circle cx="5.5" cy="8" r="2.5"/><path d="M8 8h5.5"/><path d="M11.5 8v2.5"/><path d="M13.5 8v1.5"/>';
+const ICON_PLUGIN = '<path d="M4 2.5h5v5H4z"/><path d="M7 7.5h5v5H7z"/><path d="M9.5 2.5v3.5"/><path d="M6.5 10.5v3"/><path d="M12.5 4.5h2"/><path d="M12.5 7.5h1.5"/>';
 const ICON_SHIELD = '<path d="M8 2.5l5 2v3.5c0 3-2.1 5-5 5.5-2.9-.5-5-2.5-5-5.5V4.5z"/><path d="M6 8l1.5 1.5L10.5 6.5"/>';
 const ICON_DOC = '<path d="M4 2.5h6l3 3v8a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-10a1 1 0 0 1 1-1z"/><path d="M5.5 7h5"/><path d="M5.5 9.5h5"/><path d="M5.5 12h3"/>';
 const ICON_GEAR = '<circle cx="8" cy="8" r="2"/><path d="M8 1.5v1.8"/><path d="M8 12.7v1.8"/><path d="M1.5 8h1.8"/><path d="M12.7 8h1.8"/><path d="M3.4 3.4l1.3 1.3"/><path d="M11.3 11.3l1.3 1.3"/><path d="M12.6 3.4l-1.3 1.3"/><path d="M4.7 11.3l-1.3 1.3"/>';
@@ -76,6 +77,10 @@ exports.ADMIN_NAV_GROUPS = [
         items: [
             { href: "/admin/users", labelKey: "nav.admin.users", icon: ICON_USERS, match: "prefix" },
             { href: "/admin/keys", labelKey: "nav.admin.keys", icon: ICON_KEY, match: "prefix" },
+            // MCP tokens are a separate credential from API keys: they need an
+            // administrator's approval before they work, so they get their own
+            // page in the same group rather than a corner of /admin/keys.
+            { href: "/admin/mcp-tokens", labelKey: "nav.admin.mcpTokens", icon: ICON_PLUGIN, match: "prefix" },
         ],
     },
     {

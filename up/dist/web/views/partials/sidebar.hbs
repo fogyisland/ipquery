@@ -54,6 +54,7 @@
           <a href="/dashboard" class="sidebar-link {{#if (eq req.path '/dashboard')}}active{{/if}}"><span class="sidebar-icon--empty" aria-hidden="true"></span><span>{{req.t 'nav.dashboard'}}</span></a>
           <a href="/dashboard/history" class="sidebar-link {{#if (startsWith req.path '/dashboard/history')}}active{{/if}}"><span class="sidebar-icon--empty" aria-hidden="true"></span><span>{{req.t 'nav.history'}}</span></a>
           <a href="/dashboard/keys" class="sidebar-link {{#if (startsWith req.path '/dashboard/keys')}}active{{/if}}"><span class="sidebar-icon--empty" aria-hidden="true"></span><span>{{req.t 'nav.apiKeys'}}</span></a>
+          <a href="/dashboard/mcp-tokens" class="sidebar-link {{#if (startsWith req.path '/dashboard/mcp-tokens')}}active{{/if}}"><span class="sidebar-icon--empty" aria-hidden="true"></span><span>{{req.t 'nav.mcpTokens'}}</span></a>
           <a href="/dashboard/profile" class="sidebar-link {{#if (startsWith req.path '/dashboard/profile')}}active{{/if}}"><span class="sidebar-icon--empty" aria-hidden="true"></span><span>{{req.t 'nav.profile'}}</span></a>
         </div>
         {{#if (eq req.session.role 'admin')}}
