@@ -683,7 +683,14 @@ export async function lastSuccessfulEtl(pool: mysql.Pool): Promise<Date | null> 
 // page in PR 2. Snake-case column mapping is consistent with the rest
 // of this file; RowDataPacket coercion uses explicit String/Number/Date.
 
-export type EtlRunDownloadSource = "dbip-city" | "dbip-country" | "dbip-asn";
+export type EtlRunDownloadSource =
+  | "dbip-city"
+  | "dbip-country"
+  | "dbip-asn"
+  | "metowolf-cn"
+  | "runishiwo-cn"
+  | "runishiwo-v6"
+  | "sapics-user";
 export type EtlRunDownloadStatus = "success" | "failed" | "missing" | "skipped";
 
 export interface EtlRunDownloadRow {
@@ -944,6 +951,68 @@ export async function getEtlRunSwap(pool: mysql.Pool, runId: number): Promise<Et
   );
   if (rows.length === 0) return null;
   return etlRunSwapFromRow(rows[0]!);
+}
+
+export interface EtlRunDedupeRow {
+  runId: number;
+  inputRows: number;
+  contained: number;
+  exactDuplicates: number;
+  partialOverlaps: number;
+  emitted: number;
+  durationMs: number | null;
+  startedAt: Date;
+  finishedAt: Date | null;
+}
+
+function etlRunDedupeFromRow(r: mysql.RowDataPacket): EtlRunDedupeRow {
+  return {
+    runId: Number(r.run_id),
+    inputRows: Number(r.input_rows),
+    contained: Number(r.contained),
+    exactDuplicates: Number(r.exact_duplicates),
+    partialOverlaps: Number(r.partial_overlaps),
+    emitted: Number(r.emitted),
+    durationMs: r.duration_ms == null ? null : Number(r.duration_ms),
+    startedAt: new Date(r.started_at),
+    finishedAt: r.finished_at == null ? null : new Date(r.finished_at),
+  };
+}
+
+export async function insertEtlRunDedupe(pool: mysql.Pool, row: EtlRunDedupeRow): Promise<void> {
+  await pool.query(
+    `INSERT INTO etl_run_dedupe
+       (run_id, input_rows, contained, exact_duplicates, partial_overlaps,
+        emitted, duration_ms, started_at, finished_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      row.runId,
+      row.inputRows,
+      row.contained,
+      row.exactDuplicates,
+      row.partialOverlaps,
+      row.emitted,
+      row.durationMs,
+      row.startedAt,
+      row.finishedAt,
+    ],
+  );
+}
+
+export async function getEtlRunDedupe(
+  pool: mysql.Pool,
+  runId: number,
+): Promise<EtlRunDedupeRow | null> {
+  const [rows] = await pool.query<mysql.RowDataPacket[]>(
+    `SELECT run_id, input_rows, contained, exact_duplicates, partial_overlaps,
+            emitted, duration_ms, started_at, finished_at
+       FROM etl_run_dedupe
+      WHERE run_id = ?
+      LIMIT 1`,
+    [runId],
+  );
+  if (rows.length === 0) return null;
+  return etlRunDedupeFromRow(rows[0]!);
 }
 
 export { runMigrations, getAppliedVersions, migrationStatus } from "./migrations/runner";
