@@ -16,6 +16,7 @@ import {
   insertEtlRunDownload,
   insertEtlRunParse,
   insertEtlRunInsert,
+  insertEtlRunDedupe,
   upsertEtlRunSwap,
   type EtlRunDownloadSource,
   type EtlRunDownloadRow,
@@ -27,9 +28,24 @@ import {
   parseDbipCityCsvStreamWithStats,
   parseDbipCountryCsvStreamWithStats,
   parseDbipAsnCsvStreamWithStats,
-  type ParseStreamResult,
 } from "./sources/dbip";
-import { DEFAULT_SPECS, downloadAll, validateGzFile, type DownloadSpec } from "./download";
+import {
+  ALL_SPECS,
+  EXTRA_SPECS,
+  downloadAll,
+  validateGzFile,
+  type DownloadSpec,
+} from "./download";
+import { parseMetowolfCidrStreamWithStats } from "./sources/cidr";
+import { parseRunishiwoV4CidrStreamWithStats, parseRunishiwoV6CidrStreamWithStats } from "./sources/cidr";
+import { parseSapicsCountryStreamWithStats } from "./sources/sapicsCountry";
+import {
+  isGithubStreamFile,
+  type GithubStreamFile,
+  type StreamFile,
+} from "./sources/githubTypes";
+import { prepareGithubSources, type GithubPrepared } from "./sources/prepare";
+import type { ParseStreamResult, SourceRecord } from "./sources/types";
 import { acquireEtlRunLock, EtlRunLockedError } from "./runGuard";
 import type { AppConfig } from "../config";
 import type { Source, NormalizedRecord, IpRangeRow, EtlStage } from "../types";
@@ -40,26 +56,12 @@ import type { Source, NormalizedRecord, IpRangeRow, EtlStage } from "../types";
 // a later, lower-priority file (inserted later) doesn't clobber a value
 // already filled by an earlier, higher-priority one. Higher priority wins
 // because COALESCE(existing, new) keeps the already-present value.
-interface StreamFile {
-  source: Source;
-  /** Logical etl_run_* source label (matches the ENUM). */
-  etlSource: EtlRunDownloadSource;
-  filename: string;
-  /** Parse fn that returns { records, stats } so we can persist skip
-   *  counters without breaking the streaming signature. */
-  parse: (p: string) => ParseStreamResult;
-  fillCols: ReadonlySet<keyof IpRangeRow>;
-}
-
-// Priority order matches the cross-source merge: insert maxmind first if
-// present, then ip2region, then DB-IP files (city, country, asn). Each
-// file fills only its own columns, so a lower-priority file can never
-// overwrite a higher-priority one.
-const DBIP_FILES: StreamFile[] = [
+const SOURCE_FILES: ReadonlyArray<StreamFile> = [
   {
     source: "dbip",
     etlSource: "dbip-city",
     filename: "dbip.csv.gz",
+    validate: "gzip",
     parse: parseDbipCityCsvStreamWithStats,
     fillCols: new Set<keyof IpRangeRow>([
       "countryCode",
@@ -76,6 +78,7 @@ const DBIP_FILES: StreamFile[] = [
     source: "dbip-country",
     etlSource: "dbip-country",
     filename: "dbip-country.csv.gz",
+    validate: "gzip",
     parse: parseDbipCountryCsvStreamWithStats,
     fillCols: new Set<keyof IpRangeRow>(["countryCode", "countrySource"]),
   },
@@ -83,8 +86,49 @@ const DBIP_FILES: StreamFile[] = [
     source: "dbip-asn",
     etlSource: "dbip-asn",
     filename: "dbip-asn.csv.gz",
+    validate: "gzip",
     parse: parseDbipAsnCsvStreamWithStats,
     fillCols: new Set<keyof IpRangeRow>(["asn", "asnOrg", "asnSource"]),
+  },
+  {
+    source: "metowolf-cn",
+    etlSource: "metowolf-cn",
+    filename: "china-ipv4.txt",
+    validate: "text",
+    textFormat: "cidr",
+    parse: parseMetowolfCidrStreamWithStats,
+    fillCols: new Set<keyof IpRangeRow>(["countryCode", "countrySource"]),
+    dedupeGroup: "github-list",
+  },
+  {
+    source: "runishiwo-cn",
+    etlSource: "runishiwo-cn",
+    filename: "china-v4.txt",
+    validate: "text",
+    textFormat: "cidr",
+    parse: parseRunishiwoV4CidrStreamWithStats,
+    fillCols: new Set<keyof IpRangeRow>(["countryCode", "countrySource"]),
+    dedupeGroup: "github-list",
+  },
+  {
+    source: "runishiwo-cn",
+    etlSource: "runishiwo-v6",
+    filename: "china-v6.txt",
+    validate: "text",
+    textFormat: "cidr",
+    parse: parseRunishiwoV6CidrStreamWithStats,
+    fillCols: new Set<keyof IpRangeRow>(["countryCode", "countrySource"]),
+    dedupeGroup: "github-list",
+  },
+  {
+    source: "sapics-user",
+    etlSource: "sapics-user",
+    filename: "sapics-user-country.csv",
+    validate: "text",
+    textFormat: "country-csv",
+    parse: parseSapicsCountryStreamWithStats,
+    fillCols: new Set<keyof IpRangeRow>(["countryCode", "countrySource"]),
+    dedupeGroup: "github-list",
   },
 ];
 
@@ -258,10 +302,10 @@ async function runDownloadStage(
   /** Which specs to fetch. Defaults to all of them; the pipeline passes
    *  only the files that are missing or corrupt, so a cached-and-valid
    *  file is never re-downloaded. */
-  specs: ReadonlyArray<DownloadSpec> = DEFAULT_SPECS,
+  specs: ReadonlyArray<DownloadSpec> = ALL_SPECS,
 ): Promise<EtlRunDownloadRow[]> {
   const t0 = Date.now();
-  const { attempts } = await downloadAll(
+  const { attempts, failures } = await downloadAll(
     specs,
     rawDir,
     now,
@@ -271,10 +315,11 @@ async function runDownloadStage(
   if (sink) await sink.flush();
   console.log(`[etl] download stage: ${attempts.length} attempt(s) recorded in ${elapsed}ms`);
   const rows: EtlRunDownloadRow[] = [];
-  for (const a of attempts) {
+  const monthlyAttempts = attempts.filter((attempt) => attempt.spec.mode === "monthly");
+  for (const a of monthlyAttempts) {
     const row: EtlRunDownloadRow = {
       runId,
-      source: a.spec.kind === "city" ? "dbip-city" : a.spec.kind === "country" ? "dbip-country" : "dbip-asn",
+      source: a.spec.etlSource,
       destName: a.destName,
       sourceUrl: a.url === "(none)" ? null : a.url,
       month: a.month,
@@ -289,137 +334,242 @@ async function runDownloadStage(
     await insertEtlRunDownload(pool, row);
     rows.push(row);
   }
+  for (const spec of specs.filter((entry) => entry.mode === "fixed")) {
+    const specAttempts = attempts.filter((attempt) => attempt.spec.destName === spec.destName);
+    const success = specAttempts.find((attempt) => attempt.status === "success");
+    const failure = failures.find((entry) => entry.destName === spec.destName);
+    const row: EtlRunDownloadRow = success
+      ? {
+          runId,
+          source: spec.etlSource,
+          destName: spec.destName,
+          sourceUrl: success.url,
+          month: null,
+          status: "success",
+          bytes: success.bytes,
+          durationMs: success.durationMs,
+          retryCount: success.retryCount,
+          errorMessage: success.errorMessage,
+          startedAt: success.startedAt,
+          finishedAt: success.finishedAt,
+        }
+      : {
+          runId,
+          source: spec.etlSource,
+          destName: spec.destName,
+          sourceUrl: failure?.url ?? null,
+          month: null,
+          status: "failed",
+          bytes: null,
+          durationMs: specAttempts.reduce((sum, attempt) => sum + (attempt.durationMs ?? 0), 0),
+          retryCount: specAttempts.length,
+          errorMessage: failure?.message ?? "刷新失败、复用旧缓存",
+          startedAt: specAttempts[0]?.startedAt ?? now,
+          finishedAt: specAttempts[specAttempts.length - 1]?.finishedAt ?? now,
+        };
+    await insertEtlRunDownload(pool, row);
+    rows.push(row);
+  }
   return rows;
-}
-
-interface ParseFile {
-  source: Source;
-  etlSource: EtlRunDownloadSource;
-  filename: string;
-  parse: (p: string) => ParseStreamResult;
 }
 
 async function runParseStage(
   pool: mysql.Pool,
   runId: number,
   rawDir: string,
-  files: ParseFile[],
+  files: ReadonlyArray<StreamFile>,
   sink?: EtlProgressSink,
+  github?: GithubPrepared,
 ): Promise<EtlRunParseRow[]> {
   const rows: EtlRunParseRow[] = [];
-  for (const f of files) {
+  const githubFiles = files.filter(isGithubStreamFile);
+  const dbipFiles = files.filter((file) => !isGithubStreamFile(file));
+  for (const f of dbipFiles) {
     const fullPath = path.join(rawDir, f.filename);
-    // Defence in depth: the download stage already refuses to proceed
-    // with a missing file, but the parse stage used to silently skip
-    // anything not handed to it — which is how a run could report
-    // "success" with a partial data set. Fail loudly instead.
     if (!(await fileExists(fullPath))) {
       throw new Error(`source file vanished before parsing: ${f.filename}`);
     }
     const startedAt = new Date();
     const t0 = Date.now();
-    // Walk the file once to fill in skip counters. The actual insert
-    // happens later in runInsertStage — the second walk is cheap
-    // because the OS page cache holds the .gz content.
     const { records, stats } = f.parse(fullPath);
     for await (const _ of records) {
       void _;
     }
-    const finishedAt = new Date();
-    const row: EtlRunParseRow = {
-      runId,
-      source: f.etlSource,
-      destName: f.filename,
-      rowsEmitted: stats.rowsEmitted,
-      rowsSkippedShort: stats.skipped.shortLine,
-      rowsSkippedHeader: stats.skipped.headerRow,
-      rowsSkippedUnparseableIp: stats.skipped.unparseableIp,
-      rowsSkippedMissingCol: stats.skipped.missingCol,
-      rowsSkippedNanAsn: stats.skipped.nonNumericAsn,
-      rowsSkippedOther: stats.skipped.other,
-      gunzipErrors: stats.gunzipErrors,
-      startedAt,
-      finishedAt,
-      durationMs: Date.now() - t0,
-    };
-    await insertEtlRunParse(pool, row);
-    rows.push(row);
+    rows.push(await persistParseRow(pool, runId, f, stats, startedAt, Date.now() - t0));
     if (sink) sink.onParseTotal(stats.rowsEmitted);
-    console.log(
-      `[etl] parse ${f.etlSource}: emitted=${stats.rowsEmitted} skipped=${stats.skipped.shortLine + stats.skipped.headerRow + stats.skipped.unparseableIp + stats.skipped.missingCol + stats.skipped.nonNumericAsn + stats.skipped.other} duration=${row.durationMs}ms`,
-    );
+  }
+  if (githubFiles.length > 0) {
+    if (!github) throw new Error("prepared GitHub source records are missing before parse");
+    for (const f of githubFiles) {
+      const stats = github.byFile.get(f.etlSource);
+      if (!stats) throw new Error(`prepared stats missing for ${f.etlSource}`);
+      rows.push(await persistParseRow(pool, runId, f, stats, new Date(), 0));
+      if (sink) sink.onParseTotal(stats.rowsEmitted);
+    }
   }
   return rows;
 }
 
-interface InsertFile {
-  source: Source;
-  etlSource: EtlRunDownloadSource;
-  filename: string;
-  parse: (p: string) => ParseStreamResult;
-  fillCols: ReadonlySet<keyof IpRangeRow>;
+async function persistParseRow(
+  pool: mysql.Pool,
+  runId: number,
+  file: StreamFile,
+  stats: ParseStreamResult["stats"],
+  startedAt: Date,
+  durationMs: number,
+): Promise<EtlRunParseRow> {
+  const row: EtlRunParseRow = {
+    runId,
+    source: file.etlSource,
+    destName: file.filename,
+    rowsEmitted: stats.rowsEmitted,
+    rowsSkippedShort: stats.skipped.shortLine,
+    rowsSkippedHeader: stats.skipped.headerRow,
+    rowsSkippedUnparseableIp: stats.skipped.unparseableIp,
+    rowsSkippedMissingCol: stats.skipped.missingCol,
+    rowsSkippedNanAsn: stats.skipped.nonNumericAsn,
+    rowsSkippedOther: stats.skipped.other,
+    gunzipErrors: stats.gunzipErrors,
+    startedAt,
+    finishedAt: new Date(),
+    durationMs,
+  };
+  await insertEtlRunParse(pool, row);
+  return row;
+}
+
+interface InsertTotals {
+  attempted: number;
+  inserted: number;
+  duplicates: number;
+  batchCount: number;
+}
+
+function emptyTotals(): InsertTotals {
+  return { attempted: 0, inserted: 0, duplicates: 0, batchCount: 0 };
+}
+
+function addTotals(target: InsertTotals, added: InsertTotals): void {
+  target.attempted += added.attempted;
+  target.inserted += added.inserted;
+  target.duplicates += added.duplicates;
+  target.batchCount += added.batchCount;
+}
+
+async function flushBatch(
+  pool: mysql.Pool,
+  batch: IpRangeRow[],
+  fillCols: ReadonlySet<keyof IpRangeRow>,
+  totals: InsertTotals,
+): Promise<InsertTotals> {
+  const result = await insertIntoNewUpsert(pool, batch, fillCols);
+  addTotals(totals, result);
+  return result;
 }
 
 async function runInsertStage(
   pool: mysql.Pool,
   runId: number,
   rawDir: string,
-  files: InsertFile[],
+  files: ReadonlyArray<StreamFile>,
   sink?: EtlProgressSink,
+  github?: GithubPrepared,
 ): Promise<EtlRunInsertRow[]> {
   const rows: EtlRunInsertRow[] = [];
-  // Track a running inserted count across files so the UI bar moves
-  // monotonically. It must live OUTSIDE the per-file loop: resetting it
-  // per file made the bar drop to 0% when moving on to dbip-country.
   let runInsertedSoFar = 0;
-  for (const f of files) {
+  for (const f of files.filter((file) => !isGithubStreamFile(file))) {
     const startedAt = new Date();
     const t0 = Date.now();
-    const totals = { attempted: 0, inserted: 0, duplicates: 0, batchCount: 0 };
+    const totals = emptyTotals();
     let batch: IpRangeRow[] = [];
-    const fullPath = path.join(rawDir, f.filename);
-    for await (const rec of f.parse(fullPath).records) {
+    for await (const rec of f.parse(path.join(rawDir, f.filename)).records) {
       batch.push(toIpRangeRow(rec, f.source, f.fillCols));
       if (batch.length >= 1000) {
-        const c = await insertIntoNewUpsert(pool, batch, f.fillCols);
-        totals.attempted += c.attempted;
-        totals.inserted += c.inserted;
-        totals.duplicates += c.duplicates;
-        totals.batchCount += c.batchCount;
-        runInsertedSoFar += c.inserted;
+        const result = await flushBatch(pool, batch, f.fillCols, totals);
+        runInsertedSoFar += result.inserted;
         if (sink) sink.onInsert(runInsertedSoFar);
         batch = [];
       }
     }
     if (batch.length > 0) {
-      const c = await insertIntoNewUpsert(pool, batch, f.fillCols);
-      totals.attempted += c.attempted;
-      totals.inserted += c.inserted;
-      totals.duplicates += c.duplicates;
-      totals.batchCount += c.batchCount;
-      runInsertedSoFar += c.inserted;
+      const result = await flushBatch(pool, batch, f.fillCols, totals);
+      runInsertedSoFar += result.inserted;
       if (sink) sink.onInsert(runInsertedSoFar);
     }
-    const finishedAt = new Date();
-    const row: EtlRunInsertRow = {
-      runId,
-      source: f.etlSource,
-      destName: f.filename,
-      rowsAttempted: totals.attempted,
-      rowsInserted: totals.inserted,
-      rowsDuplicates: totals.duplicates,
-      batchCount: totals.batchCount,
-      durationMs: Date.now() - t0,
-      startedAt,
-      finishedAt,
+    rows.push(await persistInsertRow(pool, runId, f, totals, startedAt, Date.now() - t0));
+  }
+  const githubFiles = files.filter(isGithubStreamFile);
+  if (githubFiles.length > 0) {
+    if (!github) throw new Error("prepared GitHub source records are missing before insert");
+    const bySource = new Map<EtlRunDownloadSource, InsertTotals>();
+    for (const f of githubFiles) bySource.set(f.etlSource, emptyTotals());
+    const fillCols = githubFiles[0]!.fillCols;
+    let batch: SourceRecord[] = [];
+    const flushGithubBatch = async (): Promise<void> => {
+      const rowBatch = batch.map((rec) => toIpRangeRow(rec, rec.source, fillCols));
+      const result = await insertIntoNewUpsert(pool, rowBatch, fillCols);
+      let remainingInserted = result.inserted;
+      let remainingDuplicates = result.duplicates;
+      for (const rec of batch) {
+        const totals = bySource.get(rec.etlSource) ?? emptyTotals();
+        totals.attempted += 1;
+        totals.batchCount += 1;
+        if (remainingInserted > 0) {
+          totals.inserted += 1;
+          remainingInserted -= 1;
+        } else if (remainingDuplicates > 0) {
+          totals.duplicates += 1;
+          remainingDuplicates -= 1;
+        }
+        bySource.set(rec.etlSource, totals);
+      }
+      runInsertedSoFar += result.inserted;
+      if (sink) sink.onInsert(runInsertedSoFar);
+      batch = [];
     };
-    await insertEtlRunInsert(pool, row);
-    rows.push(row);
-    console.log(
-      `[etl] insert ${f.etlSource}: attempted=${totals.attempted} inserted=${totals.inserted} dupes=${totals.duplicates} batches=${totals.batchCount} duration=${row.durationMs}ms`,
-    );
+    for (const rec of github.dedupe.records) {
+      batch.push(rec);
+      if (batch.length >= 1000) await flushGithubBatch();
+    }
+    if (batch.length > 0) await flushGithubBatch();
+    for (const f of githubFiles) {
+      rows.push(
+        await persistInsertRow(
+          pool,
+          runId,
+          f,
+          bySource.get(f.etlSource) ?? emptyTotals(),
+          new Date(),
+          0,
+        ),
+      );
+    }
   }
   return rows;
+}
+
+async function persistInsertRow(
+  pool: mysql.Pool,
+  runId: number,
+  file: StreamFile,
+  totals: InsertTotals,
+  startedAt: Date,
+  durationMs: number,
+): Promise<EtlRunInsertRow> {
+  const row: EtlRunInsertRow = {
+    runId,
+    source: file.etlSource,
+    destName: file.filename,
+    rowsAttempted: totals.attempted,
+    rowsInserted: totals.inserted,
+    rowsDuplicates: totals.duplicates,
+    batchCount: totals.batchCount,
+    durationMs,
+    startedAt,
+    finishedAt: new Date(),
+  };
+  await insertEtlRunInsert(pool, row);
+  return row;
 }
 
 async function runSwapStage(pool: mysql.Pool, runId: number): Promise<EtlRunSwapRow> {
@@ -638,7 +788,7 @@ async function runPipelineLocked(
     //    download exactly the files that are missing or damaged.
     const reusable: StreamFile[] = [];
     const needDownload: StreamFile[] = [];
-    for (const f of DBIP_FILES) {
+    for (const f of SOURCE_FILES.filter((file) => file.validate === "gzip")) {
       const filePath = path.join(rawDir, f.filename);
       if (!(await fileExists(filePath))) {
         needDownload.push(f);
@@ -656,16 +806,18 @@ async function runPipelineLocked(
       reusable.push(f);
     }
 
-    if (needDownload.length > 0) {
-      sink.setStage("download");
-      // Map the files we need onto their download specs (matched by
-      // destination filename) so a cached-and-valid file is never
-      // re-downloaded.
-      const needNames = new Set(needDownload.map((f) => f.filename));
-      const specs = DEFAULT_SPECS.filter((spec) => needNames.has(spec.destName));
-      const download = opts.download ?? runDownloadStage;
-      await download(pool, runId, rawDir, now, sink, specs);
-    }
+    // The four GitHub fixed files refresh every run. A failure preserves
+    // the previous validated cache and is recorded as 'failed', never
+    // 'skipped'. The injected test download seam receives all specs so
+    // integration tests can short-circuit without network access.
+    const needNames = new Set(needDownload.map((f) => f.filename));
+    const monthlySpecs = ALL_SPECS.filter(
+      (spec) => spec.mode === "monthly" && needNames.has(spec.destName),
+    );
+    const specs = [...monthlySpecs, ...EXTRA_SPECS];
+    sink.setStage("download");
+    const download = opts.download ?? runDownloadStage;
+    await download(pool, runId, rawDir, now, sink, specs);
 
     // Re-check the disk: after the download stage, every file must be
     // present AND intact. A file that is still missing or corrupt at
@@ -673,13 +825,14 @@ async function runPipelineLocked(
     // because the parse stage would silently skip it.
     const present: StreamFile[] = [];
     const missing: string[] = [];
-    for (const f of DBIP_FILES) {
+    for (const f of SOURCE_FILES) {
       const filePath = path.join(rawDir, f.filename);
       if (!(await fileExists(filePath))) {
         missing.push(f.filename);
         continue;
       }
-      const problem = await validateGzFile(filePath);
+      const problem =
+        f.validate === "gzip" ? await validateGzFile(filePath) : null;
       if (problem) {
         missing.push(`${f.filename} (${problem})`);
         continue;
@@ -715,7 +868,7 @@ async function runPipelineLocked(
     // when re-running against cached files.
     try {
       let totalBytes = 0;
-      for (const f of DBIP_FILES) {
+      for (const f of SOURCE_FILES) {
         try {
           const stat = await fs.stat(path.join(rawDir, f.filename));
           totalBytes += stat.size;
@@ -726,21 +879,27 @@ async function runPipelineLocked(
       await sink.flush();
     } catch { /* ignore — sink is best-effort */ }
 
-    // 2) Parse stage: per-file skip counters.
+    // 2) Parse stage: per-file skip counters. The four GitHub sources
+    // are parsed and deduped once; parse and insert reuse that snapshot.
     sink.setStage("parse");
     await sink.flush();
-    const parseRows = await runParseStage(
-      pool,
-      runId,
+    const githubStartedAt = new Date();
+    const github = await prepareGithubSources(
+      present.filter(isGithubStreamFile),
       rawDir,
-      present.map((f) => ({
-        source: f.source,
-        etlSource: f.etlSource,
-        filename: f.filename,
-        parse: f.parse,
-      })),
-      sink,
     );
+    await insertEtlRunDedupe(pool, {
+      runId,
+      inputRows: github.dedupe.stats.input,
+      contained: github.dedupe.stats.contained,
+      exactDuplicates: github.dedupe.stats.exactDuplicates,
+      partialOverlaps: github.dedupe.stats.partialOverlaps,
+      emitted: github.dedupe.stats.emitted,
+      durationMs: Date.now() - githubStartedAt.getTime(),
+      startedAt: githubStartedAt,
+      finishedAt: new Date(),
+    });
+    const parseRows = await runParseStage(pool, runId, rawDir, present, sink, github);
     await sink.flush();
 
     // A source file that parses to zero rows is as bad as a missing
@@ -749,12 +908,31 @@ async function runPipelineLocked(
     // entirely. DB-IP city-lite is the primary source (it carries
     // city/geo data on top of the country codes), so its absence is
     // always fatal.
-    const emptySources = parseRows
-      .filter((r) => r.rowsEmitted === 0)
-      .map((r) => r.destName);
-    if (emptySources.length > 0) {
+    const emptyDbipSources = parseRows
+      .filter(
+        (row) =>
+          row.rowsEmitted === 0 &&
+          present.some((file) =>
+            file.filename === row.destName && file.dedupeGroup !== "github-list",
+          ),
+      )
+      .map((row) => row.destName);
+    if (emptyDbipSources.length > 0) {
       throw new Error(
-        `source files parsed to zero rows: ${emptySources.join(", ")} — refusing to swap incomplete data over the live table`,
+        `source files parsed to zero rows: ${emptyDbipSources.join(", ")} — refusing to swap incomplete data over the live table`,
+      );
+    }
+    const emptyGithubSources = parseRows.filter(
+      (row) =>
+        row.rowsEmitted === 0 &&
+        present.some((file) => file.filename === row.destName && file.dedupeGroup === "github-list"),
+    );
+    for (const row of emptyGithubSources) {
+      console.warn(`[etl] github source ${row.destName} emitted zero rows after dedupe`);
+    }
+    if (github.dedupe.stats.emitted === 0) {
+      throw new Error(
+        "deduped GitHub sources emitted zero rows — refusing to swap incomplete data over the live table",
       );
     }
 
@@ -786,19 +964,7 @@ async function runPipelineLocked(
     sink.setStage("insert");
     await sink.flush();
     await truncateNew(pool);
-    const insertRows = await runInsertStage(
-      pool,
-      runId,
-      rawDir,
-      present.map((f) => ({
-        source: f.source,
-        etlSource: f.etlSource,
-        filename: f.filename,
-        parse: f.parse,
-        fillCols: f.fillCols,
-      })),
-      sink,
-    );
+    const insertRows = await runInsertStage(pool, runId, rawDir, present, sink, github);
     await sink.flush();
 
     // Second half of the guard: the files existed, but did they carry
@@ -828,18 +994,19 @@ async function runPipelineLocked(
     // old post-swap counts walk.
     const countFor = (etlSource: EtlRunDownloadSource): number =>
       insertRows.filter((r) => r.source === etlSource).reduce((sum, r) => sum + r.rowsAttempted, 0);
-    const dbipRecords = countFor("dbip-city");
+    const dbipCityRecords = countFor("dbip-city");
     const dbipCountryRecords = countFor("dbip-country");
     const dbipAsnRecords = countFor("dbip-asn");
-    const total = dbipRecords + dbipCountryRecords + dbipAsnRecords;
+    const dbipTotal = dbipCityRecords + dbipCountryRecords + dbipAsnRecords;
+    const mergedTotal = insertRows.reduce((sum, row) => sum + row.rowsAttempted, 0);
     await recordEtlFinish(pool, runId, "success", {
-      dbipRecords: total,
-      mergedRecords: total,
+      dbipRecords: dbipTotal,
+      mergedRecords: mergedTotal,
     });
     console.log(
-      `[etl] success run=${runId} merged=${total} (dbip=${dbipRecords}, dbip-country=${dbipCountryRecords}, dbip-asn=${dbipAsnRecords})`,
+      `[etl] success run=${runId} merged=${mergedTotal} (dbip=${dbipCityRecords}, dbip-country=${dbipCountryRecords}, dbip-asn=${dbipAsnRecords})`,
     );
-    return { runId, merged: total };
+    return { runId, merged: mergedTotal };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     await markStageFailed(pool, runId, msg);

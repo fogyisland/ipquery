@@ -1,6 +1,7 @@
+// SPDX-License-Identifier: MIT
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import * as mysql from "mysql2/promise";
-import { createPool, runMigrations, findRange, lastEtlRun } from "../../src/storage/mysql";
+import { createPool, runMigrations, findRange, lastEtlRun, getEtlRunDedupe } from "../../src/storage/mysql";
 import { runPipeline, EtlProgressSink } from "../../src/etl/pipeline";
 import { loadConfig } from "../../src/config";
 import * as fs from "node:fs/promises";
@@ -10,6 +11,17 @@ import * as zlib from "node:zlib";
 const TEST_DB = "ipquery_test";
 let pool: mysql.Pool;
 const cfg = loadConfig();
+const noDownload = async (): Promise<[]> => [];
+
+async function writeFixedFixtures(rawDir: string): Promise<void> {
+  await fs.writeFile(path.join(rawDir, "china-ipv4.txt"), "1.0.0.0/8\n1.2.3.0/24\n");
+  await fs.writeFile(path.join(rawDir, "china-v4.txt"), "1.0.0.0/8\n");
+  await fs.writeFile(path.join(rawDir, "china-v6.txt"), "# CN IPv6 List\n2001:db8::/32\n");
+  await fs.writeFile(
+    path.join(rawDir, "sapics-user-country.csv"),
+    "2.0.0.0,2.0.0.255,CN\n2001:db8::,2001:db8::ffff,CN\n",
+  );
+}
 
 beforeAll(async () => {
   cfg.db.database = TEST_DB;
@@ -38,6 +50,7 @@ beforeAll(async () => {
   );
   const asnCsv = "start_ip,end_ip,asn,asn_name\n9.9.9.0,9.9.9.255,64500,Example ISP\n";
   await fs.writeFile(path.join(rawDir, "dbip-asn.csv.gz"), zlib.gzipSync(Buffer.from(asnCsv)));
+  await writeFixedFixtures(rawDir);
   await fs.writeFile(
     path.join(rawDir, "ip2region.xdb"),
     JSON.stringify([{ start: "9.9.9.0", end: "9.9.9.255", country: "英国", city: "London" }]),
@@ -76,10 +89,32 @@ afterAll(async () => {
 
 describe("etl pipeline", () => {
   it("runs end-to-end and populates ip_ranges", async () => {
-    const result = await runPipeline({ cfg });
-    expect(result.merged).toBeGreaterThan(0);
+    const result = await runPipeline({ cfg, download: noDownload });
+    expect(result.merged).toBeGreaterThan(3);
     const last = await lastEtlRun(pool);
     expect(last?.status).toBe("success");
+    expect(last?.mergedRecords).toBe(result.merged);
+    expect(last?.dbipRecords).toBe(3);
+    const dedupe = await getEtlRunDedupe(pool, result.runId);
+    expect(dedupe).not.toBeNull();
+    expect(dedupe!.emitted).toBeGreaterThan(0);
+    const [parseRows] = await pool.query<mysql.RowDataPacket[]>(
+      `SELECT source, rows_emitted FROM etl_run_parses WHERE run_id = ? AND source IN
+       ('metowolf-cn','runishiwo-cn','runishiwo-v6','sapics-user')`,
+      [result.runId],
+    );
+    expect(parseRows.reduce((sum, row) => sum + Number(row.rows_emitted), 0)).toBe(dedupe!.emitted);
+    const [insertRows] = await pool.query<mysql.RowDataPacket[]>(
+      `SELECT source, rows_attempted FROM etl_run_inserts WHERE run_id = ? AND source IN
+       ('metowolf-cn','runishiwo-cn','runishiwo-v6','sapics-user')`,
+      [result.runId],
+    );
+    expect(insertRows.reduce((sum, row) => sum + Number(row.rows_attempted), 0)).toBe(dedupe!.emitted);
+    const githubRange = await findRange(
+      pool,
+      Buffer.from([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 1]),
+    );
+    expect(["metowolf-cn", "runishiwo-cn"]).toContain(githubRange?.countrySource);
   });
 
   it("subsequent /lookup finds seeded data", async () => {
@@ -109,7 +144,7 @@ describe("etl pipeline", () => {
       seen.push(rowsDone);
       origOnInsert(rowsDone);
     };
-    const result = await runPipeline({ cfg, runIdOverride: undefined, sink });
+    const result = await runPipeline({ cfg, runId: undefined, sink, download: noDownload });
     expect(result.merged).toBeGreaterThan(0);
     expect(seen.length).toBeGreaterThan(0);
     for (let i = 1; i < seen.length; i++) {
@@ -129,7 +164,6 @@ describe("etl pipeline", () => {
   // network fetch. The pipeline must treat "the file is still missing
   // after the download stage" as a hard failure rather than swapping
   // a partial data set over the live table.
-  const noopDownload = async () => [];
 
   it("refuses to swap when a source file cannot be obtained", async () => {
     // Regression: the old download stage decided per-run ("if NO file
@@ -142,7 +176,7 @@ describe("etl pipeline", () => {
     const backup = path.join(cfg.etl.dataDir, "dbip.csv.gz.bak");
     await fs.rename(target, backup);
     try {
-      await expect(runPipeline({ cfg, download: noopDownload })).rejects.toThrow(
+      await expect(runPipeline({ cfg, download: noDownload })).rejects.toThrow(
         /unavailable|vanished/i,
       );
     } finally {
@@ -158,7 +192,7 @@ describe("etl pipeline", () => {
     const backup = path.join(cfg.etl.dataDir, "dbip.csv.gz.bak");
     await fs.rename(target, backup);
     try {
-      await expect(runPipeline({ cfg, download: noopDownload })).rejects.toThrow();
+      await expect(runPipeline({ cfg, download: noDownload })).rejects.toThrow();
       const last = await lastEtlRun(pool);
       expect(last?.status).toBe("failed");
       expect(last?.errorMessage).toBeTruthy();
