@@ -42,7 +42,7 @@ function parseDec(s: string | undefined): number | undefined {
 // Minimal RFC 4180-ish CSV line parser: handles double-quoted fields that
 // may contain commas and `""`-escaped quotes. Doesn't handle embedded
 // newlines because DB-IP rows don't have them.
-function parseCsvLine(line: string): string[] {
+export function parseCsvLine(line: string): string[] {
   const out: string[] = [];
   let i = 0;
   while (i <= line.length) {
@@ -97,36 +97,8 @@ function isHeaderRow(cols: string[]): boolean {
   return cols[0] === "ip_start" || cols[0] === "start_ip";
 }
 
-// Skip-counter buckets returned by the *WithStats parsers below. Mirrors
-// the columns on etl_run_parses so the pipeline can persist the result
-// directly without remapping.
-export interface ParseSkipCounters {
-  shortLine: number;
-  headerRow: number;
-  unparseableIp: number;
-  missingCol: number;
-  nonNumericAsn: number;
-  other: number;
-}
-
-export interface ParseStats {
-  rowsEmitted: number;
-  skipped: ParseSkipCounters;
-  gunzipErrors: number;
-}
-
-export interface ParseStreamResult {
-  records: AsyncIterable<NormalizedRecord>;
-  stats: ParseStats;
-}
-
-function newStats(): ParseStats {
-  return {
-    rowsEmitted: 0,
-    skipped: { shortLine: 0, headerRow: 0, unparseableIp: 0, missingCol: 0, nonNumericAsn: 0, other: 0 },
-    gunzipErrors: 0,
-  };
-}
+import { newStats, type ParseStats, type ParseStreamResult } from "./types";
+export { newStats, type ParseSkipCounters, type ParseStats, type ParseStreamResult } from "./types";
 
 async function* parseDbipCityLines(gzPath: string, stats: ParseStats): AsyncIterable<NormalizedRecord> {
   for await (const cols of streamGzippedCsv(gzPath, true)) {

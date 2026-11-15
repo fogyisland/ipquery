@@ -9,10 +9,18 @@ import * as http from "node:http";
 import { Readable } from "node:stream";
 import { EventEmitter } from "node:events";
 import {
+  ALL_SPECS,
   candidateMonths,
   DEFAULT_SPECS,
+  downloadAll,
   downloadToFile,
+  EXTRA_SPECS,
+  fetchFixedOneWithAttempts,
+  parseDownloadKinds,
+  replaceWithValidatedTemp,
   validateGzFile,
+  validateTextFile,
+  type FixedSpec,
 } from "../../src/etl/download";
 
 describe("candidateMonths", () => {
@@ -66,6 +74,207 @@ describe("DEFAULT_SPECS", () => {
       "dbip-country-lite",
       "dbip-asn-lite",
     ]);
+  });
+});
+
+describe("EXTRA_SPECS", () => {
+  it("EXTRA_SPECS pins the four fixed sources", () => {
+    expect(EXTRA_SPECS.map((s) => [s.kind, s.destName, s.etlSource, s.format])).toEqual([
+      ["metowolf-cn", "china-ipv4.txt", "metowolf-cn", "cidr"],
+      ["runishiwo-cn", "china-v4.txt", "runishiwo-cn", "cidr"],
+      ["runishiwo-v6", "china-v6.txt", "runishiwo-v6", "cidr"],
+      ["sapics-user", "sapics-user-country.csv", "sapics-user", "country-csv"],
+    ]);
+    expect(EXTRA_SPECS.map((s) => s.urls)).toEqual([
+      [
+        "https://raw.githubusercontent.com/metowolf/iplist/master/data/special/china.txt",
+        "https://cdn.jsdelivr.net/gh/metowolf/iplist@master/data/special/china.txt",
+      ],
+      [
+        "https://raw.githubusercontent.com/runishiwo/ChinaIPlist/main/cn_v4.txt",
+        "https://cdn.jsdelivr.net/gh/runishiwo/ChinaIPlist@main/cn_v4.txt",
+      ],
+      [
+        "https://raw.githubusercontent.com/runishiwo/ChinaIPlist/main/cn_v6.txt",
+        "https://cdn.jsdelivr.net/gh/runishiwo/ChinaIPlist@main/cn_v6.txt",
+      ],
+      [
+        "https://github.com/sapics/ip-location-db/releases/download/latest/user-country.csv",
+        "https://cdn.jsdelivr.net/gh/sapics/ip-location-db@latest/user-country.csv",
+      ],
+    ]);
+  });
+});
+
+describe("validateTextFile", () => {
+  let tmpDir: string;
+
+  beforeAll(async () => {
+    tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "ipquery-text-"));
+  });
+
+  afterAll(async () => {
+    await fs.rm(tmpDir, { recursive: true, force: true });
+  });
+
+  const writeText = async (name: string, body: string | Buffer): Promise<string> => {
+    const filePath = path.join(tmpDir, name);
+    await fs.writeFile(filePath, body);
+    return filePath;
+  };
+
+  it("validateTextFile rejects empty, NUL, replacement char, HTML, comment-only and accepts a last line without newline", async () => {
+    expect(await validateTextFile(await writeText("empty.txt", ""), "cidr")).toBeTruthy();
+    expect(
+      await validateTextFile(await writeText("nul.txt", Buffer.from("1.2.3.0/24\u0000\n")), "cidr"),
+    ).toBeTruthy();
+    expect(
+      await validateTextFile(await writeText("replacement.txt", Buffer.from("�\n")), "cidr"),
+    ).toBeTruthy();
+    expect(
+      await validateTextFile(await writeText("html.txt", "<!doctype html>\n"), "cidr"),
+    ).toBeTruthy();
+    expect(
+      await validateTextFile(await writeText("comment-only.txt", "# only a comment\n"), "cidr"),
+    ).toBeTruthy();
+    expect(await validateTextFile(path.join(tmpDir, "missing.txt"), "cidr")).toBeTruthy();
+    expect(
+      await validateTextFile(await writeText("no-tail-newline.txt", "1.2.3.0/24\n4.5.6.0/24"), "cidr"),
+    ).toBeNull();
+    const countryCsv = "1.2.3.0,1.2.3.255,CN\n2001:db8::,2001:db8::ffff,CN";
+    expect(await validateTextFile(await writeText("country.csv", countryCsv), "country-csv")).toBeNull();
+    expect(
+      await validateTextFile(
+        await writeText("bad-country.csv", "not-an-ip,not-an-ip,CN\n"),
+        "country-csv",
+      ),
+    ).toBeTruthy();
+  });
+});
+
+describe("fixed URL refresh", () => {
+  let tmpDir: string;
+  const validCidr = "# CN IPv6 list\n2001:db8::/32\n";
+
+  beforeAll(async () => {
+    tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "ipquery-fixed-"));
+  });
+
+  afterAll(async () => {
+    await fs.rm(tmpDir, { recursive: true, force: true });
+  });
+
+  const urlStub = (
+    handlers: Readonly<Record<string, { status: number; body: string }>>,
+  ): typeof https.get => {
+    const impl = ((url: string, cb: (_res: http.IncomingMessage) => void) => {
+      const handler = handlers[url] ?? { status: 500, body: "upstream failure" };
+      const res = Readable.from([Buffer.from(handler.body)]) as unknown as http.IncomingMessage;
+      (res as unknown as { statusCode: number }).statusCode = handler.status;
+      (res as unknown as { headers: Record<string, string> }).headers = {
+        "content-length": String(Buffer.byteLength(handler.body)),
+      };
+      setImmediate(() => cb(res));
+      const req = new EventEmitter() as EventEmitter & {
+        setTimeout: (_ms: number, _cb: () => void) => void;
+        destroy: (_err?: Error) => void;
+      };
+      req.setTimeout = () => undefined;
+      req.destroy = () => undefined;
+      return req as unknown as http.ClientRequest;
+    }) as unknown as typeof https.get;
+    return impl;
+  };
+
+  const v6Spec = (): FixedSpec => ({ ...EXTRA_SPECS[2]! });
+
+  it("primary 500 falls back to the jsDelivr mirror", async () => {
+    const spec = v6Spec();
+    const mirror = spec.urls[1]!;
+    const result = await fetchFixedOneWithAttempts(
+      spec,
+      tmpDir,
+      undefined,
+      urlStub({ [mirror]: { status: 200, body: validCidr } }),
+    );
+    expect(result.month).toBeNull();
+    expect(result.url).toBe(mirror);
+    expect(result.etlSource).toBe("runishiwo-v6");
+    expect(await fs.readFile(path.join(tmpDir, spec.destName), "utf8")).toBe(validCidr);
+  });
+
+  it("fixed refresh keeps the previous cache intact and cleans every temp file", async () => {
+    const spec = { ...v6Spec(), destName: "cache-intact.txt" };
+    const destPath = path.join(tmpDir, spec.destName);
+    const previous = "# previous complete cache\n2001:db8::/48\n";
+    await fs.writeFile(destPath, previous);
+    const primary = "https://primary.example.test/failure";
+    const mirror = "https://mirror.example.test/failure";
+    spec.urls = [primary, mirror];
+    const { results, failures, attempts } = await downloadAll(
+      [spec],
+      tmpDir,
+      new Date("2026-11-15T00:00:00Z"),
+      undefined,
+      urlStub({
+        [primary]: { status: 500, body: "primary down" },
+        [mirror]: { status: 500, body: "mirror down" },
+      }),
+    );
+    expect(results).toEqual([]);
+    expect(await fs.readFile(destPath, "utf8")).toBe(previous);
+    expect((await fs.readdir(tmpDir)).filter((name) => name.includes("cache-intact.txt."))).toEqual([]);
+    expect(failures).toHaveLength(1);
+    expect(failures[0]!.urls).toEqual([primary, mirror]);
+    expect(failures[0]!.attemptCount).toBe(2);
+    expect(failures[0]!.etlSource).toBe("runishiwo-v6");
+    expect(attempts).toHaveLength(2);
+    expect(attempts.every((attempt) => attempt.status === "failed")).toBe(true);
+    const failureMessage = failures[0]!.message;
+    expect(failureMessage).toContain(primary);
+    expect(failureMessage).toContain(mirror);
+    expect(failureMessage).toContain("刷新失败、复用旧缓存");
+    await fs.rm(destPath);
+  });
+
+  it("mirror HTML error page leaves the previous cache intact", async () => {
+    const spec = { ...v6Spec(), destName: "html-cache.txt" };
+    const destPath = path.join(tmpDir, spec.destName);
+    const previous = "2001:db8::/32\n";
+    await fs.writeFile(destPath, previous);
+    const mirror = spec.urls[1]!;
+    await expect(
+      fetchFixedOneWithAttempts(
+        spec,
+        tmpDir,
+        undefined,
+        urlStub({ [mirror]: { status: 200, body: "<!doctype html><h1>502</h1>" } }),
+      ),
+    ).rejects.toThrow(mirror);
+    expect(await fs.readFile(destPath, "utf8")).toBe(previous);
+    expect((await fs.readdir(tmpDir)).filter((name) => name.includes("html-cache.txt."))).toEqual([]);
+    await fs.rm(destPath);
+  });
+
+  it("replaceWithValidatedTemp renames back when the second rename throws", async () => {
+    const destPath = path.join(tmpDir, "atomic.txt");
+    const tmpPath = path.join(tmpDir, "atomic.txt.part");
+    const backupPath = path.join(tmpDir, "atomic.txt.bak");
+    await fs.writeFile(destPath, "old");
+    await fs.writeFile(tmpPath, "new");
+    let callCount = 0;
+    const failingSecondRename = (async (from: string, to: string) => {
+      callCount += 1;
+      if (callCount === 2) throw new Error("simulated rename failure");
+      await fs.rename(from, to);
+    }) as typeof fs.rename;
+    await expect(
+      replaceWithValidatedTemp(destPath, tmpPath, backupPath, failingSecondRename, fs.rm),
+    ).rejects.toThrow("simulated rename failure");
+    expect(await fs.readFile(destPath, "utf8")).toBe("old");
+    await expect(fs.stat(tmpPath)).rejects.toThrow();
+    await expect(fs.stat(backupPath)).rejects.toThrow();
+    await fs.rm(destPath);
   });
 });
 

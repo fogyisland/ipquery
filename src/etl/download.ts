@@ -2,27 +2,49 @@
 import * as fs from "node:fs";
 import * as fsp from "node:fs/promises";
 import * as path from "node:path";
+import * as readline from "node:readline";
 import * as https from "node:https";
 import { pipeline } from "node:stream/promises";
 import * as zlib from "node:zlib";
+import { parseIp } from "../ip";
+import type { EtlRunDownloadSource } from "../storage/mysql";
+import { parseCsvLine } from "./sources/dbip";
 
 // DB-IP distributes its free data as monthly gzipped CSVs at
 // https://download.db-ip.com/free/dbip-{city,country,asn}-lite-YYYY-MM.csv.gz.
-// No auth, CC-BY. We pick the newest available month: try the current
-// month, fall back to previous months on 404. The ETL pipeline reads the
-// files under dataDir/raw/ by their canonical names (dbip.csv.gz etc.),
-// so this downloader streams each fetch straight into the canonical
-// path — no temp files, no atomic-rename dance (the pipeline's truncate +
-// atomicSwapRanges handles the consumer side).
+// Monthly files stream straight into their canonical paths; the four
+// GitHub text sources always refresh through a validated temporary file
+// and a three-step rename so a failed refresh preserves the old cache.
 
-export interface DownloadSpec {
-  /** Logical source name — matches the filenames in src/etl/pipeline.ts. */
-  kind: "city" | "country" | "asn";
-  /** DB-IP URL stem, e.g. 'dbip-city-lite'. */
-  urlStem: string;
-  /** Destination filename inside outDir, e.g. 'dbip.csv.gz'. */
+export type DbipKind = "city" | "country" | "asn";
+export type FixedKind =
+  | "metowolf-cn"
+  | "runishiwo-cn"
+  | "runishiwo-v6"
+  | "sapics-user";
+export type DownloadKind = DbipKind | FixedKind;
+
+interface SpecBase {
   destName: string;
+  etlSource: EtlRunDownloadSource;
 }
+
+export interface DbipSpec extends SpecBase {
+  mode: "monthly";
+  kind: DbipKind;
+  urlStem: string;
+  validate: "gzip";
+}
+
+export interface FixedSpec extends SpecBase {
+  mode: "fixed";
+  kind: FixedKind;
+  urls: readonly string[];
+  format: "cidr" | "country-csv";
+  validate: "text";
+}
+
+export type DownloadSpec = DbipSpec | FixedSpec;
 
 /** Per-chunk hook fired while a single file is downloading. bytesTotal
  *  is the Content-Length header value when known, or null when the
@@ -30,24 +52,119 @@ export interface DownloadSpec {
  *  caller can still render an indeterminate progress bar in that case. */
 export type DownloadProgressFn = (bytesDone: number, bytesTotal: number | null) => void;
 
-export const DEFAULT_SPECS: ReadonlyArray<DownloadSpec> = [
-  { kind: "city", urlStem: "dbip-city-lite", destName: "dbip.csv.gz" },
-  { kind: "country", urlStem: "dbip-country-lite", destName: "dbip-country.csv.gz" },
-  { kind: "asn", urlStem: "dbip-asn-lite", destName: "dbip-asn.csv.gz" },
+export const DEFAULT_SPECS: ReadonlyArray<DbipSpec> = [
+  {
+    mode: "monthly",
+    kind: "city",
+    urlStem: "dbip-city-lite",
+    destName: "dbip.csv.gz",
+    etlSource: "dbip-city",
+    validate: "gzip",
+  },
+  {
+    mode: "monthly",
+    kind: "country",
+    urlStem: "dbip-country-lite",
+    destName: "dbip-country.csv.gz",
+    etlSource: "dbip-country",
+    validate: "gzip",
+  },
+  {
+    mode: "monthly",
+    kind: "asn",
+    urlStem: "dbip-asn-lite",
+    destName: "dbip-asn.csv.gz",
+    etlSource: "dbip-asn",
+    validate: "gzip",
+  },
 ];
 
+export const EXTRA_SPECS: ReadonlyArray<FixedSpec> = [
+  {
+    mode: "fixed",
+    kind: "metowolf-cn",
+    destName: "china-ipv4.txt",
+    etlSource: "metowolf-cn",
+    format: "cidr",
+    validate: "text",
+    urls: [
+      "https://raw.githubusercontent.com/metowolf/iplist/master/data/special/china.txt",
+      "https://cdn.jsdelivr.net/gh/metowolf/iplist@master/data/special/china.txt",
+    ],
+  },
+  {
+    mode: "fixed",
+    kind: "runishiwo-cn",
+    destName: "china-v4.txt",
+    etlSource: "runishiwo-cn",
+    format: "cidr",
+    validate: "text",
+    urls: [
+      "https://raw.githubusercontent.com/runishiwo/ChinaIPlist/main/cn_v4.txt",
+      "https://cdn.jsdelivr.net/gh/runishiwo/ChinaIPlist@main/cn_v4.txt",
+    ],
+  },
+  {
+    mode: "fixed",
+    kind: "runishiwo-v6",
+    destName: "china-v6.txt",
+    etlSource: "runishiwo-v6",
+    format: "cidr",
+    validate: "text",
+    urls: [
+      "https://raw.githubusercontent.com/runishiwo/ChinaIPlist/main/cn_v6.txt",
+      "https://cdn.jsdelivr.net/gh/runishiwo/ChinaIPlist@main/cn_v6.txt",
+    ],
+  },
+  {
+    mode: "fixed",
+    kind: "sapics-user",
+    destName: "sapics-user-country.csv",
+    etlSource: "sapics-user",
+    format: "country-csv",
+    validate: "text",
+    urls: [
+      "https://github.com/sapics/ip-location-db/releases/download/latest/user-country.csv",
+      "https://cdn.jsdelivr.net/gh/sapics/ip-location-db@latest/user-country.csv",
+    ],
+  },
+];
+
+export const ALL_SPECS: ReadonlyArray<DownloadSpec> = [...DEFAULT_SPECS, ...EXTRA_SPECS];
+
+export function parseDownloadKinds(input: string | undefined): DownloadSpec[] {
+  const kinds = (input ?? "")
+    .split(",")
+    .map((kind) => kind.trim())
+    .filter(Boolean);
+  const byKind = new Map<string, DownloadSpec>(ALL_SPECS.map((spec) => [spec.kind, spec]));
+  const invalid = kinds.filter((kind) => !byKind.has(kind));
+  if (invalid.length > 0) {
+    throw new Error(
+      `unknown --only value(s): ${invalid.join(", ")}; valid: ${ALL_SPECS.map((spec) => spec.kind).join(", ")}`,
+    );
+  }
+  if (kinds.length === 0) return [...ALL_SPECS];
+  return kinds.map((kind) => byKind.get(kind)!);
+}
+
 export interface DownloadResult {
-  kind: DownloadSpec["kind"];
+  kind: DownloadKind;
   destName: string;
+  etlSource: EtlRunDownloadSource;
   url: string;
   bytes: number;
-  /** YYYY-MM the file actually came from — useful for the summary line. */
-  month: string;
+  /** YYYY-MM for DB-IP monthly files, null for fixed GitHub sources. */
+  month: string | null;
 }
 
 export interface DownloadFailure {
-  kind: DownloadSpec["kind"];
+  kind: DownloadKind;
+  destName: string;
+  etlSource: EtlRunDownloadSource;
   url: string;
+  urls: readonly string[];
+  attemptCount: number;
   message: string;
 }
 
@@ -159,6 +276,72 @@ export async function validateGzFile(filePath: string): Promise<string | null> {
     return `gzip integrity check failed (truncated or corrupt trailer): ${msg}`;
   } finally {
     if (handle) await handle.close().catch(() => {});
+  }
+}
+
+function isTextStructurallyValidLine(
+  line: string,
+  format: "cidr" | "country-csv",
+): boolean {
+  if (format === "cidr") {
+    const separator = line.indexOf("/");
+    const address = separator === -1 ? line : line.slice(0, separator);
+    const parsed = parseIp(address);
+    if (!parsed) return false;
+    const prefixText = separator === -1 ? null : line.slice(separator + 1);
+    if (prefixText !== null && !/^\d{1,3}$/.test(prefixText)) return false;
+    const prefix = prefixText === null ? (address.includes(":") ? 128 : 32) : Number(prefixText);
+    const maxPrefix = address.includes(":") ? 128 : 32;
+    return prefix >= 0 && prefix <= maxPrefix;
+  }
+  const fields = parseCsvLine(line);
+  if (fields.length !== 3) return false;
+  if (!parseIp(fields[0]!.trim()) || !parseIp(fields[1]!.trim())) return false;
+  return /^[A-Za-z]{2}$/.test(fields[2]!.trim());
+}
+
+/**
+ * Check a plain-text source without loading the 25 MB country CSV into
+ * memory. One structurally valid line is enough: parsers count malformed
+ * rows separately, while an HTML error page or a binary/NUL payload is a
+ * download failure, not an empty dataset.
+ */
+export async function validateTextFile(
+  filePath: string,
+  format: "cidr" | "country-csv",
+): Promise<string | null> {
+  try {
+    const handle = await fsp.open(filePath, "r");
+    const { size } = await handle.stat();
+    await handle.close();
+    if (size === 0) return "text source is empty";
+    const lines = readline.createInterface({
+      input: fs.createReadStream(filePath, { encoding: "utf8" }),
+      crlfDelay: Infinity,
+    });
+    let lineNumber = 0;
+    let hasValidLine = false;
+    try {
+      for await (const line of lines) {
+        lineNumber += 1;
+        if (line.includes("\u0000")) return `text source contains a NUL byte on line ${lineNumber}`;
+        if (line.includes("�")) {
+          return `text source contains a replacement character on line ${lineNumber}`;
+        }
+        if (lineNumber === 1 && line.startsWith("<")) {
+          return "text source starts with an HTML/XML error page";
+        }
+        const trimmed = line.trim();
+        if (trimmed === "" || trimmed.startsWith("#") || trimmed.startsWith("//")) continue;
+        if (isTextStructurallyValidLine(trimmed, format)) hasValidLine = true;
+      }
+    } finally {
+      lines.close();
+    }
+    if (!hasValidLine) return `text source has no valid ${format} record`;
+    return null;
+  } catch (err) {
+    return `text source could not be read: ${err instanceof Error ? err.message : String(err)}`;
   }
 }
 
@@ -290,6 +473,135 @@ export function downloadToFile(
   });
 }
 
+async function fileExists(filePath: string): Promise<boolean> {
+  try {
+    await fsp.access(filePath);
+    return true;
+  } catch (err) {
+    const code = (err as NodeJS.ErrnoException).code;
+    if (code === "ENOENT") return false;
+    throw err;
+  }
+}
+
+/**
+ * Swap a validated temporary file into place without relying on whether
+ * rename() overwrites an existing destination. A failure after the first
+ * rename restores the previous cache and removes every intermediate file.
+ */
+export async function replaceWithValidatedTemp(
+  destPath: string,
+  tmpPath: string,
+  backupPath: string,
+  renameImpl: typeof fs.promises.rename = fsp.rename,
+  rmImpl: typeof fs.promises.rm = fsp.rm,
+): Promise<void> {
+  const hadPrevious = await fileExists(destPath);
+  try {
+    if (hadPrevious) await renameImpl(destPath, backupPath);
+    await renameImpl(tmpPath, destPath);
+    if (hadPrevious) await rmImpl(backupPath, { force: true });
+  } catch (err) {
+    await rmImpl(tmpPath, { force: true });
+    if (hadPrevious) {
+      try {
+        await renameImpl(backupPath, destPath);
+      } catch (restoreErr) {
+        throw new Error(
+          `failed to replace ${destPath}: ${err instanceof Error ? err.message : String(err)}; ` +
+            `failed to restore backup: ${restoreErr instanceof Error ? restoreErr.message : String(restoreErr)}`,
+        );
+      }
+    }
+    throw err;
+  }
+}
+
+async function recordFixedAttempt(
+  spec: FixedSpec,
+  url: string,
+  status: "success" | "failed",
+  bytes: number | null,
+  startedAt: Date,
+  durationMs: number,
+  retryCount: number,
+  errorMessage: string | null,
+): Promise<void> {
+  downloadAttempts.push({
+    spec,
+    destName: spec.destName,
+    url,
+    status,
+    bytes,
+    month: null,
+    durationMs,
+    retryCount,
+    errorMessage,
+    startedAt,
+    finishedAt: new Date(),
+  });
+}
+
+export async function fetchFixedOneWithAttempts(
+  spec: FixedSpec,
+  outDir: string,
+  onProgress?: DownloadProgressFn,
+  getImpl: typeof https.get = https.get,
+): Promise<DownloadResult> {
+  await fsp.mkdir(outDir, { recursive: true });
+  const destPath = path.join(outDir, spec.destName);
+  const errors: string[] = [];
+  for (const [index, url] of spec.urls.entries()) {
+    const suffix = `${process.pid}-${Date.now()}-${index}`;
+    const tmpPath = path.join(outDir, `${spec.destName}.part-${suffix}`);
+    const backupPath = path.join(outDir, `${spec.destName}.bak-${suffix}`);
+    const startedAt = new Date();
+    const t0 = Date.now();
+    try {
+      const bytes = await downloadToFile(url, tmpPath, onProgress, getImpl);
+      const problem = await validateTextFile(tmpPath, spec.format);
+      if (problem) throw new Error(`invalid ${spec.format} payload: ${problem}`);
+      await replaceWithValidatedTemp(destPath, tmpPath, backupPath);
+      await recordFixedAttempt(
+        spec,
+        url,
+        "success",
+        bytes,
+        startedAt,
+        Date.now() - t0,
+        index,
+        index > 0 ? `mirror fallback after ${index} failed URL(s)` : null,
+      );
+      return {
+        kind: spec.kind,
+        destName: spec.destName,
+        etlSource: spec.etlSource,
+        url,
+        bytes,
+        month: null,
+      };
+    } catch (err) {
+      await fsp.rm(tmpPath, { force: true });
+      await fsp.rm(backupPath, { force: true });
+      const message = err instanceof Error ? err.message : String(err);
+      errors.push(`${url}: ${message}`);
+      await recordFixedAttempt(
+        spec,
+        url,
+        "failed",
+        null,
+        startedAt,
+        Date.now() - t0,
+        index,
+        message,
+      );
+    }
+  }
+  throw new Error(
+    `刷新失败、复用旧缓存: ${spec.destName} (${errors.join("; ")})`,
+  );
+}
+
 /**
  * Download a single spec, walking back through candidateMonths until one
  * returns 2xx. Returns the DownloadResult with the winning month, or
@@ -301,7 +613,7 @@ export function downloadToFile(
  * aggregate themselves.
  */
 export async function fetchOne(
-  spec: DownloadSpec,
+  spec: DbipSpec,
   outDir: string,
   now: Date,
   lookback = 6,
@@ -315,7 +627,14 @@ export async function fetchOne(
     const url = `https://download.db-ip.com/free/${spec.urlStem}-${month}.csv.gz`;
     try {
       const bytes = await downloadToFile(url, destPath, onProgress);
-      return { kind: spec.kind, destName: spec.destName, url, bytes, month };
+      return {
+        kind: spec.kind,
+        destName: spec.destName,
+        etlSource: spec.etlSource,
+        url,
+        bytes,
+        month,
+      };
     } catch (err) {
       const msg = (err as Error).message;
       // 404 means "month not released yet" — try the previous one.
@@ -336,10 +655,9 @@ export async function fetchOne(
  * in M ms". This is additive on top of fetchOne — the existing export is
  * kept for backwards compatibility with the CLI command.
  */
-// Module-scoped accumulator used by fetchOneWithAttempts. One fetchOneWithAttempts
-// call → many 404 attempts + one success attempt (or all-failed if every
-// candidate 404s). The pipeline (Task 1.5) only ever calls this once per
-// run, so a module-scoped array is safe.
+// Module-scoped accumulator used by fetchOneWithAttempts. Every downloadAll
+// call drains it at the end with takeDownloadAttempts(), so one call's
+// monthly 404 attempts cannot leak into the next call's fixed-source rows.
 const downloadAttempts: DownloadAttempt[] = [];
 
 export async function fetchOneWithAttempts(
@@ -348,7 +666,11 @@ export async function fetchOneWithAttempts(
   now: Date,
   lookback = 6,
   onProgress?: DownloadProgressFn,
+  getImpl: typeof https.get = https.get,
 ): Promise<DownloadResult> {
+  if (spec.mode === "fixed") {
+    return fetchFixedOneWithAttempts(spec, outDir, onProgress, getImpl);
+  }
   await fsp.mkdir(outDir, { recursive: true });
   const destPath = path.join(outDir, spec.destName);
   const months = candidateMonths(now, lookback);
@@ -376,7 +698,14 @@ export async function fetchOneWithAttempts(
         startedAt,
         finishedAt: new Date(),
       });
-      return { kind: spec.kind, destName: spec.destName, url, bytes, month };
+      return {
+        kind: spec.kind,
+        destName: spec.destName,
+        etlSource: spec.etlSource,
+        url,
+        bytes,
+        month,
+      };
     } catch (err) {
       const msg = (err as Error).message;
       const is404 = /HTTP 404/.test(msg);
@@ -426,6 +755,7 @@ export async function downloadAll(
   outDir: string,
   now: Date = new Date(),
   onProgress?: DownloadProgressFn,
+  getImpl: typeof https.get = https.get,
 ): Promise<{
   results: DownloadResult[];
   failures: DownloadFailure[];
@@ -442,16 +772,23 @@ export async function downloadAll(
     let inFlightDone = 0;
     let inFlightTotal: number | null = null;
     try {
-      const r = await fetchOneWithAttempts(spec, outDir, now, 6, (chunkDone, chunkTotal) => {
-        inFlightDone = chunkDone;
-        if (chunkTotal !== null) inFlightTotal = chunkTotal;
-        const cumDone = completedBytes + inFlightDone;
-        // If any in-flight total is unknown we can't render a percentage,
-        // so we pass null. Once the chunk reports Content-Length we lock
-        // it in (Content-Length doesn't change mid-stream).
-        const cumTotal = inFlightTotal !== null ? completedTotal + inFlightTotal : null;
-        if (onProgress) onProgress(cumDone, cumTotal);
-      });
+      const r = await fetchOneWithAttempts(
+        spec,
+        outDir,
+        now,
+        6,
+        (chunkDone, chunkTotal) => {
+          inFlightDone = chunkDone;
+          if (chunkTotal !== null) inFlightTotal = chunkTotal;
+          const cumDone = completedBytes + inFlightDone;
+          // If any in-flight total is unknown we can't render a percentage,
+          // so we pass null. Once the chunk reports Content-Length we lock
+          // it in (Content-Length doesn't change mid-stream).
+          const cumTotal = inFlightTotal !== null ? completedTotal + inFlightTotal : null;
+          if (onProgress) onProgress(cumDone, cumTotal);
+        },
+        getImpl,
+      );
       results.push(r);
       // Roll the in-flight counters into the completed totals so the
       // NEXT file's progress reports include this one's full size.
@@ -459,12 +796,21 @@ export async function downloadAll(
       completedTotal += inFlightTotal ?? r.bytes;
       const mb = (r.bytes / 1024 / 1024).toFixed(1);
       console.log(
-        `[download] ${spec.kind.padEnd(7)} ${r.month}  ${mb.padStart(7)} MB  → ${path.join(outDir, r.destName)}`,
+        `[download] ${spec.kind.padEnd(12)} ${r.month ?? "fixed"}  ${mb.padStart(7)} MB  → ${path.join(outDir, r.destName)}`,
       );
     } catch (err) {
       const msg = (err as Error).message;
-      failures.push({ kind: spec.kind, url: "(see message)", message: msg });
-      console.error(`[download] ${spec.kind.padEnd(7)} FAILED: ${msg}`);
+      const failureUrls = spec.mode === "fixed" ? spec.urls : [];
+      failures.push({
+        kind: spec.kind,
+        destName: spec.destName,
+        etlSource: spec.etlSource,
+        url: failureUrls[0] ?? "(see message)",
+        urls: failureUrls,
+        attemptCount: failureUrls.length || 1,
+        message: msg,
+      });
+      console.error(`[download] ${spec.kind.padEnd(12)} FAILED: ${msg}`);
     }
   }
   // Walk the attempt buffer back to attribute the "all candidates 404'd"
@@ -481,15 +827,16 @@ export async function downloadAll(
     bySpec.set(key, list);
   }
   const attemptOut: DownloadAttempt[] = [];
+  const byFailure = new Map<string, { attempts: DownloadAttempt[]; message: string }>();
   for (const spec of specs) {
     const list = bySpec.get(spec.destName) ?? [];
     if (list.length === 0) continue;
     const anySuccess = list.some((a) => a.status === "success");
     if (anySuccess) {
       attemptOut.push(...list);
-    } else {
-      // All-failed → roll up into one 'missing' row that summarises the
-      // candidate walk. retry_count = number of distinct months tried.
+    } else if (spec.mode === "monthly") {
+      // All-failed monthly candidates mean the release is missing;
+      // collapse the 404 walk into one 'missing' row for run-detail.
       const first = list[0]!;
       const last = list[list.length - 1]!;
       attemptOut.push({
@@ -499,13 +846,32 @@ export async function downloadAll(
         status: "missing",
         bytes: null,
         month: null,
-        durationMs: list.reduce((s, a) => s + (a.durationMs ?? 0), 0),
+        durationMs: list.reduce((sum, a) => sum + (a.durationMs ?? 0), 0),
         retryCount: list.length,
-        errorMessage: list.map((a) => a.month + ":" + (a.errorMessage ?? "")).join("; "),
+        errorMessage: list.map((a) => `${a.month ?? a.url}:${a.errorMessage ?? ""}`).join("; "),
         startedAt: first.startedAt,
         finishedAt: last.finishedAt,
       });
+    } else {
+      // A fixed refresh failure is never 'missing': every failed URL is
+      // visible and the stage layer can record one 'failed' row that says
+      // the previous validated cache is being reused.
+      attemptOut.push(...list);
+      byFailure.set(spec.destName, { attempts: list, message: msgForFailure(spec, list) });
+    }
+  }
+  for (const [destName, details] of byFailure) {
+    const failure = failures.find((f) => f.destName === destName);
+    if (failure) {
+      failure.attemptCount = details.attempts.length;
+      failure.message = details.message;
     }
   }
   return { results, failures, attempts: attemptOut };
+}
+
+function msgForFailure(spec: FixedSpec, attempts: DownloadAttempt[]): string {
+  const attemptedUrls = attempts.map((a) => a.url).join("; ");
+  const reasons = attempts.map((a) => `${a.url}: ${a.errorMessage ?? "failed"}`).join("; ");
+  return `刷新失败、复用旧缓存: ${spec.destName} (${attemptedUrls}; ${reasons})`;
 }

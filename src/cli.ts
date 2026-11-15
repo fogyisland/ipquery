@@ -11,7 +11,7 @@ import { loadDemoSeed } from "./storage/seed/demoSeed";
 import { bootstrapAdmin } from "./web/admin/bootstrap";
 import { isInitialized, markInitialized } from "./storage/settings";
 import { findUserByEmail } from "./storage/users";
-import { downloadAll, DEFAULT_SPECS, type DownloadSpec } from "./etl/download";
+import { downloadAll, parseDownloadKinds } from "./etl/download";
 import { databaseIsReachable, explainCliDbFailure, probeConnection, writeDbCredentialsToEnv } from "./api/dbBootstrap";
 
 const program = new Command();
@@ -370,34 +370,27 @@ program
     },
   );
 
-const SPEC_BY_KIND: Record<DownloadSpec["kind"], DownloadSpec> = Object.fromEntries(
-  DEFAULT_SPECS.map((s) => [s.kind, s] as const),
-) as Record<DownloadSpec["kind"], DownloadSpec>;
-
 program
   .command("download")
   .description(
-    "Fetch the free DB-IP CSV.gz files (city-lite, country-lite, asn-lite) into data/raw/ for the ETL pipeline",
+    "Fetch DB-IP monthly CSV.gz files and the four GitHub text sources into data/raw/ for the ETL pipeline",
   )
-  .option("--only <kinds>", "comma-separated subset: city,country,asn (default: all)")
+  .option(
+    "--only <kinds>",
+    "comma-separated subset: city,country,asn,metowolf-cn,runishiwo-cn,runishiwo-v6,sapics-user (default: all)",
+  )
   .option("--out <dir>", "override output directory (default: ${DATA_DIR}/raw)")
   .action(async (opts: { only?: string; out?: string }) => {
     const cfg = loadConfig();
     const outDir = opts.out ?? `${cfg.etl.dataDir}/raw`;
-    const kinds = opts.only
-      ? opts.only
-          .split(",")
-          .map((s) => s.trim())
-          .filter(Boolean)
-      : DEFAULT_SPECS.map((s) => s.kind);
-    const bad = kinds.filter((k) => !(k in SPEC_BY_KIND));
-    if (bad.length > 0) {
-      console.error(
-        `unknown --only value(s): ${bad.join(", ")}; valid: ${Object.keys(SPEC_BY_KIND).join(", ")}`,
-      );
+    let specs: ReturnType<typeof parseDownloadKinds>;
+    try {
+      specs = parseDownloadKinds(opts.only);
+    } catch (err) {
+      console.error((err as Error).message);
       process.exit(2);
+      return;
     }
-    const specs = kinds.map((k) => SPEC_BY_KIND[k as DownloadSpec["kind"]]);
     console.log(`[download] target dir: ${outDir}`);
     const { results, failures } = await downloadAll(specs, outDir);
     if (failures.length > 0) {
