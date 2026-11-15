@@ -68,9 +68,23 @@ if (!isDir(distDir)) {
     ["cli.js", "the CLI entry point"],
     ["api/server.js", "the HTTP server"],
     ["storage/schema.sql", "the base schema"],
+    ["mcp/server.js", "the MCP server (the `ipquery-mcp` command)"],
   ];
   for (const [rel, what] of entryPoints) {
     if (!isFile(path.join(distDir, rel))) fail(`dist/${rel} is missing (${what})`);
+  }
+
+  // The MCP server is the only entry point installed as a command, so
+  // it is the only one that must carry a shebang: npm links it
+  // directly and the kernel, not node, has to be the one to read it.
+  // A missing shebang turns into an "exec format error" at connect
+  // time, long after the release was declared intact.
+  const mcpEntry = path.join(distDir, "mcp", "server.js");
+  if (isFile(mcpEntry)) {
+    const firstLine = fs.readFileSync(mcpEntry, "utf8").split(/\r?\n/, 1)[0];
+    if (firstLine !== "#!/usr/bin/env node") {
+      fail("dist/mcp/server.js has no `#!/usr/bin/env node` shebang — it cannot be installed as a command");
+    }
   }
 }
 

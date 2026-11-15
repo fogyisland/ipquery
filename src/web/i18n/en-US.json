@@ -55,14 +55,16 @@
         "data": "Data Pipeline",
         "access": "Access & Identity",
         "system": "System & Governance"
-      }
+      },
+      "mcpTokens": "MCP Tokens"
     },
     "logout": "Log out",
     "history": "History",
     "apiKeys": "API Keys",
     "profile": "Profile",
     "signup": "Sign up",
-    "login": "Log in"
+    "login": "Log in",
+    "mcpTokens": "MCP Tokens"
   },
   "auth": {
     "email": "Email",
@@ -166,7 +168,8 @@
         "help": "Replace YOUR_KEY with any active key, and IP with the address you want to look up.",
         "copy": "Copy"
       },
-      "revoked": "revoked"
+      "revoked": "revoked",
+      "invalidLabel": "Invalid label"
     },
     "profile": {
       "title": "Profile",
@@ -195,7 +198,46 @@
     "lastQuery.at": "at",
     "lastQuery.cta": "Open the live lookup",
     "lastQuery.miss": "no match",
-    "lastQuery.invalid": "invalid input"
+    "lastQuery.invalid": "invalid input",
+    "mcp": {
+      "title": "MCP Tokens",
+      "intro": "An MCP token lets an AI client (Claude Code, Cursor, …) reach IPQuery. A token only works after an administrator approves it.",
+      "empty": "No MCP tokens yet",
+      "request": "Request a token",
+      "label": "Label",
+      "scope": "Scope",
+      "scope.lookup": "Lookup only",
+      "scope.ops": "Lookup + operational data",
+      "scope.help": "Operational data covers query logs (redacted), the backfill queue and ETL status. Only an administrator can approve that scope.",
+      "prefix": "Prefix",
+      "status": "Status",
+      "status.pending": "Pending",
+      "status.approved": "Approved",
+      "status.rejected": "Rejected",
+      "status.revoked": "Revoked",
+      "lastUsed": "Last used",
+      "requestedAt": "Requested",
+      "decidedAt": "Decided",
+      "createdOnce": "Save this token now — it cannot be shown again:",
+      "copy": "Copy",
+      "revoke": {
+        "confirm": {
+          "title": "Revoke MCP token",
+          "body": "Revoke this token? Any client using it stops working immediately."
+        }
+      },
+      "revokedNote": "Revoked",
+      "pendingNote": "Waiting for an administrator",
+      "rejectedNote": "The administrator turned this request down",
+      "clientTitle": "Client configuration",
+      "clientHelp": "Once approved, paste this into your AI client's MCP settings:",
+      "clientPending": "The token only works after approval; until then the client will refuse to connect.",
+      "installTitle": "How to connect",
+      "step1": "Request a token and wait for an administrator to approve it",
+      "step2": "Copy the client configuration below and paste in your token",
+      "step3": "Confirm the MCP server in your AI client and it is ready to use",
+      "requestSubmitted": "Request submitted — waiting for an administrator to approve it."
+    }
   },
   "admin": {
     "title": "Admin",
@@ -812,6 +854,48 @@
           "busy": "Processing…"
         }
       }
+    },
+    "mcpTokens": {
+      "title": "MCP token approvals",
+      "intro": "A user-requested MCP token only works after it is approved here. An ops-scoped token can read query logs and queue data — approve those with care.",
+      "col": {
+        "id": "ID",
+        "owner": "Requested by",
+        "label": "Label",
+        "scope": "Scope",
+        "prefix": "Prefix",
+        "status": "Status",
+        "requested": "Requested",
+        "decided": "Decided",
+        "lastUsed": "Last used"
+      },
+      "status.pending": "Pending",
+      "status.approved": "Approved",
+      "status.rejected": "Rejected",
+      "status.revoked": "Revoked",
+      "scope.lookup": "Lookup only",
+      "scope.ops": "Lookup + operational data",
+      "approve": "Approve",
+      "reject": "Reject",
+      "revoke": "Revoke",
+      "approveConfirm": "Approve this token? The requester AI client can use it right away.",
+      "rejectConfirm": "Reject this request? The requester will see the rejected status.",
+      "revokeConfirm": "Revoke this token? Clients using it stop working immediately.",
+      "note": "Note",
+      "notePlaceholder": "Optional",
+      "empty": "No MCP token requests yet",
+      "pendingCount": "Pending",
+      "action": "Decide",
+      "noteRequired": "A note is required",
+      "noteTooLong": "Note is too long",
+      "bulkApprove": "Approve selected",
+      "bulkReject": "Reject selected",
+      "bulkRevoke": "Revoke selected",
+      "bulkApproveConfirm": "Approve the selected MCP token requests?",
+      "bulkRejectConfirm": "Reject the selected MCP token requests?",
+      "bulkRevokeConfirm": "Revoke the selected MCP tokens?",
+      "bulkSelectAll": "Select all",
+      "bulkSelectOne": "Select token #{id}"
     }
   },
   "home": {

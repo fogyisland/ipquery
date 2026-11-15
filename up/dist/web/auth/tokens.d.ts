@@ -3,6 +3,9 @@ export declare function hashToken(plain: string): string;
 export declare function generateCsrf(): string;
 export declare function verifyCsrf(presented: string, expected: string, issuedAt: number, ttlMs: number): boolean;
 export declare function generateApiKey(): string;
+/** MCP tokens carry their own prefix so an operator can tell a token
+ *  from an API key at a glance in a client's config file. */
+export declare function generateMcpToken(): string;
 /** HMAC-bind a CSRF nonce to the server-side secret. The nonce travels
  *  in the cookie (readable by JS) AND in the form body; the HMAC
  *  lives in a SECOND cookie that's httpOnly + secure. On verify,

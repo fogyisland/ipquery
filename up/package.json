@@ -18,6 +18,9 @@
     "status": "node dist/cli.js status",
     "seed:demo": "node dist/cli.js seed:demo"
   },
+  "bin": {
+    "ipquery-mcp": "dist/mcp/server.js"
+  },
   "dependencies": {
     "@fastify/compress": "^7.0.3",
     "@fastify/cookie": "^9.4.0",

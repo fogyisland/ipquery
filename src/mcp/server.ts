@@ -1,7 +1,12 @@
+#!/usr/bin/env node
 // SPDX-License-Identifier: MIT
 // MCP stdio server entry. stdio is owned by the MCP protocol — all
 // diagnostics go to stderr. Launched by AI clients as a subprocess:
 //   node dist/mcp/server.js
+//
+// The shebang above makes the same file runnable as a command:
+//   ipquery-mcp
+// which is what the `bin` entry in package.json points at.
 import { config as dotenvConfig } from "dotenv";
 import { resolveProjectRoot } from "./env";
 
@@ -14,6 +19,7 @@ import { loadConfig } from "../config";
 import { createPool } from "../storage/mysql";
 import { buildToolRegistrations } from "./server-tools";
 import { TOOL_NAMES } from "./tool-names";
+import { authenticate } from "./auth";
 import type { McpPool } from "./tools";
 
 const SERVER_INFO = { name: "ipquery", version: "1.0.0" };
@@ -55,14 +61,32 @@ async function main(): Promise<void> {
   const registrations = buildToolRegistrations(deps);
   const byName = new Map(registrations.map((r) => [r.def.name, r]));
 
+  // Authenticate before announcing readiness. A token that is not
+  // approved must fail loudly here, not on the first tool call: the
+  // client would otherwise look connected and then reject every call.
+  let auth;
+  try {
+    auth = await authenticate(
+      pool,
+      process.env.IPQUERY_MCP_TOKEN,
+      process.env.MCP_REQUIRE_TOKEN === "true" || process.env.MCP_REQUIRE_TOKEN === "1",
+    );
+  } catch (e) {
+    failFast(e instanceof Error ? e.message : String(e));
+  }
+
   const server = new Server(SERVER_INFO, { capabilities: { tools: {} } });
 
+  // Only the tools the session may reach are listed. A `lookup`-scoped
+  // token must not even see that the operational tools exist.
   server.setRequestHandler(ListToolsRequestSchema, async () => ({
-    tools: registrations.map((r) => ({
-      name: r.def.name,
-      description: r.def.description,
-      inputSchema: r.def.inputSchema,
-    })),
+    tools: registrations
+      .filter((r) => auth.allowedTools.has(r.def.name))
+      .map((r) => ({
+        name: r.def.name,
+        description: r.def.description,
+        inputSchema: r.def.inputSchema,
+      })),
   }));
 
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
@@ -75,6 +99,24 @@ async function main(): Promise<void> {
             type: "text",
             text: JSON.stringify(
               { isErrorHint: true, message: `Unknown tool: ${name}. Available: ${TOOL_NAMES.join(", ")}` },
+              null,
+              2,
+            ),
+          },
+        ],
+        isError: true,
+      };
+    }
+    if (!auth.allowedTools.has(name)) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify(
+              {
+                isErrorHint: true,
+                message: `Tool ${name} is not available to this session. The token's scope does not cover it.`,
+              },
               null,
               2,
             ),
@@ -109,8 +151,9 @@ async function main(): Promise<void> {
 
   const transport = new StdioServerTransport();
   await server.connect(transport);
+  const mode = auth.mode === "token" ? `token scope=${auth.scope}` : "local (no token)";
   console.error(
-    `[ipquery-mcp] ${SERVER_INFO.name} v${SERVER_INFO.version} ready (${TOOL_NAMES.length} tools)`,
+    `[ipquery-mcp] ${SERVER_INFO.name} v${SERVER_INFO.version} ready — ${auth.allowedTools.size}/${TOOL_NAMES.length} tools, auth=${mode}`,
   );
 }
 

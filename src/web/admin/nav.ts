@@ -71,6 +71,8 @@ const ICON_USERS =
   '<circle cx="6" cy="5.5" r="2.5"/><path d="M2 13.5c0-2.2 1.8-3.5 4-3.5s4 1.3 4 3.5"/><path d="M11 3.5a2.5 2.5 0 0 1 0 5"/><path d="M12 13.5c0-1.5-.5-2.5-1.3-3.1"/>';
 const ICON_KEY =
   '<circle cx="5.5" cy="8" r="2.5"/><path d="M8 8h5.5"/><path d="M11.5 8v2.5"/><path d="M13.5 8v1.5"/>';
+const ICON_PLUGIN =
+  '<path d="M4 2.5h5v5H4z"/><path d="M7 7.5h5v5H7z"/><path d="M9.5 2.5v3.5"/><path d="M6.5 10.5v3"/><path d="M12.5 4.5h2"/><path d="M12.5 7.5h1.5"/>';
 const ICON_SHIELD =
   '<path d="M8 2.5l5 2v3.5c0 3-2.1 5-5 5.5-2.9-.5-5-2.5-5-5.5V4.5z"/><path d="M6 8l1.5 1.5L10.5 6.5"/>';
 const ICON_DOC =
@@ -105,6 +107,10 @@ export const ADMIN_NAV_GROUPS: readonly AdminNavGroup[] = [
     items: [
       { href: "/admin/users", labelKey: "nav.admin.users", icon: ICON_USERS, match: "prefix" },
       { href: "/admin/keys", labelKey: "nav.admin.keys", icon: ICON_KEY, match: "prefix" },
+      // MCP tokens are a separate credential from API keys: they need an
+      // administrator's approval before they work, so they get their own
+      // page in the same group rather than a corner of /admin/keys.
+      { href: "/admin/mcp-tokens", labelKey: "nav.admin.mcpTokens", icon: ICON_PLUGIN, match: "prefix" },
     ],
   },
   {

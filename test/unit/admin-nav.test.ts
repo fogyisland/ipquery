@@ -36,6 +36,7 @@ describe("admin navigation model", () => {
     expect(itemsOf("access").map((i) => i.href)).toEqual([
       "/admin/users",
       "/admin/keys",
+      "/admin/mcp-tokens",
     ]);
     expect(itemsOf("system").map((i) => i.href)).toEqual([
       "/admin/audit-log",

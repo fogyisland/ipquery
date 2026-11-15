@@ -38,6 +38,7 @@ exports.hashToken = hashToken;
 exports.generateCsrf = generateCsrf;
 exports.verifyCsrf = verifyCsrf;
 exports.generateApiKey = generateApiKey;
+exports.generateMcpToken = generateMcpToken;
 exports.signCsrfBinding = signCsrfBinding;
 // SPDX-License-Identifier: MIT
 const crypto = __importStar(require("node:crypto"));
@@ -80,6 +81,11 @@ function verifyCsrf(presented, expected, issuedAt, ttlMs) {
 }
 function generateApiKey() {
     return `ipq_${randomBase32(32)}`;
+}
+/** MCP tokens carry their own prefix so an operator can tell a token
+ *  from an API key at a glance in a client's config file. */
+function generateMcpToken() {
+    return `ipqt_${randomBase32(32)}`;
 }
 /** HMAC-bind a CSRF nonce to the server-side secret. The nonce travels
  *  in the cookie (readable by JS) AND in the form body; the HMAC

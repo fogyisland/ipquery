@@ -191,7 +191,14 @@
       "WebFetch(domain:ipapi.co)",
       "WebFetch(domain:freeipapi.com)",
       "Bash(awk '{print $6}')",
-      "Bash(echo \"started PID $!\")"
+      "Bash(echo \"started PID $!\")",
+      "Bash(sed *)",
+      "PowerShell(claude mcp *)",
+      "Bash(command -v claude)",
+      "Bash(printf %s\\\\n *)"
     ]
-  }
+  },
+  "disabledMcpjsonServers": [
+    "ipquery"
+  ]
 }

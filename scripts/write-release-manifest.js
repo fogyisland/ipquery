@@ -55,6 +55,14 @@ const release = {
     // library with `update`.
     "seed:demo": "node dist/cli.js seed:demo",
   },
+  // The MCP server is installed as a command, so an operator can point
+  // any MCP client at `ipquery-mcp` without knowing where the release
+  // directory lives. Without this the release ships a working MCP
+  // server that no client can name.
+  //
+  // The target is the compiled entry, and it carries a `#!/usr/bin/env
+  // node` shebang so npm can link it directly.
+  bin: src.bin,
   dependencies: src.dependencies,
 };
 

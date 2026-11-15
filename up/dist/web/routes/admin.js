@@ -50,6 +50,7 @@ const randomProbeLog_1 = require("../../storage/randomProbeLog");
 const unknownIpQueue_2 = require("../../storage/unknownIpQueue");
 const providerErrorLog_1 = require("../../storage/providerErrorLog");
 const apiKeys_1 = require("../../storage/apiKeys");
+const mcpTokens_1 = require("../../storage/mcpTokens");
 const queryLog_1 = require("../../storage/queryLog");
 const auditLog_1 = require("../../storage/auditLog");
 const overview_1 = require("../admin/overview");
@@ -204,6 +205,14 @@ function verifyBackfillPreview(cookie) {
     }
     return { ok: true, payload };
 }
+/** Pill colour per MCP token status, so the approval table reads the same
+ *  way as the other status cells in the console. */
+const MCP_STATUS_PILL = {
+    pending: "warning",
+    approved: "success",
+    rejected: "danger",
+    revoked: "muted",
+};
 async function adminRoutes(app) {
     app.get("/admin", { config: { rateLimit: ADMIN_POLL_RATE_LIMIT } }, async (req, reply) => {
         const overview = await (0, overview_1.getOverview)(app.pool);
@@ -830,6 +839,149 @@ async function adminRoutes(app) {
         };
         await (0, apiKeys_1.revokeApiKeysBulk)(app.pool, ids);
         return reply.redirect("/admin/keys");
+    });
+    app.get("/admin/mcp-tokens", async (req, reply) => {
+        const q = (0, queryString_1.parseListQuery)(req.url.split("?")[1] ?? "", {
+            filters: ["status", "scope"],
+            sort: ["id", "requested_at", "decided_at"],
+        });
+        const limit = q.limit;
+        const offset = (q.page - 1) * limit;
+        const { rows, total } = await (0, mcpTokens_1.listAllMcpTokens)(app.pool, {
+            offset,
+            limit,
+            status: q.filters.status,
+            scope: q.filters.scope,
+        });
+        const totalPages = Math.max(1, Math.ceil(total / limit));
+        const queryParts = [];
+        if (q.filters.status)
+            queryParts.push(`status=${encodeURIComponent(q.filters.status)}`);
+        if (q.filters.scope)
+            queryParts.push(`scope=${encodeURIComponent(q.filters.scope)}`);
+        if (q.sort)
+            queryParts.push(`sort=${q.sort.dir === "desc" ? "-" : ""}${q.sort.col}`);
+        const queryString = queryParts.join("&");
+        const counts = await (0, mcpTokens_1.countMcpTokensByStatus)(app.pool);
+        return reply.view("admin/mcp-tokens.hbs", {
+            layout: "layouts/admin",
+            title: req.t("admin.mcpTokens.title"),
+            tokens: rows.map((row) => ({
+                ...row,
+                scopeLabel: req.t(`admin.mcpTokens.scope.${row.scope}`),
+                statusLabel: req.t(`admin.mcpTokens.status.${row.status}`),
+                pillKind: MCP_STATUS_PILL[row.status] ?? "muted",
+            })),
+            counts,
+            page: q.page,
+            totalPages,
+            queryString,
+            filters: q.filters,
+            sort: q.sort,
+            sortColumns: (0, sortColumns_1.buildSortColumns)(["id", "label", "token_prefix", "requested_at"], q.sort, { ...q.filters, page: q.page }),
+            req,
+            csrfToken: req.csrfToken,
+        });
+    });
+    app.post("/admin/mcp-tokens/:id/approve", async (req, reply) => {
+        if (!(0, csrf_1.verifyCsrfRequest)(req))
+            return (0, render_1.sendCsrfPage)(reply, 403);
+        const id = Number(req.params.id);
+        if (!Number.isFinite(id) || id <= 0)
+            return reply.redirect("/admin/mcp-tokens");
+        const note = (req.body.note ?? "").trim();
+        if (note.length > 255) {
+            return reply.code(400).view("admin/mcp-tokens.hbs", {
+                layout: "layouts/admin",
+                title: req.t("admin.mcpTokens.title"),
+                flash: { error: req.t("admin.mcpTokens.noteTooLong") },
+                tokens: [],
+                counts: await (0, mcpTokens_1.countMcpTokensByStatus)(app.pool),
+                page: 1,
+                totalPages: 1,
+                queryString: "",
+                filters: {},
+                sort: undefined,
+                sortColumns: [],
+                req,
+                csrfToken: req.csrfToken,
+            });
+        }
+        req.auditAction = {
+            action: "mcp_token.approve",
+            targetType: "mcp_token",
+            targetId: id,
+            metadata: { source: "admin", note: note || null },
+        };
+        await (0, mcpTokens_1.decideMcpToken)(app.pool, id, "approved", req.user.id, note || null);
+        return reply.redirect("/admin/mcp-tokens");
+    });
+    app.post("/admin/mcp-tokens/:id/reject", async (req, reply) => {
+        if (!(0, csrf_1.verifyCsrfRequest)(req))
+            return (0, render_1.sendCsrfPage)(reply, 403);
+        const id = Number(req.params.id);
+        if (!Number.isFinite(id) || id <= 0)
+            return reply.redirect("/admin/mcp-tokens");
+        const note = (req.body.note ?? "").trim();
+        req.auditAction = {
+            action: "mcp_token.reject",
+            targetType: "mcp_token",
+            targetId: id,
+            metadata: { source: "admin", note: note || null },
+        };
+        await (0, mcpTokens_1.decideMcpToken)(app.pool, id, "rejected", req.user.id, note || null);
+        return reply.redirect("/admin/mcp-tokens");
+    });
+    app.post("/admin/mcp-tokens/:id/revoke", async (req, reply) => {
+        if (!(0, csrf_1.verifyCsrfRequest)(req))
+            return (0, render_1.sendCsrfPage)(reply, 403);
+        const id = Number(req.params.id);
+        if (!Number.isFinite(id) || id <= 0)
+            return reply.redirect("/admin/mcp-tokens");
+        req.auditAction = {
+            action: "mcp_token.revoke",
+            targetType: "mcp_token",
+            targetId: id,
+            metadata: { source: "admin" },
+        };
+        await (0, mcpTokens_1.revokeMcpToken)(app.pool, id);
+        return reply.redirect("/admin/mcp-tokens");
+    });
+    // Bulk decisions. The admin ticks the per-row checkboxes and clicks
+    // "Approve selected (N)" / "Reject selected (N)". The form posts a
+    // comma-separated ids list, capped at 100 by the storage helper.
+    app.post("/admin/mcp-tokens/bulk", async (req, reply) => {
+        if (!(0, csrf_1.verifyCsrfRequest)(req))
+            return (0, render_1.sendCsrfPage)(reply, 403);
+        const body = req.body;
+        const ids = (body.ids ?? "")
+            .split(",")
+            .map((s) => Number(s.trim()))
+            .filter((n) => Number.isFinite(n) && n > 0)
+            .slice(0, 100);
+        if (ids.length === 0)
+            return reply.redirect("/admin/mcp-tokens");
+        const decision = body.action === "approve" ? "approved" : body.action === "reject" ? "rejected" : null;
+        if (decision) {
+            req.auditAction = {
+                action: `mcp_token.bulk_${body.action}`,
+                targetType: "mcp_token",
+                metadata: { ids, count: ids.length },
+            };
+            for (const id of ids) {
+                await (0, mcpTokens_1.decideMcpToken)(app.pool, id, decision, req.user.id, null);
+            }
+            return reply.redirect("/admin/mcp-tokens");
+        }
+        if (body.action === "revoke") {
+            req.auditAction = {
+                action: "mcp_token.bulk_revoke",
+                targetType: "mcp_token",
+                metadata: { ids, count: ids.length },
+            };
+            await (0, mcpTokens_1.revokeMcpTokensBulk)(app.pool, ids);
+        }
+        return reply.redirect("/admin/mcp-tokens");
     });
     app.get("/admin/audit", async (req, reply) => {
         const q = (0, queryString_1.parseListQuery)(req.url.split("?")[1] ?? "", {

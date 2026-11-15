@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "ipquery": {
+      "type": "stdio",
+      "command": "ipquery-mcp",
+      "args": []
+    }
+  }
+}
