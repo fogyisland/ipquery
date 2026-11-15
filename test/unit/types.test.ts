@@ -2,9 +2,19 @@ import { describe, it, expect } from "vitest";
 import type { Source, NormalizedRecord, LookupResult, EtlRun } from "../../src/types";
 
 describe("types", () => {
-  it("Source is a union of three string literals", () => {
-    const sources: Source[] = ["maxmind", "ip2region", "dbip"];
-    expect(sources).toHaveLength(3);
+  it("Source covers the nine ingestion labels", () => {
+    const sources: Source[] = [
+      "maxmind",
+      "ip2region",
+      "dbip",
+      "dbip-country",
+      "dbip-asn",
+      "ipinfo",
+      "metowolf-cn",
+      "runishiwo-cn",
+      "sapics-user",
+    ];
+    expect(sources).toHaveLength(9);
   });
 
   it("NormalizedRecord has 16-byte Buffer start/end", () => {
