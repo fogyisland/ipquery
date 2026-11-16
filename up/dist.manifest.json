@@ -1,7 +1,7 @@
 {
   "formatVersion": 1,
-  "fileCount": 417,
-  "totalBytes": 2176026,
+  "fileCount": 420,
+  "totalBytes": 2186879,
   "files": {
     "api/dbBootstrap.d.ts": {
       "bytes": 8916,
@@ -164,12 +164,24 @@
       "sha256": "b4adf381ec4cbc85fedb297043111916c20942743a1a9f03e601e0d07c6eb7dc"
     },
     "etl/pipeline.js": {
-      "bytes": 38068,
-      "sha256": "7761eab284cacb0d18b11d73dcc036cc095a4ebbda449ff8a387b211e19cb0ec"
+      "bytes": 40763,
+      "sha256": "e56fb726ab1af7061d85da105231c6c9bf8d5d34fb2e828f7522659ef319e6a2"
     },
     "etl/pipeline.js.map": {
-      "bytes": 26739,
-      "sha256": "61ed2f3fb0960c31525e3235d12698024afd6bf7530c98f627cf88335c62ef35"
+      "bytes": 29000,
+      "sha256": "5362c607209213ad0c7df8b7369ae2a6227378cdb5be089516408bb9947d732f"
+    },
+    "etl/progressReporter.d.ts": {
+      "bytes": 1437,
+      "sha256": "3e6d1589502c5a829d33e5352875248da0c7f3b9ad1bd2ff3a81c7842951ee58"
+    },
+    "etl/progressReporter.js": {
+      "bytes": 2032,
+      "sha256": "c5913c6f87c11a30233c75b0d412a914065edb21361d5e3c94d66a6f2726c401"
+    },
+    "etl/progressReporter.js.map": {
+      "bytes": 2428,
+      "sha256": "d3b5069916d0b90207fd4c410a2f9f04b0efe95ca111e05c88f162c837234bb3"
     },
     "etl/providerLock.d.ts": {
       "bytes": 1224,

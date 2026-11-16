@@ -47,6 +47,7 @@ const sapicsCountry_1 = require("./sources/sapicsCountry");
 const githubTypes_1 = require("./sources/githubTypes");
 const prepare_1 = require("./sources/prepare");
 const runGuard_1 = require("./runGuard");
+const progressReporter_1 = require("./progressReporter");
 // A streaming ingest target: one physical file from one logical source.
 // `fillCols` says which columns this file contributes; the upsert path in
 // storage/mysql.ts uses that to gate INSERT ... ON DUPLICATE KEY UPDATE so
@@ -353,10 +354,18 @@ async function runParseStage(pool, runId, rawDir, files, sink, github) {
         }
         const startedAt = new Date();
         const t0 = Date.now();
+        const sizeMb = await fileSizeMb(fullPath);
+        console.log(`[etl] parse: ${f.filename} (${sizeMb}) — counting rows`);
+        const reporter = (0, progressReporter_1.createProgressReporter)({
+            label: `parse ${f.filename}`,
+            unit: "rows",
+        });
         const { records, stats } = f.parse(fullPath);
         for await (const _ of records) {
             void _;
+            reporter.tick(1);
         }
+        reporter.finish();
         rows.push(await persistParseRow(pool, runId, f, stats, startedAt, Date.now() - t0));
         if (sink)
             sink.onParseTotal(stats.rowsEmitted);
@@ -395,6 +404,16 @@ async function persistParseRow(pool, runId, file, stats, startedAt, durationMs) 
     await (0, mysql_1.insertEtlRunParse)(pool, row);
     return row;
 }
+/** "12.3 MB" for a log line; "unknown" when the stat fails. */
+async function fileSizeMb(filePath) {
+    try {
+        const stat = await fs.stat(filePath);
+        return `${(stat.size / 1024 / 1024).toFixed(1)} MB`;
+    }
+    catch {
+        return "unknown size";
+    }
+}
 function emptyTotals() {
     return { attempted: 0, inserted: 0, duplicates: 0, batchCount: 0 };
 }
@@ -409,19 +428,38 @@ async function flushBatch(pool, batch, fillCols, totals) {
     addTotals(totals, result);
     return result;
 }
-async function runInsertStage(pool, runId, rawDir, files, sink, github) {
+async function runInsertStage(pool, runId, rawDir, files, sink, github, 
+/** The parse stage's per-file rows. Their `rowsEmitted` is the expected
+ *  row count for the insert of the same file, which is what lets the
+ *  progress line show a percentage and an ETA. */
+parseRows = []) {
     const rows = [];
     let runInsertedSoFar = 0;
-    for (const f of files.filter((file) => !(0, githubTypes_1.isGithubStreamFile)(file))) {
+    const dbipFiles = files.filter((file) => !(0, githubTypes_1.isGithubStreamFile)(file));
+    if (dbipFiles.length > 0) {
+        console.log(`[etl] insert: ${dbipFiles.length} DB-IP source file(s) — this is the long stage`);
+    }
+    for (const f of dbipFiles) {
         const startedAt = new Date();
         const t0 = Date.now();
         const totals = emptyTotals();
+        // The rows this file contributes were counted during parse; reuse that
+        // number so the progress line can show a percentage and an ETA instead
+        // of a bare running total.
+        const expected = parseRows.find((row) => row.source === f.etlSource)?.rowsEmitted;
+        const reporter = (0, progressReporter_1.createProgressReporter)({
+            label: `insert ${f.filename}`,
+            unit: "rows",
+            total: expected && expected > 0 ? expected : undefined,
+        });
+        console.log(`[etl] insert: ${f.filename}${expected ? ` (~${expected.toLocaleString()} rows expected)` : ""}`);
         let batch = [];
         for await (const rec of f.parse(path.join(rawDir, f.filename)).records) {
             batch.push(toIpRangeRow(rec, f.source, f.fillCols));
             if (batch.length >= 1000) {
                 const result = await flushBatch(pool, batch, f.fillCols, totals);
                 runInsertedSoFar += result.inserted;
+                reporter.tick(batch.length);
                 if (sink)
                     sink.onInsert(runInsertedSoFar);
                 batch = [];
@@ -430,9 +468,13 @@ async function runInsertStage(pool, runId, rawDir, files, sink, github) {
         if (batch.length > 0) {
             const result = await flushBatch(pool, batch, f.fillCols, totals);
             runInsertedSoFar += result.inserted;
+            reporter.tick(batch.length);
             if (sink)
                 sink.onInsert(runInsertedSoFar);
         }
+        reporter.finish();
+        console.log(`[etl] insert: ${f.filename} — ${totals.inserted.toLocaleString()} new, ` +
+            `${totals.duplicates.toLocaleString()} merged into existing ranges`);
         rows.push(await persistInsertRow(pool, runId, f, totals, startedAt, Date.now() - t0));
     }
     const githubFiles = files.filter(githubTypes_1.isGithubStreamFile);
@@ -630,6 +672,8 @@ async function runPipelineLocked(pool, opts) {
     const runId = opts.runId ?? (await (0, mysql_1.recordEtlStart)(pool));
     const rawDir = path.join(cfg.etl.dataDir, "raw");
     const now = new Date();
+    const runStartedAt = Date.now();
+    console.log(`[etl] run ${runId} starting — data dir ${rawDir}`);
     const sink = opts.sink ?? new EtlProgressSink(pool, runId);
     try {
         // 1) Decide which files we have on disk.
@@ -671,6 +715,9 @@ async function runPipelineLocked(pool, opts) {
         const needNames = new Set(needDownload.map((f) => f.filename));
         const monthlySpecs = download_1.ALL_SPECS.filter((spec) => spec.mode === "monthly" && needNames.has(spec.destName));
         const specs = [...monthlySpecs, ...download_1.EXTRA_SPECS];
+        const monthlyCount = monthlySpecs.length;
+        console.log(`[etl] download: ${monthlyCount} DB-IP file(s) to fetch, ` +
+            `${reusable.length} reused from cache, ${download_1.EXTRA_SPECS.length} GitHub file(s) refreshed`);
         sink.setStage("download");
         const fixedImpl = opts.downloadFixed ?? download_1.fetchFixedOneWithAttempts;
         const download = opts.download ?? runDownloadStage;
@@ -735,6 +782,7 @@ async function runPipelineLocked(pool, opts) {
         // are parsed and deduped once; parse and insert reuse that snapshot.
         sink.setStage("parse");
         await sink.flush();
+        console.log(`[etl] parse: ${present.length} source file(s)`);
         const githubStartedAt = new Date();
         const github = await (0, prepare_1.prepareGithubSources)(present.filter(githubTypes_1.isGithubStreamFile), rawDir);
         await (0, mysql_1.insertEtlRunDedupe)(pool, {
@@ -797,7 +845,7 @@ async function runPipelineLocked(pool, opts) {
         sink.setStage("insert");
         await sink.flush();
         await (0, mysql_1.truncateNew)(pool);
-        const insertRows = await runInsertStage(pool, runId, rawDir, present, sink, github);
+        const insertRows = await runInsertStage(pool, runId, rawDir, present, sink, github, parseRows);
         await sink.flush();
         // Second half of the guard: the files existed, but did they carry
         // any usable rows? A truncated or empty download parses to zero
@@ -830,7 +878,11 @@ async function runPipelineLocked(pool, opts) {
             dbipRecords: dbipTotal,
             mergedRecords: mergedTotal,
         });
-        console.log(`[etl] success run=${runId} merged=${mergedTotal} (dbip=${dbipCityRecords}, dbip-country=${dbipCountryRecords}, dbip-asn=${dbipAsnRecords})`);
+        const totalSec = Math.round((Date.now() - runStartedAt) / 1000);
+        const totalMin = Math.floor(totalSec / 60);
+        const totalLabel = totalMin > 0 ? `${totalMin}m${String(totalSec % 60).padStart(2, "0")}s` : `${totalSec}s`;
+        console.log(`[etl] success run=${runId} merged=${mergedTotal} in ${totalLabel} ` +
+            `(dbip=${dbipCityRecords}, dbip-country=${dbipCountryRecords}, dbip-asn=${dbipAsnRecords})`);
         return { runId, merged: mergedTotal };
     }
     catch (err) {

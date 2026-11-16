@@ -13,6 +13,11 @@ const prettierConfig = require("eslint-config-prettier");
 module.exports = tseslint.config(
   {
     ignores: [
+      // Worktrees live under .claude/ and each carries its own dist/ and
+      // node_modules/. Without this, linting from the main checkout picks
+      // up another checkout's compiled output and reports hundreds of
+      // errors that exist nowhere in this tree.
+      ".claude/**",
       "dist/**",
       // The committed release copy of dist/. It is generated output —
       // linting it would flag the compiler's own output, and it is
