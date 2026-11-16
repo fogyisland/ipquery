@@ -76,9 +76,9 @@ describe("aggregateProviderHealth", () => {
       `INSERT INTO provider_call_counter
          (provider_name, day_utc, calls_total, calls_429, calls_timeout,
           calls_network_err, calls_other_err, last_called_at)
-       VALUES ('iplocate', CURDATE(), 10, 3, 2, 1, 1, NOW(3))`,
+       VALUES ('ipinfo', CURDATE(), 10, 3, 2, 1, 1, NOW(3))`,
     );
-    const agg = await aggregateProviderHealth(td.pool, "iplocate", 24 * 60 * 60 * 1000);
+    const agg = await aggregateProviderHealth(td.pool, "ipinfo", 24 * 60 * 60 * 1000);
     expect(agg.calls).toBe(10);
     expect(agg.errors429).toBe(3);
     expect(agg.errorsOther).toBe(4); // 2 + 1 + 1
@@ -89,15 +89,10 @@ describe("aggregateProviderHealth", () => {
 describe("aggregateProviderHealthAll", () => {
   it("returns one row per provider in the catalog, even with no data", async () => {
     const all = await aggregateProviderHealthAll(td.pool, 24 * 60 * 60 * 1000);
-    // Five seeded providers from migration 016.
-    expect(all.length).toBe(5);
-    expect(all.map((r) => r.providerName).sort()).toEqual([
-      "freeipapi",
-      "ip-api",
-      "ipapi-co",
-      "ipinfo",
-      "iplocate",
-    ]);
+    // The two providers left after migration 028 retired the three that
+    // never answered.
+    expect(all.length).toBe(2);
+    expect(all.map((r) => r.providerName).sort()).toEqual(["ip-api", "ipinfo"]);
     for (const row of all) {
       expect(row.calls).toBe(0);
       expect(row.failureRatePct).toBe(0);

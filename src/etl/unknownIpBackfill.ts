@@ -733,25 +733,6 @@ async function writeConsensusRange(pool: Pool, ip: Buffer, rec: IpGeoRecord): Pr
   return res.affectedRows === 1;
 }
 
-/** Convenience constructor: pick providers based on which API keys are
- *  present in env. Each provider silently abstains if its key is missing,
- *  so the backfill is robust to partial configurations — it'll just have
- *  fewer votes and may fail to reach consensus. */
-export function buildDefaultProviders(env: NodeJS.ProcessEnv = process.env): IpGeoProvider[] {
-  // Lazy import so the providers' deps (which only fire when lookup() is
-  // called) aren't loaded for callers that don't need backfill.
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { IpApiProvider, IpinfoProvider, IplocateProvider, FreeIpApiProvider, IpapiCoProvider } =
-    require("./providers") as typeof import("./providers");
-  return [
-    new IpApiProvider(), // no key required, 45/min HTTP
-    new IpinfoProvider({ token: env.IPINFO_TOKEN }), // key optional, 50k/month HTTPS
-    new IplocateProvider({ apiKey: env.IPLOCATE_API_KEY }), // key optional, 1k/day HTTPS
-    new FreeIpApiProvider(), // no key, 60/min HTTPS
-    new IpapiCoProvider(), // no key, 30k/month HTTPS
-  ];
-}
-
 /** Convenience: parse + validate an IP string into the same Buffer format
  *  unknown_ip_queue stores. Re-exported here so admin routes don't need
  *  to import the low-level helper directly. */

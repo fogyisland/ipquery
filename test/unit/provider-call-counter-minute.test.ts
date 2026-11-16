@@ -94,10 +94,10 @@ describe("provider_call_counter_minute mirror", () => {
   });
 
   it("truncates minute_utc to the minute", async () => {
-    await touchProviderCalled(td.pool, "iplocate", {});
+    await touchProviderCalled(td.pool, "ipinfo", {});
     const [rows] = await td.pool.query<{ minute_utc: Date }[]>(
       `SELECT minute_utc FROM provider_call_counter_minute WHERE provider_name = ?`,
-      ["iplocate"],
+      ["ipinfo"],
     );
     const bucket = rows[0]!.minute_utc;
     expect(bucket.getUTCSeconds()).toBe(0);
