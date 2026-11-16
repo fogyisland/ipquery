@@ -195,7 +195,9 @@
       "Bash(sed *)",
       "PowerShell(claude mcp *)",
       "Bash(command -v claude)",
-      "Bash(printf %s\\\\n *)"
+      "Bash(printf %s\\\\n *)",
+      "Bash(rm -f \"/c/Users/徐鹏/.claude/settings.json.bak-before-mcp-approval\")",
+      "Read(//c/Users/徐鹏/.claude/**)"
     ]
   },
   "disabledMcpjsonServers": [
