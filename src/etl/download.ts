@@ -667,9 +667,10 @@ export async function fetchOneWithAttempts(
   lookback = 6,
   onProgress?: DownloadProgressFn,
   getImpl: typeof https.get = https.get,
+  fixedImpl: typeof fetchFixedOneWithAttempts = fetchFixedOneWithAttempts,
 ): Promise<DownloadResult> {
   if (spec.mode === "fixed") {
-    return fetchFixedOneWithAttempts(spec, outDir, onProgress, getImpl);
+    return fixedImpl(spec, outDir, onProgress, getImpl);
   }
   await fsp.mkdir(outDir, { recursive: true });
   const destPath = path.join(outDir, spec.destName);
@@ -756,6 +757,10 @@ export async function downloadAll(
   now: Date = new Date(),
   onProgress?: DownloadProgressFn,
   getImpl: typeof https.get = https.get,
+  /** Seam for the fixed-file refresh layer. Tests replace this to force
+   *  the "refresh failed, reuse the old cache" fallback without driving
+   *  the mirror-walking fetcher. Defaults to the real implementation. */
+  fixedImpl: typeof fetchFixedOneWithAttempts = fetchFixedOneWithAttempts,
 ): Promise<{
   results: DownloadResult[];
   failures: DownloadFailure[];
@@ -788,6 +793,7 @@ export async function downloadAll(
           if (onProgress) onProgress(cumDone, cumTotal);
         },
         getImpl,
+        fixedImpl,
       );
       results.push(r);
       // Roll the in-flight counters into the completed totals so the

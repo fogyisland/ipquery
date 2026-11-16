@@ -90,7 +90,7 @@
     <tbody>
       {{#each downloads}}
       <tr>
-        <td><code>{{this.source}}</code></td>
+        <td><code>{{this.source}}</code><span class="muted">{{this.sourceLabel}}</span></td>
         <td>{{this.month}}</td>
         <td class="table-num">{{#if this.bytes}}{{this.bytes}}{{else}}—{{/if}}</td>
         <td class="table-num">{{#if this.durationMs}}{{this.durationMs}}ms{{else}}—{{/if}}</td>
@@ -119,7 +119,7 @@
   <tbody>
     {{#each parses}}
     <tr>
-      <td><code>{{this.source}}</code></td>
+      <td><code>{{this.source}}</code><span class="muted">{{this.sourceLabel}}</span></td>
       <td class="table-num">{{this.rowsEmitted}}</td>
       <td class="table-num">
         <details class="etl-skip-details">
@@ -160,7 +160,7 @@
   <tbody>
     {{#each inserts}}
     <tr>
-      <td><code>{{this.source}}</code></td>
+      <td><code>{{this.source}}</code><span class="muted">{{this.sourceLabel}}</span></td>
       <td class="table-num">{{this.rowsAttempted}}</td>
       <td class="table-num">{{this.rowsInserted}}</td>
       <td class="table-num">{{this.rowsDuplicates}}</td>
