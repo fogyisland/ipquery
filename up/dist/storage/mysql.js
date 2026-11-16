@@ -57,6 +57,8 @@ exports.insertEtlRunInsert = insertEtlRunInsert;
 exports.listEtlRunInserts = listEtlRunInserts;
 exports.upsertEtlRunSwap = upsertEtlRunSwap;
 exports.getEtlRunSwap = getEtlRunSwap;
+exports.insertEtlRunDedupe = insertEtlRunDedupe;
+exports.getEtlRunDedupe = getEtlRunDedupe;
 // SPDX-License-Identifier: MIT
 const mysql = __importStar(require("mysql2/promise"));
 const ip_1 = require("../ip");
@@ -756,6 +758,45 @@ async function getEtlRunSwap(pool, runId) {
     if (rows.length === 0)
         return null;
     return etlRunSwapFromRow(rows[0]);
+}
+function etlRunDedupeFromRow(r) {
+    return {
+        runId: Number(r.run_id),
+        inputRows: Number(r.input_rows),
+        contained: Number(r.contained),
+        exactDuplicates: Number(r.exact_duplicates),
+        partialOverlaps: Number(r.partial_overlaps),
+        emitted: Number(r.emitted),
+        durationMs: r.duration_ms == null ? null : Number(r.duration_ms),
+        startedAt: new Date(r.started_at),
+        finishedAt: r.finished_at == null ? null : new Date(r.finished_at),
+    };
+}
+async function insertEtlRunDedupe(pool, row) {
+    await pool.query(`INSERT INTO etl_run_dedupe
+       (run_id, input_rows, contained, exact_duplicates, partial_overlaps,
+        emitted, duration_ms, started_at, finished_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, [
+        row.runId,
+        row.inputRows,
+        row.contained,
+        row.exactDuplicates,
+        row.partialOverlaps,
+        row.emitted,
+        row.durationMs,
+        row.startedAt,
+        row.finishedAt,
+    ]);
+}
+async function getEtlRunDedupe(pool, runId) {
+    const [rows] = await pool.query(`SELECT run_id, input_rows, contained, exact_duplicates, partial_overlaps,
+            emitted, duration_ms, started_at, finished_at
+       FROM etl_run_dedupe
+      WHERE run_id = ?
+      LIMIT 1`, [runId]);
+    if (rows.length === 0)
+        return null;
+    return etlRunDedupeFromRow(rows[0]);
 }
 var runner_1 = require("./migrations/runner");
 Object.defineProperty(exports, "runMigrations", { enumerable: true, get: function () { return runner_1.runMigrations; } });

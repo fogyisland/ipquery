@@ -120,7 +120,7 @@ export declare function getEtlRunProgress(pool: mysql.Pool, id: number): Promise
 export declare function lastEtlRun(pool: mysql.Pool): Promise<EtlRun | null>;
 export declare function recentEtlRuns(pool: mysql.Pool, limit: number): Promise<EtlRun[]>;
 export declare function lastSuccessfulEtl(pool: mysql.Pool): Promise<Date | null>;
-export type EtlRunDownloadSource = "dbip-city" | "dbip-country" | "dbip-asn";
+export type EtlRunDownloadSource = "dbip-city" | "dbip-country" | "dbip-asn" | "metowolf-cn" | "runishiwo-cn" | "runishiwo-v6" | "sapics-user";
 export type EtlRunDownloadStatus = "success" | "failed" | "missing" | "skipped";
 export interface EtlRunDownloadRow {
     runId: number;
@@ -181,4 +181,17 @@ export interface EtlRunSwapRow {
 }
 export declare function upsertEtlRunSwap(pool: mysql.Pool, row: EtlRunSwapRow): Promise<void>;
 export declare function getEtlRunSwap(pool: mysql.Pool, runId: number): Promise<EtlRunSwapRow | null>;
+export interface EtlRunDedupeRow {
+    runId: number;
+    inputRows: number;
+    contained: number;
+    exactDuplicates: number;
+    partialOverlaps: number;
+    emitted: number;
+    durationMs: number | null;
+    startedAt: Date;
+    finishedAt: Date | null;
+}
+export declare function insertEtlRunDedupe(pool: mysql.Pool, row: EtlRunDedupeRow): Promise<void>;
+export declare function getEtlRunDedupe(pool: mysql.Pool, runId: number): Promise<EtlRunDedupeRow | null>;
 export { runMigrations, getAppliedVersions, migrationStatus } from "./migrations/runner";

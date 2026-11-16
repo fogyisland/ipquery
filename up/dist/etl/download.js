@@ -33,10 +33,14 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.DEFAULT_SPECS = void 0;
+exports.ALL_SPECS = exports.EXTRA_SPECS = exports.DEFAULT_SPECS = void 0;
+exports.parseDownloadKinds = parseDownloadKinds;
 exports.validateGzFile = validateGzFile;
+exports.validateTextFile = validateTextFile;
 exports.candidateMonths = candidateMonths;
 exports.downloadToFile = downloadToFile;
+exports.replaceWithValidatedTemp = replaceWithValidatedTemp;
+exports.fetchFixedOneWithAttempts = fetchFixedOneWithAttempts;
 exports.fetchOne = fetchOne;
 exports.fetchOneWithAttempts = fetchOneWithAttempts;
 exports.takeDownloadAttempts = takeDownloadAttempts;
@@ -45,14 +49,103 @@ exports.downloadAll = downloadAll;
 const fs = __importStar(require("node:fs"));
 const fsp = __importStar(require("node:fs/promises"));
 const path = __importStar(require("node:path"));
+const readline = __importStar(require("node:readline"));
 const https = __importStar(require("node:https"));
 const promises_1 = require("node:stream/promises");
 const zlib = __importStar(require("node:zlib"));
+const ip_1 = require("../ip");
+const dbip_1 = require("./sources/dbip");
 exports.DEFAULT_SPECS = [
-    { kind: "city", urlStem: "dbip-city-lite", destName: "dbip.csv.gz" },
-    { kind: "country", urlStem: "dbip-country-lite", destName: "dbip-country.csv.gz" },
-    { kind: "asn", urlStem: "dbip-asn-lite", destName: "dbip-asn.csv.gz" },
+    {
+        mode: "monthly",
+        kind: "city",
+        urlStem: "dbip-city-lite",
+        destName: "dbip.csv.gz",
+        etlSource: "dbip-city",
+        validate: "gzip",
+    },
+    {
+        mode: "monthly",
+        kind: "country",
+        urlStem: "dbip-country-lite",
+        destName: "dbip-country.csv.gz",
+        etlSource: "dbip-country",
+        validate: "gzip",
+    },
+    {
+        mode: "monthly",
+        kind: "asn",
+        urlStem: "dbip-asn-lite",
+        destName: "dbip-asn.csv.gz",
+        etlSource: "dbip-asn",
+        validate: "gzip",
+    },
 ];
+exports.EXTRA_SPECS = [
+    {
+        mode: "fixed",
+        kind: "metowolf-cn",
+        destName: "china-ipv4.txt",
+        etlSource: "metowolf-cn",
+        format: "cidr",
+        validate: "text",
+        urls: [
+            "https://raw.githubusercontent.com/metowolf/iplist/master/data/special/china.txt",
+            "https://cdn.jsdelivr.net/gh/metowolf/iplist@master/data/special/china.txt",
+        ],
+    },
+    {
+        mode: "fixed",
+        kind: "runishiwo-cn",
+        destName: "china-v4.txt",
+        etlSource: "runishiwo-cn",
+        format: "cidr",
+        validate: "text",
+        urls: [
+            "https://raw.githubusercontent.com/runishiwo/ChinaIPlist/main/cn_v4.txt",
+            "https://cdn.jsdelivr.net/gh/runishiwo/ChinaIPlist@main/cn_v4.txt",
+        ],
+    },
+    {
+        mode: "fixed",
+        kind: "runishiwo-v6",
+        destName: "china-v6.txt",
+        etlSource: "runishiwo-v6",
+        format: "cidr",
+        validate: "text",
+        urls: [
+            "https://raw.githubusercontent.com/runishiwo/ChinaIPlist/main/cn_v6.txt",
+            "https://cdn.jsdelivr.net/gh/runishiwo/ChinaIPlist@main/cn_v6.txt",
+        ],
+    },
+    {
+        mode: "fixed",
+        kind: "sapics-user",
+        destName: "sapics-user-country.csv",
+        etlSource: "sapics-user",
+        format: "country-csv",
+        validate: "text",
+        urls: [
+            "https://github.com/sapics/ip-location-db/releases/download/latest/user-country.csv",
+            "https://cdn.jsdelivr.net/gh/sapics/ip-location-db@latest/user-country.csv",
+        ],
+    },
+];
+exports.ALL_SPECS = [...exports.DEFAULT_SPECS, ...exports.EXTRA_SPECS];
+function parseDownloadKinds(input) {
+    const kinds = (input ?? "")
+        .split(",")
+        .map((kind) => kind.trim())
+        .filter(Boolean);
+    const byKind = new Map(exports.ALL_SPECS.map((spec) => [spec.kind, spec]));
+    const invalid = kinds.filter((kind) => !byKind.has(kind));
+    if (invalid.length > 0) {
+        throw new Error(`unknown --only value(s): ${invalid.join(", ")}; valid: ${exports.ALL_SPECS.map((spec) => spec.kind).join(", ")}`);
+    }
+    if (kinds.length === 0)
+        return [...exports.ALL_SPECS];
+    return kinds.map((kind) => byKind.get(kind));
+}
 /**
  * Inflate a gzip file and return the number of uncompressed bytes,
  * without holding the decompressed data in memory. Throws if the
@@ -141,6 +234,75 @@ async function validateGzFile(filePath) {
     finally {
         if (handle)
             await handle.close().catch(() => { });
+    }
+}
+function isTextStructurallyValidLine(line, format) {
+    if (format === "cidr") {
+        const separator = line.indexOf("/");
+        const address = separator === -1 ? line : line.slice(0, separator);
+        const parsed = (0, ip_1.parseIp)(address);
+        if (!parsed)
+            return false;
+        const prefixText = separator === -1 ? null : line.slice(separator + 1);
+        if (prefixText !== null && !/^\d{1,3}$/.test(prefixText))
+            return false;
+        const prefix = prefixText === null ? (address.includes(":") ? 128 : 32) : Number(prefixText);
+        const maxPrefix = address.includes(":") ? 128 : 32;
+        return prefix >= 0 && prefix <= maxPrefix;
+    }
+    const fields = (0, dbip_1.parseCsvLine)(line);
+    if (fields.length !== 3)
+        return false;
+    if (!(0, ip_1.parseIp)(fields[0].trim()) || !(0, ip_1.parseIp)(fields[1].trim()))
+        return false;
+    return /^[A-Za-z]{2}$/.test(fields[2].trim());
+}
+/**
+ * Check a plain-text source without loading the 25 MB country CSV into
+ * memory. One structurally valid line is enough: parsers count malformed
+ * rows separately, while an HTML error page or a binary/NUL payload is a
+ * download failure, not an empty dataset.
+ */
+async function validateTextFile(filePath, format) {
+    try {
+        const handle = await fsp.open(filePath, "r");
+        const { size } = await handle.stat();
+        await handle.close();
+        if (size === 0)
+            return "text source is empty";
+        const lines = readline.createInterface({
+            input: fs.createReadStream(filePath, { encoding: "utf8" }),
+            crlfDelay: Infinity,
+        });
+        let lineNumber = 0;
+        let hasValidLine = false;
+        try {
+            for await (const line of lines) {
+                lineNumber += 1;
+                if (line.includes("\u0000"))
+                    return `text source contains a NUL byte on line ${lineNumber}`;
+                if (line.includes("�")) {
+                    return `text source contains a replacement character on line ${lineNumber}`;
+                }
+                if (lineNumber === 1 && line.startsWith("<")) {
+                    return "text source starts with an HTML/XML error page";
+                }
+                const trimmed = line.trim();
+                if (trimmed === "" || trimmed.startsWith("#") || trimmed.startsWith("//"))
+                    continue;
+                if (isTextStructurallyValidLine(trimmed, format))
+                    hasValidLine = true;
+            }
+        }
+        finally {
+            lines.close();
+        }
+        if (!hasValidLine)
+            return `text source has no valid ${format} record`;
+        return null;
+    }
+    catch (err) {
+        return `text source could not be read: ${err instanceof Error ? err.message : String(err)}`;
     }
 }
 /** Build the candidate month list: newest first, walking back N months. */
@@ -254,6 +416,97 @@ getImpl = https.get) {
         });
     });
 }
+async function fileExists(filePath) {
+    try {
+        await fsp.access(filePath);
+        return true;
+    }
+    catch (err) {
+        const code = err.code;
+        if (code === "ENOENT")
+            return false;
+        throw err;
+    }
+}
+/**
+ * Swap a validated temporary file into place without relying on whether
+ * rename() overwrites an existing destination. A failure after the first
+ * rename restores the previous cache and removes every intermediate file.
+ */
+async function replaceWithValidatedTemp(destPath, tmpPath, backupPath, renameImpl = fsp.rename, rmImpl = fsp.rm) {
+    const hadPrevious = await fileExists(destPath);
+    try {
+        if (hadPrevious)
+            await renameImpl(destPath, backupPath);
+        await renameImpl(tmpPath, destPath);
+        if (hadPrevious)
+            await rmImpl(backupPath, { force: true });
+    }
+    catch (err) {
+        await rmImpl(tmpPath, { force: true });
+        if (hadPrevious) {
+            try {
+                await renameImpl(backupPath, destPath);
+            }
+            catch (restoreErr) {
+                throw new Error(`failed to replace ${destPath}: ${err instanceof Error ? err.message : String(err)}; ` +
+                    `failed to restore backup: ${restoreErr instanceof Error ? restoreErr.message : String(restoreErr)}`);
+            }
+        }
+        throw err;
+    }
+}
+async function recordFixedAttempt(spec, url, status, bytes, startedAt, durationMs, retryCount, errorMessage) {
+    downloadAttempts.push({
+        spec,
+        destName: spec.destName,
+        url,
+        status,
+        bytes,
+        month: null,
+        durationMs,
+        retryCount,
+        errorMessage,
+        startedAt,
+        finishedAt: new Date(),
+    });
+}
+async function fetchFixedOneWithAttempts(spec, outDir, onProgress, getImpl = https.get) {
+    await fsp.mkdir(outDir, { recursive: true });
+    const destPath = path.join(outDir, spec.destName);
+    const errors = [];
+    for (const [index, url] of spec.urls.entries()) {
+        const suffix = `${process.pid}-${Date.now()}-${index}`;
+        const tmpPath = path.join(outDir, `${spec.destName}.part-${suffix}`);
+        const backupPath = path.join(outDir, `${spec.destName}.bak-${suffix}`);
+        const startedAt = new Date();
+        const t0 = Date.now();
+        try {
+            const bytes = await downloadToFile(url, tmpPath, onProgress, getImpl);
+            const problem = await validateTextFile(tmpPath, spec.format);
+            if (problem)
+                throw new Error(`invalid ${spec.format} payload: ${problem}`);
+            await replaceWithValidatedTemp(destPath, tmpPath, backupPath);
+            await recordFixedAttempt(spec, url, "success", bytes, startedAt, Date.now() - t0, index, index > 0 ? `mirror fallback after ${index} failed URL(s)` : null);
+            return {
+                kind: spec.kind,
+                destName: spec.destName,
+                etlSource: spec.etlSource,
+                url,
+                bytes,
+                month: null,
+            };
+        }
+        catch (err) {
+            await fsp.rm(tmpPath, { force: true });
+            await fsp.rm(backupPath, { force: true });
+            const message = err instanceof Error ? err.message : String(err);
+            errors.push(`${url}: ${message}`);
+            await recordFixedAttempt(spec, url, "failed", null, startedAt, Date.now() - t0, index, message);
+        }
+    }
+    throw new Error(`刷新失败、复用旧缓存: ${spec.destName} (${errors.join("; ")})`);
+}
 /**
  * Download a single spec, walking back through candidateMonths until one
  * returns 2xx. Returns the DownloadResult with the winning month, or
@@ -273,7 +526,14 @@ async function fetchOne(spec, outDir, now, lookback = 6, onProgress) {
         const url = `https://download.db-ip.com/free/${spec.urlStem}-${month}.csv.gz`;
         try {
             const bytes = await downloadToFile(url, destPath, onProgress);
-            return { kind: spec.kind, destName: spec.destName, url, bytes, month };
+            return {
+                kind: spec.kind,
+                destName: spec.destName,
+                etlSource: spec.etlSource,
+                url,
+                bytes,
+                month,
+            };
         }
         catch (err) {
             const msg = err.message;
@@ -293,12 +553,14 @@ async function fetchOne(spec, outDir, now, lookback = 6, onProgress) {
  * in M ms". This is additive on top of fetchOne — the existing export is
  * kept for backwards compatibility with the CLI command.
  */
-// Module-scoped accumulator used by fetchOneWithAttempts. One fetchOneWithAttempts
-// call → many 404 attempts + one success attempt (or all-failed if every
-// candidate 404s). The pipeline (Task 1.5) only ever calls this once per
-// run, so a module-scoped array is safe.
+// Module-scoped accumulator used by fetchOneWithAttempts. Every downloadAll
+// call drains it at the end with takeDownloadAttempts(), so one call's
+// monthly 404 attempts cannot leak into the next call's fixed-source rows.
 const downloadAttempts = [];
-async function fetchOneWithAttempts(spec, outDir, now, lookback = 6, onProgress) {
+async function fetchOneWithAttempts(spec, outDir, now, lookback = 6, onProgress, getImpl = https.get, fixedImpl = fetchFixedOneWithAttempts) {
+    if (spec.mode === "fixed") {
+        return fixedImpl(spec, outDir, onProgress, getImpl);
+    }
     await fsp.mkdir(outDir, { recursive: true });
     const destPath = path.join(outDir, spec.destName);
     const months = candidateMonths(now, lookback);
@@ -326,7 +588,14 @@ async function fetchOneWithAttempts(spec, outDir, now, lookback = 6, onProgress)
                 startedAt,
                 finishedAt: new Date(),
             });
-            return { kind: spec.kind, destName: spec.destName, url, bytes, month };
+            return {
+                kind: spec.kind,
+                destName: spec.destName,
+                etlSource: spec.etlSource,
+                url,
+                bytes,
+                month,
+            };
         }
         catch (err) {
             const msg = err.message;
@@ -369,7 +638,11 @@ function takeDownloadAttempts() {
  * uses this to render a single "download" bar even though three files
  * are being fetched back-to-back.
  */
-async function downloadAll(specs, outDir, now = new Date(), onProgress) {
+async function downloadAll(specs, outDir, now = new Date(), onProgress, getImpl = https.get, 
+/** Seam for the fixed-file refresh layer. Tests replace this to force
+ *  the "refresh failed, reuse the old cache" fallback without driving
+ *  the mirror-walking fetcher. Defaults to the real implementation. */
+fixedImpl = fetchFixedOneWithAttempts) {
     const results = [];
     const failures = [];
     // Aggregator: bytes done across all finished specs + the in-flight one.
@@ -392,19 +665,28 @@ async function downloadAll(specs, outDir, now = new Date(), onProgress) {
                 const cumTotal = inFlightTotal !== null ? completedTotal + inFlightTotal : null;
                 if (onProgress)
                     onProgress(cumDone, cumTotal);
-            });
+            }, getImpl, fixedImpl);
             results.push(r);
             // Roll the in-flight counters into the completed totals so the
             // NEXT file's progress reports include this one's full size.
             completedBytes += r.bytes;
             completedTotal += inFlightTotal ?? r.bytes;
             const mb = (r.bytes / 1024 / 1024).toFixed(1);
-            console.log(`[download] ${spec.kind.padEnd(7)} ${r.month}  ${mb.padStart(7)} MB  → ${path.join(outDir, r.destName)}`);
+            console.log(`[download] ${spec.kind.padEnd(12)} ${r.month ?? "fixed"}  ${mb.padStart(7)} MB  → ${path.join(outDir, r.destName)}`);
         }
         catch (err) {
             const msg = err.message;
-            failures.push({ kind: spec.kind, url: "(see message)", message: msg });
-            console.error(`[download] ${spec.kind.padEnd(7)} FAILED: ${msg}`);
+            const failureUrls = spec.mode === "fixed" ? spec.urls : [];
+            failures.push({
+                kind: spec.kind,
+                destName: spec.destName,
+                etlSource: spec.etlSource,
+                url: failureUrls[0] ?? "(see message)",
+                urls: failureUrls,
+                attemptCount: failureUrls.length || 1,
+                message: msg,
+            });
+            console.error(`[download] ${spec.kind.padEnd(12)} FAILED: ${msg}`);
         }
     }
     // Walk the attempt buffer back to attribute the "all candidates 404'd"
@@ -421,6 +703,7 @@ async function downloadAll(specs, outDir, now = new Date(), onProgress) {
         bySpec.set(key, list);
     }
     const attemptOut = [];
+    const byFailure = new Map();
     for (const spec of specs) {
         const list = bySpec.get(spec.destName) ?? [];
         if (list.length === 0)
@@ -429,9 +712,9 @@ async function downloadAll(specs, outDir, now = new Date(), onProgress) {
         if (anySuccess) {
             attemptOut.push(...list);
         }
-        else {
-            // All-failed → roll up into one 'missing' row that summarises the
-            // candidate walk. retry_count = number of distinct months tried.
+        else if (spec.mode === "monthly") {
+            // All-failed monthly candidates mean the release is missing;
+            // collapse the 404 walk into one 'missing' row for run-detail.
             const first = list[0];
             const last = list[list.length - 1];
             attemptOut.push({
@@ -441,14 +724,33 @@ async function downloadAll(specs, outDir, now = new Date(), onProgress) {
                 status: "missing",
                 bytes: null,
                 month: null,
-                durationMs: list.reduce((s, a) => s + (a.durationMs ?? 0), 0),
+                durationMs: list.reduce((sum, a) => sum + (a.durationMs ?? 0), 0),
                 retryCount: list.length,
-                errorMessage: list.map((a) => a.month + ":" + (a.errorMessage ?? "")).join("; "),
+                errorMessage: list.map((a) => `${a.month ?? a.url}:${a.errorMessage ?? ""}`).join("; "),
                 startedAt: first.startedAt,
                 finishedAt: last.finishedAt,
             });
         }
+        else {
+            // A fixed refresh failure is never 'missing': every failed URL is
+            // visible and the stage layer can record one 'failed' row that says
+            // the previous validated cache is being reused.
+            attemptOut.push(...list);
+            byFailure.set(spec.destName, { attempts: list, message: msgForFailure(spec, list) });
+        }
+    }
+    for (const [destName, details] of byFailure) {
+        const failure = failures.find((f) => f.destName === destName);
+        if (failure) {
+            failure.attemptCount = details.attempts.length;
+            failure.message = details.message;
+        }
     }
     return { results, failures, attempts: attemptOut };
+}
+function msgForFailure(spec, attempts) {
+    const attemptedUrls = attempts.map((a) => a.url).join("; ");
+    const reasons = attempts.map((a) => `${a.url}: ${a.errorMessage ?? "failed"}`).join("; ");
+    return `刷新失败、复用旧缓存: ${spec.destName} (${attemptedUrls}; ${reasons})`;
 }
 //# sourceMappingURL=download.js.map
