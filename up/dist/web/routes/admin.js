@@ -1619,7 +1619,7 @@ async function adminRoutes(app) {
                     kind: rateKind(health1h?.failureRatePct ?? 0, health1h?.calls ?? 0),
                     // HBS drops hash args on a helper called from an attribute, so the
                     // sentence is built here where the counts are already at hand.
-                    title: req.t("admin.unknownIps.healthCard.health1hTitle", {
+                    title: req.t("admin.unknownIps.healthCard.window1hTitle", {
                         calls: health1h?.calls ?? 0,
                         err429: health1h?.errors429 ?? 0,
                     }),
@@ -1631,7 +1631,7 @@ async function adminRoutes(app) {
                     kind: rateKind(health24h?.failureRatePct ?? 0, health24h?.calls ?? 0),
                     // HBS drops hash args on a helper called from an attribute, so the
                     // sentence is built here where the counts are already at hand.
-                    title: req.t("admin.unknownIps.healthCard.health24hTitle", {
+                    title: req.t("admin.unknownIps.healthCard.window24hTitle", {
                         calls: health24h?.calls ?? 0,
                         err429: health24h?.errors429 ?? 0,
                     }),
@@ -1643,7 +1643,7 @@ async function adminRoutes(app) {
                     kind: rateKind(health7d?.failureRatePct ?? 0, health7d?.calls ?? 0),
                     // HBS drops hash args on a helper called from an attribute, so the
                     // sentence is built here where the counts are already at hand.
-                    title: req.t("admin.unknownIps.healthCard.health7dTitle", {
+                    title: req.t("admin.unknownIps.healthCard.window7dTitle", {
                         calls: health7d?.calls ?? 0,
                         err429: health7d?.errors429 ?? 0,
                     }),
@@ -2199,7 +2199,7 @@ async function adminRoutes(app) {
                     kind: rateKind(health1h?.failureRatePct ?? 0, health1h?.calls ?? 0),
                     // HBS drops hash args on a helper called from an attribute, so the
                     // sentence is built here where the counts are already at hand.
-                    title: req.t("admin.unknownIps.healthCard.health1hTitle", {
+                    title: req.t("admin.unknownIps.healthCard.window1hTitle", {
                         calls: health1h?.calls ?? 0,
                         err429: health1h?.errors429 ?? 0,
                     }),
@@ -2211,7 +2211,7 @@ async function adminRoutes(app) {
                     kind: rateKind(health24h?.failureRatePct ?? 0, health24h?.calls ?? 0),
                     // HBS drops hash args on a helper called from an attribute, so the
                     // sentence is built here where the counts are already at hand.
-                    title: req.t("admin.unknownIps.healthCard.health24hTitle", {
+                    title: req.t("admin.unknownIps.healthCard.window24hTitle", {
                         calls: health24h?.calls ?? 0,
                         err429: health24h?.errors429 ?? 0,
                     }),
@@ -2223,7 +2223,7 @@ async function adminRoutes(app) {
                     kind: rateKind(health7d?.failureRatePct ?? 0, health7d?.calls ?? 0),
                     // HBS drops hash args on a helper called from an attribute, so the
                     // sentence is built here where the counts are already at hand.
-                    title: req.t("admin.unknownIps.healthCard.health7dTitle", {
+                    title: req.t("admin.unknownIps.healthCard.window7dTitle", {
                         calls: health7d?.calls ?? 0,
                         err429: health7d?.errors429 ?? 0,
                     }),
@@ -2276,7 +2276,7 @@ async function adminRoutes(app) {
                     errors429: h1h.errors429,
                     failurePct: h1h.failureRatePct,
                     kind: rateKind(h1h.failureRatePct, h1h.calls),
-                    title: req.t("admin.unknownIps.healthCard.health1hTitle", {
+                    title: req.t("admin.unknownIps.healthCard.window1hTitle", {
                         calls: h1h.calls,
                         err429: h1h.errors429,
                     }),
@@ -2286,7 +2286,7 @@ async function adminRoutes(app) {
                     errors429: h24h.errors429,
                     failurePct: h24h.failureRatePct,
                     kind: rateKind(h24h.failureRatePct, h24h.calls),
-                    title: req.t("admin.unknownIps.healthCard.health24hTitle", {
+                    title: req.t("admin.unknownIps.healthCard.window24hTitle", {
                         calls: h24h.calls,
                         err429: h24h.errors429,
                     }),
@@ -2296,7 +2296,7 @@ async function adminRoutes(app) {
                     errors429: h7d.errors429,
                     failurePct: h7d.failureRatePct,
                     kind: rateKind(h7d.failureRatePct, h7d.calls),
-                    title: req.t("admin.unknownIps.healthCard.health7dTitle", {
+                    title: req.t("admin.unknownIps.healthCard.window7dTitle", {
                         calls: h7d.calls,
                         err429: h7d.errors429,
                     }),

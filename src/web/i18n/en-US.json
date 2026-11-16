@@ -730,11 +730,7 @@
           "off": "Disabled"
         },
         "save": "Save",
-        "apiKeyPlaceholder": "not set",
-        "apiKeyLabel": "API key",
-        "apiKeyStored": "Stored — leave blank to keep it",
-        "quotaChipTitle": "The vendor's published free quota",
-        "enforcedChipTitle": "The limit this app enforces (never exceeds the published one)"
+        "apiKeyPlaceholder": "not set"
       },
       "healthCard": {
         "statusOk": "Healthy",
@@ -861,7 +857,13 @@
       "title": "Providers",
       "builtInSection": "Built-in providers",
       "circuitBreakerSection": "Circuit breaker",
-      "customSection": "Custom providers"
+      "customSection": "Custom providers",
+      "quotaChipTitle": "The vendor's published free quota",
+      "enforcedChipTitle": "The limit this app enforces (never exceeds the published one)",
+      "apiKeyLabel": "API key",
+      "apiKeyStored": "Stored — leave blank to keep it",
+      "enabledChip": "Enabled",
+      "disabledChip": "Disabled"
     },
     "ingest": {
       "backfill": {

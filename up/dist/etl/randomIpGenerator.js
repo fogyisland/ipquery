@@ -30,6 +30,7 @@ exports.pickRandomIpsNotInRanges = pickRandomIpsNotInRanges;
 const unknownIpBackfill_1 = require("./unknownIpBackfill");
 const randomProbeLog_1 = require("../storage/randomProbeLog");
 const providerLock_1 = require("./providerLock");
+const providerRotation_1 = require("./providerRotation");
 const node_crypto_1 = require("node:crypto");
 const DEFAULT_COUNT = 10;
 const DEFAULT_MAX_TRIES = 50;
@@ -101,9 +102,20 @@ async function runRandomGeneration(pool, providers, opts = {}) {
             workSummary.finishedAt = Date.now();
         }
         else {
-            // Step 2: serial fan-out per IP.
+            // Step 2: one provider per IP, taking turns.
+            //
+            // The queue-driven backfill asks every provider and votes; random
+            // generation does not need that. The address is picked to widen
+            // coverage, and a single confident answer already writes a row — so
+            // asking all of them spends four times the quota for the same rows,
+            // which is exactly the burst that trips a free tier.
+            let rotation = (0, providerRotation_1.createRotation)(providers);
             for (const slot of picked.ips) {
-                const result = await (0, unknownIpBackfill_1.processIp)(pool, providers, slot.text, slot.buffer, workSummary, "random", false, log);
+                const step = (0, providerRotation_1.nextProvider)(rotation, providers);
+                rotation = step.state;
+                if (!step.provider)
+                    break;
+                const result = await (0, unknownIpBackfill_1.processIp)(pool, [step.provider], slot.text, slot.buffer, workSummary, "random", false, log);
                 const outcome = result.outcome;
                 const consensus = outcome.kind === "merged" ? outcome.record : null;
                 // Fire-and-forget the per-IP probe audit. Must NEVER poison the

@@ -14,7 +14,7 @@
 import { describe, it, expect } from "vitest";
 import { KNOWN_PROVIDERS, providerDisplayName } from "../../src/storage/ingestProviders";
 
-const REMOVED = ["ipapi-co", "freeipapi", "iplocate"];
+const REMOVED = ["ipapi-co", "freeipapi", "iplocate", "ipinfo"];
 
 describe("the ingest provider catalog", () => {
   it("no longer lists the two providers that never answered", () => {
@@ -23,11 +23,11 @@ describe("the ingest provider catalog", () => {
     }
   });
 
-  it("keeps the providers that do answer, plus the two additions", () => {
-    for (const name of ["ip-api", "ipinfo", "ip-sb", "ip9"]) {
+  it("keeps the three that answer without a key", () => {
+    for (const name of ["ip-api", "ip-sb", "ip9"]) {
       expect(KNOWN_PROVIDERS).toContain(name);
     }
-    expect(KNOWN_PROVIDERS).toHaveLength(4);
+    expect(KNOWN_PROVIDERS).toHaveLength(3);
   });
 
   it("has no display-name entry for a removed provider", () => {
@@ -40,7 +40,6 @@ describe("the ingest provider catalog", () => {
 
   it("still labels the providers it does know", () => {
     expect(providerDisplayName("ip-api")).toBe("IP-API");
-    expect(providerDisplayName("ipinfo")).toBe("IPinfo.io");
     expect(providerDisplayName("ip-sb")).toBe("IP.SB");
     expect(providerDisplayName("ip9")).toBe("IP9.COM.CN");
   });
@@ -51,9 +50,9 @@ describe("the enforced-limit label", () => {
   // stay readable.
   it("is omitted for a provider with no published per-minute figure", async () => {
     const { enforcedRateLimitLabel } = await import("../../src/storage/ingestProviders");
-    // ipinfo counts by the month, so nothing is throttled locally and the
-    // card must not claim "no limit" — the chip is left out.
-    expect(enforcedRateLimitLabel("ipinfo")).toBeNull();
+    // Nothing in the catalog goes unthrottled today, but the helper has to
+    // answer for a custom provider too — and "no limit" must not be printed.
+    expect(enforcedRateLimitLabel("a-custom-provider")).toBeNull();
     expect(enforcedRateLimitLabel("something-custom")).toBeNull();
   });
 

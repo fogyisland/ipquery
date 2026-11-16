@@ -35,125 +35,130 @@
 <h3>{{req.t 'admin.providers.builtInSection'}}</h3>
 <div class="provider-health-list">
   {{#each providerHealth}}
+  {{!-- A provider card answers one question: is this source worth keeping
+       on? Health sits on the left, the controls that change it on the
+       right, so the two are read together rather than scrolled between.
+       The window figures lead with the failure rate because that is the
+       number the question turns on; raw call counts stay in the tooltip. --}}
   <div class="provider-health-card provider-health-card--{{this.status}}">
     <div class="provider-health-card-head">
-      <div>
+      <div class="provider-health-card-id">
         <span class="provider-health-card-name">{{this.displayName}}</span>
         <code class="provider-health-card-slug">{{this.name}}</code>
       </div>
-      <span class="provider-health-status provider-health-status--{{this.status}}">
-        {{#if (eq this.status 'healthy')}}{{@root.req.t 'admin.unknownIps.healthCard.statusOk'}}
-        {{else if (eq this.status 'failing')}}{{@root.req.t 'admin.unknownIps.healthCard.statusFailing'}}
-        {{else if (eq this.status 'recovering')}}{{@root.req.t 'admin.unknownIps.healthCard.statusRecovering'}}
-        {{else if (eq this.status 'disabled')}}{{@root.req.t 'admin.unknownIps.healthCard.statusDisabled'}}
-        {{else}}{{@root.req.t 'admin.unknownIps.healthCard.statusIdle'}}{{/if}}
-      </span>
+      <div class="provider-health-card-flags">
+        {{#if this.enabled}}
+          <span class="provider-flag provider-flag--on">{{@root.req.t 'admin.providers.enabledChip'}}</span>
+        {{else}}
+          <span class="provider-flag provider-flag--off">{{@root.req.t 'admin.providers.disabledChip'}}</span>
+        {{/if}}
+        <span class="provider-health-status provider-health-status--{{this.status}}">
+          {{#if (eq this.status 'healthy')}}{{@root.req.t 'admin.unknownIps.healthCard.statusOk'}}
+          {{else if (eq this.status 'failing')}}{{@root.req.t 'admin.unknownIps.healthCard.statusFailing'}}
+          {{else if (eq this.status 'recovering')}}{{@root.req.t 'admin.unknownIps.healthCard.statusRecovering'}}
+          {{else if (eq this.status 'disabled')}}{{@root.req.t 'admin.unknownIps.healthCard.statusDisabled'}}
+          {{else}}{{@root.req.t 'admin.unknownIps.healthCard.statusIdle'}}{{/if}}
+        </span>
+      </div>
     </div>
 
-    <div class="provider-health-card-grid">
-      <div class="provider-health-stat">
-        <span class="provider-health-stat-label">{{@root.req.t 'admin.unknownIps.healthCard.lastSuccess'}}</span>
-        <span class="provider-health-stat-value">
-          {{#if this.lastUsedAt}}<span title="{{formatDate this.lastUsedAt}}">{{formatRelative @root.req this.lastUsedAt}}</span>
-          {{else}}<span class="admin-tag admin-tag--muted">{{@root.req.t 'admin.unknownIps.healthCard.noSuccess'}}</span>{{/if}}
-        </span>
-      </div>
-      <div class="provider-health-stat">
-        <span class="provider-health-stat-label">{{@root.req.t 'admin.unknownIps.healthCard.lastError'}}</span>
-        <span class="provider-health-stat-value">
-          {{#if this.lastErrorAt}}<span title="{{this.lastErrorReason}}" class="provider-health-error-text">{{formatRelative @root.req this.lastErrorAt}}</span>
-          {{else}}<span class="admin-tag admin-tag--ok">{{@root.req.t 'admin.unknownIps.healthCard.noError'}}</span>{{/if}}
-        </span>
-      </div>
-      {{#if this.lastStats}}
-      <div class="provider-health-stat">
-        <span class="provider-health-stat-label">{{@root.req.t 'admin.unknownIps.healthCard.lastRun'}}</span>
-        <span class="provider-health-stat-value">
-          {{@root.req.t 'admin.unknownIps.healthCard.successCount'}}: <strong>{{this.lastStats.ok}}</strong>
-          · {{@root.req.t 'admin.unknownIps.healthCard.failedCount'}}: <strong>{{this.lastStats.failed}}</strong>
-          {{#if this.lastStats.rateLimited}}
-            · {{@root.req.t 'admin.unknownIps.healthCard.rateLimitedCount'}}: <strong>{{this.lastStats.rateLimited}}</strong>
+    <div class="provider-health-card-body">
+      <div class="provider-health-card-left">
+        <div class="provider-health-window">
+          <div class="provider-health-window-cell provider-health-window-cell--{{this.health1h.kind}}" title="{{this.health1h.title}}">
+            <div class="provider-health-window-label">{{@root.req.t 'admin.unknownIps.healthCard.window1h'}}</div>
+            <div class="provider-health-window-figure">{{this.health1h.failurePct}}<span class="provider-health-window-unit">%</span></div>
+            <div class="provider-health-window-sub">{{this.health1h.calls}} {{@root.req.t 'admin.unknownIps.healthCard.calls'}}</div>
+          </div>
+          <div class="provider-health-window-cell provider-health-window-cell--{{this.health24h.kind}}" title="{{this.health24h.title}}">
+            <div class="provider-health-window-label">{{@root.req.t 'admin.unknownIps.healthCard.window24h'}}</div>
+            <div class="provider-health-window-figure">{{this.health24h.failurePct}}<span class="provider-health-window-unit">%</span></div>
+            <div class="provider-health-window-sub">{{this.health24h.calls}} {{@root.req.t 'admin.unknownIps.healthCard.calls'}}</div>
+          </div>
+          <div class="provider-health-window-cell provider-health-window-cell--{{this.health7d.kind}}" title="{{this.health7d.title}}">
+            <div class="provider-health-window-label">{{@root.req.t 'admin.unknownIps.healthCard.window7d'}}</div>
+            <div class="provider-health-window-figure">{{this.health7d.failurePct}}<span class="provider-health-window-unit">%</span></div>
+            <div class="provider-health-window-sub">{{this.health7d.calls}} {{@root.req.t 'admin.unknownIps.healthCard.calls'}}</div>
+          </div>
+        </div>
+
+        <div class="provider-health-card-facts">
+          <span class="provider-fact">
+            <span class="provider-fact-label">{{@root.req.t 'admin.unknownIps.healthCard.lastSuccess'}}</span>
+            {{#if this.lastUsedAt}}<span title="{{formatDate this.lastUsedAt}}">{{formatRelative @root.req this.lastUsedAt}}</span>
+            {{else}}<span class="provider-fact-none">{{@root.req.t 'admin.unknownIps.healthCard.noSuccess'}}</span>{{/if}}
+          </span>
+          <span class="provider-fact">
+            <span class="provider-fact-label">{{@root.req.t 'admin.unknownIps.healthCard.lastError'}}</span>
+            {{#if this.lastErrorAt}}<span class="provider-health-error-text" title="{{this.lastErrorReason}}">{{formatRelative @root.req this.lastErrorAt}}</span>
+            {{else}}<span class="provider-fact-none">{{@root.req.t 'admin.unknownIps.healthCard.noError'}}</span>{{/if}}
+          </span>
+          {{#if this.lastStats}}
+          <span class="provider-fact">
+            <span class="provider-fact-label">{{@root.req.t 'admin.unknownIps.healthCard.lastRun'}}</span>
+            <span>{{this.lastStats.ok}} / {{this.lastStats.failed}}{{#if this.lastStats.rateLimited}} / {{this.lastStats.rateLimited}} 429{{/if}}</span>
+          </span>
           {{/if}}
-          · {{@root.req.t 'admin.unknownIps.healthCard.abstainedCount'}}: <strong>{{this.lastStats.abstained}}</strong>
-        </span>
+        </div>
+
+        {{#if this.lastErrorReason}}
+        <div class="provider-health-card-error" title="{{this.lastErrorReason}}">{{this.lastErrorReason}}</div>
+        {{/if}}
+
+        {{#if this.lastError}}
+        <details class="provider-last-error">
+          <summary>{{@root.req.t 'admin.unknownIps.healthCard.last429'}}</summary>
+          <pre>{{this.lastError.rawResponse}}</pre>
+          <small>{{formatDate this.lastError.ts}} - {{this.lastError.ipText}}</small>
+        </details>
+        {{/if}}
       </div>
-      {{/if}}
-    </div>
 
-    {{#if this.lastErrorReason}}
-    <div class="provider-health-card-error" title="{{this.lastErrorReason}}">{{this.lastErrorReason}}</div>
-    {{/if}}
+      <div class="provider-health-card-right">
+        {{#if this.quotaTodayText}}
+        <div class="provider-health-card-quota-row">
+          {{> pill kind=this.quotaKind text=this.quotaTodayText}}
+          {{#if this.autoReenableAt}}{{#unless this.enabled}}
+            {{> pill kind=this.reenableKind text=this.reenableText}}
+          {{/unless}}{{/if}}
+        </div>
+        {{else}}
+          {{#if this.autoReenableAt}}{{#unless this.enabled}}
+          <div class="provider-health-card-quota-row">
+            {{> pill kind=this.reenableKind text=this.reenableText}}
+          </div>
+          {{/unless}}{{/if}}
+        {{/if}}
 
-    {{!-- The three windows used to print nine numbers in three columns.
-         The decision they support is "is this provider worth keeping
-         enabled", so the card shows the failure rate per window — the
-         number that answers it, already coloured by the route — and keeps
-         the raw call / 429 counts in the title for anyone who needs them. --}}
-    <div class="provider-health-window">
-      <div class="provider-health-window-cell provider-health-window-cell--{{this.health1h.kind}}"
-           title="{{@root.req.t 'admin.unknownIps.healthCard.window1hTitle' calls=this.health1h.calls err429=this.health1h.errors429}}">
-        <div class="provider-health-window-label">{{@root.req.t 'admin.unknownIps.healthCard.window1h'}}</div>
-        <div class="provider-health-window-figure">{{this.health1h.failurePct}}<span class="provider-health-window-unit">%</span></div>
-        <div class="provider-health-window-sub">{{this.health1h.calls}} {{@root.req.t 'admin.unknownIps.healthCard.calls'}}</div>
+        {{!-- One form, one button. The toggle and the key used to be two
+             separate forms each carrying its own save, so toggling and then
+             pressing the key's button silently reverted the toggle. --}}
+        <form method="POST" action="/admin/providers/{{this.name}}" class="provider-settings-form">
+          <input type="hidden" name="csrf" value="{{csrfToken}}">
+          <label class="provider-toggle">
+            <input type="checkbox" name="enabled" value="on" {{#if this.enabled}}checked{{/if}}>
+            <span>{{#if this.enabled}}{{@root.req.t 'admin.unknownIps.providers.enabled.on'}}{{else}}{{@root.req.t 'admin.unknownIps.providers.enabled.off'}}{{/if}}</span>
+          </label>
+          <label class="provider-key-field">
+            <span class="provider-key-field-label">{{@root.req.t 'admin.providers.apiKeyLabel'}}</span>
+            <input type="password" name="apiKey"
+                   placeholder="{{#if this.hasApiKey}}{{@root.req.t 'admin.providers.apiKeyStored'}}{{else}}{{@root.req.t 'admin.unknownIps.providers.apiKeyPlaceholder'}}{{/if}}"
+                   autocomplete="off">
+          </label>
+          <button type="submit" class="btn-primary btn-sm">{{@root.req.t 'admin.unknownIps.providers.save'}}</button>
+        </form>
+
+        <div class="provider-health-card-limits">
+          <span class="provider-limit-chip" title="{{@root.req.t 'admin.providers.quotaChipTitle'}}">
+            {{this.freeQuota}}
+          </span>
+          {{#if this.enforcedLimit}}
+            <span class="provider-limit-chip provider-limit-chip--enforced" title="{{@root.req.t 'admin.providers.enforcedChipTitle'}}">
+              {{this.enforcedLimit}}
+            </span>
+          {{/if}}
+        </div>
       </div>
-      <div class="provider-health-window-cell provider-health-window-cell--{{this.health24h.kind}}"
-           title="{{@root.req.t 'admin.unknownIps.healthCard.window24hTitle' calls=this.health24h.calls err429=this.health24h.errors429}}">
-        <div class="provider-health-window-label">{{@root.req.t 'admin.unknownIps.healthCard.window24h'}}</div>
-        <div class="provider-health-window-figure">{{this.health24h.failurePct}}<span class="provider-health-window-unit">%</span></div>
-        <div class="provider-health-window-sub">{{this.health24h.calls}} {{@root.req.t 'admin.unknownIps.healthCard.calls'}}</div>
-      </div>
-      <div class="provider-health-window-cell provider-health-window-cell--{{this.health7d.kind}}"
-           title="{{@root.req.t 'admin.unknownIps.healthCard.window7dTitle' calls=this.health7d.calls err429=this.health7d.errors429}}">
-        <div class="provider-health-window-label">{{@root.req.t 'admin.unknownIps.healthCard.window7d'}}</div>
-        <div class="provider-health-window-figure">{{this.health7d.failurePct}}<span class="provider-health-window-unit">%</span></div>
-        <div class="provider-health-window-sub">{{this.health7d.calls}} {{@root.req.t 'admin.unknownIps.healthCard.calls'}}</div>
-      </div>
-    </div>
-
-    {{> pill kind=this.quotaKind text=this.quotaTodayText}}
-
-    {{#if this.autoReenableAt}}{{#unless this.enabled}}
-    {{> pill kind=this.reenableKind text=this.reenableText}}
-    {{/unless}}{{/if}}
-
-    {{#if this.lastError}}
-    <details class="provider-last-error">
-      <summary>{{@root.req.t 'admin.unknownIps.healthCard.last429'}}</summary>
-      <pre>{{this.lastError.rawResponse}}</pre>
-      <small>{{formatDate this.lastError.ts}} — {{this.lastError.ipText}}</small>
-    </details>
-    {{/if}}
-
-    {{!-- One form, one button. The toggle and the key used to be two
-         separate forms each carrying its own "save", so changing the
-         toggle and then pressing the key's button silently reverted it.
-         A blank key field means "leave the stored key alone". --}}
-    <form method="POST" action="/admin/providers/{{this.name}}" class="provider-settings-form">
-      <input type="hidden" name="csrf" value="{{csrfToken}}">
-      <div class="provider-settings-row">
-        <label class="provider-toggle">
-          <input type="checkbox" name="enabled" value="on" {{#if this.enabled}}checked{{/if}}>
-          <span>{{#if this.enabled}}{{@root.req.t 'admin.unknownIps.providers.enabled.on'}}{{else}}{{@root.req.t 'admin.unknownIps.providers.enabled.off'}}{{/if}}</span>
-        </label>
-        <label class="provider-key-field">
-          <span class="provider-key-field-label">{{@root.req.t 'admin.unknownIps.providers.apiKeyLabel'}}</span>
-          <input type="password" name="apiKey"
-                 placeholder="{{#if this.hasApiKey}}{{@root.req.t 'admin.unknownIps.providers.apiKeyStored'}}{{else}}{{@root.req.t 'admin.unknownIps.providers.apiKeyPlaceholder'}}{{/if}}"
-                 autocomplete="off">
-        </label>
-        <button type="submit" class="btn-primary btn-sm">{{@root.req.t 'admin.unknownIps.providers.save'}}</button>
-      </div>
-    </form>
-
-    <div class="provider-health-card-limits">
-      <span class="provider-limit-chip" title="{{@root.req.t 'admin.providers.quotaChipTitle'}}">
-        {{this.freeQuota}}
-      </span>
-      {{#if this.enforcedLimit}}
-        <span class="provider-limit-chip provider-limit-chip--enforced" title="{{@root.req.t 'admin.providers.enforcedChipTitle'}}">
-          {{this.enforcedLimit}}
-        </span>
-      {{/if}}
     </div>
   </div>
   {{/each}}

@@ -34,7 +34,8 @@ export declare const PROVIDER_CATALOG: Record<string, {
 /**
  * Every source the backfill can vote with, in catalog order.
  *
- * `ipapi.co`, `freeipapi.com` and `iplocate.io` were removed on 2026-11-16:
+ * `ipapi.co`, `freeipapi.com`, `iplocate.io` and `ipinfo.io` were removed on
+ * 2026-11-16:
  * against the addresses in this library their success rate was effectively
  * zero, so the votes in every fan-out went to providers that never
  * answered and the majority could not decide. Their rows are purged from

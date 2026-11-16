@@ -81,6 +81,9 @@ export interface RandomGenConfig {
     cooldownMinutes: number;
     cbLinkage: boolean;
 }
+/** Twenty runs an hour, expressed as the interval the runner uses. */
+export declare const RANDOM_GEN_RUNS_PER_HOUR = 20;
+export declare const RANDOM_GEN_INTERVAL_SEC: number;
 export declare function loadRandomGenConfig(pool: Pool): Promise<RandomGenConfig>;
 export interface RandomGenConfigUpdate {
     intervalSec?: number;

@@ -1575,31 +1575,6 @@ dl.settings-dl dd {
   color: var(--warning);
   word-break: break-all;
 }
-.provider-toggle-form,
-.provider-key-form {
-  display: flex;
-  align-items: center;
-  gap: var(--sp-2);
-  flex-wrap: wrap;
-}
-.provider-toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-family: var(--font-mono);
-  font-size: 12px;
-  color: var(--text-2);
-}
-.provider-key-form input[type="password"] {
-  width: 200px;
-  font-family: var(--font-mono);
-  font-size: 12px;
-  background: var(--bg);
-  border: var(--hairline);
-  border-radius: var(--radius);
-  padding: 5px 8px;
-  color: var(--text);
-}
 
 /* ─── Settings page: metric strip + tabs + form fields ────────────────
    Stripe/Cloudflare-style read-only settings console. Tabs are pure CSS
@@ -1974,9 +1949,14 @@ color: var(--text-3);
 .provider-health-card {
   background: var(--surface);
   border: var(--hairline);
-  padding: var(--sp-3) var(--sp-4);
+  border-radius: var(--radius);
+  padding: var(--sp-4);
   margin-bottom: var(--sp-3);
   position: relative;
+  /* A quiet lift so four cards read as four objects rather than one
+     long list of rows. */
+  box-shadow: var(--shadow-card);
+  overflow: hidden;
 }
 .provider-health-card::before {
   /* Left border stripe keyed to status — at-a-glance triage. */
@@ -2002,6 +1982,111 @@ color: var(--text-3);
 }
 .provider-health-card--idle {
   --status-color: var(--accent);
+}
+
+/* Two columns, not a stack. The left half answers "is this source worth
+   keeping on" (failure rates, last success, last error); the right half is
+   everything that changes it (the toggle, the key, the limits). Reading the
+   answer next to the control it justifies is the point. */
+.provider-health-card-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, auto);
+  gap: var(--sp-4);
+  align-items: start;
+}
+.provider-health-card-left {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  min-width: 0;
+}
+.provider-health-card-right {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  padding-left: var(--sp-4);
+  border-left: var(--hairline);
+  min-width: 0;
+}
+@media (max-width: 860px) {
+  .provider-health-card-body {
+    grid-template-columns: 1fr;
+  }
+  .provider-health-card-right {
+    padding-left: 0;
+    border-left: 0;
+    padding-top: var(--sp-3);
+    border-top: var(--hairline);
+  }
+}
+
+/* The header carries two chips and a status; they sit together on the
+   right rather than being scattered down the card. */
+.provider-health-card-flags {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.provider-flag {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px var(--sp-2);
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  border: 1px solid transparent;
+}
+.provider-flag--on {
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-color: var(--accent-line);
+}
+.provider-flag--off {
+  color: var(--text-3);
+  background: var(--surface-3);
+  border-color: var(--border);
+}
+
+/* The supporting facts, in one line rather than two bordered boxes. */
+.provider-health-card-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2) var(--sp-5);
+  font-size: 12px;
+  color: var(--text-2);
+}
+.provider-fact {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--sp-2);
+  min-width: 0;
+}
+.provider-fact-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-3);
+  white-space: nowrap;
+}
+.provider-fact-none {
+  color: var(--text-3);
+}
+
+/* The form reads as one control group on one line. */
+.provider-settings-form {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--sp-2);
+  flex-wrap: wrap;
+  margin: 0;
+}
+.provider-settings-form .provider-toggle {
+  align-self: center;
+}
+.provider-settings-form .provider-key-field {
+  flex: 1 1 140px;
+  min-width: 0;
 }
 
 .provider-health-card-head {
@@ -2051,8 +2136,8 @@ color: var(--text-3);
 
 .provider-health-card-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: var(--sp-3);
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--sp-2);
   margin-bottom: var(--sp-3);
 }
 .provider-health-stat {
@@ -2091,21 +2176,6 @@ color: var(--text-3);
   white-space: nowrap;
 }
 
-.provider-health-card-config {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--sp-3);
-  padding-top: var(--sp-3);
-  border-top: var(--hairline);
-}
-.provider-toggle-form,
-.provider-key-form {
-  display: flex;
-  align-items: center;
-  gap: var(--sp-2);
-  margin: 0;
-  flex-wrap: wrap;
-}
 .provider-toggle {
   display: inline-flex;
   align-items: center;
@@ -2115,15 +2185,19 @@ color: var(--text-3);
   color: var(--text-2);
   cursor: pointer;
 }
-.provider-key-form input[type="password"] {
-  width: 200px;
-  max-width: 100%;
+.provider-key-field input {
+  width: 100%;
   background: var(--bg);
   border: var(--hairline);
   color: var(--text);
   padding: 6px 8px;
   font-family: var(--font-mono);
   font-size: 12px;
+}
+.provider-key-field input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-soft);
 }
 /* The two limit chips: what the vendor promises, and what we enforce.
    Side by side so the pair reads as one fact — "published: X, enforced: Y".
@@ -2777,6 +2851,21 @@ color: var(--text-3);
 }
 
 /* Provider health window sub-grid (1h / 24h / 7d mini-cells) */
+/* The card's three bands: header, health, settings. A hairline between
+   them is what keeps six loose rows from reading as one long list. */
+.provider-health-card-section {
+  padding-bottom: var(--sp-3);
+  border-bottom: var(--hairline);
+  margin-bottom: var(--sp-3);
+}
+.provider-health-card-quota-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+  margin-bottom: var(--sp-3);
+}
+
 .provider-health-window {
   display: grid;
   grid-template-columns: repeat(3, 1fr);

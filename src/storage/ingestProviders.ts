@@ -19,7 +19,6 @@ import type { Pool, RowDataPacket } from "mysql2/promise";
 import type { IpGeoProvider } from "../etl/providers/types";
 import { getSetting, setSetting } from "./settings";
 import { IpApiProvider } from "../etl/providers/ipApi";
-import { IpinfoProvider } from "../etl/providers/ipinfo";
 import { IpSbProvider } from "../etl/providers/ipSb";
 import { Ip9Provider } from "../etl/providers/ip9";
 import { GenericHttpProvider, type GenericProviderRow } from "../etl/genericHttpProvider";
@@ -57,7 +56,6 @@ export interface ProviderConfigRow {
  *  them. */
 export const PROVIDER_CATALOG: Record<string, { displayName: string; freeQuota: string }> = {
   "ip-api": { displayName: "IP-API", freeQuota: "45 req/min, no key (HTTP only)" },
-  ipinfo: { displayName: "IPinfo.io", freeQuota: "50,000 req/month, key required (HTTPS)" },
   "ip-sb": { displayName: "IP.SB", freeQuota: "100 req/min (5 req/s), no key (HTTPS)" },
   ip9: { displayName: "IP9.COM.CN", freeQuota: "60 req/min, no key (HTTPS), Chinese results" },
 };
@@ -65,7 +63,8 @@ export const PROVIDER_CATALOG: Record<string, { displayName: string; freeQuota: 
 /**
  * Every source the backfill can vote with, in catalog order.
  *
- * `ipapi.co`, `freeipapi.com` and `iplocate.io` were removed on 2026-11-16:
+ * `ipapi.co`, `freeipapi.com`, `iplocate.io` and `ipinfo.io` were removed on
+ * 2026-11-16:
  * against the addresses in this library their success rate was effectively
  * zero, so the votes in every fan-out went to providers that never
  * answered and the majority could not decide. Their rows are purged from
@@ -465,9 +464,6 @@ export function buildProvidersFromConfig(configs: ProviderConfigRow[]): IpGeoPro
     switch (c.name) {
       case "ip-api":
         out.push(new IpApiProvider());
-        break;
-      case "ipinfo":
-        if (c.apiKey) out.push(new IpinfoProvider({ token: c.apiKey }));
         break;
       case "ip-sb":
         out.push(new IpSbProvider());

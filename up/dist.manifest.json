@@ -1,7 +1,7 @@
 {
   "formatVersion": 1,
-  "fileCount": 422,
-  "totalBytes": 2219871,
+  "fileCount": 426,
+  "totalBytes": 2229440,
   "files": {
     "api/dbBootstrap.d.ts": {
       "bytes": 8916,
@@ -207,6 +207,18 @@
       "bytes": 2282,
       "sha256": "6ae95524e014fee19c493c17ddef21ed97deaf55dde87bae3ceef43c609e4954"
     },
+    "etl/providerRotation.d.ts": {
+      "bytes": 883,
+      "sha256": "a2212bc1540191f1f01a74ec4382791ec7d342912ded9814904072fab8850bab"
+    },
+    "etl/providerRotation.js": {
+      "bytes": 1532,
+      "sha256": "d84ccf80a258695d4631e8bef4e336c7fa861cb56fba676255ae16062385b0b8"
+    },
+    "etl/providerRotation.js.map": {
+      "bytes": 1381,
+      "sha256": "9861df3cc6f28b221d33ac8a0476c6b6da940869bd96b3a3ca988ee2768c8849"
+    },
     "etl/providers/index.d.ts": {
       "bytes": 219,
       "sha256": "c39dc6a2f5acdb70e96722fd8d3e7712a81ab9a3a9c4dfe61bafa58e6c3446c0"
@@ -284,12 +296,12 @@
       "sha256": "d81f5b1b2f5f5c9cd726a16d0e3d13a3c1376c24b50a72cca4e78d594041be46"
     },
     "etl/randomIpGenerator.js": {
-      "bytes": 14252,
-      "sha256": "4078666dd0dcc7a146ccb25709033d564a21befad90527262daf02c1ffa2a811"
+      "bytes": 14997,
+      "sha256": "42ba310a6b9eeb2b7f160f90bbfceb0dc38f0fe1d1c7df6adf99c647d8164279"
     },
     "etl/randomIpGenerator.js.map": {
-      "bytes": 8403,
-      "sha256": "24d732293b038a56514d602257c3612524bc6395d224d9e1019aa7a3ffbb477b"
+      "bytes": 8706,
+      "sha256": "76af4ede12506ea77da5555c2440327521e699927398f0d4773dc1d064214857"
     },
     "etl/runGuard.d.ts": {
       "bytes": 2265,
@@ -580,16 +592,16 @@
       "sha256": "2b766299ed17493cd8cd969288510a660cdb15496b2f46160b8688ed8d019a4f"
     },
     "storage/ingestProviders.d.ts": {
-      "bytes": 6772,
-      "sha256": "ca9773d732ea9a8200f2cd972e732d92d5a6b45b4ea3b34ebc2a7833823bc4d9"
+      "bytes": 6788,
+      "sha256": "14f68314a6dc33c3b3f273f964167d37ca0f5fd56f6203cdacdb38023aae843f"
     },
     "storage/ingestProviders.js": {
-      "bytes": 19490,
-      "sha256": "59f8f4b9dc32766955303517abd9d597a3d9300819bde9a9264a21945058c6bd"
+      "bytes": 19198,
+      "sha256": "4a718401d18f8fc866ef2662535a842a00f1bb80dbbd1911b36723cec4f18715"
     },
     "storage/ingestProviders.js.map": {
-      "bytes": 10502,
-      "sha256": "f21ee5e56a7b7ad61750fb046f64323259a8883555c800a677875316c01d1300"
+      "bytes": 10282,
+      "sha256": "c4edea80c2ce98789d13a5b2c34de9081b391f50a42209b00b2106ac5e501315"
     },
     "storage/mcpTokens.d.ts": {
       "bytes": 2189,
@@ -715,6 +727,10 @@
       "bytes": 1174,
       "sha256": "cf4bde8c2425d791dc4b65720b2658e1259a56656c5268fee94c89a1fcec9d42"
     },
+    "storage/migrations/030_random_gen_cadence.sql": {
+      "bytes": 1028,
+      "sha256": "47d22234b53d58776e0c9228cf0015c91b77e6dc950442fa731b894c429967e4"
+    },
     "storage/migrations/runner.d.ts": {
       "bytes": 475,
       "sha256": "524b81361e04749aa8c66238b0537fb434b877d95aa91641f56b1bb55dccfc28"
@@ -764,16 +780,16 @@
       "sha256": "dbc5146d091c072c77f3d7cf7df1d557d83cdf75023cdf46c567a45b7cc8cf1d"
     },
     "storage/randomProbeLog.d.ts": {
-      "bytes": 3970,
-      "sha256": "3d69cdce180fd1e5395ec6e22784b99cafe76e0fe93f383677f336c18eec43c1"
+      "bytes": 4147,
+      "sha256": "264aef813a284ee3439a11df84a12fc403cde8001f752f5ec8acdff31710a055"
     },
     "storage/randomProbeLog.js": {
-      "bytes": 9833,
-      "sha256": "12ec2978b173347eb04d93a6d338bb4e265e7e9a981a8d155fa06c27f57d8e26"
+      "bytes": 11101,
+      "sha256": "4a1c50a935526e563251bd7e84f959dc349d168ebc4b5052dc9f2e145e70a17a"
     },
     "storage/randomProbeLog.js.map": {
-      "bytes": 7980,
-      "sha256": "91cd238660307080c54cb8554405f602e4a60731bef25b54f3acb32d2ea5a604"
+      "bytes": 8168,
+      "sha256": "919fea47f06703070b6335c0b0e41f649b798a13cf63d41c6082d6e519c14d8f"
     },
     "storage/rateLimit.d.ts": {
       "bytes": 778,
@@ -988,8 +1004,8 @@
       "sha256": "8c7cbeaf442c0998237bbe4146d3679cdda9fac91ff551a7f73864ca2ed732f1"
     },
     "web/assets/css/admin.css": {
-      "bytes": 76182,
-      "sha256": "f1dbe907a9bf54f2b92275dee9c6f5b61b89364b8dbb8d1f89369621a4b3ddb6"
+      "bytes": 78504,
+      "sha256": "8200aac0951f1a050f30767aedac88dc4631a47fefa443bced5a62b37bf2c6d0"
     },
     "web/assets/css/base.css": {
       "bytes": 1554,
@@ -1096,8 +1112,8 @@
       "sha256": "080b721f056d5350784d1dcca32fb83964e222582476c118dae2420b8a8565ee"
     },
     "web/i18n/en-US.json": {
-      "bytes": 50969,
-      "sha256": "210a61641ea30d8b98628645baa2b5b5bf440d8745053852d27078156bb48eaa"
+      "bytes": 51027,
+      "sha256": "bbef018c815b67cd05b3126ad50a2fac2a88156e0ec0baeeae675a83bee61739"
     },
     "web/i18n/index.d.ts": {
       "bytes": 309,
@@ -1116,8 +1132,8 @@
       "sha256": "33cd4e4a9a90a35dc5c3b8308e78a6449754c712719b9f1af35b2e25156641cc"
     },
     "web/i18n/zh-CN.json": {
-      "bytes": 50699,
-      "sha256": "e4b122c3fd00b70e02c61add5a03c544b080113841a4b7a2b7652bb74c87f44d"
+      "bytes": 50760,
+      "sha256": "a6f0b93c141b1ffa9965e10e529ef7d7386c7f0ca6b06962200dc807560e4f51"
     },
     "web/maps/geo-map.d.ts": {
       "bytes": 1050,
@@ -1353,7 +1369,7 @@
     },
     "web/routes/admin.js": {
       "bytes": 125937,
-      "sha256": "5e2170462df6f723dd813271ed682d3ad4839fc1482271f6732a722e52828357"
+      "sha256": "8d0f21204397d10d6b7bdaaef74ca71f314834739106674e6a522dcca4c12432"
     },
     "web/routes/admin.js.map": {
       "bytes": 101480,
@@ -1444,8 +1460,8 @@
       "sha256": "6ce7551f74fcf4381cd045d9ce60dbb1bdd9203fcd6120bf0bf912052cdc5267"
     },
     "web/views/admin/providers.hbs": {
-      "bytes": 18090,
-      "sha256": "babaf097539a764cf2a434116d711485ba5880839f8989f4c8414bc40d1a8a64"
+      "bytes": 18209,
+      "sha256": "5179571c2b520864e841f98ef1dddf0fde7fecc8f2c5ea3a96262868f1c2d97e"
     },
     "web/views/admin/queries.hbs": {
       "bytes": 4610,
