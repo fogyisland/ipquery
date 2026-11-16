@@ -173,6 +173,14 @@
 </div>
 {{/if}}
 
+{{#if dedupe}}
+  <h3>{{req.t 'admin.etl.runDetail.dedupeTitle'}}</h3>
+  <p class="etl-dedupe-summary">{{dedupeSummaryText}}</p>
+  <p class="etl-dedupe-meta">
+    {{req.t 'admin.etl.runDetail.dedupeMeta' exact=dedupe.exactDuplicates partial=dedupe.partialOverlaps}}
+  </p>
+{{/if}}
+
 {{!-- ── Error banners ── --}}
 {{#if run.error_message}}
 <div class="etl-error-banner">
