@@ -1,8 +1,16 @@
 {{!-- SPDX-License-Identifier: MIT --}}
+{{!--
+  The stale-form page. The action must be the one that helps: a signed-in
+  visitor whose tab outlived the session wants to go back and retry, not to
+  be told their installation is gone. `csrfBackHref` comes from the renderer,
+  which knows the session state; the default here is the safest guess.
+--}}
 <header class="boot-step-head">
   <h1>{{req.t "error.csrf.title"}}</h1>
   <p class="boot-lede">{{req.t "error.csrf.body"}}</p>
 </header>
 <div class="boot-actions">
-  <a href="/init" class="btn-primary">{{req.t "setup.boot.backToStart"}}</a>
+  <a href="{{#if csrfBackHref}}{{csrfBackHref}}{{else}}/login{{/if}}" class="btn-primary">
+    {{#if csrfBackLabel}}{{csrfBackLabel}}{{else}}{{req.t "error.csrf.signIn"}}{{/if}}
+  </a>
 </div>
