@@ -730,7 +730,11 @@
           "off": "Disabled"
         },
         "save": "Save",
-        "apiKeyPlaceholder": "not set"
+        "apiKeyPlaceholder": "not set",
+        "apiKeyLabel": "API key",
+        "apiKeyStored": "Stored — leave blank to keep it",
+        "quotaChipTitle": "The vendor's published free quota",
+        "enforcedChipTitle": "The limit this app enforces (never exceeds the published one)"
       },
       "healthCard": {
         "statusOk": "Healthy",
@@ -757,7 +761,10 @@
         "calls": "calls",
         "err429": "429s",
         "failurePct": "failure",
-        "last429": "last 429"
+        "last429": "last 429",
+        "window1hTitle": "Last hour: {calls} calls, {err429} rate-limited",
+        "window24hTitle": "Last 24 hours: {calls} calls, {err429} rate-limited",
+        "window7dTitle": "Last 7 days: {calls} calls, {err429} rate-limited"
       },
       "runner": {
         "title": "Runner",

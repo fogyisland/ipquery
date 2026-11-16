@@ -2125,13 +2125,62 @@ color: var(--text-3);
   font-family: var(--font-mono);
   font-size: 12px;
 }
-.provider-health-card-quota {
+/* The two limit chips: what the vendor promises, and what we enforce.
+   Side by side so the pair reads as one fact — "published: X, enforced: Y".
+   The enforced one is the one an operator can act on, so it carries the
+   accent. */
+.provider-health-card-limits {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
   margin-top: var(--sp-3);
   padding-top: var(--sp-2);
   border-top: var(--hairline);
-  font-family: var(--font-mono);
-  font-size: 11px;
+}
+.provider-limit-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  padding: 2px var(--sp-2);
+  border: var(--hairline);
+  border-radius: 999px;
+  background: var(--surface-2);
+  font: 11px var(--font-mono);
   color: var(--text-3);
+}
+.provider-limit-chip--enforced {
+  border-color: color-mix(in srgb, var(--accent) 35%, transparent);
+  background: color-mix(in srgb, var(--accent) 8%, var(--surface));
+  color: var(--accent);
+}
+
+/* One form for the toggle AND the key. They used to be two forms with two
+   save buttons, so toggling and then pressing the key's button silently
+   reverted the toggle. */
+.provider-settings-form {
+  margin-top: var(--sp-3);
+  padding-top: var(--sp-3);
+  border-top: var(--hairline);
+}
+.provider-settings-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--sp-3);
+}
+.provider-key-field {
+  display: flex;
+  flex: 1 1 220px;
+  flex-direction: column;
+  gap: 2px;
+}
+.provider-key-field-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-3);
+}
+.provider-key-field input {
+  font: 12px var(--font-mono);
 }
 
 /* Circuit breaker card. */
@@ -2740,6 +2789,50 @@ color: var(--text-3);
   display: flex;
   flex-direction: column;
   gap: 2px;
+  padding: var(--sp-2);
+  border-left: 2px solid transparent;
+  border-radius: var(--radius-sm);
+  /* The failure rate is the card's headline judgement, so the window
+     carries its colour rather than repeating three raw numbers. */
+  background: var(--surface-2);
+}
+.provider-health-window-cell--ok {
+  border-left-color: var(--success);
+}
+.provider-health-window-cell--warning {
+  border-left-color: var(--accent);
+}
+.provider-health-window-cell--danger {
+  border-left-color: var(--danger);
+}
+.provider-health-window-cell--muted {
+  border-left-color: var(--border);
+  opacity: 0.75;
+}
+.provider-health-window-figure {
+  font: 600 18px/1.2 var(--font-mono);
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.provider-health-window-cell--ok .provider-health-window-figure {
+  color: var(--success);
+}
+.provider-health-window-cell--warning .provider-health-window-figure {
+  color: var(--accent);
+}
+.provider-health-window-cell--danger .provider-health-window-figure {
+  color: var(--danger);
+}
+.provider-health-window-cell--muted .provider-health-window-figure {
+  color: var(--text-3);
+}
+.provider-health-window-unit {
+  font-size: 11px;
+  margin-left: 1px;
+}
+.provider-health-window-sub {
+  font: 11px var(--font-mono);
+  color: var(--text-3);
 }
 .provider-health-window-label {
   font-size: 11px;

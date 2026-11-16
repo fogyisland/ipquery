@@ -84,24 +84,29 @@
     <div class="provider-health-card-error" title="{{this.lastErrorReason}}">{{this.lastErrorReason}}</div>
     {{/if}}
 
+    {{!-- The three windows used to print nine numbers in three columns.
+         The decision they support is "is this provider worth keeping
+         enabled", so the card shows the failure rate per window — the
+         number that answers it, already coloured by the route — and keeps
+         the raw call / 429 counts in the title for anyone who needs them. --}}
     <div class="provider-health-window">
-      <div class="provider-health-window-cell">
+      <div class="provider-health-window-cell provider-health-window-cell--{{this.health1h.kind}}"
+           title="{{@root.req.t 'admin.unknownIps.healthCard.window1hTitle' calls=this.health1h.calls err429=this.health1h.errors429}}">
         <div class="provider-health-window-label">{{@root.req.t 'admin.unknownIps.healthCard.window1h'}}</div>
-        <div class="provider-health-window-value">{{this.health1h.calls}} {{@root.req.t 'admin.unknownIps.healthCard.calls'}}</div>
-        <div class="provider-health-window-value">{{this.health1h.errors429}} {{@root.req.t 'admin.unknownIps.healthCard.err429'}}</div>
-        <div class="provider-health-window-value">{{this.health1h.failurePct}}% {{@root.req.t 'admin.unknownIps.healthCard.failurePct'}}</div>
+        <div class="provider-health-window-figure">{{this.health1h.failurePct}}<span class="provider-health-window-unit">%</span></div>
+        <div class="provider-health-window-sub">{{this.health1h.calls}} {{@root.req.t 'admin.unknownIps.healthCard.calls'}}</div>
       </div>
-      <div class="provider-health-window-cell">
+      <div class="provider-health-window-cell provider-health-window-cell--{{this.health24h.kind}}"
+           title="{{@root.req.t 'admin.unknownIps.healthCard.window24hTitle' calls=this.health24h.calls err429=this.health24h.errors429}}">
         <div class="provider-health-window-label">{{@root.req.t 'admin.unknownIps.healthCard.window24h'}}</div>
-        <div class="provider-health-window-value">{{this.health24h.calls}} {{@root.req.t 'admin.unknownIps.healthCard.calls'}}</div>
-        <div class="provider-health-window-value">{{this.health24h.errors429}} {{@root.req.t 'admin.unknownIps.healthCard.err429'}}</div>
-        <div class="provider-health-window-value">{{this.health24h.failurePct}}% {{@root.req.t 'admin.unknownIps.healthCard.failurePct'}}</div>
+        <div class="provider-health-window-figure">{{this.health24h.failurePct}}<span class="provider-health-window-unit">%</span></div>
+        <div class="provider-health-window-sub">{{this.health24h.calls}} {{@root.req.t 'admin.unknownIps.healthCard.calls'}}</div>
       </div>
-      <div class="provider-health-window-cell">
+      <div class="provider-health-window-cell provider-health-window-cell--{{this.health7d.kind}}"
+           title="{{@root.req.t 'admin.unknownIps.healthCard.window7dTitle' calls=this.health7d.calls err429=this.health7d.errors429}}">
         <div class="provider-health-window-label">{{@root.req.t 'admin.unknownIps.healthCard.window7d'}}</div>
-        <div class="provider-health-window-value">{{this.health7d.calls}} {{@root.req.t 'admin.unknownIps.healthCard.calls'}}</div>
-        <div class="provider-health-window-value">{{this.health7d.errors429}} {{@root.req.t 'admin.unknownIps.healthCard.err429'}}</div>
-        <div class="provider-health-window-value">{{this.health7d.failurePct}}% {{@root.req.t 'admin.unknownIps.healthCard.failurePct'}}</div>
+        <div class="provider-health-window-figure">{{this.health7d.failurePct}}<span class="provider-health-window-unit">%</span></div>
+        <div class="provider-health-window-sub">{{this.health7d.calls}} {{@root.req.t 'admin.unknownIps.healthCard.calls'}}</div>
       </div>
     </div>
 
@@ -119,28 +124,37 @@
     </details>
     {{/if}}
 
-    <div class="provider-health-card-config">
-      <form method="POST" action="/admin/providers/{{this.name}}" class="provider-toggle-form">
-        <input type="hidden" name="csrf" value="{{csrfToken}}">
-        <input type="hidden" name="apiKey" value="">
+    {{!-- One form, one button. The toggle and the key used to be two
+         separate forms each carrying its own "save", so changing the
+         toggle and then pressing the key's button silently reverted it.
+         A blank key field means "leave the stored key alone". --}}
+    <form method="POST" action="/admin/providers/{{this.name}}" class="provider-settings-form">
+      <input type="hidden" name="csrf" value="{{csrfToken}}">
+      <div class="provider-settings-row">
         <label class="provider-toggle">
           <input type="checkbox" name="enabled" value="on" {{#if this.enabled}}checked{{/if}}>
           <span>{{#if this.enabled}}{{@root.req.t 'admin.unknownIps.providers.enabled.on'}}{{else}}{{@root.req.t 'admin.unknownIps.providers.enabled.off'}}{{/if}}</span>
         </label>
-        <button type="submit" class="button">{{@root.req.t 'admin.unknownIps.providers.save'}}</button>
-      </form>
-      <form method="POST" action="/admin/providers/{{this.name}}" class="provider-key-form">
-        <input type="hidden" name="csrf" value="{{csrfToken}}">
-        <input type="hidden" name="enabled" value="{{#if this.enabled}}on{{else}}off{{/if}}">
-        <input type="password" name="apiKey" placeholder="{{@root.req.t 'admin.unknownIps.providers.apiKeyPlaceholder'}}" autocomplete="off">
-        <button type="submit" class="button">{{@root.req.t 'admin.unknownIps.providers.save'}}</button>
-      </form>
-    </div>
+        <label class="provider-key-field">
+          <span class="provider-key-field-label">{{@root.req.t 'admin.unknownIps.providers.apiKeyLabel'}}</span>
+          <input type="password" name="apiKey"
+                 placeholder="{{#if this.hasApiKey}}{{@root.req.t 'admin.unknownIps.providers.apiKeyStored'}}{{else}}{{@root.req.t 'admin.unknownIps.providers.apiKeyPlaceholder'}}{{/if}}"
+                 autocomplete="off">
+        </label>
+        <button type="submit" class="btn-primary btn-sm">{{@root.req.t 'admin.unknownIps.providers.save'}}</button>
+      </div>
+    </form>
 
-    <div class="provider-health-card-quota">{{this.freeQuota}}</div>
-    {{#if this.enforcedLimit}}
-      <div class="provider-health-card-quota provider-health-card-limit">{{this.enforcedLimit}}</div>
-    {{/if}}
+    <div class="provider-health-card-limits">
+      <span class="provider-limit-chip" title="{{@root.req.t 'admin.providers.quotaChipTitle'}}">
+        {{this.freeQuota}}
+      </span>
+      {{#if this.enforcedLimit}}
+        <span class="provider-limit-chip provider-limit-chip--enforced" title="{{@root.req.t 'admin.providers.enforcedChipTitle'}}">
+          {{this.enforcedLimit}}
+        </span>
+      {{/if}}
+    </div>
   </div>
   {{/each}}
 </div>

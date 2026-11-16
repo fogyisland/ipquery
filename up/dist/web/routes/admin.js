@@ -1616,16 +1616,37 @@ async function adminRoutes(app) {
                     calls: health1h?.calls ?? 0,
                     errors429: health1h?.errors429 ?? 0,
                     failurePct: health1h?.failureRatePct ?? 0,
+                    kind: rateKind(health1h?.failureRatePct ?? 0, health1h?.calls ?? 0),
+                    // HBS drops hash args on a helper called from an attribute, so the
+                    // sentence is built here where the counts are already at hand.
+                    title: req.t("admin.unknownIps.healthCard.health1hTitle", {
+                        calls: health1h?.calls ?? 0,
+                        err429: health1h?.errors429 ?? 0,
+                    }),
                 },
                 health24h: {
                     calls: health24h?.calls ?? 0,
                     errors429: health24h?.errors429 ?? 0,
                     failurePct: health24h?.failureRatePct ?? 0,
+                    kind: rateKind(health24h?.failureRatePct ?? 0, health24h?.calls ?? 0),
+                    // HBS drops hash args on a helper called from an attribute, so the
+                    // sentence is built here where the counts are already at hand.
+                    title: req.t("admin.unknownIps.healthCard.health24hTitle", {
+                        calls: health24h?.calls ?? 0,
+                        err429: health24h?.errors429 ?? 0,
+                    }),
                 },
                 health7d: {
                     calls: health7d?.calls ?? 0,
                     errors429: health7d?.errors429 ?? 0,
                     failurePct: health7d?.failureRatePct ?? 0,
+                    kind: rateKind(health7d?.failureRatePct ?? 0, health7d?.calls ?? 0),
+                    // HBS drops hash args on a helper called from an attribute, so the
+                    // sentence is built here where the counts are already at hand.
+                    title: req.t("admin.unknownIps.healthCard.health7dTitle", {
+                        calls: health7d?.calls ?? 0,
+                        err429: health7d?.errors429 ?? 0,
+                    }),
                 },
                 // Today's quota pill.
                 quotaTodayPct,
@@ -2083,6 +2104,24 @@ async function adminRoutes(app) {
         await app.randomGenRunner.syncFromSettings();
         return reply.redirect("/admin/ingest#overview");
     });
+    /**
+     * How a failure rate should read.
+     *
+     * The card shows the rate as its headline figure, so the colour has to
+     * carry the judgement: under 5% is fine, 5-25% is worth a look, and
+     * anything above a quarter of calls failing is a provider that should
+     * probably be off. A rate over an empty window is "muted", not "good" —
+     * no calls is not the same as no failures.
+     */
+    const rateKind = (pct, calls) => {
+        if (calls === 0)
+            return "muted";
+        if (pct >= 25)
+            return "danger";
+        if (pct >= 5)
+            return "warning";
+        return "ok";
+    };
     const enrichBuiltInHealth = async (req) => {
         const [configs, lastBackfill, health1hAll, health24hAll, health7dAll, last429Rows] = await Promise.all([
             (0, ingestProviders_2.listProviderConfigs)(app.pool),
@@ -2157,16 +2196,37 @@ async function adminRoutes(app) {
                     calls: health1h?.calls ?? 0,
                     errors429: health1h?.errors429 ?? 0,
                     failurePct: health1h?.failureRatePct ?? 0,
+                    kind: rateKind(health1h?.failureRatePct ?? 0, health1h?.calls ?? 0),
+                    // HBS drops hash args on a helper called from an attribute, so the
+                    // sentence is built here where the counts are already at hand.
+                    title: req.t("admin.unknownIps.healthCard.health1hTitle", {
+                        calls: health1h?.calls ?? 0,
+                        err429: health1h?.errors429 ?? 0,
+                    }),
                 },
                 health24h: {
                     calls: health24h?.calls ?? 0,
                     errors429: health24h?.errors429 ?? 0,
                     failurePct: health24h?.failureRatePct ?? 0,
+                    kind: rateKind(health24h?.failureRatePct ?? 0, health24h?.calls ?? 0),
+                    // HBS drops hash args on a helper called from an attribute, so the
+                    // sentence is built here where the counts are already at hand.
+                    title: req.t("admin.unknownIps.healthCard.health24hTitle", {
+                        calls: health24h?.calls ?? 0,
+                        err429: health24h?.errors429 ?? 0,
+                    }),
                 },
                 health7d: {
                     calls: health7d?.calls ?? 0,
                     errors429: health7d?.errors429 ?? 0,
                     failurePct: health7d?.failureRatePct ?? 0,
+                    kind: rateKind(health7d?.failureRatePct ?? 0, health7d?.calls ?? 0),
+                    // HBS drops hash args on a helper called from an attribute, so the
+                    // sentence is built here where the counts are already at hand.
+                    title: req.t("admin.unknownIps.healthCard.health7dTitle", {
+                        calls: health7d?.calls ?? 0,
+                        err429: health7d?.errors429 ?? 0,
+                    }),
                 },
                 quotaTodayPct,
                 quotaKind,
@@ -2188,7 +2248,7 @@ async function adminRoutes(app) {
             return a.name.localeCompare(b.name);
         });
     };
-    const enrichCustomProviders = async () => {
+    const enrichCustomProviders = async (req) => {
         const configs = await (0, ingestProviders_2.listProviderConfigs)(app.pool);
         const customConfigs = configs.filter((c) => c.isCustom);
         const { aggregateProviderHealth } = await Promise.resolve().then(() => __importStar(require("../../storage/providerErrorLog")));
@@ -2210,9 +2270,36 @@ async function adminRoutes(app) {
                 cityPath: c.customCityPath ?? "",
                 asnPath: c.customAsnPath ?? "",
                 timeoutMs: c.customTimeoutMs ?? 5000,
-                health1h: { calls: h1h.calls, errors429: h1h.errors429, failurePct: h1h.failureRatePct },
-                health24h: { calls: h24h.calls, errors429: h24h.errors429, failurePct: h24h.failureRatePct },
-                health7d: { calls: h7d.calls, errors429: h7d.errors429, failurePct: h7d.failureRatePct },
+                health1h: {
+                    calls: h1h.calls,
+                    errors429: h1h.errors429,
+                    failurePct: h1h.failureRatePct,
+                    kind: rateKind(h1h.failureRatePct, h1h.calls),
+                    title: req.t("admin.unknownIps.healthCard.health1hTitle", {
+                        calls: h1h.calls,
+                        err429: h1h.errors429,
+                    }),
+                },
+                health24h: {
+                    calls: h24h.calls,
+                    errors429: h24h.errors429,
+                    failurePct: h24h.failureRatePct,
+                    kind: rateKind(h24h.failureRatePct, h24h.calls),
+                    title: req.t("admin.unknownIps.healthCard.health24hTitle", {
+                        calls: h24h.calls,
+                        err429: h24h.errors429,
+                    }),
+                },
+                health7d: {
+                    calls: h7d.calls,
+                    errors429: h7d.errors429,
+                    failurePct: h7d.failureRatePct,
+                    kind: rateKind(h7d.failureRatePct, h7d.calls),
+                    title: req.t("admin.unknownIps.healthCard.health7dTitle", {
+                        calls: h7d.calls,
+                        err429: h7d.errors429,
+                    }),
+                },
                 lastErrorAt: c.lastErrorAt,
                 lastErrorReason: c.lastErrorReason,
             };
@@ -2225,7 +2312,7 @@ async function adminRoutes(app) {
     app.get("/admin/providers", async (req, reply) => {
         const [providerHealth, customProviders, circuitBreaker] = await Promise.all([
             enrichBuiltInHealth(req),
-            enrichCustomProviders(),
+            enrichCustomProviders(req),
             (0, providerErrorLog_1.getCircuitBreakerConfig)(app.pool),
         ]);
         let flash = {};
@@ -2296,7 +2383,7 @@ async function adminRoutes(app) {
             // with the flash message so the admin sees context for the error.
             const [providerHealth, customProviders, circuitBreaker] = await Promise.all([
                 enrichBuiltInHealth(req),
-                enrichCustomProviders(),
+                enrichCustomProviders(req),
                 (0, providerErrorLog_1.getCircuitBreakerConfig)(app.pool),
             ]);
             const flash = { kind: "error", message: req.t(`admin.unknownIps.customProviders.errors.${errors[0]}`) };

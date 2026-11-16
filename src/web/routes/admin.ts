@@ -1756,16 +1756,37 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
             calls: health1h?.calls ?? 0,
             errors429: health1h?.errors429 ?? 0,
             failurePct: health1h?.failureRatePct ?? 0,
+            kind: rateKind(health1h?.failureRatePct ?? 0, health1h?.calls ?? 0),
+            // HBS drops hash args on a helper called from an attribute, so the
+            // sentence is built here where the counts are already at hand.
+            title: req.t("admin.unknownIps.healthCard.health1hTitle", {
+              calls: health1h?.calls ?? 0,
+              err429: health1h?.errors429 ?? 0,
+            }),
           },
           health24h: {
             calls: health24h?.calls ?? 0,
             errors429: health24h?.errors429 ?? 0,
             failurePct: health24h?.failureRatePct ?? 0,
+            kind: rateKind(health24h?.failureRatePct ?? 0, health24h?.calls ?? 0),
+            // HBS drops hash args on a helper called from an attribute, so the
+            // sentence is built here where the counts are already at hand.
+            title: req.t("admin.unknownIps.healthCard.health24hTitle", {
+              calls: health24h?.calls ?? 0,
+              err429: health24h?.errors429 ?? 0,
+            }),
           },
           health7d: {
             calls: health7d?.calls ?? 0,
             errors429: health7d?.errors429 ?? 0,
             failurePct: health7d?.failureRatePct ?? 0,
+            kind: rateKind(health7d?.failureRatePct ?? 0, health7d?.calls ?? 0),
+            // HBS drops hash args on a helper called from an attribute, so the
+            // sentence is built here where the counts are already at hand.
+            title: req.t("admin.unknownIps.healthCard.health7dTitle", {
+              calls: health7d?.calls ?? 0,
+              err429: health7d?.errors429 ?? 0,
+            }),
           },
           // Today's quota pill.
           quotaTodayPct,
@@ -2271,6 +2292,34 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
   // /admin/providers page can reuse it without duplicating the 100-line
   // status / quota / reenable / 429 resolution logic. The shape is
   // identical to what /admin/unknown-ips already feeds its template.
+  /** One rolling window of a provider's call history. `kind` is the
+   *  colour the card gives the rate — see `rateKind`. */
+  type HealthWindow = {
+    calls: number;
+    errors429: number;
+    failurePct: number;
+    kind: "ok" | "warning" | "danger" | "muted";
+    /** The full sentence for the cell's tooltip. Resolved in the route
+     *  because HBS drops hash args on a helper used in an attribute. */
+    title: string;
+  };
+
+  /**
+   * How a failure rate should read.
+   *
+   * The card shows the rate as its headline figure, so the colour has to
+   * carry the judgement: under 5% is fine, 5-25% is worth a look, and
+   * anything above a quarter of calls failing is a provider that should
+   * probably be off. A rate over an empty window is "muted", not "good" —
+   * no calls is not the same as no failures.
+   */
+  const rateKind = (pct: number, calls: number): "ok" | "warning" | "danger" | "muted" => {
+    if (calls === 0) return "muted";
+    if (pct >= 25) return "danger";
+    if (pct >= 5) return "warning";
+    return "ok";
+  };
+
   type EnrichedProviderHealth = {
     name: string;
     displayName: string;
@@ -2284,9 +2333,9 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
     lastErrorAt: Date | null;
     lastErrorReason: string | null;
     lastStats: { ok: number; failed: number; rateLimited: number; abstained: number } | null;
-    health1h: { calls: number; errors429: number; failurePct: number };
-    health24h: { calls: number; errors429: number; failurePct: number };
-    health7d: { calls: number; errors429: number; failurePct: number };
+    health1h: HealthWindow;
+    health24h: HealthWindow;
+    health7d: HealthWindow;
     quotaTodayPct: number;
     quotaKind: "success" | "warning" | "danger" | "muted";
     quotaTodayText: string;
@@ -2365,16 +2414,37 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
           calls: health1h?.calls ?? 0,
           errors429: health1h?.errors429 ?? 0,
           failurePct: health1h?.failureRatePct ?? 0,
+          kind: rateKind(health1h?.failureRatePct ?? 0, health1h?.calls ?? 0),
+          // HBS drops hash args on a helper called from an attribute, so the
+          // sentence is built here where the counts are already at hand.
+          title: req.t("admin.unknownIps.healthCard.health1hTitle", {
+            calls: health1h?.calls ?? 0,
+            err429: health1h?.errors429 ?? 0,
+          }),
         },
         health24h: {
           calls: health24h?.calls ?? 0,
           errors429: health24h?.errors429 ?? 0,
           failurePct: health24h?.failureRatePct ?? 0,
+          kind: rateKind(health24h?.failureRatePct ?? 0, health24h?.calls ?? 0),
+          // HBS drops hash args on a helper called from an attribute, so the
+          // sentence is built here where the counts are already at hand.
+          title: req.t("admin.unknownIps.healthCard.health24hTitle", {
+            calls: health24h?.calls ?? 0,
+            err429: health24h?.errors429 ?? 0,
+          }),
         },
         health7d: {
           calls: health7d?.calls ?? 0,
           errors429: health7d?.errors429 ?? 0,
           failurePct: health7d?.failureRatePct ?? 0,
+          kind: rateKind(health7d?.failureRatePct ?? 0, health7d?.calls ?? 0),
+          // HBS drops hash args on a helper called from an attribute, so the
+          // sentence is built here where the counts are already at hand.
+          title: req.t("admin.unknownIps.healthCard.health7dTitle", {
+            calls: health7d?.calls ?? 0,
+            err429: health7d?.errors429 ?? 0,
+          }),
         },
         quotaTodayPct,
         quotaKind,
@@ -2411,13 +2481,15 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
     cityPath: string;
     asnPath: string;
     timeoutMs: number;
-    health1h: { calls: number; errors429: number; failurePct: number };
-    health24h: { calls: number; errors429: number; failurePct: number };
-    health7d: { calls: number; errors429: number; failurePct: number };
+    health1h: HealthWindow;
+    health24h: HealthWindow;
+    health7d: HealthWindow;
     lastErrorAt: Date | null;
     lastErrorReason: string | null;
   };
-  const enrichCustomProviders = async (): Promise<EnrichedCustomProvider[]> => {
+  const enrichCustomProviders = async (
+    req: { t: (key: string, vars?: Record<string, string | number>) => string },
+  ): Promise<EnrichedCustomProvider[]> => {
     const configs = await listProviderConfigs(app.pool);
     const customConfigs = configs.filter((c) => c.isCustom);
     const { aggregateProviderHealth } = await import("../../storage/providerErrorLog");
@@ -2440,9 +2512,36 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
           cityPath: c.customCityPath ?? "",
           asnPath: c.customAsnPath ?? "",
           timeoutMs: c.customTimeoutMs ?? 5000,
-          health1h: { calls: h1h.calls, errors429: h1h.errors429, failurePct: h1h.failureRatePct },
-          health24h: { calls: h24h.calls, errors429: h24h.errors429, failurePct: h24h.failureRatePct },
-          health7d: { calls: h7d.calls, errors429: h7d.errors429, failurePct: h7d.failureRatePct },
+          health1h: {
+            calls: h1h.calls,
+            errors429: h1h.errors429,
+            failurePct: h1h.failureRatePct,
+            kind: rateKind(h1h.failureRatePct, h1h.calls),
+            title: req.t("admin.unknownIps.healthCard.health1hTitle", {
+              calls: h1h.calls,
+              err429: h1h.errors429,
+            }),
+          },
+          health24h: {
+            calls: h24h.calls,
+            errors429: h24h.errors429,
+            failurePct: h24h.failureRatePct,
+            kind: rateKind(h24h.failureRatePct, h24h.calls),
+            title: req.t("admin.unknownIps.healthCard.health24hTitle", {
+              calls: h24h.calls,
+              err429: h24h.errors429,
+            }),
+          },
+          health7d: {
+            calls: h7d.calls,
+            errors429: h7d.errors429,
+            failurePct: h7d.failureRatePct,
+            kind: rateKind(h7d.failureRatePct, h7d.calls),
+            title: req.t("admin.unknownIps.healthCard.health7dTitle", {
+              calls: h7d.calls,
+              err429: h7d.errors429,
+            }),
+          },
           lastErrorAt: c.lastErrorAt,
           lastErrorReason: c.lastErrorReason,
         } satisfies EnrichedCustomProvider;
@@ -2457,7 +2556,7 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
   app.get("/admin/providers", async (req, reply) => {
     const [providerHealth, customProviders, circuitBreaker] = await Promise.all([
       enrichBuiltInHealth(req as unknown as ReqForHealth),
-      enrichCustomProviders(),
+      enrichCustomProviders(req),
       getCircuitBreakerConfig(app.pool),
     ]);
     let flash: Record<string, unknown> = {};
@@ -2526,7 +2625,7 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
       // with the flash message so the admin sees context for the error.
       const [providerHealth, customProviders, circuitBreaker] = await Promise.all([
         enrichBuiltInHealth(req as unknown as ReqForHealth),
-        enrichCustomProviders(),
+        enrichCustomProviders(req),
         getCircuitBreakerConfig(app.pool),
       ]);
       const flash = { kind: "error", message: req.t(`admin.unknownIps.customProviders.errors.${errors[0]}`) };
