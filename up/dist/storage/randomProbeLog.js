@@ -6,7 +6,7 @@
 // /admin/unknown-ips Overview tab "Recent Probes" table; written by the
 // call sites of processIp via recordRandomProbe(). See migration 018.
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.DEFAULT_RETENTION_DAYS = void 0;
+exports.DEFAULT_RETENTION_DAYS = exports.RANDOM_GEN_INTERVAL_SEC = exports.RANDOM_GEN_RUNS_PER_HOUR = void 0;
 exports.recordRandomProbe = recordRandomProbe;
 exports.recentProbes = recentProbes;
 exports.probeSummaryStats = probeSummaryStats;
@@ -148,12 +148,28 @@ async function probeSummaryStats(pool, windowMs = 60 * 60 * 1000) {
     stats.warmingRatePerDay = hours > 0 ? Math.round((stats.total / hours) * 24) : 0;
     return stats;
 }
+/**
+ * One run every three minutes — twenty an hour.
+ *
+ * The cadence is a quota decision, not a performance one. Four providers at
+ * 45-100 calls a minute each sounds generous, but the limits are per
+ * calendar minute and a run now asks ONE provider per IP: twenty runs an
+ * hour is twenty provider calls an hour per source at a batch size of one,
+ * which leaves the free tiers untouched for the queue-driven backfill.
+ *
+ * The previous default (60s, batch 10) was 600 IPs an hour against every
+ * provider — enough to drain a free tier before the backfill that actually
+ * needs the votes got a turn.
+ */
 const DEFAULT_CONFIG = {
-    intervalSec: 60,
-    batchSize: 10,
+    intervalSec: 180,
+    batchSize: 1,
     cooldownMinutes: 15,
     cbLinkage: true,
 };
+/** Twenty runs an hour, expressed as the interval the runner uses. */
+exports.RANDOM_GEN_RUNS_PER_HOUR = 20;
+exports.RANDOM_GEN_INTERVAL_SEC = 3600 / exports.RANDOM_GEN_RUNS_PER_HOUR;
 async function loadRandomGenConfig(pool) {
     const [intervalRaw, batchRaw, cooldownRaw, cbRaw] = await Promise.all([
         (0, settings_1.getSetting)(pool, "random_gen_interval_sec"),
@@ -162,12 +178,18 @@ async function loadRandomGenConfig(pool) {
         (0, settings_1.getSetting)(pool, "random_gen_cb_linkage"),
     ]);
     return {
+        // Floor of 60s: anything faster is a burst the free tiers will answer
+        // with 429s. Ceiling of an hour: slower than that and the "continuous"
+        // runner is indistinguishable from a manual click.
         intervalSec: intervalRaw === null
             ? DEFAULT_CONFIG.intervalSec
-            : Math.min(3600, Math.max(1, Number(intervalRaw) || DEFAULT_CONFIG.intervalSec)),
+            : Math.min(3600, Math.max(60, Number(intervalRaw) || DEFAULT_CONFIG.intervalSec)),
+        // Capped at 20: each IP costs one provider call, and a large batch
+        // turns one tick into the kind of burst the per-minute limiter exists
+        // to prevent.
         batchSize: batchRaw === null
             ? DEFAULT_CONFIG.batchSize
-            : Math.min(100, Math.max(1, Number(batchRaw) || DEFAULT_CONFIG.batchSize)),
+            : Math.min(20, Math.max(1, Number(batchRaw) || DEFAULT_CONFIG.batchSize)),
         cooldownMinutes: cooldownRaw === null
             ? DEFAULT_CONFIG.cooldownMinutes
             : Math.min(1440, Math.max(0, Number(cooldownRaw) || DEFAULT_CONFIG.cooldownMinutes)),

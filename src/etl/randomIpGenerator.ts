@@ -31,6 +31,7 @@ import { touchProviderError, updateProviderConfig } from "../storage/ingestProvi
 import { processIp, disableRateLimitedProviders, type BackfillSummary } from "./unknownIpBackfill";
 import { recordRandomProbe } from "../storage/randomProbeLog";
 import { providerFanoutLock, type ProviderLock } from "./providerLock";
+import { createRotation, nextProvider } from "./providerRotation";
 import { randomUUID } from "node:crypto";
 
 export interface RandomGenerationOptions {
@@ -172,11 +173,21 @@ export async function runRandomGeneration(
     if (picked.ips.length === 0) {
       workSummary.finishedAt = Date.now();
     } else {
-      // Step 2: serial fan-out per IP.
+      // Step 2: one provider per IP, taking turns.
+      //
+      // The queue-driven backfill asks every provider and votes; random
+      // generation does not need that. The address is picked to widen
+      // coverage, and a single confident answer already writes a row — so
+      // asking all of them spends four times the quota for the same rows,
+      // which is exactly the burst that trips a free tier.
+      let rotation = createRotation(providers);
       for (const slot of picked.ips) {
+        const step = nextProvider(rotation, providers);
+        rotation = step.state;
+        if (!step.provider) break;
         const result = await processIp(
           pool,
-          providers,
+          [step.provider],
           slot.text,
           slot.buffer,
           workSummary,

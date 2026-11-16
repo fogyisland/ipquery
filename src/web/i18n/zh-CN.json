@@ -731,11 +731,7 @@
           "off": "已停用"
         },
         "save": "保存",
-        "apiKeyPlaceholder": "未填写",
-        "apiKeyLabel": "API Key",
-        "apiKeyStored": "已保存（留空则不修改）",
-        "quotaChipTitle": "提供商公布的免费额度",
-        "enforcedChipTitle": "程序实际执行的限流（不会超过公布额度）"
+        "apiKeyPlaceholder": "未填写"
       },
       "healthCard": {
         "statusOk": "正常",
@@ -862,7 +858,13 @@
       "title": "数据源管理",
       "builtInSection": "内置数据源",
       "circuitBreakerSection": "熔断器配置",
-      "customSection": "自定义数据源"
+      "customSection": "自定义数据源",
+      "quotaChipTitle": "提供商公布的免费额度",
+      "enforcedChipTitle": "程序实际执行的限流（不会超过公布额度）",
+      "apiKeyLabel": "API Key",
+      "apiKeyStored": "已保存（留空则不修改）",
+      "enabledChip": "已启用",
+      "disabledChip": "已停用"
     },
     "ingest": {
       "backfill": {
