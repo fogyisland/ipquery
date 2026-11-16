@@ -2324,8 +2324,10 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
     name: string;
     displayName: string;
     freeQuota: string;
-    /** The limit the backfill enforces, beside the vendor's own wording. */
-    enforcedLimit: string;
+    /** The limit the backfill enforces, beside the vendor's own wording.
+     *  Null when nothing is enforced — the chip is then omitted rather
+     *  than claiming "no limit", which reads as a caveat on every card. */
+    enforcedLimit: string | null;
     enabled: boolean;
     hasApiKey: boolean;
     status: "failing" | "disabled" | "recovering" | "healthy" | "idle";
@@ -2481,6 +2483,7 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
     cityPath: string;
     asnPath: string;
     timeoutMs: number;
+    enforcedLimit: string | null;
     health1h: HealthWindow;
     health24h: HealthWindow;
     health7d: HealthWindow;
@@ -2512,6 +2515,7 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
           cityPath: c.customCityPath ?? "",
           asnPath: c.customAsnPath ?? "",
           timeoutMs: c.customTimeoutMs ?? 5000,
+          enforcedLimit: enforcedRateLimitLabel(c.name),
           health1h: {
             calls: h1h.calls,
             errors429: h1h.errors429,
