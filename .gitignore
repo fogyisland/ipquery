@@ -9,6 +9,12 @@ data/
 *.xdb
 *.csv.gz
 *.csv
+# ...except the test fixtures. The rules above exist to keep multi-megabyte
+# library downloads out of git; the fixtures are a few hundred bytes each
+# and the tests that read them fail outright without them. Without this
+# exemption a fresh clone and every new worktree start with a red suite.
+!fixtures/*.csv
+!fixtures/*.csv.gz
 .env
 .env.local
 *.log

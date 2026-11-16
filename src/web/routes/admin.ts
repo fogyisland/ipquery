@@ -13,6 +13,11 @@ import {
 } from "../../storage/users";
 import { hashPassword } from "../auth/password";
 import { verifyCsrfRequest } from "../plugins/csrf";
+import {
+  saveEtlScheduleConfig,
+  loadEtlScheduleConfig,
+  ETL_SCHEDULE_PRESETS,
+} from "../../storage/etlSchedule";
 import { runPipeline } from "../../etl/pipeline";
 import { recordEtlStart, getEtlRunProgress } from "../../storage/mysql";
 import { topByQueryCount, queueStats } from "../../storage/unknownIpQueue";
@@ -68,6 +73,7 @@ import {
   listEtlRunDownloads,
   listEtlRunParses,
   listEtlRunInserts,
+  getEtlRunDedupe,
   getEtlRunSwap,
   recordEtlFinish,
 } from "../../storage/mysql";
@@ -588,10 +594,11 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
     liveOnly: boolean,
   ): Promise<Record<string, unknown>> => {
     const id = Number(run.id);
-    const [downloads, parses, inserts, swap] = await Promise.all([
+    const [downloads, parses, inserts, dedupe, swap] = await Promise.all([
       listEtlRunDownloads(app.pool, id),
       listEtlRunParses(app.pool, id),
       listEtlRunInserts(app.pool, id),
+      getEtlRunDedupe(app.pool, id),
       getEtlRunSwap(app.pool, id),
     ]);
     // Aggregate across the per-file rows so the template doesn't need to
@@ -634,7 +641,22 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
     const swapStatusText = swap
       ? req.t(swap.status === "success" ? "admin.etl.stages.swapOk" : "admin.etl.stages.swapFailed")
       : "";
+    const dedupeSummaryText = dedupe
+      ? req.t("admin.etl.runDetail.dedupeBody", {
+          input: dedupe.inputRows,
+          contained: dedupe.contained,
+          emitted: dedupe.emitted,
+        })
+      : null;
     const swapDurationText = swap ? req.t("admin.etl.stages.duration", { ms: swap.durationMs ?? 0 }) : "";
+    // The seven ingestion labels are an open set (the source-note in the
+    // API docs says so), so a label without a translation falls back to
+    // the raw value rather than rendering as a missing key.
+    const sourceLabel = (raw: string): string => {
+      const key = `admin.etl.source.${raw}`;
+      const text = req.t(key);
+      return text === key ? raw : text;
+    };
     const skipLabels = {
       shortLine: req.t("admin.etl.stages.skipReason.shortLine"),
       headerRow: req.t("admin.etl.stages.skipReason.headerRow"),
@@ -645,6 +667,7 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
     };
     const downloadsView = downloads.map((d) => ({
       ...d,
+      sourceLabel: sourceLabel(d.source),
       statusKind:
         d.status === "success"
           ? "success"
@@ -654,6 +677,7 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
     }));
     const parsesView = parses.map((p) => ({
       ...p,
+      sourceLabel: sourceLabel(p.source),
       skippedTotal:
         p.rowsSkippedShort +
         p.rowsSkippedHeader +
@@ -663,6 +687,10 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
         p.rowsSkippedOther,
       skipLabels,
     }));
+    const insertsView = inserts.map((row) => ({
+      ...row,
+      sourceLabel: sourceLabel(row.source),
+    }));
     const swapRow = swap ? { ...swap, statusText: swapStatusText, durationText: swapDurationText } : null;
     return {
       run,
@@ -671,7 +699,9 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
       statusText,
       downloads: downloadsView,
       parses: parsesView,
-      inserts,
+      inserts: insertsView,
+      dedupe,
+      dedupeSummaryText,
       swap: swapRow,
       bytesTotal,
       rowsEmittedTotal,
@@ -1332,6 +1362,13 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
     // must not exist anywhere in the rendered DOM: anything that can read
     // HTML source (DevTools, view-source, a cached page, a proxy log, or
     // an XSS in this page) would otherwise lift the live secrets.
+    // The schedule shown here is the one the scheduler is actually
+    // running: a saved setting, else the env seed, else the default. The
+    // env vars in `cfg.etl` are only the seed now.
+    const etlSchedule = await loadEtlScheduleConfig(app.pool, {
+      schedule: cfg.etl.schedule,
+      timezone: cfg.etl.timezone,
+    });
     const display = {
       db: {
         host: cfg.db.host,
@@ -1346,7 +1383,11 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
         rateLimit: cfg.api.rateLimit,
         trustProxy: cfg.api.trustProxy,
       },
-      etl: { schedule: cfg.etl.schedule, timezone: cfg.etl.timezone, dataDir: cfg.etl.dataDir },
+      etl: {
+        schedule: etlSchedule.schedule,
+        timezone: etlSchedule.timezone,
+        dataDir: cfg.etl.dataDir,
+      },
       web: {
         baseUrl: cfg.web.baseUrl,
         cookieDomain: cfg.web.cookieDomain,
@@ -1418,10 +1459,63 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
       etlLastRun,
       etlStatusKind,
       etlStatusText,
+      etlSchedule: {
+        ...etlSchedule,
+        sourceLabel: req.t(`admin.settings.etl.scheduleSource.${etlSchedule.source}`),
+        presets: ETL_SCHEDULE_PRESETS.map((preset) => ({
+          ...preset,
+          label: req.t(`admin.settings.etl.preset.${preset.id}`),
+        })),
+      },
       flash: consumeEtlFlash(req, reply, req.t),
       req,
       csrfToken: req.csrfToken,
     });
+  });
+
+  app.post("/admin/settings/etl-schedule", async (req, reply) => {
+    if (!verifyCsrfRequest(req)) return sendCsrfPage(reply, 403);
+    req.auditAction = { action: "etl.schedule.update", targetType: "setting" };
+    const body = req.body as { schedule?: string; timezone?: string } | undefined;
+    const schedule = (body?.schedule ?? "").trim();
+    const timezone = (body?.timezone ?? "").trim();
+    try {
+      await saveEtlScheduleConfig(app.pool, { schedule, timezone });
+    } catch (err) {
+      // The validation message is written for the operator — show it
+      // rather than a generic failure. Nothing was written, so the
+      // previous schedule is still the one running.
+      reply.setCookie(
+        "etl_schedule_flash",
+        JSON.stringify({
+          kind: "error",
+          message: err instanceof Error ? err.message : String(err),
+        }),
+        { path: "/admin", maxAge: 30, httpOnly: true, sameSite: "lax" },
+      );
+      return reply.redirect("/admin/settings#integrations");
+    }
+    // Re-arm the live timer so the new cadence takes effect now. A
+    // failure here must not lose the save — the value is already stored,
+    // and a restart would pick it up.
+    let warning: string | null = null;
+    try {
+      const armed = await app.resyncEtlScheduler();
+      warning = armed.warning;
+    } catch (err) {
+      req.log.error({ err }, "ETL schedule saved but re-arming failed");
+      warning = "调度已保存，但重新装载定时器失败，请重启服务。";
+    }
+    reply.setCookie(
+      "etl_schedule_flash",
+      JSON.stringify(
+        warning
+          ? { kind: "warning", message: `已保存，但有告警：${warning}` }
+          : { kind: "success", message: `已保存：${schedule}（${timezone}）` },
+      ),
+      { path: "/admin", maxAge: 30, httpOnly: true, sameSite: "lax" },
+    );
+    return reply.redirect("/admin/settings#integrations");
   });
 
   app.post("/admin/settings/etl-restart", async (req, reply) => {

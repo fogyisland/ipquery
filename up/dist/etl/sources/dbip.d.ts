@@ -1,21 +1,7 @@
 import type { NormalizedRecord } from "../../types";
-export interface ParseSkipCounters {
-    shortLine: number;
-    headerRow: number;
-    unparseableIp: number;
-    missingCol: number;
-    nonNumericAsn: number;
-    other: number;
-}
-export interface ParseStats {
-    rowsEmitted: number;
-    skipped: ParseSkipCounters;
-    gunzipErrors: number;
-}
-export interface ParseStreamResult {
-    records: AsyncIterable<NormalizedRecord>;
-    stats: ParseStats;
-}
+export declare function parseCsvLine(line: string): string[];
+import { type ParseStreamResult } from "./types";
+export { newStats, type ParseSkipCounters, type ParseStats, type ParseStreamResult } from "./types";
 export declare function parseDbipCityCsvStream(gzPath: string): AsyncIterable<NormalizedRecord>;
 export declare function parseDbipCityCsv(gzPath: string): Promise<NormalizedRecord[]>;
 export declare function parseDbipCityCsvStreamWithStats(gzPath: string): ParseStreamResult;

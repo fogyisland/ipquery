@@ -63,6 +63,8 @@ describe("migrations", () => {
       "023",
       "024",
       "025",
+      "026",
+      "027",
     ]);
   });
 
@@ -94,6 +96,8 @@ describe("migrations", () => {
       "023",
       "024",
       "025",
+      "026",
+      "027",
     ]);
   });
 
@@ -111,13 +115,15 @@ describe("migrations", () => {
     expect(tables).toContain("schema_migrations");
     expect(tables).toContain("provider_call_counter");
     expect(tables).toContain("provider_call_counter_minute");
+    expect(tables).toContain("mcp_tokens");
+    expect(tables).toContain("etl_run_dedupe");
   });
 
   it("skips versions already marked applied", async () => {
     const before = await getAppliedVersions(pool);
     expect(before.has("003")).toBe(true);
     const r = await runMigrations(pool);
-    expect(r.skipped.length).toBe(24);
+    expect(r.skipped.length).toBe(26);
   });
 
   it("records apply timestamps", async () => {

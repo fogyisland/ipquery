@@ -166,4 +166,103 @@ describe("findRange overlapping-range correctness + perf", () => {
     expect(found?.countryCode).toBe("X");
     expect(elapsed).toBeLessThan(1000);
   });
+  it("fillCols never overwrites existing fine-grained columns", async () => {
+    // A country-only file (metowolf-cn / runishiwo-cn style) must never
+    // clobber the city / geo / asn columns a richer file already wrote.
+    // The upsert writes `COALESCE(col, VALUES(col))` so an existing value
+    // survives; a null one is filled in.
+    await truncateNew(pool);
+    const full: IpRangeRow = {
+      startIp: v4(10, 0, 0, 0),
+      endIp: v4(10, 0, 0, 255),
+      countryCode: "GB",
+      city: "London",
+      latitude: 51.5074,
+      longitude: -0.1278,
+      asn: 64500,
+      asnOrg: "Example ISP",
+      countrySource: "dbip" as const,
+      citySource: "dbip" as const,
+      geoSource: "dbip" as const,
+      asnSource: "dbip-asn" as const,
+    };
+    await insertIntoNewUpsert(
+      pool,
+      [full],
+      new Set([
+        "countryCode",
+        "city",
+        "latitude",
+        "longitude",
+        "asn",
+        "asnOrg",
+        "countrySource",
+        "citySource",
+        "geoSource",
+        "asnSource",
+      ] as Array<keyof IpRangeRow>),
+    );
+    // A narrow country-only upsert over the SAME (start,end) key.
+    await insertIntoNewUpsert(
+      pool,
+      [
+        {
+          startIp: v4(10, 0, 0, 0),
+          endIp: v4(10, 0, 0, 255),
+          countryCode: "CN",
+          countrySource: "metowolf-cn" as const,
+        },
+      ],
+      new Set(["countryCode", "countrySource"] as Array<keyof IpRangeRow>),
+    );
+    await atomicSwapRanges(pool);
+
+    const found = await findRange(pool, v4(10, 0, 0, 5));
+    // The country-only pass must NOT have replaced the richer row.
+    expect(found?.countryCode).toBe("GB");
+    expect(found?.countrySource).toBe("dbip");
+    // …and the fine-grained columns must be untouched.
+    expect(found?.city).toBe("London");
+    expect(found?.latitude).toBeCloseTo(51.5074, 3);
+    expect(found?.asn).toBe(64500);
+    expect(found?.asnOrg).toBe("Example ISP");
+    expect(found?.geoSource).toBe("dbip");
+    expect(found?.asnSource).toBe("dbip-asn");
+  });
+
+  it("findRange still picks the smallest covering range after deduped big ranges", async () => {
+    // A deduped, wide country range plus a narrow city range that both
+    // cover the target: the narrow one still wins, and the wide one does
+    // not shadow it.
+    await truncateNew(pool);
+    const wide: IpRangeRow = {
+      startIp: v4(10, 0, 0, 0),
+      endIp: v4(10, 255, 255, 255),
+      countryCode: "CN",
+      countrySource: "runishiwo-cn" as const,
+    };
+    const narrow: IpRangeRow = {
+      startIp: v4(10, 0, 0, 0),
+      endIp: v4(10, 0, 0, 255),
+      countryCode: "CN",
+      city: "Beijing",
+      countrySource: "dbip" as const,
+      citySource: "dbip" as const,
+    };
+    await insertIntoNewUpsert(
+      pool,
+      [wide, narrow],
+      new Set(["countryCode", "city", "countrySource", "citySource"] as Array<keyof IpRangeRow>),
+    );
+    await atomicSwapRanges(pool);
+
+    const found = await findRange(pool, v4(10, 0, 0, 5));
+    expect(found?.city).toBe("Beijing");
+    expect(found?.citySource).toBe("dbip");
+    // The wide range still answers for an address the narrow one misses.
+    const outside = await findRange(pool, v4(10, 200, 0, 5));
+    expect(outside?.countryCode).toBe("CN");
+    expect(outside?.city).toBeNull();
+    expect(outside?.countrySource).toBe("runishiwo-cn");
+  });
 });

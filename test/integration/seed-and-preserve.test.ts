@@ -21,6 +21,47 @@ import * as zlib from "node:zlib";
 import { createPool, runMigrations, findRange, preserveManualRows } from "../../src/storage/mysql";
 import { loadDemoSeed } from "../../src/storage/seed/demoSeed";
 import { runPipeline } from "../../src/etl/pipeline";
+
+// The four GitHub sources refresh on EVERY run by design — the pipeline
+// calls the fixed-file downloader whether or not a cached copy exists, so
+// it always has the latest China ranges. That makes any test that runs
+// the pipeline without a seam a network test: a slow or blocked fetch
+// stalls the run for up to 120s per URL and then fails it.
+//
+// These cases are about preservation, not about how the files arrive. The
+// seam below records the request and returns instantly, leaving the
+// fixtures on disk exactly as `beforeAll` wrote them — which is what a
+// successful-but-cached refresh looks like to the rest of the pipeline.
+// The fixtures the four fixed sources should serve. The pipeline re-checks
+// the file after the download stage and refuses to swap when one is
+// missing, so the seam has to leave a real file behind — returning a
+// "success" without writing would fail that check, not skip it.
+const FIXED_FIXTURES: Readonly<Record<string, string>> = {
+  "china-ipv4.txt": "198.18.0.0/15\n",
+  "china-v4.txt": "198.18.0.0/15\n",
+  "china-v6.txt": "# CN IPv6 List\n2001:db8::/32\n",
+  "sapics-user-country.csv": "203.0.113.0,203.0.113.255,AU\n",
+};
+
+const cachedRefresh = async (spec: {
+  destName: string;
+  kind: string;
+  etlSource: string;
+}, outDir: string) => {
+  const body = FIXED_FIXTURES[spec.destName] ?? "";
+  await fs.writeFile(path.join(outDir, spec.destName), body);
+  return {
+    kind: spec.kind,
+    destName: spec.destName,
+    etlSource: spec.etlSource,
+    url: "(cached)",
+    bytes: Buffer.byteLength(body),
+    month: null,
+  };
+};
+
+/** A pipeline run against the on-disk fixtures, with no network. */
+const runOffline = () => runPipeline({ cfg, downloadFixed: cachedRefresh as never });
 import { loadConfig } from "../../src/config";
 
 const TEST_DB = "ipquery_test_seed";
@@ -215,7 +256,7 @@ describe("ETL preserves hand-authored rows", () => {
     );
     expect(await countBySource("multi-provider")).toBe(1);
 
-    await runPipeline({ cfg });
+    await runOffline();
 
     expect(await countBySource("multi-provider")).toBe(1);
     const row = await findRange(pool, manual);
@@ -223,7 +264,7 @@ describe("ETL preserves hand-authored rows", () => {
     expect(row?.countryCode).toBe("US");
   });
 
-  it("the ETL's own rows still land, and the demo rows stay gone", async () => {    await runPipeline({ cfg });
+  it("the ETL's own rows still land, and the demo rows stay gone", async () => {    await runOffline();
     // The ETL row for 9.9.9.5 must be present after the run.
     const row = await findRange(pool, ipBytes("9.9.9.5"));
     expect(row?.countryCode).toBe("GB");
@@ -251,7 +292,7 @@ describe("ETL preserves hand-authored rows", () => {
       [manual, manual],
     );
 
-    await runPipeline({ cfg });
+    await runOffline();
 
     const row = await findRange(pool, manual);
     expect(row?.countrySource).toBe("multi-provider");
@@ -286,7 +327,7 @@ describe("preservation does not duplicate", () => {
       [start, end],
     );
 
-    await runPipeline({ cfg });
+    await runOffline();
 
     // Exactly one row for that range — the ETL's.
     const [rows] = await pool.query<mysql.RowDataPacket[]>(
@@ -308,8 +349,8 @@ describe("preservation does not duplicate", () => {
       [manual, manual],
     );
 
-    await runPipeline({ cfg });
-    await runPipeline({ cfg });
+    await runOffline();
+    await runOffline();
 
     expect(await countBySource("multi-provider")).toBe(1);
   });

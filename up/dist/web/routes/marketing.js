@@ -1,6 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.default = marketingRoutes;
+const lookup_1 = require("../../api/routes/lookup");
 const mysql_1 = require("../../storage/mysql");
 const ip_1 = require("../../ip");
 const mysql_2 = require("../../storage/mysql");
@@ -9,6 +10,34 @@ const geo_map_1 = require("../maps/geo-map");
 const render_map_1 = require("../maps/render-map");
 const country_names_1 = require("../../country-names");
 async function marketingRoutes(app) {
+    // The /try form is a lookup, and a lookup is worth a row in query_log
+    // whenever the caller can be identified. An anonymous visitor is still
+    // answered, just not counted — the same rule /lookup follows. What was
+    // missing is that the form skipped the row unconditionally, so browser
+    // traffic never reached the analytics page at all.
+    //
+    // `ip_text` holds the submitted string verbatim: it is the field the
+    // analytics reads, and it is parameterised on the way in. The binary
+    // `ip` column is NOT NULL, so an unparseable submission records against
+    // the unspecified address and is reported as `invalid`.
+    const recordTryQuery = (req, ip, found) => {
+        const caller = (0, lookup_1.callerOf)(req);
+        if (!caller)
+            return;
+        const buf = (0, ip_1.parseIp)(ip) ?? (0, ip_1.parseIp)("0.0.0.0");
+        if (!buf)
+            return;
+        req.pendingLog = {
+            ip: buf,
+            ipText: ip,
+            status: (0, ip_1.isValidIp)(ip) ? (found ? "hit" : "miss") : "invalid",
+            userId: caller.userId,
+            apiKeyId: caller.apiKeyId,
+            sessionId: caller.sessionId,
+            remoteAddr: null,
+            userAgent: req.headers["user-agent"] ?? null,
+        };
+    };
     // Marketing redesign: all 5 public pages render inside layouts/marketing
     // (light commercial chrome, top nav + footer). isHome/isDocs/isTry/
     // isStatus/isAbout flags drive the active-nav indicator (a regression
@@ -105,6 +134,10 @@ async function marketingRoutes(app) {
             return reply.code(403).view("errors/csrf.hbs", { layout: "layouts/marketing", req });
         const ip = (req.body.ip ?? "").trim();
         if (!(0, ip_1.isValidIp)(ip)) {
+            // Unparseable input is answered as `invalid` — and counted as such
+            // for anyone we can identify, so the analytics distinguish "bad
+            // input" from "address we do not cover".
+            recordTryQuery(req, ip, false);
             return reply.view("marketing/try.hbs", {
                 layout: "layouts/marketing",
                 title: req.t("nav.try"),
@@ -118,6 +151,7 @@ async function marketingRoutes(app) {
         }
         const buf = (0, ip_1.parseIp)(ip);
         const row = buf ? await (0, mysql_2.findRange)(app.pool, buf) : null;
+        recordTryQuery(req, ip, row !== null);
         if (!row) {
             return reply.view("marketing/try.hbs", {
                 layout: "layouts/marketing",

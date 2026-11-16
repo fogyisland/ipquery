@@ -12,6 +12,7 @@ import {
   insertEtlRunDownload,
   insertEtlRunParse,
   insertEtlRunInsert,
+  insertEtlRunDedupe,
   upsertEtlRunSwap,
 } from "../../src/storage/mysql";
 import { generateToken } from "../../src/web/auth/tokens";
@@ -94,6 +95,17 @@ beforeAll(async () => {
     startedAt: new Date(),
     finishedAt: new Date(),
   });
+  await insertEtlRunDedupe(app.pool, {
+    runId: finishedRunId,
+    inputRows: 20,
+    contained: 5,
+    exactDuplicates: 2,
+    partialOverlaps: 1,
+    emitted: 12,
+    durationMs: 3,
+    startedAt: new Date(),
+    finishedAt: new Date(),
+  });
   await upsertEtlRunSwap(app.pool, {
     runId: finishedRunId,
     status: "success",
@@ -138,6 +150,9 @@ describe("admin /admin/etl/runs/:id", () => {
     expect(r.text).toContain("etl-skip-details");
     // Inserts table renders batch_count column.
     expect(r.text).toContain("8300020");
+    expect(r.text).toContain("去重");
+    expect(r.text).toContain("20");
+    expect(r.text).toContain("12");
     // Live polling trigger is present when status=running — but this
     // run is finished, so the trigger should NOT be in the DOM.
     expect(r.text).not.toContain('hx-trigger="every 5s"');

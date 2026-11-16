@@ -338,7 +338,10 @@
         "parses": "解析阶段",
         "inserts": "入库阶段",
         "runError": "运行错误",
-        "swapError": "原子切换错误"
+        "swapError": "原子切换错误",
+        "dedupeTitle": "去重",
+        "dedupeBody": "输入 {input} 条，大段覆盖丢弃 {contained} 条，实际入库 {emitted} 条。",
+        "dedupeMeta": "完全重复合并 {exact}，部分重叠保留 {partial}。"
       },
       "col": {
         "started": "开始时间",
@@ -366,7 +369,16 @@
       "detail": {
         "title": "ETL Run #{id}"
       },
-      "alreadyRunning": "已有 ETL 运行正在进行中"
+      "alreadyRunning": "已有 ETL 运行正在进行中",
+      "source": {
+        "dbip-city": "DB-IP city-lite（城市 / 坐标 / 国家）",
+        "dbip-country": "DB-IP country-lite（国家）",
+        "dbip-asn": "DB-IP asn-lite（ASN / 运营商）",
+        "metowolf-cn": "metowolf/iplist（中国大陆 IPv4）",
+        "runishiwo-cn": "runishiwo/ChinaIPlist（中国大陆 IPv4）",
+        "runishiwo-v6": "runishiwo/ChinaIPlist（中国大陆 IPv6）",
+        "sapics-user": "sapics/ip-location-db（用户上报国家）"
+      }
     },
     "keys": {
       "title": "API Keys 全局",
@@ -484,11 +496,22 @@
         "unset": "(未设置)"
       },
       "etl": {
-        "scheduleHint": "定时任务表达式",
+        "scheduleHint": "cron 表达式（分 时 日 月 周）。保存后立即生效，无需重启。",
         "lastRunNever": "尚未运行",
         "lastRunOk": "成功 · 合并 {merged} 条",
         "lastRunFailed": "失败",
-        "lastRunRunning": "运行中…"
+        "lastRunRunning": "运行中…",
+        "scheduleSource": {
+          "saved": "当前生效：后台保存的设置",
+          "env": "当前生效：环境变量 ETL_SCHEDULE（尚未在后台保存过）",
+          "default": "当前生效：默认值"
+        },
+        "preset": {
+          "daily": "每天",
+          "weekly": "每周一",
+          "monthly": "每月 1 号"
+        },
+        "scheduleSave": "保存周期"
       },
       "section": {
         "db": "数据库",
@@ -1133,7 +1156,8 @@
       "adminDesc": "管理后台需要轮询 ETL 实时进度，因此使用独立且更大的额度，不会占用公开 API 的额度。",
       "notLimited": "不限"
     },
-    "rateLimitsScopeNote": "限流按路径生效。网页与静态资源不受公共 API 额度约束；路由级限速会替换该路由的全局限速，而不是与之叠加；管理后台的轮询路由与公共 API 分开计费。"
+    "rateLimitsScopeNote": "限流按路径生效。网页与静态资源不受公共 API 额度约束；路由级限速会替换该路由的全局限速，而不是与之叠加；管理后台的轮询路由与公共 API 分开计费。",
+    "sourceNote": "source 返回实际入库来源标签，可能取 metowolf-cn、runishiwo-cn、sapics-user 等值，不是封闭枚举。"
   },
   "footer": {
     "copyright": "© {year} IPQuery",

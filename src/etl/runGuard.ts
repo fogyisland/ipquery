@@ -49,12 +49,40 @@
 // ONE dedicated connection checked out of the pool for the whole run,
 // and the lock and the connection are released together.
 
-import type { Pool } from "mysql2/promise";
+import type { Pool, PoolConnection } from "mysql2/promise";
 import type { RowDataPacket } from "mysql2";
 
-/** The advisory lock name. Scoped per-database so two IPQuery installs
- *  sharing one MySQL server don't block each other. */
-const LOCK_NAME = "ipquery:etl:run";
+/**
+ * The advisory lock name, scoped to one database.
+ *
+ * `GET_LOCK` is keyed by NAME alone — two connections to different
+ * databases on the same server collide when the names match. The comment
+ * here used to claim per-database scoping while the constant was a bare
+ * string, so every IPQuery database on a MySQL server shared one lock:
+ * a run against one library blocked a run against another, and the
+ * integration suite deadlocked against itself whenever two files ran a
+ * pipeline concurrently.
+ *
+ * The name therefore carries the database it protects. `DATABASE()` is
+ * read through the same connection that will hold the lock, so the suffix
+ * is always the schema this run is actually writing to.
+ */
+function lockNameFor(database: string): string {
+  return `ipquery:etl:run:${database}`;
+}
+
+/** Resolve the lock name for the database behind this connection. */
+async function resolveLockName(conn: PoolConnection): Promise<string> {
+  const [rows] = await conn.query<RowDataPacket[]>(`SELECT DATABASE() AS db`);
+  const db = rows[0]?.db;
+  if (typeof db !== "string" || db === "") {
+    // No default schema on the connection means the pool was built
+    // without one, and the ETL cannot run anyway. Fail loudly rather than
+    // falling back to a shared name — that is the bug this replaced.
+    throw new Error("cannot resolve the ETL lock name: the connection has no database selected");
+  }
+  return lockNameFor(db);
+}
 
 /** How long to wait for the advisory lock before giving up, in seconds.
  *  Zero: the ETL takes minutes, so a lock holder is legitimately busy
@@ -134,10 +162,13 @@ export async function acquireEtlRunLock(
 
   const conn = await pool.getConnection();
   let held = false;
+  // Resolved before the try so the catch block's best-effort release can
+  // name the same lock. A failure here means there is nothing to release.
+  const lockName = await resolveLockName(conn);
   try {
     const [rows] = await conn.query<RowDataPacket[]>(
       `SELECT GET_LOCK(?, ?) AS acquired`,
-      [LOCK_NAME, LOCK_WAIT_SECONDS],
+      [lockName, LOCK_WAIT_SECONDS],
     );
     // GET_LOCK returns 1 on success, 0 on timeout, NULL on error.
     if (Number(rows[0]?.acquired) !== 1) {
@@ -158,7 +189,7 @@ export async function acquireEtlRunLock(
     // makes the decision on state we know is current.
     const recheck = await findRunningEtlRun(pool, opts?.excludeRunId);
     if (recheck !== null) {
-      await conn.query(`SELECT RELEASE_LOCK(?) AS released`, [LOCK_NAME]);
+      await conn.query(`SELECT RELEASE_LOCK(?) AS released`, [lockName]);
       held = false;
       conn.release();
       return {
@@ -175,7 +206,7 @@ export async function acquireEtlRunLock(
         if (released) return;
         released = true;
         try {
-          await conn.query(`SELECT RELEASE_LOCK(?) AS released`, [LOCK_NAME]);
+          await conn.query(`SELECT RELEASE_LOCK(?) AS released`, [lockName]);
         } catch {
           // Best-effort: the lock is session-scoped, so MySQL releases
           // it when this connection closes. A failed RELEASE_LOCK
@@ -189,7 +220,7 @@ export async function acquireEtlRunLock(
   } catch (err) {
     if (held) {
       try {
-        await conn.query(`SELECT RELEASE_LOCK(?) AS released`, [LOCK_NAME]);
+        await conn.query(`SELECT RELEASE_LOCK(?) AS released`, [lockName]);
       } catch {
         // Best-effort.
       }

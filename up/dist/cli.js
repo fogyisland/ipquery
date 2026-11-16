@@ -329,27 +329,23 @@ program
         await pool.end();
     }
 });
-const SPEC_BY_KIND = Object.fromEntries(download_1.DEFAULT_SPECS.map((s) => [s.kind, s]));
 program
     .command("download")
-    .description("Fetch the free DB-IP CSV.gz files (city-lite, country-lite, asn-lite) into data/raw/ for the ETL pipeline")
-    .option("--only <kinds>", "comma-separated subset: city,country,asn (default: all)")
+    .description("Fetch DB-IP monthly CSV.gz files and the four GitHub text sources into data/raw/ for the ETL pipeline")
+    .option("--only <kinds>", "comma-separated subset: city,country,asn,metowolf-cn,runishiwo-cn,runishiwo-v6,sapics-user (default: all)")
     .option("--out <dir>", "override output directory (default: ${DATA_DIR}/raw)")
     .action(async (opts) => {
     const cfg = (0, config_1.loadConfig)();
     const outDir = opts.out ?? `${cfg.etl.dataDir}/raw`;
-    const kinds = opts.only
-        ? opts.only
-            .split(",")
-            .map((s) => s.trim())
-            .filter(Boolean)
-        : download_1.DEFAULT_SPECS.map((s) => s.kind);
-    const bad = kinds.filter((k) => !(k in SPEC_BY_KIND));
-    if (bad.length > 0) {
-        console.error(`unknown --only value(s): ${bad.join(", ")}; valid: ${Object.keys(SPEC_BY_KIND).join(", ")}`);
-        process.exit(2);
+    let specs;
+    try {
+        specs = (0, download_1.parseDownloadKinds)(opts.only);
     }
-    const specs = kinds.map((k) => SPEC_BY_KIND[k]);
+    catch (err) {
+        console.error(err.message);
+        process.exit(2);
+        return;
+    }
     console.log(`[download] target dir: ${outDir}`);
     const { results, failures } = await (0, download_1.downloadAll)(specs, outDir);
     if (failures.length > 0) {

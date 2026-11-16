@@ -62,7 +62,7 @@ describe("migrations legacy upgrade", () => {
     // also checks for their absence before applying, they would normally be
     // reapplied -- except IF NOT EXISTS makes the CREATE TABLE a no-op
     // so the table-version sync is allowed to record.
-    // Either way: no error, and all 11 versions end up in schema_migrations.
+    // Either way: no error, and all versions end up in schema_migrations.
     expect(result.applied.length).toBeGreaterThanOrEqual(0);
 
     const applied = await pool.query<mysql.RowDataPacket[]>(
@@ -94,9 +94,11 @@ describe("migrations legacy upgrade", () => {
       "023",
       "024",
       "025",
+      "026",
+      "027",
     ]);
 
-    // The 11 expected tables all still exist after the upgrade.
+    // The 13 expected tables all still exist after the upgrade.
     const [rows] = await pool.query<mysql.RowDataPacket[]>("SHOW TABLES");
     const tables = rows.map((r) => Object.values(r)[0] as string).sort();
     expect(tables).toContain("ip_ranges");
@@ -109,5 +111,7 @@ describe("migrations legacy upgrade", () => {
     expect(tables).toContain("password_resets");
     expect(tables).toContain("query_log");
     expect(tables).toContain("schema_migrations");
+    expect(tables).toContain("mcp_tokens");
+    expect(tables).toContain("etl_run_dedupe");
   });
 });
