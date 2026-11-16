@@ -1,7 +1,7 @@
 {
   "formatVersion": 1,
-  "fileCount": 426,
-  "totalBytes": 2229440,
+  "fileCount": 427,
+  "totalBytes": 2230493,
   "files": {
     "api/dbBootstrap.d.ts": {
       "bytes": 8916,
@@ -730,6 +730,10 @@
     "storage/migrations/030_random_gen_cadence.sql": {
       "bytes": 1028,
       "sha256": "47d22234b53d58776e0c9228cf0015c91b77e6dc950442fa731b894c429967e4"
+    },
+    "storage/migrations/031_retire_ipinfo.sql": {
+      "bytes": 1053,
+      "sha256": "f37f11f09d0c9c97128d1db354643db852f05a3a186171f159c845774113c592"
     },
     "storage/migrations/runner.d.ts": {
       "bytes": 475,
