@@ -53,7 +53,7 @@ beforeEach(async () => {
   await td.pool.query("TRUNCATE TABLE provider_call_counter");
   await td.pool.query("DELETE FROM ingest_providers WHERE is_custom = 1");
   // Reset built-in providers so toggle tests don't leak state.
-  for (const name of ["ip-api", "ipinfo", "iplocate", "freeipapi", "ipapi-co"]) {
+  for (const name of ["ip-api", "ipinfo"]) {
     await updateProviderConfig(td.pool, name, {
       enabled: true,
       autoReenableAt: null,

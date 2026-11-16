@@ -109,7 +109,7 @@ beforeEach(async () => {
     responses[`203.0.113.${i}`] = rec({ countryCode: "US", city: "MV", asn: 15169 });
   testStubs.ipapi = new StubProvider("ipapi", responses);
   testStubs.ipinfo = new StubProvider("ipinfo", responses);
-  testStubs.iplocate = new StubProvider("iplocate", responses);
+  testStubs.ipinfo = new StubProvider("ipinfo", responses);
   await td.pool.query("TRUNCATE TABLE unknown_ip_queue");
   await td.pool.query("TRUNCATE TABLE ip_ranges");
   // Disable circuit breaker so provider failures don't interfere.

@@ -31,6 +31,21 @@ export declare const PROVIDER_CATALOG: Record<string, {
     displayName: string;
     freeQuota: string;
 }>;
+/**
+ * Every source the backfill can vote with, in catalog order.
+ *
+ * `ipapi.co`, `freeipapi.com` and `iplocate.io` were removed on 2026-11-16:
+ * against the addresses in this library their success rate was effectively
+ * zero, so the votes in every fan-out went to providers that never
+ * answered and the majority could not decide. Their rows are purged from
+ * `ingest_providers` by migration 028. What remains is the pair that
+ * actually responds.
+ */
+export declare const KNOWN_PROVIDERS: readonly string[];
+/** The label to show for a provider, falling back to the raw name for
+ *  anything the catalog does not know — an old row, a custom provider, or
+ *  a name that was retired. */
+export declare function providerDisplayName(name: string): string;
 export declare const PROVIDER_CATALOG_LIST: ProviderConfigRow[];
 export declare function listProviderConfigs(pool: Pool): Promise<ProviderConfigRow[]>;
 export declare function getProviderConfig(pool: Pool, name: string): Promise<ProviderConfigRow | null>;

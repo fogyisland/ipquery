@@ -37,21 +37,21 @@ describe("touchProviderCalled", () => {
   });
 
   it("UPSERTs multiple calls into a single row per UTC day", async () => {
-    await touchProviderCalled(td.pool, "iplocate", {});
-    await touchProviderCalled(td.pool, "iplocate", {});
-    await touchProviderCalled(td.pool, "iplocate", {});
+    await touchProviderCalled(td.pool, "ip-api", {});
+    await touchProviderCalled(td.pool, "ip-api", {});
+    await touchProviderCalled(td.pool, "ip-api", {});
     const [rows] = await td.pool.query<{ calls_total: number }[]>(
       `SELECT calls_total FROM provider_call_counter WHERE provider_name = ?`,
-      ["iplocate"],
+      ["ip-api"],
     );
     expect(rows.length).toBe(1);
     expect(Number(rows[0]!.calls_total)).toBe(3);
   });
 
   it("distinguishes timeout / network / other errorCode buckets", async () => {
-    await touchProviderCalled(td.pool, "freeipapi", { errorCode: "timeout" });
-    await touchProviderCalled(td.pool, "freeipapi", { errorCode: "network" });
-    await touchProviderCalled(td.pool, "freeipapi", { errorCode: "http_500" });
+    await touchProviderCalled(td.pool, "ipinfo", { errorCode: "timeout" });
+    await touchProviderCalled(td.pool, "ipinfo", { errorCode: "network" });
+    await touchProviderCalled(td.pool, "ipinfo", { errorCode: "http_500" });
     const [rows] = await td.pool.query<
       {
         calls_total: number;
@@ -62,7 +62,7 @@ describe("touchProviderCalled", () => {
     >(
       `SELECT calls_total, calls_timeout, calls_network_err, calls_other_err
          FROM provider_call_counter WHERE provider_name = ?`,
-      ["freeipapi"],
+      ["ipinfo"],
     );
     expect(Number(rows[0]!.calls_total)).toBe(3);
     expect(Number(rows[0]!.calls_timeout)).toBe(1);

@@ -114,11 +114,6 @@ export declare function processIp(pool: Pool, providers: IpGeoProvider[], ipText
  *  the provider is auto-disabled even without a 429. The breaker reads
  *  the persisted `provider_error_log` for a sliding-window check. */
 export declare function disableRateLimitedProviders(pool: Pool, providers: IpGeoProvider[], summary: BackfillSummary): Promise<void>;
-/** Convenience constructor: pick providers based on which API keys are
- *  present in env. Each provider silently abstains if its key is missing,
- *  so the backfill is robust to partial configurations — it'll just have
- *  fewer votes and may fail to reach consensus. */
-export declare function buildDefaultProviders(env?: NodeJS.ProcessEnv): IpGeoProvider[];
 /** Convenience: parse + validate an IP string into the same Buffer format
  *  unknown_ip_queue stores. Re-exported here so admin routes don't need
  *  to import the low-level helper directly. */

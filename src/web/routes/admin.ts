@@ -21,7 +21,7 @@ import {
 import { runPipeline } from "../../etl/pipeline";
 import { recordEtlStart, getEtlRunProgress } from "../../storage/mysql";
 import { topByQueryCount, queueStats } from "../../storage/unknownIpQueue";
-import { runBackfill, buildDefaultProviders } from "../../etl/unknownIpBackfill";
+import { runBackfill } from "../../etl/unknownIpBackfill";
 import { runRandomGeneration } from "../../etl/randomIpGenerator";
 import { sendErrorPage, sendCsrfPage } from "../errors/render";
 import {

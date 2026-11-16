@@ -16,7 +16,8 @@
 //   4. Wire buildProvidersFromConfig() to map the catalog entry to the
 //      provider class with the configured api_key.
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.PROVIDER_CATALOG_LIST = exports.PROVIDER_CATALOG = void 0;
+exports.PROVIDER_CATALOG_LIST = exports.KNOWN_PROVIDERS = exports.PROVIDER_CATALOG = void 0;
+exports.providerDisplayName = providerDisplayName;
 exports.listProviderConfigs = listProviderConfigs;
 exports.getProviderConfig = getProviderConfig;
 exports.upsertCustomProvider = upsertCustomProvider;
@@ -31,9 +32,6 @@ exports.loadLastBackfillProviderStats = loadLastBackfillProviderStats;
 const settings_1 = require("./settings");
 const ipApi_1 = require("../etl/providers/ipApi");
 const ipinfo_1 = require("../etl/providers/ipinfo");
-const iplocate_1 = require("../etl/providers/iplocate");
-const freeipapi_1 = require("../etl/providers/freeipapi");
-const ipapiCo_1 = require("../etl/providers/ipapiCo");
 const genericHttpProvider_1 = require("../etl/genericHttpProvider");
 /** Static catalog. Mirrors the seeded rows in migration 016 — adding a
  *  new provider requires a row AND a catalog entry, never one alone.
@@ -42,11 +40,25 @@ const genericHttpProvider_1 = require("../etl/genericHttpProvider");
  *  them. */
 exports.PROVIDER_CATALOG = {
     "ip-api": { displayName: "IP-API", freeQuota: "45 req/min, no key (HTTP only)" },
-    iplocate: { displayName: "IPLocate.io", freeQuota: "1,000 req/day, key required (HTTPS)" },
     ipinfo: { displayName: "IPinfo.io", freeQuota: "50,000 req/month, key required (HTTPS)" },
-    freeipapi: { displayName: "FreeIPAPI", freeQuota: "60 req/min, no key (HTTPS)" },
-    "ipapi-co": { displayName: "ipapi.co", freeQuota: "30,000 req/month, no key (HTTPS)" },
 };
+/**
+ * Every source the backfill can vote with, in catalog order.
+ *
+ * `ipapi.co`, `freeipapi.com` and `iplocate.io` were removed on 2026-11-16:
+ * against the addresses in this library their success rate was effectively
+ * zero, so the votes in every fan-out went to providers that never
+ * answered and the majority could not decide. Their rows are purged from
+ * `ingest_providers` by migration 028. What remains is the pair that
+ * actually responds.
+ */
+exports.KNOWN_PROVIDERS = Object.keys(exports.PROVIDER_CATALOG);
+/** The label to show for a provider, falling back to the raw name for
+ *  anything the catalog does not know — an old row, a custom provider, or
+ *  a name that was retired. */
+function providerDisplayName(name) {
+    return exports.PROVIDER_CATALOG[name]?.displayName ?? name;
+}
 exports.PROVIDER_CATALOG_LIST = Object.entries(exports.PROVIDER_CATALOG).map(([name, meta]) => ({
     name,
     displayName: meta.displayName,
@@ -320,22 +332,13 @@ function buildProvidersFromConfig(configs) {
             case "ip-api":
                 out.push(new ipApi_1.IpApiProvider());
                 break;
-            case "iplocate":
-                // Provider abstains on its own if apiKey is null — but skipping
-                // here avoids the per-call null check.
-                if (c.apiKey)
-                    out.push(new iplocate_1.IplocateProvider({ apiKey: c.apiKey }));
-                break;
             case "ipinfo":
                 if (c.apiKey)
                     out.push(new ipinfo_1.IpinfoProvider({ token: c.apiKey }));
                 break;
-            case "freeipapi":
-                out.push(new freeipapi_1.FreeIpApiProvider());
-                break;
-            case "ipapi-co":
-                out.push(new ipapiCo_1.IpapiCoProvider());
-                break;
+            // `freeipapi` and `ipapi-co` were removed on 2026-11-16 — see
+            // KNOWN_PROVIDERS. A stale row is filtered out before we get here,
+            // so reaching this branch means someone re-added one by hand.
             default:
                 // Unknown name — log via warn, don't fail the whole job.
                 // eslint-disable-next-line no-console

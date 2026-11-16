@@ -35,7 +35,7 @@ afterAll(async () => {
 
 beforeEach(async () => {
   // Reset every provider to known state before each test.
-  for (const name of ["ip-api", "ipinfo", "iplocate", "freeipapi", "ipapi-co"]) {
+  for (const name of ["ip-api", "ipinfo"]) {
     await updateProviderConfig(td.pool, name, {
       enabled: true,
       autoReenableAt: null,
@@ -115,7 +115,7 @@ describe("POST /admin/providers/:name — manual toggle wins over reaper", () =>
     // same either way — but the POST must complete cleanly (reap
     // doesn't error on a row that already exists with the right state).
     const past = new Date(Date.now() - 5 * 60_000); // 5min ago
-    await updateProviderConfig(td.pool, "iplocate", {
+    await updateProviderConfig(td.pool, "ipinfo", {
       enabled: false,
       autoReenableAt: past,
       autoDisabledReason: "429 rate limited",
@@ -123,7 +123,7 @@ describe("POST /admin/providers/:name — manual toggle wins over reaper", () =>
 
     const { cookie, token } = await csrfPair();
     const r = await request(app.server)
-      .post("/admin/providers/iplocate")
+      .post("/admin/providers/ipinfo")
       .set("Cookie", "sid=" + adminSid + "; " + cookie)
       .type("form")
       .send({ csrf: token, enabled: "off", apiKey: "" });
@@ -131,6 +131,6 @@ describe("POST /admin/providers/:name — manual toggle wins over reaper", () =>
 
     // Final state: disabled (admin won).
     const configs = await listProviderConfigs(td.pool);
-    expect(configs.find((r) => r.name === "iplocate")!.enabled).toBe(false);
+    expect(configs.find((r) => r.name === "ipinfo")!.enabled).toBe(false);
   });
 });

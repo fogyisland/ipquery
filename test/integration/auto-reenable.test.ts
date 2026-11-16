@@ -19,7 +19,7 @@ afterAll(async () => {
 beforeEach(async () => {
   await td.pool.query("TRUNCATE TABLE unknown_ip_queue");
   await td.pool.query("TRUNCATE TABLE ip_ranges");
-  for (const name of ["ip-api", "ipinfo", "iplocate", "freeipapi", "ipapi-co"]) {
+  for (const name of ["ip-api", "ipinfo"]) {
     await updateProviderConfig(td.pool, name, {
       enabled: true,
       autoReenableAt: null,
@@ -67,14 +67,14 @@ describe("reapProviders (circuit-breaker cooldown)", () => {
 
     const goodA = new FakeProvider("ip-api", { [ip]: rec({ countryCode: "US" }) });
     const goodB = new FakeProvider("ipinfo", { [ip]: rec({ countryCode: "US" }) });
-    const throttled = new FakeProvider("iplocate", {});
+    const throttled = new FakeProvider("ipinfo", {});
     throttled.rateLimit = true;
 
     const summary = await runBackfill(td.pool, [goodA, goodB, throttled], { batchLimit: 50 });
-    expect(summary.providersDisabled).toContain("iplocate");
+    expect(summary.providersDisabled).toContain("ipinfo");
 
     const configs = await listProviderConfigs(td.pool);
-    const ipi = configs.find((r) => r.name === "iplocate")!;
+    const ipi = configs.find((r) => r.name === "ipinfo")!;
     expect(ipi.enabled).toBe(false);
     // autoReenableAt was stamped ~ cooldownMinutes ahead — should be in
     // the future, within (0, 60min] window.

@@ -40,7 +40,7 @@ beforeEach(async () => {
   await td.pool.query("TRUNCATE TABLE provider_error_log");
   _resetProviderHealthCache();
   // Reset all providers to enabled so per-test re-enables don't leak.
-  for (const name of ["ip-api", "ipinfo", "iplocate", "freeipapi", "ipapi-co"]) {
+  for (const name of ["ip-api", "ipinfo"]) {
     await updateProviderConfig(td.pool, name, {
       enabled: true,
       autoReenableAt: null,
