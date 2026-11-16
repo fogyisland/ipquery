@@ -33,7 +33,8 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.parseDbipCsvStream = exports.parseDbipCsv = void 0;
+exports.parseDbipCsvStream = exports.parseDbipCsv = exports.newStats = void 0;
+exports.parseCsvLine = parseCsvLine;
 exports.parseDbipCityCsvStream = parseDbipCityCsvStream;
 exports.parseDbipCityCsv = parseDbipCityCsv;
 exports.parseDbipCityCsvStreamWithStats = parseDbipCityCsvStreamWithStats;
@@ -142,13 +143,9 @@ async function* streamGzippedCsv(gzPath, header) {
 function isHeaderRow(cols) {
     return cols[0] === "ip_start" || cols[0] === "start_ip";
 }
-function newStats() {
-    return {
-        rowsEmitted: 0,
-        skipped: { shortLine: 0, headerRow: 0, unparseableIp: 0, missingCol: 0, nonNumericAsn: 0, other: 0 },
-        gunzipErrors: 0,
-    };
-}
+const types_1 = require("./types");
+var types_2 = require("./types");
+Object.defineProperty(exports, "newStats", { enumerable: true, get: function () { return types_2.newStats; } });
 async function* parseDbipCityLines(gzPath, stats) {
     for await (const cols of streamGzippedCsv(gzPath, true)) {
         if (cols.length < 5) {
@@ -249,12 +246,12 @@ async function* parseDbipCityCsvStream(gzPath) {
 }
 async function parseDbipCityCsv(gzPath) {
     const out = [];
-    for await (const r of parseDbipCityLines(gzPath, newStats()))
+    for await (const r of parseDbipCityLines(gzPath, (0, types_1.newStats)()))
         out.push(r);
     return out;
 }
 function parseDbipCityCsvStreamWithStats(gzPath) {
-    const stats = newStats();
+    const stats = (0, types_1.newStats)();
     return { records: parseDbipCityLines(gzPath, stats), stats };
 }
 // Country-lite: country code only.
@@ -264,12 +261,12 @@ async function* parseDbipCountryCsvStream(gzPath) {
 }
 async function parseDbipCountryCsv(gzPath) {
     const out = [];
-    for await (const r of parseDbipCountryLines(gzPath, newStats()))
+    for await (const r of parseDbipCountryLines(gzPath, (0, types_1.newStats)()))
         out.push(r);
     return out;
 }
 function parseDbipCountryCsvStreamWithStats(gzPath) {
-    const stats = newStats();
+    const stats = (0, types_1.newStats)();
     return { records: parseDbipCountryLines(gzPath, stats), stats };
 }
 // ASN-lite: ASN number + ASN organization.
@@ -279,12 +276,12 @@ async function* parseDbipAsnCsvStream(gzPath) {
 }
 async function parseDbipAsnCsv(gzPath) {
     const out = [];
-    for await (const r of parseDbipAsnLines(gzPath, newStats()))
+    for await (const r of parseDbipAsnLines(gzPath, (0, types_1.newStats)()))
         out.push(r);
     return out;
 }
 function parseDbipAsnCsvStreamWithStats(gzPath) {
-    const stats = newStats();
+    const stats = (0, types_1.newStats)();
     return { records: parseDbipAsnLines(gzPath, stats), stats };
 }
 // Backwards-compatible aliases: the original parseDbipCsv referred to the

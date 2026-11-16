@@ -1,6 +1,7 @@
 import * as mysql from "mysql2/promise";
 import { type EtlRunDownloadRow } from "../storage/mysql";
-import { type DownloadSpec } from "./download";
+import { fetchFixedOneWithAttempts, type DownloadSpec, type FixedSpec, type DownloadResult } from "./download";
+import type * as https from "node:https";
 import type { AppConfig } from "../config";
 import type { EtlStage } from "../types";
 export interface PipelineResult {
@@ -38,6 +39,16 @@ export declare class EtlProgressSink {
     flush(): Promise<void>;
     private maybeScheduleFlush;
 }
+/** Signature of the fixed-file refresh layer. It owns the
+ *  "refresh failed, reuse the old cache" fallback: a mirror walk that
+ *  exhausts every URL throws, and the caller decides whether a cached
+ *  copy is still good enough to run. */
+export type FixedRefresh = (spec: FixedSpec, outDir: string, onProgress?: (bytesDone: number, bytesTotal: number | null) => void, getImpl?: typeof https.get) => Promise<DownloadResult>;
+/** Signature of the download stage. `fixedImpl` is the fixed-file
+ *  refresh layer: it owns the "refresh failed, reuse the old cache"
+ *  fallback, and tests replace it to exercise that path without driving
+ *  the mirror-walking fetcher. */
+export type DownloadStage = (pool: mysql.Pool, runId: number, rawDir: string, now: Date, sink: EtlProgressSink | undefined, specs: ReadonlyArray<DownloadSpec>, fixedImpl?: typeof fetchFixedOneWithAttempts) => Promise<EtlRunDownloadRow[]>;
 export declare function runPipeline(opts: {
     cfg: AppConfig;
     runId?: number;
@@ -47,5 +58,10 @@ export declare function runPipeline(opts: {
     /** Test seam: replace the network download stage. The default
      *  implementation fetches the real DB-IP files; tests inject a stub
      *  so a missing/corrupt-file scenario never touches the network. */
-    download?: (pool: mysql.Pool, runId: number, rawDir: string, now: Date, sink: EtlProgressSink | undefined, specs: ReadonlyArray<DownloadSpec>) => Promise<EtlRunDownloadRow[]>;
+    download?: DownloadStage;
+    /** Test seam: replace the fixed-file refresh layer that owns the
+     *  "refresh failed, reuse the old cache" fallback. The default walks
+     *  every mirror for every fixed source and throws only when all of
+     *  them are down AND there is no cached copy to fall back on. */
+    downloadFixed?: FixedRefresh;
 }): Promise<PipelineResult>;

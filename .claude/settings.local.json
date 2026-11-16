@@ -195,7 +195,18 @@
       "Bash(sed *)",
       "PowerShell(claude mcp *)",
       "Bash(command -v claude)",
-      "Bash(printf %s\\\\n *)"
+      "Bash(printf %s\\\\n *)",
+      "Bash(rm -f \"/c/Users/徐鹏/.claude/settings.json.bak-before-mcp-approval\")",
+      "Read(//c/Users/徐鹏/.claude/**)",
+      "Bash(pwd *)",
+      "Bash(npm ci *)",
+      "Bash(bash \"/c/Users/徐鹏/.claude/plugins/cache/claude-plugins-official/superpowers/7.0.2/skills/executing-plans/scripts/task-start\" \"docs/superpowers/plans/2026-11-15-multi-source-etl.md\" 1)",
+      "Bash(bash \"/c/Users/徐鹏/.claude/plugins/cache/claude-plugins-official/superpowers/7.0.2/skills/executing-plans/scripts/task-done\" docs/superpowers/plans/2026-11-15-multi-source-etl.md 2 c5b01e7ed26f156c2e561711092c0fa70f4c1e55 -- npx vitest run test/unit/download.test.ts test/unit/cli-download-kinds.test.ts)",
+      "Bash(bash \"/c/Users/徐鹏/.claude/plugins/cache/claude-plugins-official/superpowers/7.0.2/skills/executing-plans/scripts/task-start\" docs/superpowers/plans/2026-11-15-multi-source-etl.md 3)",
+      "Bash(bash \"/c/Users/徐鹏/.claude/plugins/cache/claude-plugins-official/superpowers/7.0.2/skills/executing-plans/scripts/task-done\" docs/superpowers/plans/2026-11-15-multi-source-etl.md 3 c5b01e7ed26f156c2e561711092c0fa70f4c1e55 -- npx vitest run test/unit/download.test.ts)",
+      "Bash(bash \"/c/Users/徐鹏/.claude/plugins/cache/claude-plugins-official/superpowers/7.0.2/skills/executing-plans/scripts/task-start\" docs/superpowers/plans/2026-11-15-multi-source-etl.md 4)",
+      "Bash(bash \"/c/Users/徐鹏/.claude/plugins/cache/claude-plugins-official/superpowers/7.0.2/skills/executing-plans/scripts/task-start\" docs/superpowers/plans/2026-11-15-multi-source-etl.md 6)",
+      "Bash(bash \"/c/Users/徐鹏/.claude/plugins/cache/claude-plugins-official/superpowers/7.0.2/skills/executing-plans/scripts/task-start\" docs/superpowers/plans/2026-11-15-multi-source-etl.md 7)"
     ]
   },
   "disabledMcpjsonServers": [

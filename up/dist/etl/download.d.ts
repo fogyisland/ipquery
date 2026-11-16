@@ -1,29 +1,52 @@
+import * as fs from "node:fs";
 import * as https from "node:https";
-export interface DownloadSpec {
-    /** Logical source name — matches the filenames in src/etl/pipeline.ts. */
-    kind: "city" | "country" | "asn";
-    /** DB-IP URL stem, e.g. 'dbip-city-lite'. */
-    urlStem: string;
-    /** Destination filename inside outDir, e.g. 'dbip.csv.gz'. */
+import type { EtlRunDownloadSource } from "../storage/mysql";
+export type DbipKind = "city" | "country" | "asn";
+export type FixedKind = "metowolf-cn" | "runishiwo-cn" | "runishiwo-v6" | "sapics-user";
+export type DownloadKind = DbipKind | FixedKind;
+interface SpecBase {
     destName: string;
+    etlSource: EtlRunDownloadSource;
 }
+export interface DbipSpec extends SpecBase {
+    mode: "monthly";
+    kind: DbipKind;
+    urlStem: string;
+    validate: "gzip";
+}
+export interface FixedSpec extends SpecBase {
+    mode: "fixed";
+    kind: FixedKind;
+    urls: readonly string[];
+    format: "cidr" | "country-csv";
+    validate: "text";
+}
+export type DownloadSpec = DbipSpec | FixedSpec;
 /** Per-chunk hook fired while a single file is downloading. bytesTotal
  *  is the Content-Length header value when known, or null when the
  *  server didn't send one (chunked encoding, mirrors, etc.) — the
  *  caller can still render an indeterminate progress bar in that case. */
 export type DownloadProgressFn = (bytesDone: number, bytesTotal: number | null) => void;
-export declare const DEFAULT_SPECS: ReadonlyArray<DownloadSpec>;
+export declare const DEFAULT_SPECS: ReadonlyArray<DbipSpec>;
+export declare const EXTRA_SPECS: ReadonlyArray<FixedSpec>;
+export declare const ALL_SPECS: ReadonlyArray<DownloadSpec>;
+export declare function parseDownloadKinds(input: string | undefined): DownloadSpec[];
 export interface DownloadResult {
-    kind: DownloadSpec["kind"];
+    kind: DownloadKind;
     destName: string;
+    etlSource: EtlRunDownloadSource;
     url: string;
     bytes: number;
-    /** YYYY-MM the file actually came from — useful for the summary line. */
-    month: string;
+    /** YYYY-MM for DB-IP monthly files, null for fixed GitHub sources. */
+    month: string | null;
 }
 export interface DownloadFailure {
-    kind: DownloadSpec["kind"];
+    kind: DownloadKind;
+    destName: string;
+    etlSource: EtlRunDownloadSource;
     url: string;
+    urls: readonly string[];
+    attemptCount: number;
     message: string;
 }
 export interface DownloadAttempt {
@@ -62,6 +85,13 @@ export interface DownloadAttempt {
  * string when it is not.
  */
 export declare function validateGzFile(filePath: string): Promise<string | null>;
+/**
+ * Check a plain-text source without loading the 25 MB country CSV into
+ * memory. One structurally valid line is enough: parsers count malformed
+ * rows separately, while an HTML error page or a binary/NUL payload is a
+ * download failure, not an empty dataset.
+ */
+export declare function validateTextFile(filePath: string, format: "cidr" | "country-csv"): Promise<string | null>;
 /** Build the candidate month list: newest first, walking back N months. */
 export declare function candidateMonths(now: Date, lookback: number): string[];
 /**
@@ -84,6 +114,13 @@ export declare function downloadToFile(url: string, destPath: string, onProgress
  *  check can be exercised without a real server. */
 getImpl?: typeof https.get): Promise<number>;
 /**
+ * Swap a validated temporary file into place without relying on whether
+ * rename() overwrites an existing destination. A failure after the first
+ * rename restores the previous cache and removes every intermediate file.
+ */
+export declare function replaceWithValidatedTemp(destPath: string, tmpPath: string, backupPath: string, renameImpl?: typeof fs.promises.rename, rmImpl?: typeof fs.promises.rm): Promise<void>;
+export declare function fetchFixedOneWithAttempts(spec: FixedSpec, outDir: string, onProgress?: DownloadProgressFn, getImpl?: typeof https.get): Promise<DownloadResult>;
+/**
  * Download a single spec, walking back through candidateMonths until one
  * returns 2xx. Returns the DownloadResult with the winning month, or
  * throws if every candidate 404s / errors.
@@ -93,8 +130,8 @@ getImpl?: typeof https.get): Promise<number>;
  * reported are per-file — callers tracking the sum across files should
  * aggregate themselves.
  */
-export declare function fetchOne(spec: DownloadSpec, outDir: string, now: Date, lookback?: number, onProgress?: DownloadProgressFn): Promise<DownloadResult>;
-export declare function fetchOneWithAttempts(spec: DownloadSpec, outDir: string, now: Date, lookback?: number, onProgress?: DownloadProgressFn): Promise<DownloadResult>;
+export declare function fetchOne(spec: DbipSpec, outDir: string, now: Date, lookback?: number, onProgress?: DownloadProgressFn): Promise<DownloadResult>;
+export declare function fetchOneWithAttempts(spec: DownloadSpec, outDir: string, now: Date, lookback?: number, onProgress?: DownloadProgressFn, getImpl?: typeof https.get, fixedImpl?: typeof fetchFixedOneWithAttempts): Promise<DownloadResult>;
 /** Drain the accumulated attempts from the most recent fetchOneWithAttempts call.
  *  Returns a copy so callers can't mutate the internal buffer. */
 export declare function takeDownloadAttempts(): DownloadAttempt[];
@@ -109,8 +146,13 @@ export declare function takeDownloadAttempts(): DownloadAttempt[];
  * uses this to render a single "download" bar even though three files
  * are being fetched back-to-back.
  */
-export declare function downloadAll(specs: ReadonlyArray<DownloadSpec>, outDir: string, now?: Date, onProgress?: DownloadProgressFn): Promise<{
+export declare function downloadAll(specs: ReadonlyArray<DownloadSpec>, outDir: string, now?: Date, onProgress?: DownloadProgressFn, getImpl?: typeof https.get, 
+/** Seam for the fixed-file refresh layer. Tests replace this to force
+ *  the "refresh failed, reuse the old cache" fallback without driving
+ *  the mirror-walking fetcher. Defaults to the real implementation. */
+fixedImpl?: typeof fetchFixedOneWithAttempts): Promise<{
     results: DownloadResult[];
     failures: DownloadFailure[];
     attempts: DownloadAttempt[];
 }>;
+export {};

@@ -504,10 +504,11 @@ async function adminRoutes(app) {
     });
     const buildRunDetailCtx = async (run, req, liveOnly) => {
         const id = Number(run.id);
-        const [downloads, parses, inserts, swap] = await Promise.all([
+        const [downloads, parses, inserts, dedupe, swap] = await Promise.all([
             (0, mysql_2.listEtlRunDownloads)(app.pool, id),
             (0, mysql_2.listEtlRunParses)(app.pool, id),
             (0, mysql_2.listEtlRunInserts)(app.pool, id),
+            (0, mysql_2.getEtlRunDedupe)(app.pool, id),
             (0, mysql_2.getEtlRunSwap)(app.pool, id),
         ]);
         // Aggregate across the per-file rows so the template doesn't need to
@@ -545,7 +546,22 @@ async function adminRoutes(app) {
         const swapStatusText = swap
             ? req.t(swap.status === "success" ? "admin.etl.stages.swapOk" : "admin.etl.stages.swapFailed")
             : "";
+        const dedupeSummaryText = dedupe
+            ? req.t("admin.etl.runDetail.dedupeBody", {
+                input: dedupe.inputRows,
+                contained: dedupe.contained,
+                emitted: dedupe.emitted,
+            })
+            : null;
         const swapDurationText = swap ? req.t("admin.etl.stages.duration", { ms: swap.durationMs ?? 0 }) : "";
+        // The seven ingestion labels are an open set (the source-note in the
+        // API docs says so), so a label without a translation falls back to
+        // the raw value rather than rendering as a missing key.
+        const sourceLabel = (raw) => {
+            const key = `admin.etl.source.${raw}`;
+            const text = req.t(key);
+            return text === key ? raw : text;
+        };
         const skipLabels = {
             shortLine: req.t("admin.etl.stages.skipReason.shortLine"),
             headerRow: req.t("admin.etl.stages.skipReason.headerRow"),
@@ -556,6 +572,7 @@ async function adminRoutes(app) {
         };
         const downloadsView = downloads.map((d) => ({
             ...d,
+            sourceLabel: sourceLabel(d.source),
             statusKind: d.status === "success"
                 ? "success"
                 : d.status === "missing" || d.status === "skipped"
@@ -564,6 +581,7 @@ async function adminRoutes(app) {
         }));
         const parsesView = parses.map((p) => ({
             ...p,
+            sourceLabel: sourceLabel(p.source),
             skippedTotal: p.rowsSkippedShort +
                 p.rowsSkippedHeader +
                 p.rowsSkippedUnparseableIp +
@@ -571,6 +589,10 @@ async function adminRoutes(app) {
                 p.rowsSkippedNanAsn +
                 p.rowsSkippedOther,
             skipLabels,
+        }));
+        const insertsView = inserts.map((row) => ({
+            ...row,
+            sourceLabel: sourceLabel(row.source),
         }));
         const swapRow = swap ? { ...swap, statusText: swapStatusText, durationText: swapDurationText } : null;
         return {
@@ -580,7 +602,9 @@ async function adminRoutes(app) {
             statusText,
             downloads: downloadsView,
             parses: parsesView,
-            inserts,
+            inserts: insertsView,
+            dedupe,
+            dedupeSummaryText,
             swap: swapRow,
             bytesTotal,
             rowsEmittedTotal,
