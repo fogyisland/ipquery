@@ -32,7 +32,24 @@ export declare class EtlProgressSink {
      *  `parsedRows` is a count of rows that will reach insert (skip
      *  counters already excluded by the parser). */
     onParseTotal(parsedRows: number): void;
-    /** Called every 1000 rows during insert. */
+    /** A read-only view of the counters, for tests and for callers that
+     *  need the current numbers without parsing the flush. */
+    getState(): Readonly<{
+        downloadBytesDone: number;
+        downloadBytesTotal: number | null;
+        insertRowsDone: number;
+        insertRowsTotal: number | null;
+        currentStage: EtlStage;
+    }>;
+    /**
+     * Called every 1000 rows during insert.
+     *
+     * `rowsDone` is the count of rows ATTEMPTED, not rows inserted. The
+     * denominator (`onParseTotal`) is the count of rows the files will
+     * yield, so the two have to be measured the same way — an inserted-only
+     * numerator stops around 97% whenever the sources overlap on
+     * (start_ip, end_ip) and the upsert merges them.
+     */
     onInsert(rowsDone: number): void;
     setStage(stage: EtlStage): void;
     /** Force a final write. Used at the end of each pipeline stage. */
