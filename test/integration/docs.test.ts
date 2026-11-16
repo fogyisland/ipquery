@@ -59,12 +59,19 @@ describe("/docs API reference", () => {
     expect(r.text).toContain("replaces the global limit");
   });
 
-  it("GET /docs renders the rate-limits section in zh-CN too", async () => {
-    const r = await request(app.server).get("/docs").set("cookie", "lang=zh-CN");
-    expect(r.status).toBe(200);
-    expect(r.text).toContain('id="ratelimits"');
-    expect(r.text).toContain("公共 API");
-    expect(r.text).toContain("网页与静态资源");
-    expect(r.text).toContain("管理后台");
+  it("GET /docs explains that source is an open label", async () => {
+    const english = await request(app.server).get("/docs").set("cookie", "lang=en-US");
+    expect(english.status).toBe(200);
+    expect(english.text).toContain("metowolf-cn");
+    expect(english.text).toContain("runishiwo-cn");
+    expect(english.text).toContain("sapics-user");
+    expect(english.text).toContain("source");
+
+    const chinese = await request(app.server).get("/docs").set("cookie", "lang=zh-CN");
+    expect(chinese.status).toBe(200);
+    expect(chinese.text).toContain("实际入库来源");
+    expect(chinese.text).toContain("metowolf-cn");
+    expect(chinese.text).toContain("runishiwo-cn");
+    expect(chinese.text).toContain("sapics-user");
   });
 });

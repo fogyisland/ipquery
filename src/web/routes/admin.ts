@@ -68,6 +68,7 @@ import {
   listEtlRunDownloads,
   listEtlRunParses,
   listEtlRunInserts,
+  getEtlRunDedupe,
   getEtlRunSwap,
   recordEtlFinish,
 } from "../../storage/mysql";
@@ -588,10 +589,11 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
     liveOnly: boolean,
   ): Promise<Record<string, unknown>> => {
     const id = Number(run.id);
-    const [downloads, parses, inserts, swap] = await Promise.all([
+    const [downloads, parses, inserts, dedupe, swap] = await Promise.all([
       listEtlRunDownloads(app.pool, id),
       listEtlRunParses(app.pool, id),
       listEtlRunInserts(app.pool, id),
+      getEtlRunDedupe(app.pool, id),
       getEtlRunSwap(app.pool, id),
     ]);
     // Aggregate across the per-file rows so the template doesn't need to
@@ -634,6 +636,13 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
     const swapStatusText = swap
       ? req.t(swap.status === "success" ? "admin.etl.stages.swapOk" : "admin.etl.stages.swapFailed")
       : "";
+    const dedupeSummaryText = dedupe
+      ? req.t("admin.etl.runDetail.dedupeBody", {
+          input: dedupe.inputRows,
+          contained: dedupe.contained,
+          emitted: dedupe.emitted,
+        })
+      : null;
     const swapDurationText = swap ? req.t("admin.etl.stages.duration", { ms: swap.durationMs ?? 0 }) : "";
     const skipLabels = {
       shortLine: req.t("admin.etl.stages.skipReason.shortLine"),
@@ -672,6 +681,8 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
       downloads: downloadsView,
       parses: parsesView,
       inserts,
+      dedupe,
+      dedupeSummaryText,
       swap: swapRow,
       bytesTotal,
       rowsEmittedTotal,

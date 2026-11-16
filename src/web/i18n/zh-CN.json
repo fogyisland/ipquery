@@ -338,7 +338,10 @@
         "parses": "解析阶段",
         "inserts": "入库阶段",
         "runError": "运行错误",
-        "swapError": "原子切换错误"
+        "swapError": "原子切换错误",
+        "dedupeTitle": "去重",
+        "dedupeBody": "输入 {input} 条，大段覆盖丢弃 {contained} 条，实际入库 {emitted} 条。",
+        "dedupeMeta": "完全重复合并 {exact}，部分重叠保留 {partial}。"
       },
       "col": {
         "started": "开始时间",
@@ -1133,7 +1136,8 @@
       "adminDesc": "管理后台需要轮询 ETL 实时进度，因此使用独立且更大的额度，不会占用公开 API 的额度。",
       "notLimited": "不限"
     },
-    "rateLimitsScopeNote": "限流按路径生效。网页与静态资源不受公共 API 额度约束；路由级限速会替换该路由的全局限速，而不是与之叠加；管理后台的轮询路由与公共 API 分开计费。"
+    "rateLimitsScopeNote": "限流按路径生效。网页与静态资源不受公共 API 额度约束；路由级限速会替换该路由的全局限速，而不是与之叠加；管理后台的轮询路由与公共 API 分开计费。",
+    "sourceNote": "source 返回实际入库来源标签，可能取 metowolf-cn、runishiwo-cn、sapics-user 等值，不是封闭枚举。"
   },
   "footer": {
     "copyright": "© {year} IPQuery",
