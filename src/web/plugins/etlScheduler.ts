@@ -20,6 +20,7 @@ import * as cron from "node-cron";
 import type { AppConfig } from "../../config";
 import { runPipeline } from "../../etl/pipeline";
 import { EtlRunLockedError } from "../../etl/runGuard";
+import { loadEtlScheduleConfig } from "../../storage/etlSchedule";
 
 declare module "fastify" {
   interface FastifyInstance {
@@ -32,6 +33,16 @@ declare module "fastify" {
      * Disarm the ETL schedule. Used when the database goes away.
      */
     stopEtlScheduler: () => void;
+    /**
+     * Re-read the schedule from the database and re-arm the timer.
+     * Called after an operator saves a new schedule, so the change takes
+     * effect without a restart.
+     */
+    resyncEtlScheduler: () => Promise<{
+      schedule: string;
+      timezone: string;
+      warning: string | null;
+    }>;
   }
 }
 
@@ -45,39 +56,110 @@ declare module "fastify" {
  */
 export function registerEtlScheduler(app: FastifyInstance): void {
   let task: cron.ScheduledTask | null = null;
+  // The expression the live timer was armed with. Kept so `start()` can be
+  // a no-op when nothing changed, and so the log line names the schedule
+  // that is actually running rather than the one in the config file.
+  let armedConfig: { schedule: string; timezone: string } | null = null;
+
+  /** Resolve the schedule the operator wants right now. The env vars in
+   *  `app.cfg.etl` are only the seed for a fresh install; a saved setting
+   *  wins. Reading at arm time (rather than capturing at register time)
+   *  is what lets a console save take effect on the next resync. */
+  const resolveSchedule = async (): Promise<{
+    schedule: string;
+    timezone: string;
+    warning: string | null;
+  }> => {
+    try {
+      const cfg = await loadEtlScheduleConfig(app.pool, {
+        schedule: app.cfg.etl.schedule,
+        timezone: app.cfg.etl.timezone,
+      });
+      if (cfg.warning) app.log.warn({ warning: cfg.warning }, "ETL schedule fell back");
+      return { schedule: cfg.schedule, timezone: cfg.timezone, warning: cfg.warning };
+    } catch (err) {
+      // The settings table may not exist yet on a degraded boot. Falling
+      // back to the env value keeps the schedule armed either way.
+      app.log.warn({ err }, "could not read the saved ETL schedule; using the env seed");
+      return {
+        schedule: app.cfg.etl.schedule,
+        timezone: app.cfg.etl.timezone,
+        warning: null,
+      };
+    }
+  };
 
   const start = (): void => {
-    if (task) return; // already armed
-    const cfg = app.cfg;
-    task = cron.schedule(
-      cfg.etl.schedule,
-      async () => {
-        app.log.info("cron: triggering ETL");
-        try {
-          await runPipeline({ cfg });
-        } catch (err) {
-          // A lock refusal is expected, not an error: the previous run is
-          // simply still going. Say so, rather than logging it as a
-          // failure that an operator has to investigate.
-          if (err instanceof EtlRunLockedError) {
-            app.log.info({ msg: err.message }, "cron: ETL skipped — another run holds the lock");
-          } else {
-            app.log.error({ err }, "cron: ETL failed");
+    // Arming is now async (the schedule comes from the database), but the
+    // decorated signature stays synchronous so the existing call sites —
+    // buildServer and the setup wizard — keep working. The timer is armed
+    // as soon as the read resolves; a run that fires before then is
+    // impossible, since cron needs the expression first.
+    void (async () => {
+      if (task) return; // already armed
+      const resolved = await resolveSchedule();
+      if (task) return; // a concurrent start() won the race
+      const cfg = app.cfg;
+      armedConfig = { schedule: resolved.schedule, timezone: resolved.timezone };
+      task = cron.schedule(
+        resolved.schedule,
+        async () => {
+          app.log.info("cron: triggering ETL");
+          try {
+            await runPipeline({ cfg });
+          } catch (err) {
+            // A lock refusal is expected, not an error: the previous run is
+            // simply still going. Say so, rather than logging it as a
+            // failure that an operator has to investigate.
+            if (err instanceof EtlRunLockedError) {
+              app.log.info({ msg: err.message }, "cron: ETL skipped — another run holds the lock");
+            } else {
+              app.log.error({ err }, "cron: ETL failed");
+            }
           }
-        }
-      },
-      { timezone: cfg.etl.timezone },
-    );
-    app.log.info({ schedule: cfg.etl.schedule, timezone: cfg.etl.timezone }, "ETL schedule armed");
+        },
+        { timezone: resolved.timezone },
+      );
+      app.log.info(
+        { schedule: resolved.schedule, timezone: resolved.timezone },
+        "ETL schedule armed",
+      );
+    })();
   };
 
   const stop = (): void => {
     if (!task) return;
     task.stop();
     task = null;
+    armedConfig = null;
     app.log.info("ETL schedule disarmed");
+  };
+
+  /** Read the saved schedule and re-arm the timer to match it. An
+   *  operator changing the cadence from the console expects it to take
+   *  effect immediately, not at the next restart. */
+  const resync = async (): Promise<{
+    schedule: string;
+    timezone: string;
+    warning: string | null;
+  }> => {
+    const wasArmed = task !== null;
+    const resolved = await resolveSchedule();
+    const changed =
+      armedConfig === null ||
+      armedConfig.schedule !== resolved.schedule ||
+      armedConfig.timezone !== resolved.timezone;
+    if (!changed) return resolved;
+    if (wasArmed) stop();
+    start();
+    app.log.info(
+      { schedule: resolved.schedule, timezone: resolved.timezone },
+      "ETL schedule resynced",
+    );
+    return resolved;
   };
 
   app.decorate("startEtlScheduler", start);
   app.decorate("stopEtlScheduler", stop);
+  app.decorate("resyncEtlScheduler", resync);
 }

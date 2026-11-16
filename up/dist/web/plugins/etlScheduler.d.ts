@@ -10,6 +10,16 @@ declare module "fastify" {
          * Disarm the ETL schedule. Used when the database goes away.
          */
         stopEtlScheduler: () => void;
+        /**
+         * Re-read the schedule from the database and re-arm the timer.
+         * Called after an operator saves a new schedule, so the change takes
+         * effect without a restart.
+         */
+        resyncEtlScheduler: () => Promise<{
+            schedule: string;
+            timezone: string;
+            warning: string | null;
+        }>;
     }
 }
 /**
