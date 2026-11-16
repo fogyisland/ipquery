@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyRequest } from "fastify";
+import { callerOf } from "../../api/routes/lookup";
 import type { RowDataPacket } from "mysql2";
 import { lastEtlRun, recentEtlRuns } from "../../storage/mysql";
 import { parseIp, isValidIp } from "../../ip";
@@ -10,6 +11,34 @@ import { renderWorldMap } from "../maps/render-map";
 import { countryNamesFor } from "../../country-names";
 
 export default async function marketingRoutes(app: FastifyInstance): Promise<void> {
+  // The /try form is a lookup, and a lookup is worth a row in query_log
+  // whenever the caller can be identified. An anonymous visitor is still
+  // answered, just not counted — the same rule /lookup follows. What was
+  // missing is that the form skipped the row unconditionally, so browser
+  // traffic never reached the analytics page at all.
+  //
+  // `ip_text` holds the submitted string verbatim: it is the field the
+  // analytics reads, and it is parameterised on the way in. The binary
+  // `ip` column is NOT NULL, so an unparseable submission records against
+  // the unspecified address and is reported as `invalid`.
+  const recordTryQuery = (req: FastifyRequest, ip: string, found: boolean): void => {
+    const caller = callerOf(req);
+    if (!caller) return;
+    const buf = parseIp(ip) ?? parseIp("0.0.0.0");
+    if (!buf) return;
+    req.pendingLog = {
+      ip: buf,
+      ipText: ip,
+      status: isValidIp(ip) ? (found ? "hit" : "miss") : "invalid",
+      userId: caller.userId,
+      apiKeyId: caller.apiKeyId,
+      sessionId: caller.sessionId,
+      remoteAddr: null,
+      userAgent: (req.headers["user-agent"] as string | undefined) ?? null,
+    };
+  };
+
+
   // Marketing redesign: all 5 public pages render inside layouts/marketing
   // (light commercial chrome, top nav + footer). isHome/isDocs/isTry/
   // isStatus/isAbout flags drive the active-nav indicator (a regression
@@ -110,6 +139,10 @@ export default async function marketingRoutes(app: FastifyInstance): Promise<voi
       return reply.code(403).view("errors/csrf.hbs", { layout: "layouts/marketing", req });
     const ip = ((req.body as { ip?: string }).ip ?? "").trim();
     if (!isValidIp(ip)) {
+      // Unparseable input is answered as `invalid` — and counted as such
+      // for anyone we can identify, so the analytics distinguish "bad
+      // input" from "address we do not cover".
+      recordTryQuery(req, ip, false);
       return reply.view("marketing/try.hbs", {
         layout: "layouts/marketing",
         title: req.t("nav.try"),
@@ -123,6 +156,7 @@ export default async function marketingRoutes(app: FastifyInstance): Promise<voi
     }
     const buf = parseIp(ip);
     const row = buf ? await findRange(app.pool, buf) : null;
+    recordTryQuery(req, ip, row !== null);
     if (!row) {
       return reply.view("marketing/try.hbs", {
         layout: "layouts/marketing",
