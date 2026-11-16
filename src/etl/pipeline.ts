@@ -51,6 +51,7 @@ import {
 import { prepareGithubSources, type GithubPrepared } from "./sources/prepare";
 import type { ParseStreamResult, SourceRecord } from "./sources/types";
 import { acquireEtlRunLock, EtlRunLockedError } from "./runGuard";
+import { createProgressReporter } from "./progressReporter";
 import type { AppConfig } from "../config";
 import type { Source, NormalizedRecord, IpRangeRow, EtlStage } from "../types";
 
@@ -400,10 +401,18 @@ async function runParseStage(
     }
     const startedAt = new Date();
     const t0 = Date.now();
+    const sizeMb = await fileSizeMb(fullPath);
+    console.log(`[etl] parse: ${f.filename} (${sizeMb}) — counting rows`);
+    const reporter = createProgressReporter({
+      label: `parse ${f.filename}`,
+      unit: "rows",
+    });
     const { records, stats } = f.parse(fullPath);
     for await (const _ of records) {
       void _;
+      reporter.tick(1);
     }
+    reporter.finish();
     rows.push(await persistParseRow(pool, runId, f, stats, startedAt, Date.now() - t0));
     if (sink) sink.onParseTotal(stats.rowsEmitted);
   }
@@ -454,6 +463,16 @@ interface InsertTotals {
   batchCount: number;
 }
 
+/** "12.3 MB" for a log line; "unknown" when the stat fails. */
+async function fileSizeMb(filePath: string): Promise<string> {
+  try {
+    const stat = await fs.stat(filePath);
+    return `${(stat.size / 1024 / 1024).toFixed(1)} MB`;
+  } catch {
+    return "unknown size";
+  }
+}
+
 function emptyTotals(): InsertTotals {
   return { attempted: 0, inserted: 0, duplicates: 0, batchCount: 0 };
 }
@@ -483,19 +502,40 @@ async function runInsertStage(
   files: ReadonlyArray<StreamFile>,
   sink?: EtlProgressSink,
   github?: GithubPrepared,
+  /** The parse stage's per-file rows. Their `rowsEmitted` is the expected
+   *  row count for the insert of the same file, which is what lets the
+   *  progress line show a percentage and an ETA. */
+  parseRows: ReadonlyArray<EtlRunParseRow> = [],
 ): Promise<EtlRunInsertRow[]> {
   const rows: EtlRunInsertRow[] = [];
   let runInsertedSoFar = 0;
-  for (const f of files.filter((file) => !isGithubStreamFile(file))) {
+  const dbipFiles = files.filter((file) => !isGithubStreamFile(file));
+  if (dbipFiles.length > 0) {
+    console.log(`[etl] insert: ${dbipFiles.length} DB-IP source file(s) — this is the long stage`);
+  }
+  for (const f of dbipFiles) {
     const startedAt = new Date();
     const t0 = Date.now();
     const totals = emptyTotals();
+    // The rows this file contributes were counted during parse; reuse that
+    // number so the progress line can show a percentage and an ETA instead
+    // of a bare running total.
+    const expected = parseRows.find((row) => row.source === f.etlSource)?.rowsEmitted;
+    const reporter = createProgressReporter({
+      label: `insert ${f.filename}`,
+      unit: "rows",
+      total: expected && expected > 0 ? expected : undefined,
+    });
+    console.log(
+      `[etl] insert: ${f.filename}${expected ? ` (~${expected.toLocaleString()} rows expected)` : ""}`,
+    );
     let batch: IpRangeRow[] = [];
     for await (const rec of f.parse(path.join(rawDir, f.filename)).records) {
       batch.push(toIpRangeRow(rec, f.source, f.fillCols));
       if (batch.length >= 1000) {
         const result = await flushBatch(pool, batch, f.fillCols, totals);
         runInsertedSoFar += result.inserted;
+        reporter.tick(batch.length);
         if (sink) sink.onInsert(runInsertedSoFar);
         batch = [];
       }
@@ -503,8 +543,14 @@ async function runInsertStage(
     if (batch.length > 0) {
       const result = await flushBatch(pool, batch, f.fillCols, totals);
       runInsertedSoFar += result.inserted;
+      reporter.tick(batch.length);
       if (sink) sink.onInsert(runInsertedSoFar);
     }
+    reporter.finish();
+    console.log(
+      `[etl] insert: ${f.filename} — ${totals.inserted.toLocaleString()} new, ` +
+        `${totals.duplicates.toLocaleString()} merged into existing ranges`,
+    );
     rows.push(await persistInsertRow(pool, runId, f, totals, startedAt, Date.now() - t0));
   }
   const githubFiles = files.filter(isGithubStreamFile);
@@ -794,6 +840,8 @@ async function runPipelineLocked(
   const runId = opts.runId ?? (await recordEtlStart(pool));
   const rawDir = path.join(cfg.etl.dataDir, "raw");
   const now = new Date();
+  const runStartedAt = Date.now();
+  console.log(`[etl] run ${runId} starting — data dir ${rawDir}`);
   const sink = opts.sink ?? new EtlProgressSink(pool, runId);
 
   try {
@@ -841,6 +889,11 @@ async function runPipelineLocked(
       (spec) => spec.mode === "monthly" && needNames.has(spec.destName),
     );
     const specs = [...monthlySpecs, ...EXTRA_SPECS];
+    const monthlyCount = monthlySpecs.length;
+    console.log(
+      `[etl] download: ${monthlyCount} DB-IP file(s) to fetch, ` +
+        `${reusable.length} reused from cache, ${EXTRA_SPECS.length} GitHub file(s) refreshed`,
+    );
     sink.setStage("download");
     const fixedImpl = opts.downloadFixed ?? fetchFixedOneWithAttempts;
     const download = opts.download ?? runDownloadStage;
@@ -910,6 +963,7 @@ async function runPipelineLocked(
     // are parsed and deduped once; parse and insert reuse that snapshot.
     sink.setStage("parse");
     await sink.flush();
+    console.log(`[etl] parse: ${present.length} source file(s)`);
     const githubStartedAt = new Date();
     const github = await prepareGithubSources(
       present.filter(isGithubStreamFile),
@@ -991,7 +1045,7 @@ async function runPipelineLocked(
     sink.setStage("insert");
     await sink.flush();
     await truncateNew(pool);
-    const insertRows = await runInsertStage(pool, runId, rawDir, present, sink, github);
+    const insertRows = await runInsertStage(pool, runId, rawDir, present, sink, github, parseRows);
     await sink.flush();
 
     // Second half of the guard: the files existed, but did they carry
@@ -1030,8 +1084,12 @@ async function runPipelineLocked(
       dbipRecords: dbipTotal,
       mergedRecords: mergedTotal,
     });
+    const totalSec = Math.round((Date.now() - runStartedAt) / 1000);
+    const totalMin = Math.floor(totalSec / 60);
+    const totalLabel = totalMin > 0 ? `${totalMin}m${String(totalSec % 60).padStart(2, "0")}s` : `${totalSec}s`;
     console.log(
-      `[etl] success run=${runId} merged=${mergedTotal} (dbip=${dbipCityRecords}, dbip-country=${dbipCountryRecords}, dbip-asn=${dbipAsnRecords})`,
+      `[etl] success run=${runId} merged=${mergedTotal} in ${totalLabel} ` +
+        `(dbip=${dbipCityRecords}, dbip-country=${dbipCountryRecords}, dbip-asn=${dbipAsnRecords})`,
     );
     return { runId, merged: mergedTotal };
   } catch (err) {
