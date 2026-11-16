@@ -193,7 +193,27 @@ export class EtlProgressSink {
     this.maybeScheduleFlush();
   }
 
-  /** Called every 1000 rows during insert. */
+  /** A read-only view of the counters, for tests and for callers that
+   *  need the current numbers without parsing the flush. */
+  getState(): Readonly<{
+    downloadBytesDone: number;
+    downloadBytesTotal: number | null;
+    insertRowsDone: number;
+    insertRowsTotal: number | null;
+    currentStage: EtlStage;
+  }> {
+    return { ...this.state };
+  }
+
+  /**
+   * Called every 1000 rows during insert.
+   *
+   * `rowsDone` is the count of rows ATTEMPTED, not rows inserted. The
+   * denominator (`onParseTotal`) is the count of rows the files will
+   * yield, so the two have to be measured the same way — an inserted-only
+   * numerator stops around 97% whenever the sources overlap on
+   * (start_ip, end_ip) and the upsert merges them.
+   */
   onInsert(rowsDone: number): void {
     this.state.insertRowsDone = rowsDone;
     this.maybeScheduleFlush();
@@ -201,6 +221,14 @@ export class EtlProgressSink {
 
   setStage(stage: EtlStage): void {
     if (this.state.currentStage === stage) return;
+    // The insert stage is over: whatever the merge arithmetic left over is
+    // not pending work. Without this the bar sits at its last insert
+    // percentage through the swap and into the finished run.
+    if (stage === "swap" || stage === "done") {
+      if (this.state.insertRowsTotal !== null) {
+        this.state.insertRowsDone = this.state.insertRowsTotal;
+      }
+    }
     this.state.currentStage = stage;
     // Stage transitions should land on disk immediately so the UI can
     // hide the previous bar — bypass the throttle.
@@ -508,7 +536,10 @@ async function runInsertStage(
   parseRows: ReadonlyArray<EtlRunParseRow> = [],
 ): Promise<EtlRunInsertRow[]> {
   const rows: EtlRunInsertRow[] = [];
-  let runInsertedSoFar = 0;
+  // Rows ATTEMPTED across every file so far. This is what the progress
+  // bar's denominator measures, so the two must agree — counting inserts
+  // here made the bar stop around 97% wherever the sources overlap.
+  let runAttemptedSoFar = 0;
   const dbipFiles = files.filter((file) => !isGithubStreamFile(file));
   if (dbipFiles.length > 0) {
     console.log(`[etl] insert: ${dbipFiles.length} DB-IP source file(s) — this is the long stage`);
@@ -534,17 +565,17 @@ async function runInsertStage(
       batch.push(toIpRangeRow(rec, f.source, f.fillCols));
       if (batch.length >= 1000) {
         const result = await flushBatch(pool, batch, f.fillCols, totals);
-        runInsertedSoFar += result.inserted;
+        runAttemptedSoFar += result.attempted;
         reporter.tick(batch.length);
-        if (sink) sink.onInsert(runInsertedSoFar);
+        if (sink) sink.onInsert(runAttemptedSoFar);
         batch = [];
       }
     }
     if (batch.length > 0) {
       const result = await flushBatch(pool, batch, f.fillCols, totals);
-      runInsertedSoFar += result.inserted;
+      runAttemptedSoFar += result.attempted;
       reporter.tick(batch.length);
-      if (sink) sink.onInsert(runInsertedSoFar);
+      if (sink) sink.onInsert(runAttemptedSoFar);
     }
     reporter.finish();
     console.log(
@@ -578,8 +609,8 @@ async function runInsertStage(
         }
         bySource.set(rec.etlSource, totals);
       }
-      runInsertedSoFar += result.inserted;
-      if (sink) sink.onInsert(runInsertedSoFar);
+      runAttemptedSoFar += result.attempted;
+      if (sink) sink.onInsert(runAttemptedSoFar);
       batch = [];
     };
     for (const rec of github.dedupe.records) {
