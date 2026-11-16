@@ -138,6 +138,9 @@
     </div>
 
     <div class="provider-health-card-quota">{{this.freeQuota}}</div>
+    {{#if this.enforcedLimit}}
+      <div class="provider-health-card-quota provider-health-card-limit">{{this.enforcedLimit}}</div>
+    {{/if}}
   </div>
   {{/each}}
 </div>

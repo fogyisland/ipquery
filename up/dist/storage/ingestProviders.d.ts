@@ -46,6 +46,16 @@ export declare const KNOWN_PROVIDERS: readonly string[];
  *  anything the catalog does not know — an old row, a custom provider, or
  *  a name that was retired. */
 export declare function providerDisplayName(name: string): string;
+/**
+ * The rate limit the backfill actually enforces, in a form the console can
+ * print beside the vendor's own wording.
+ *
+ * The human-readable `freeQuota` string is what the vendor promises; this
+ * is what the code obeys. Showing both is deliberate: an operator who
+ * reads "100 req/min" on the card should be able to confirm that the
+ * backfill will not exceed it, rather than take it on trust.
+ */
+export declare function enforcedRateLimitLabel(name: string): string;
 export declare const PROVIDER_CATALOG_LIST: ProviderConfigRow[];
 export declare function listProviderConfigs(pool: Pool): Promise<ProviderConfigRow[]>;
 export declare function getProviderConfig(pool: Pool, name: string): Promise<ProviderConfigRow | null>;
