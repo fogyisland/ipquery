@@ -23,11 +23,11 @@ describe("the ingest provider catalog", () => {
     }
   });
 
-  it("keeps the two that do answer", () => {
-    for (const name of ["ip-api", "ipinfo"]) {
+  it("keeps the providers that do answer, plus the two additions", () => {
+    for (const name of ["ip-api", "ipinfo", "ip-sb", "ip9"]) {
       expect(KNOWN_PROVIDERS).toContain(name);
     }
-    expect(KNOWN_PROVIDERS).toHaveLength(2);
+    expect(KNOWN_PROVIDERS).toHaveLength(4);
   });
 
   it("has no display-name entry for a removed provider", () => {
@@ -41,5 +41,7 @@ describe("the ingest provider catalog", () => {
   it("still labels the providers it does know", () => {
     expect(providerDisplayName("ip-api")).toBe("IP-API");
     expect(providerDisplayName("ipinfo")).toBe("IPinfo.io");
+    expect(providerDisplayName("ip-sb")).toBe("IP.SB");
+    expect(providerDisplayName("ip9")).toBe("IP9.COM.CN");
   });
 });

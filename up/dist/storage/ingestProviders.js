@@ -18,6 +18,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.PROVIDER_CATALOG_LIST = exports.KNOWN_PROVIDERS = exports.PROVIDER_CATALOG = void 0;
 exports.providerDisplayName = providerDisplayName;
+exports.enforcedRateLimitLabel = enforcedRateLimitLabel;
 exports.listProviderConfigs = listProviderConfigs;
 exports.getProviderConfig = getProviderConfig;
 exports.upsertCustomProvider = upsertCustomProvider;
@@ -32,7 +33,10 @@ exports.loadLastBackfillProviderStats = loadLastBackfillProviderStats;
 const settings_1 = require("./settings");
 const ipApi_1 = require("../etl/providers/ipApi");
 const ipinfo_1 = require("../etl/providers/ipinfo");
+const ipSb_1 = require("../etl/providers/ipSb");
+const ip9_1 = require("../etl/providers/ip9");
 const genericHttpProvider_1 = require("../etl/genericHttpProvider");
+const providerRateLimit_1 = require("../etl/providerRateLimit");
 /** Static catalog. Mirrors the seeded rows in migration 016 — adding a
  *  new provider requires a row AND a catalog entry, never one alone.
  *  Exported (not just a module-private const) so peers like
@@ -41,6 +45,8 @@ const genericHttpProvider_1 = require("../etl/genericHttpProvider");
 exports.PROVIDER_CATALOG = {
     "ip-api": { displayName: "IP-API", freeQuota: "45 req/min, no key (HTTP only)" },
     ipinfo: { displayName: "IPinfo.io", freeQuota: "50,000 req/month, key required (HTTPS)" },
+    "ip-sb": { displayName: "IP.SB", freeQuota: "100 req/min (5 req/s), no key (HTTPS)" },
+    ip9: { displayName: "IP9.COM.CN", freeQuota: "60 req/min, no key (HTTPS), Chinese results" },
 };
 /**
  * Every source the backfill can vote with, in catalog order.
@@ -58,6 +64,27 @@ exports.KNOWN_PROVIDERS = Object.keys(exports.PROVIDER_CATALOG);
  *  a name that was retired. */
 function providerDisplayName(name) {
     return exports.PROVIDER_CATALOG[name]?.displayName ?? name;
+}
+/**
+ * The rate limit the backfill actually enforces, in a form the console can
+ * print beside the vendor's own wording.
+ *
+ * The human-readable `freeQuota` string is what the vendor promises; this
+ * is what the code obeys. Showing both is deliberate: an operator who
+ * reads "100 req/min" on the card should be able to confirm that the
+ * backfill will not exceed it, rather than take it on trust.
+ */
+function enforcedRateLimitLabel(name) {
+    const limit = providerRateLimit_1.PROVIDER_RATE_LIMITS[name];
+    if (!limit || (limit.perMinute === undefined && limit.burstPerSecond === undefined)) {
+        return "无限流（由提供商自行 429 控制）";
+    }
+    const parts = [];
+    if (limit.perMinute !== undefined)
+        parts.push(`${limit.perMinute} 次/分钟`);
+    if (limit.burstPerSecond !== undefined)
+        parts.push(`突发 ${limit.burstPerSecond} 次/秒`);
+    return `程序限流：${parts.join("，")}`;
 }
 exports.PROVIDER_CATALOG_LIST = Object.entries(exports.PROVIDER_CATALOG).map(([name, meta]) => ({
     name,
@@ -335,6 +362,12 @@ function buildProvidersFromConfig(configs) {
             case "ipinfo":
                 if (c.apiKey)
                     out.push(new ipinfo_1.IpinfoProvider({ token: c.apiKey }));
+                break;
+            case "ip-sb":
+                out.push(new ipSb_1.IpSbProvider());
+                break;
+            case "ip9":
+                out.push(new ip9_1.Ip9Provider());
                 break;
             // `freeipapi` and `ipapi-co` were removed on 2026-11-16 — see
             // KNOWN_PROVIDERS. A stale row is filtered out before we get here,

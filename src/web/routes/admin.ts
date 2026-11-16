@@ -22,6 +22,7 @@ import { runPipeline } from "../../etl/pipeline";
 import { recordEtlStart, getEtlRunProgress } from "../../storage/mysql";
 import { topByQueryCount, queueStats } from "../../storage/unknownIpQueue";
 import { runBackfill } from "../../etl/unknownIpBackfill";
+import { enforcedRateLimitLabel } from "../../storage/ingestProviders";
 import { runRandomGeneration } from "../../etl/randomIpGenerator";
 import { sendErrorPage, sendCsrfPage } from "../errors/render";
 import {
@@ -1737,6 +1738,7 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
           name: p.name,
           displayName: p.displayName,
           freeQuota: p.freeQuota,
+          enforcedLimit: enforcedRateLimitLabel(p.name),
           enabled: p.enabled,
           hasApiKey: Boolean(p.apiKey),
           status,
@@ -2273,6 +2275,8 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
     name: string;
     displayName: string;
     freeQuota: string;
+    /** The limit the backfill enforces, beside the vendor's own wording. */
+    enforcedLimit: string;
     enabled: boolean;
     hasApiKey: boolean;
     status: "failing" | "disabled" | "recovering" | "healthy" | "idle";
@@ -2349,6 +2353,7 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
         name: p.name,
         displayName: p.displayName,
         freeQuota: p.freeQuota,
+        enforcedLimit: enforcedRateLimitLabel(p.name),
         enabled: p.enabled,
         hasApiKey: Boolean(p.apiKey),
         status,

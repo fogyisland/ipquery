@@ -1,7 +1,7 @@
 {
   "formatVersion": 1,
-  "fileCount": 412,
-  "totalBytes": 2170897,
+  "fileCount": 422,
+  "totalBytes": 2207618,
   "files": {
     "api/dbBootstrap.d.ts": {
       "bytes": 8916,
@@ -152,12 +152,12 @@
       "sha256": "61cbb3fb8b0ff5125d9979d982e56ea614c482ebdbb8be186b249b4b10142ee4"
     },
     "etl/majority.js": {
-      "bytes": 3813,
-      "sha256": "35bba48a8088cbe1daeb3f93a31481d1af812536423f8e2035666f10832565ca"
+      "bytes": 4304,
+      "sha256": "b3b404fa235ccc213acdad92a313a0bb54f61fb6d7e88f63ee316e0f7d1b0455"
     },
     "etl/majority.js.map": {
-      "bytes": 3082,
-      "sha256": "53535c219850ce9d16b19134cb8346b31208e140ea2bb663a40ad9e7676fce02"
+      "bytes": 3289,
+      "sha256": "824ab27c2c1f6cfe3d2652000712feabe5806aa7654875ec3053aa91f55817b3"
     },
     "etl/pipeline.d.ts": {
       "bytes": 4349,
@@ -195,17 +195,41 @@
       "bytes": 1308,
       "sha256": "9d991476744eef615f944d7e1c343fa1069adaa8e8932f89fd362ed83b252b61"
     },
+    "etl/providerRateLimit.d.ts": {
+      "bytes": 1627,
+      "sha256": "32406dc01b5ca7184bde5b4a2fac5f57e3578297e22ad6ec23fbc20070f2f2a2"
+    },
+    "etl/providerRateLimit.js": {
+      "bytes": 3857,
+      "sha256": "4fbb117a145501ff875d619e807bf22b18de31cc0efb29acd4a9e9e0a1d73dfc"
+    },
+    "etl/providerRateLimit.js.map": {
+      "bytes": 2282,
+      "sha256": "6ae95524e014fee19c493c17ddef21ed97deaf55dde87bae3ceef43c609e4954"
+    },
     "etl/providers/index.d.ts": {
-      "bytes": 143,
-      "sha256": "6c03fbdd26c563f0e29bc2d120a95ed7e169419c4f398181920ebabf480d0729"
+      "bytes": 219,
+      "sha256": "c39dc6a2f5acdb70e96722fd8d3e7712a81ab9a3a9c4dfe61bafa58e6c3446c0"
     },
     "etl/providers/index.js": {
-      "bytes": 486,
-      "sha256": "3da7922c25b936fe3253ca740c8ccb4fddf2ddcee570b6d56721b0aeec126ed4"
+      "bytes": 830,
+      "sha256": "9c20e2ef303e9dc9ee6f486b246c1a20156bea01c3001654f70919e5b9eb2b89"
     },
     "etl/providers/index.js.map": {
-      "bytes": 193,
-      "sha256": "3e9b272ad52807472ac33e84c9c31e67d104edd4d11c5ad751047c0f909662a4"
+      "bytes": 263,
+      "sha256": "e32693e07f59ecebf67a06a0c231b013c24438ed223f13e852dadf5759b85bf8"
+    },
+    "etl/providers/ip9.d.ts": {
+      "bytes": 321,
+      "sha256": "d632bf4ff2b87ad2059cc39b21b698c45e5f5d97f285426ec3463d5764ce4479"
+    },
+    "etl/providers/ip9.js": {
+      "bytes": 7383,
+      "sha256": "6e19d572851486987802dd9744ffad4c93a100164ddf48e29d3c30f9ebd82647"
+    },
+    "etl/providers/ip9.js.map": {
+      "bytes": 5309,
+      "sha256": "6469f99ebb614b365a228c882412095ec31b8788b7aefc3bea75cf53b66226a2"
     },
     "etl/providers/ipApi.d.ts": {
       "bytes": 298,
@@ -218,6 +242,18 @@
     "etl/providers/ipApi.js.map": {
       "bytes": 3342,
       "sha256": "bd9029d037cd69e1eddf2fad78dac1b7a11453fd058f082a5c5559ca29a23053"
+    },
+    "etl/providers/ipSb.d.ts": {
+      "bytes": 324,
+      "sha256": "369bf892218ddda439994a0d66f84ae308dc0f7b5feadbeb0240b811d73db6db"
+    },
+    "etl/providers/ipSb.js": {
+      "bytes": 5353,
+      "sha256": "90267bbf924b6fb4a6588bff0beac8a7377579aff054e89b6aa27a1e998d8ef5"
+    },
+    "etl/providers/ipSb.js.map": {
+      "bytes": 3899,
+      "sha256": "950de247be59299461741b919927b2447391bfe4447d9c980f4932939bdb6450"
     },
     "etl/providers/ipinfo.d.ts": {
       "bytes": 323,
@@ -380,12 +416,12 @@
       "sha256": "ef2e750b888a6e16531ead55940a44ed239c0b6c0ea80ef9b2cb9ad22321e8f2"
     },
     "etl/unknownIpBackfill.js": {
-      "bytes": 28267,
-      "sha256": "4b8410bd8d220fbb5e26fa19be427bc3d58cfb4aaec8b48b8eddab0ccad6a07b"
+      "bytes": 28739,
+      "sha256": "1ee9ae510bd7851248c28bc8715fd024da0eef2ee763f834dd83aaf304d61d1f"
     },
     "etl/unknownIpBackfill.js.map": {
-      "bytes": 17389,
-      "sha256": "7eff8d89d8fa1abd1d0d795e06c777b21e271a7b41a16180d5aa95dcec41e259"
+      "bytes": 17534,
+      "sha256": "2239670e8f32e923918b30b88a935681a10212bb635d191b94c238e569828406"
     },
     "ip.d.ts": {
       "bytes": 243,
@@ -544,16 +580,16 @@
       "sha256": "2b766299ed17493cd8cd969288510a660cdb15496b2f46160b8688ed8d019a4f"
     },
     "storage/ingestProviders.d.ts": {
-      "bytes": 5926,
-      "sha256": "1b548d790d76243875a07350ea71a8e2eca817c2cc48ff9842433c2b8626b8f1"
+      "bytes": 6403,
+      "sha256": "cf49341cef83e4ff1f83575aa7aa2af97f1fa6e971e5072eb9a266bc2e709249"
     },
     "storage/ingestProviders.js": {
-      "bytes": 17618,
-      "sha256": "1f8e633dd3555d774383d3c5cb0c191d6a5318ddae25f05f2f780f2f3481c1ed"
+      "bytes": 19170,
+      "sha256": "abbfc6948f83964e64183d96fa7398a041c2ef36ea0d6346bb0875efc266f0c7"
     },
     "storage/ingestProviders.js.map": {
-      "bytes": 9646,
-      "sha256": "357a9daba21825a6682881180501436ff6cf76654d2d5fda892d5a9d6bcea6c8"
+      "bytes": 10498,
+      "sha256": "55cc9998ee1ea5280a787f81ac8323624d839a23d77b79186890138fd52d4466"
     },
     "storage/mcpTokens.d.ts": {
       "bytes": 2189,
@@ -674,6 +710,10 @@
     "storage/migrations/028_retire_dead_providers.sql": {
       "bytes": 1251,
       "sha256": "d48cc98dfd1748ead8d9d2e1bca83cdc3ff277fc4af1be8888cc7571ad85ba70"
+    },
+    "storage/migrations/029_add_ip_sb_provider.sql": {
+      "bytes": 1174,
+      "sha256": "cf4bde8c2425d791dc4b65720b2658e1259a56656c5268fee94c89a1fcec9d42"
     },
     "storage/migrations/runner.d.ts": {
       "bytes": 475,
@@ -1312,12 +1352,12 @@
       "sha256": "62752ec826ec66799efb98bbd9eeb3409e8efea5fa17e006460ee9a7b8982056"
     },
     "web/routes/admin.js": {
-      "bytes": 121083,
-      "sha256": "0b37acd6c912b16e1308c4d9231b0e809ac211b5b80ec557a404d3daebffa507"
+      "bytes": 121323,
+      "sha256": "891af311ccdcce707594870d572758f3e11beec8b5b0d88fb70e9d5669c260ea"
     },
     "web/routes/admin.js.map": {
-      "bytes": 98885,
-      "sha256": "33cb304ef3ee9a1dbe0664529912e7fdf5d17a110ad952ad4348f9a46d85254e"
+      "bytes": 99006,
+      "sha256": "7f6198066cd75dc2e872f26e166e5326b5292398dbce18d21c18f99189b187a1"
     },
     "web/routes/auth.d.ts": {
       "bytes": 121,
@@ -1404,8 +1444,8 @@
       "sha256": "6ce7551f74fcf4381cd045d9ce60dbb1bdd9203fcd6120bf0bf912052cdc5267"
     },
     "web/views/admin/providers.hbs": {
-      "bytes": 17064,
-      "sha256": "83894fb0a1a755c57af69a2fdbdd38e689e5626f219433314997c5165e6dc452"
+      "bytes": 17209,
+      "sha256": "bd7602c59795ede35f94e1ebf5f667d2005ebf0e8f160505d099f8b3f69a35d5"
     },
     "web/views/admin/queries.hbs": {
       "bytes": 4610,

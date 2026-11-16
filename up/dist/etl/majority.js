@@ -1,17 +1,20 @@
 "use strict";
 // SPDX-License-Identifier: MIT
 //
-// 2-of-3 majority vote across provider responses for a single IP.
+// Consensus across provider responses for a single IP.
 //
 // Rules:
-// - For each field we look at the non-null values across providers.
-// - If at least 2 providers agree, the agreed value wins.
-// - Fields where providers disagree (1-1-1, or 2-1 split with the lone
-//   dissenter) get dropped (set to null in the merged record) — better
-//   to write NULL than to write something wrong.
-// - Country code is REQUIRED to merge at all. If we can't get a 2/3
-//   agreement on country code, the whole row is treated as no_consensus
-//   and the queue row stays pending for a future attempt.
+// - The country code is the gating field: no country, no row. It does NOT
+//   need corroboration — one answered provider is enough. The row records
+//   which provider supplied it, so a later run can correct it.
+// - For the remaining fields, a value needs two providers behind it. A
+//   lone answer is dropped (written as NULL) rather than trusted: the
+//   non-gating fields are enrichment, and enrichment that only one source
+//   claims is the part most likely to be wrong.
+//
+// History: this used to be a strict 2-of-3 on the country code too. Once
+// the three providers that never answered were retired (migration 028),
+// that rule turned every single abstention into a wasted round.
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.majorityVote = majorityVote;
 const FIELDS = [
@@ -38,23 +41,29 @@ function majorityVote(responses) {
             perProvider: Object.fromEntries(responses.map((r) => [r.provider, r.record])),
         };
     }
-    // Country code is the gating field — without 2/3 agreement we can't
-    // merge. Many providers return only the code (ipinfo), some return both
-    // code + name (ip-api, iplocate); the latter is fine.
+    // Country code is the gating field: a row with no country is not worth
+    // writing. It no longer needs corroboration though.
+    //
+    // The 2-of-N rule was written when five providers answered; by the time
+    // three of them had been retired for never responding, it meant a single
+    // abstention made every round undecidable and the backfill spent its
+    // quota writing nothing. One confident answer is better than none — the
+    // written row records which provider supplied it, so a later run can
+    // still correct it, and the fan-out still prefers agreement when there
+    // is more than one answer.
     const countryCodeVotes = valid
         .map((r) => r.record.countryCode)
         .filter((c) => typeof c === "string" && c.length > 0);
-    if (countryCodeVotes.length < 2) {
-        // 0-1 votes -> either all abstained (already handled above) or only
-        // one provider had a code and the others abstained or sent null.
-        // Treat as no_country.
+    if (countryCodeVotes.length === 0) {
         return {
             ok: false,
             reason: "no_country",
             perProvider: Object.fromEntries(responses.map((r) => [r.provider, r.record])),
         };
     }
-    const countryWinner = pickMajority(countryCodeVotes);
+    const countryWinner = countryCodeVotes.length === 1
+        ? { value: countryCodeVotes[0], count: 1 }
+        : pickMajority(countryCodeVotes);
     if (!countryWinner) {
         return {
             ok: false,

@@ -36,6 +36,7 @@ const unknownIpQueue_1 = require("../storage/unknownIpQueue");
 const ingestProviders_1 = require("../storage/ingestProviders");
 const providerErrorLog_1 = require("../storage/providerErrorLog");
 const majority_1 = require("./majority");
+const providerRateLimit_1 = require("./providerRateLimit");
 const ip_1 = require("../ip");
 const randomProbeLog_1 = require("../storage/randomProbeLog");
 const providerLock_1 = require("./providerLock");
@@ -248,6 +249,12 @@ async function processIp(pool, providers, ipText, ipBuffer, summary, mode = "aut
         const start = Date.now();
         let result;
         try {
+            // Every provider publishes a ceiling and enforces it with a 429.
+            // Waiting here is what turns "this provider is broken" into
+            // "this provider is being polite": the limiter spaces calls so a
+            // burst of queue rows cannot spend a provider's whole minute in
+            // its first second.
+            await (0, providerRateLimit_1.limiterFor)(p.name).acquire();
             result = await p.lookup(ipText);
         }
         catch (err) {

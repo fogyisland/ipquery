@@ -44,9 +44,10 @@ const pipeline_1 = require("../../etl/pipeline");
 const mysql_1 = require("../../storage/mysql");
 const unknownIpQueue_1 = require("../../storage/unknownIpQueue");
 const unknownIpBackfill_1 = require("../../etl/unknownIpBackfill");
+const ingestProviders_1 = require("../../storage/ingestProviders");
 const randomIpGenerator_1 = require("../../etl/randomIpGenerator");
 const render_1 = require("../errors/render");
-const ingestProviders_1 = require("../../storage/ingestProviders");
+const ingestProviders_2 = require("../../storage/ingestProviders");
 const randomProbeLog_1 = require("../../storage/randomProbeLog");
 const unknownIpQueue_2 = require("../../storage/unknownIpQueue");
 const providerErrorLog_1 = require("../../storage/providerErrorLog");
@@ -73,7 +74,7 @@ const genericHttpProvider_1 = require("../../etl/genericHttpProvider");
  *  "no key (HTTP only)" entirely. Used to render the
  *  "today's quota X%" pill on the Providers tab. */
 function parseFreeQuotaPerMinute(providerName) {
-    const quota = ingestProviders_1.PROVIDER_CATALOG[providerName]?.freeQuota ?? "";
+    const quota = ingestProviders_2.PROVIDER_CATALOG[providerName]?.freeQuota ?? "";
     const m = quota.match(/([\d,]+)/);
     if (!m)
         return 0;
@@ -1453,8 +1454,8 @@ async function adminRoutes(app) {
         const [data, stats, providers, lastBackfill, errors, errorCodes, circuitBreaker, randomGenConfig, recentProbeRows, probeSummary, health1hAll, health24hAll, health7dAll, last429Rows, retentionDays,] = await Promise.all([
             (0, unknownIpQueue_1.topByQueryCount)(app.pool, limit),
             (0, unknownIpQueue_1.queueStats)(app.pool),
-            (0, ingestProviders_1.listProviderConfigs)(app.pool),
-            (0, ingestProviders_1.loadLastBackfillProviderStats)(app.pool),
+            (0, ingestProviders_2.listProviderConfigs)(app.pool),
+            (0, ingestProviders_2.loadLastBackfillProviderStats)(app.pool),
             tab === "failure-logs" ? (0, providerErrorLog_1.queryProviderErrors)(app.pool, errFilter) : Promise.resolve([]),
             tab === "failure-logs" ? (0, providerErrorLog_1.distinctErrorCodes)(app.pool) : Promise.resolve([]),
             (0, providerErrorLog_1.getCircuitBreakerConfig)(app.pool),
@@ -1597,6 +1598,7 @@ async function adminRoutes(app) {
                 name: p.name,
                 displayName: p.displayName,
                 freeQuota: p.freeQuota,
+                enforcedLimit: (0, ingestProviders_1.enforcedRateLimitLabel)(p.name),
                 enabled: p.enabled,
                 hasApiKey: Boolean(p.apiKey),
                 status,
@@ -1704,7 +1706,7 @@ async function adminRoutes(app) {
             targetId: name,
             metadata: { enabled: body.enabled, hasKey: Boolean(body.apiKey && body.apiKey.length > 0) },
         };
-        await (0, ingestProviders_1.updateProviderConfig)(app.pool, name, {
+        await (0, ingestProviders_2.updateProviderConfig)(app.pool, name, {
             enabled: body.enabled === "on",
             apiKey: body.apiKey === undefined ? undefined : body.apiKey.trim() === "" ? null : body.apiKey.trim(),
         });
@@ -1816,8 +1818,8 @@ async function adminRoutes(app) {
             return (0, render_1.sendCsrfPage)(reply, 403);
         req.auditAction = { action: "unknown_ips.backfill.preview", targetType: "unknown_ip_queue" };
         const batchLimit = Math.min(Math.max(Number(req.body.batchLimit ?? 100) || 100, 1), 1000);
-        const configs = await (0, ingestProviders_1.listProviderConfigs)(app.pool);
-        const providers = (0, ingestProviders_1.buildProvidersFromConfig)(configs);
+        const configs = await (0, ingestProviders_2.listProviderConfigs)(app.pool);
+        const providers = (0, ingestProviders_2.buildProvidersFromConfig)(configs);
         const result = await (0, unknownIpBackfill_1.runBackfill)(app.pool, providers, {
             batchLimit,
             mode: "auto",
@@ -1922,8 +1924,8 @@ async function adminRoutes(app) {
             return reply.redirect("/admin/ingest", 302);
         }
         const batchLimit = v.payload.batchLimit;
-        const configs = await (0, ingestProviders_1.listProviderConfigs)(app.pool);
-        const providers = (0, ingestProviders_1.buildProvidersFromConfig)(configs);
+        const configs = await (0, ingestProviders_2.listProviderConfigs)(app.pool);
+        const providers = (0, ingestProviders_2.buildProvidersFromConfig)(configs);
         const summary = await (0, unknownIpBackfill_1.runBackfill)(app.pool, providers, {
             batchLimit,
             mode: "auto",
@@ -1951,7 +1953,7 @@ async function adminRoutes(app) {
         // Persist per-provider counts so the ingest dashboard can show
         // last-run stats across page refreshes (the flash cookie is gone
         // after one render). Same shape as BackfillSummary.providers.
-        await (0, ingestProviders_1.saveLastBackfillProviderStats)(app.pool, summary.providers, new Date());
+        await (0, ingestProviders_2.saveLastBackfillProviderStats)(app.pool, summary.providers, new Date());
         // Clear the preview cookie once we've committed — a refresh of the
         // preview page should land on /admin/ingest, not re-render stale rows.
         reply.clearCookie(BACKFILL_PREVIEW_COOKIE, { path: BACKFILL_PREVIEW_COOKIE_PATH });
@@ -1980,8 +1982,8 @@ async function adminRoutes(app) {
         req.auditAction = { action: "unknown_ips.generate", targetType: "unknown_ip_queue" };
         const body = req.body;
         const count = Math.min(Math.max(Number(body.count) || 10, 1), 50);
-        const configs = await (0, ingestProviders_1.listProviderConfigs)(app.pool);
-        const providers = (0, ingestProviders_1.buildProvidersFromConfig)(configs);
+        const configs = await (0, ingestProviders_2.listProviderConfigs)(app.pool);
+        const providers = (0, ingestProviders_2.buildProvidersFromConfig)(configs);
         const summary = await (0, randomIpGenerator_1.runRandomGeneration)(app.pool, providers, {
             count,
             logger: {
@@ -2006,7 +2008,7 @@ async function adminRoutes(app) {
         // parameter through runRandomGeneration; deferred to a follow-up.
         // Random-gen also produces per-provider counts — persist so the
         // dashboard reflects this run even after the flash cookie expires.
-        await (0, ingestProviders_1.saveLastBackfillProviderStats)(app.pool, summary.providers, new Date());
+        await (0, ingestProviders_2.saveLastBackfillProviderStats)(app.pool, summary.providers, new Date());
         reply.setCookie("generate_summary", JSON.stringify(summary), {
             path: "/admin/ingest",
             maxAge: 60,
@@ -2083,8 +2085,8 @@ async function adminRoutes(app) {
     });
     const enrichBuiltInHealth = async (req) => {
         const [configs, lastBackfill, health1hAll, health24hAll, health7dAll, last429Rows] = await Promise.all([
-            (0, ingestProviders_1.listProviderConfigs)(app.pool),
-            (0, ingestProviders_1.loadLastBackfillProviderStats)(app.pool),
+            (0, ingestProviders_2.listProviderConfigs)(app.pool),
+            (0, ingestProviders_2.loadLastBackfillProviderStats)(app.pool),
             (0, providerErrorLog_1.getAggregateProviderHealthAllCached)(app.pool, 1 * 3600 * 1000),
             (0, providerErrorLog_1.getAggregateProviderHealthAllCached)(app.pool, 24 * 3600 * 1000),
             (0, providerErrorLog_1.getAggregateProviderHealthAllCached)(app.pool, 7 * 24 * 3600 * 1000),
@@ -2143,6 +2145,7 @@ async function adminRoutes(app) {
                 name: p.name,
                 displayName: p.displayName,
                 freeQuota: p.freeQuota,
+                enforcedLimit: (0, ingestProviders_1.enforcedRateLimitLabel)(p.name),
                 enabled: p.enabled,
                 hasApiKey: Boolean(p.apiKey),
                 status,
@@ -2186,7 +2189,7 @@ async function adminRoutes(app) {
         });
     };
     const enrichCustomProviders = async () => {
-        const configs = await (0, ingestProviders_1.listProviderConfigs)(app.pool);
+        const configs = await (0, ingestProviders_2.listProviderConfigs)(app.pool);
         const customConfigs = configs.filter((c) => c.isCustom);
         const { aggregateProviderHealth } = await Promise.resolve().then(() => __importStar(require("../../storage/providerErrorLog")));
         return Promise.all(customConfigs.map(async (c) => {
@@ -2277,7 +2280,7 @@ async function adminRoutes(app) {
         // Built-in names are not allowed — even though is_custom=1 would let
         // us override, the admin UI lists built-ins separately and avoiding
         // the collision is far less confusing than allowing shadow-override.
-        if (name in ingestProviders_1.PROVIDER_CATALOG) {
+        if (name in ingestProviders_2.PROVIDER_CATALOG) {
             errors.push("nameConflict");
         }
         if (errors.length > 0) {
@@ -2313,7 +2316,7 @@ async function adminRoutes(app) {
             targetType: "ingest_provider",
             targetId: name,
         };
-        await (0, ingestProviders_1.upsertCustomProvider)(app.pool, name, {
+        await (0, ingestProviders_2.upsertCustomProvider)(app.pool, name, {
             displayName: String(body.displayName ?? name).trim() || name,
             urlTemplate,
             method,
@@ -2343,7 +2346,7 @@ async function adminRoutes(app) {
             targetType: "ingest_provider",
             targetId: name,
         };
-        const removed = await (0, ingestProviders_1.deleteCustomProvider)(app.pool, name);
+        const removed = await (0, ingestProviders_2.deleteCustomProvider)(app.pool, name);
         reply.setCookie("custom_providers_flash", JSON.stringify({ kind: "deleted", name, removed }), {
             path: "/admin/providers",
             maxAge: 30,
@@ -2368,7 +2371,7 @@ async function adminRoutes(app) {
         const ipText = String(body.ip ?? "").trim();
         if (!ipText)
             return reply.code(400).send({ ok: false, error: "ip_required" });
-        const cfg = await (0, ingestProviders_1.getProviderConfig)(app.pool, name);
+        const cfg = await (0, ingestProviders_2.getProviderConfig)(app.pool, name);
         if (!cfg || !cfg.isCustom) {
             return reply.code(404).send({ ok: false, error: "not_found" });
         }
@@ -2451,8 +2454,8 @@ async function adminRoutes(app) {
             return (0, render_1.sendCsrfPage)(reply, 403);
         req.auditAction = { action: "unknown_ips.backfill", targetType: "unknown_ip_queue" };
         const batchLimit = Math.min(Math.max(Number(req.body.batchLimit ?? 100) || 100, 1), 1000);
-        const configs = await (0, ingestProviders_1.listProviderConfigs)(app.pool);
-        const providers = (0, ingestProviders_1.buildProvidersFromConfig)(configs);
+        const configs = await (0, ingestProviders_2.listProviderConfigs)(app.pool);
+        const providers = (0, ingestProviders_2.buildProvidersFromConfig)(configs);
         const summary = await (0, unknownIpBackfill_1.runBackfill)(app.pool, providers, {
             batchLimit,
             mode: "auto",
@@ -2462,7 +2465,7 @@ async function adminRoutes(app) {
                 error: (msg) => app.log.error({ msg }, "backfill-legacy"),
             },
         });
-        await (0, ingestProviders_1.saveLastBackfillProviderStats)(app.pool, summary.providers, new Date());
+        await (0, ingestProviders_2.saveLastBackfillProviderStats)(app.pool, summary.providers, new Date());
         reply.setCookie("backfill_summary", JSON.stringify(summary), {
             path: "/admin/ingest",
             maxAge: 30,

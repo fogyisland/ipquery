@@ -35,6 +35,7 @@ import type { ProviderConfigRow } from "../storage/ingestProviders";
 import { touchProviderError, touchProviderCalled, updateProviderConfig } from "../storage/ingestProviders";
 import { recordProviderError, getCircuitBreakerConfig } from "../storage/providerErrorLog";
 import { majorityVote } from "./majority";
+import { limiterFor } from "./providerRateLimit";
 import { parseIp } from "../ip";
 import { recordRandomProbe, type PerProviderDetail } from "../storage/randomProbeLog";
 import { providerFanoutLock, type ProviderLock } from "./providerLock";
@@ -390,6 +391,12 @@ export async function processIp(
         const start = Date.now();
         let result: IpGeoLookupResult;
         try {
+          // Every provider publishes a ceiling and enforces it with a 429.
+          // Waiting here is what turns "this provider is broken" into
+          // "this provider is being polite": the limiter spaces calls so a
+          // burst of queue rows cannot spend a provider's whole minute in
+          // its first second.
+          await limiterFor(p.name).acquire();
           result = await p.lookup(ipText);
         } catch (err) {
           const stats = summary.providers[p.name];

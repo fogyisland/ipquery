@@ -30,11 +30,23 @@ describe("majorityVote", () => {
     if (!r.ok) expect(r.reason).toBe("all_abstained");
   });
 
-  it("fails with no_country when only one provider returned a country code", () => {
+  it("accepts a single provider's country code when the others abstain", () => {
+    // The 2-of-N requirement was removed once the providers that never
+    // answered were retired: one confident answer beats a wasted round.
+    // The written row records which provider supplied it.
     const r = majorityVote([
       { provider: "a", record: rec({ countryCode: "US" }) },
       { provider: "b", record: rec({ countryCode: null }) },
       { provider: "c", record: null },
+    ]);
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.record.countryCode).toBe("US");
+  });
+
+  it("fails with no_country when nobody returned a country code", () => {
+    const r = majorityVote([
+      { provider: "a", record: rec({ countryCode: null }) },
+      { provider: "b", record: null },
     ]);
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.reason).toBe("no_country");
