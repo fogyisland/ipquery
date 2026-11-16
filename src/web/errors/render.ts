@@ -52,9 +52,23 @@ export function sendErrorPage(reply: FastifyReply, status: number, page: ErrorPa
  */
 export function sendCsrfPage(reply: FastifyReply, status: number): FastifyReply {
   const req = reply.request;
+  // The page offers one action, and it has to be the one that actually
+  // helps. It used to be "返回开始" → /init for every caller, which told a
+  // signed-in user with a stale tab that their installation was gone.
+  //
+  // Three states, three answers:
+  //   signed in        → the page they came from, so they can retry
+  //   anonymous, ready → /login
+  //   not initialised  → /init, which is genuinely where they belong
+  const isSignedIn = req.session?.userId !== undefined;
+  const backHref = isSignedIn ? (req.url.split("?")[0] ?? "/") : "/login";
   return reply.code(status).view("errors/csrf.hbs", {
     layout: "layouts/public",
     title: req.t("error.csrf.title"),
+    // The template uses this for its button; `setupReady` lets it point at
+    // the wizard when the install genuinely has not been initialised.
+    csrfBackHref: backHref,
+    csrfBackLabel: isSignedIn ? req.t("error.csrf.retry") : req.t("error.csrf.signIn"),
     req,
   });
 }

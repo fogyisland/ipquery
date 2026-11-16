@@ -1178,7 +1178,9 @@
     },
     "csrf": {
       "title": "Session expired",
-      "body": "Please refresh and try again"
+      "body": "Please refresh and try again",
+      "retry": "Back to the page",
+      "signIn": "Sign in"
     }
   },
   "setup": {
