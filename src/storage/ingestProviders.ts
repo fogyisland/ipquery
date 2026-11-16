@@ -89,11 +89,17 @@ export function providerDisplayName(name: string): string {
  * is what the code obeys. Showing both is deliberate: an operator who
  * reads "100 req/min" on the card should be able to confirm that the
  * backfill will not exceed it, rather than take it on trust.
+ *
+ * Returns null when no limit is enforced — a provider whose vendor
+ * publishes no per-minute figure (ipinfo counts by the month) is not
+ * throttled locally, and its own 429 is the signal. Printing "no limit"
+ * there would read as a caveat on every card; the chip is omitted instead,
+ * because the vendor's own quota line already says what the rule is.
  */
-export function enforcedRateLimitLabel(name: string): string {
+export function enforcedRateLimitLabel(name: string): string | null {
   const limit = PROVIDER_RATE_LIMITS[name];
   if (!limit || (limit.perMinute === undefined && limit.burstPerSecond === undefined)) {
-    return "无限流（由提供商自行 429 控制）";
+    return null;
   }
   const parts: string[] = [];
   if (limit.perMinute !== undefined) parts.push(`${limit.perMinute} 次/分钟`);

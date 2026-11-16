@@ -45,3 +45,22 @@ describe("the ingest provider catalog", () => {
     expect(providerDisplayName("ip9")).toBe("IP9.COM.CN");
   });
 });
+
+describe("the enforced-limit label", () => {
+  // Imported here rather than at the top so the file's earlier assertions
+  // stay readable.
+  it("is omitted for a provider with no published per-minute figure", async () => {
+    const { enforcedRateLimitLabel } = await import("../../src/storage/ingestProviders");
+    // ipinfo counts by the month, so nothing is throttled locally and the
+    // card must not claim "no limit" — the chip is left out.
+    expect(enforcedRateLimitLabel("ipinfo")).toBeNull();
+    expect(enforcedRateLimitLabel("something-custom")).toBeNull();
+  });
+
+  it("names the figure the code obeys", async () => {
+    const { enforcedRateLimitLabel } = await import("../../src/storage/ingestProviders");
+    expect(enforcedRateLimitLabel("ip-sb")).toBe("程序限流：100 次/分钟，突发 5 次/秒");
+    expect(enforcedRateLimitLabel("ip9")).toBe("程序限流：60 次/分钟");
+    expect(enforcedRateLimitLabel("ip-api")).toBe("程序限流：45 次/分钟");
+  });
+});

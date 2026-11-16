@@ -1,7 +1,7 @@
 {
   "formatVersion": 1,
   "fileCount": 422,
-  "totalBytes": 2219038,
+  "totalBytes": 2219871,
   "files": {
     "api/dbBootstrap.d.ts": {
       "bytes": 8916,
@@ -580,16 +580,16 @@
       "sha256": "2b766299ed17493cd8cd969288510a660cdb15496b2f46160b8688ed8d019a4f"
     },
     "storage/ingestProviders.d.ts": {
-      "bytes": 6403,
-      "sha256": "cf49341cef83e4ff1f83575aa7aa2af97f1fa6e971e5072eb9a266bc2e709249"
+      "bytes": 6772,
+      "sha256": "ca9773d732ea9a8200f2cd972e732d92d5a6b45b4ea3b34ebc2a7833823bc4d9"
     },
     "storage/ingestProviders.js": {
-      "bytes": 19170,
-      "sha256": "abbfc6948f83964e64183d96fa7398a041c2ef36ea0d6346bb0875efc266f0c7"
+      "bytes": 19490,
+      "sha256": "59f8f4b9dc32766955303517abd9d597a3d9300819bde9a9264a21945058c6bd"
     },
     "storage/ingestProviders.js.map": {
-      "bytes": 10498,
-      "sha256": "55cc9998ee1ea5280a787f81ac8323624d839a23d77b79186890138fd52d4466"
+      "bytes": 10502,
+      "sha256": "f21ee5e56a7b7ad61750fb046f64323259a8883555c800a677875316c01d1300"
     },
     "storage/mcpTokens.d.ts": {
       "bytes": 2189,
@@ -1352,12 +1352,12 @@
       "sha256": "62752ec826ec66799efb98bbd9eeb3409e8efea5fa17e006460ee9a7b8982056"
     },
     "web/routes/admin.js": {
-      "bytes": 125851,
-      "sha256": "e46a1e3cd6286b219e5ae767079cd9ea7b12595e4553a8c403dd833d67ffb54a"
+      "bytes": 125937,
+      "sha256": "5e2170462df6f723dd813271ed682d3ad4839fc1482271f6732a722e52828357"
     },
     "web/routes/admin.js.map": {
-      "bytes": 101426,
-      "sha256": "03629433a499e926255a7e62970284c35a716bf56312dd77d51958d772cc35a4"
+      "bytes": 101480,
+      "sha256": "081023d42916a7921d1f8d7303876c0e1a4b29c1e278cf7caf0aa04f5b6df49e"
     },
     "web/routes/auth.d.ts": {
       "bytes": 121,

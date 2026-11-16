@@ -2270,6 +2270,7 @@ async function adminRoutes(app) {
                 cityPath: c.customCityPath ?? "",
                 asnPath: c.customAsnPath ?? "",
                 timeoutMs: c.customTimeoutMs ?? 5000,
+                enforcedLimit: (0, ingestProviders_1.enforcedRateLimitLabel)(c.name),
                 health1h: {
                     calls: h1h.calls,
                     errors429: h1h.errors429,
