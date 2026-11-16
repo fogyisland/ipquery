@@ -434,27 +434,27 @@ git commit -m "feat(admin): surface dedupe totals and document open source label
 - Consumes: Task 1–7 全部产出；`insertIntoNewUpsert(pool, rows, fillCols)` 的 `COALESCE` 语义；`findRange` 的最小 `range_size` 优先；`/stats` 的 `sources.dbip.records` 与 `mergedRecords`；`src/mcp/tools.ts` 的 `EtlStatusResult.sources`。
 - Produces: 无新生产接口；交付一份全绿验证记录与 `up/dist/` 是否需要同步的结论，本计划不执行同步。
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 `test/integration/find-range.test.ts` 新增 `it(\"fillCols never overwrites existing fine-grained columns\", ...)`：先用完整 `fillCols` 插入一条带 `city`/`latitude`/`asn`/`countrySource: \"dbip\"` 的段，再用 `new Set([\"countryCode\", \"countrySource\"])` 对同一 `(startIp, endIp)` 插入 `countryCode: \"CN\"`、`countrySource: \"metowolf-cn\"`，`atomicSwapRanges` 后断言 `city`、`latitude`、`asn` 未变且 `countryCode`/`countrySource` 仍是 DB-IP 的值；另新增 `it(\"findRange still picks the smallest covering range after deduped big ranges\", ...)`，断言大段与细段共存时 `findRange` 仍返回最小 `range_size` 段。
 `test/integration/etl-pipeline.test.ts` 新增两条：`it(\"pipeline reuses a valid old cache after a failed refresh\", ...)`（`download` stub 不写文件、返回一条 `failed` 行，旧 fixed fixture 保持），断言 run 成功、`etl_run_downloads` 有 `failed` 无对应 `skipped`、parse/insert 计数一致；`it(\"pipeline fails without a valid old cache\", ...)`（先删 `china-v6.txt`），断言 `runPipeline` 抛错、run 记 `failed` 且 `ip_ranges` 未被交换。
 `test/integration/stats-route.test.ts` 与 `test/unit/mcp-tools.test.ts` 各新增 `it(\"stats and MCP keep the DB-IP-only dbip counter\", ...)`：前者把 `recordEtlFinish` 改为 `{ mergedRecords: 42, dbipRecords: 30 }`，断言 `res.body.lastRun.mergedRecords === 42` 且 `res.body.lastRun.sources.dbip.records === 30`；后者把 mock 改为 `merged_records: 8940000`、`dbip_records: 8000000`，断言 `res.lastRun.mergedRecords === 8940000` 且 `res.lastRun.sources.dbip.records === 8000000`。
 
-- [ ] **Step 2: 运行测试确认失败**
+- [x] **Step 2: 运行测试确认失败**
 
 Run: `npx vitest run test/integration/find-range.test.ts test/integration/etl-pipeline.test.ts test/integration/stats-route.test.ts test/unit/mcp-tools.test.ts`
 Expected: FAIL（新用例因缺失 `failed` 记录、旧缓存路径或 DB-IP-only 口径断言未接线而失败）。
 
-- [ ] **Step 3: 补齐回归实现**
+- [x] **Step 3: 补齐回归实现**
 
 修正 Task 6/7 中任何未满足断言的最小实现（优先修编排与记录写入，不重构无关代码）；核实 `src/mcp/tools.ts` 与 `src/api/routes/stats.ts` 仍只读 `last.dbipRecords`/`last.mergedRecords`、不新增响应字段；核实 `src/cli.ts` 的七个 kind 与 `ALL_SPECS` 顺序一致。发布包本任务只检查、不改写：若后续确需同步，顺序是 `npm run build` → `npm run sync:release` → `npm run check:release`，其中 `check:release` 只校验 `up/dist/` 与 manifest 一致，不证明 `src/` 已编译进 `dist/`；本计划不执行这三条发布命令。
 
-- [ ] **Step 4: 运行全量验证确认通过**
+- [x] **Step 4: 运行全量验证确认通过**
 
 Run: `npm run test:unit && npm run test:integration && npm run lint && npm run check:release`
 Expected: 四条命令全部 exit 0；`test:unit`/`test:integration` 无 FAIL；`lint` 的 `tsc --noEmit` 与 `eslint .` 零错误；`check:release` 无 drift，但仅作为 manifest 一致性检查，不作为源码同步证据。再做一次真实网络手工冒烟：`npm run dev -- download --only metowolf-cn,runishiwo-cn,runishiwo-v6,sapics-user`，确认四份文件落到 `data/raw/` 且 `validateTextFile` 通过；该冒烟不进 CI、不写测试断言。
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add test/integration/find-range.test.ts test/integration/etl-pipeline.test.ts test/integration/stats-route.test.ts test/unit/mcp-tools.test.ts src/etl/pipeline.ts src/web/routes/admin.ts
