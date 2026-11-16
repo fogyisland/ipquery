@@ -104,6 +104,41 @@ describe("mcpEtlStatus", () => {
     expect(res.lastRun).toBeNull();
     expect(res.queue).toEqual({ pending: 0, processed: 0, totalQueries: 0 });
   });
+  it("stats and MCP keep the DB-IP-only dbip counter", async () => {
+    // `mergedRecords` now counts every row that reached the live table,
+    // including the GitHub-sourced ones. `sources.dbip.records` must
+    // keep meaning "rows that came from the DB-IP files" — a widened
+    // counter would make the run page lie about which source produced
+    // the data.
+    const pool = {
+      query: vi
+        .fn()
+        .mockResolvedValueOnce([
+          [
+            {
+              id: 15,
+              started_at: new Date("2026-11-06T02:00:00Z"),
+              finished_at: new Date("2026-11-06T02:30:00Z"),
+              status: "success",
+              merged_records: 8940000,
+              maxmind_records: 0,
+              ip2region_records: 0,
+              dbip_records: 8000000,
+            },
+          ],
+          [],
+        ])
+        .mockResolvedValueOnce([[{ pending: 0, processed: 0, total_queries: 0 }], []]),
+    };
+    const res = await mcpEtlStatus(makeDeps(pool));
+    const lastRun = res.lastRun as {
+      mergedRecords: number;
+      sources: Record<string, { records: number | null }>;
+    };
+    expect(lastRun.mergedRecords).toBe(8940000);
+    expect(lastRun.sources.dbip.records).toBe(8000000);
+    expect(lastRun.sources.dbip.records).not.toBe(lastRun.mergedRecords);
+  });
 });
 
 describe("tool defs", () => {

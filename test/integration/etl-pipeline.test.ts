@@ -237,4 +237,94 @@ describe("etl pipeline", () => {
       await fs.rename(backup, target);
     }
   });
+  it("pipeline reuses a valid old cache after a failed refresh", async () => {
+    // Regression: a refresh that fails must NOT take the run down when
+    // the previous file is still on disk and still valid. The download
+    // stage records a `failed` row for that file and no `skipped` row —
+    // the file WAS attempted and it failed, so the run page shows the
+    // failed refresh, not "nothing happened".
+    //
+    // The stub stands in for the network layer only: it records the
+    // request and then rethrows the refresh failure the real download
+    // layer raises when every mirror is down. Keeping the seam at the
+    // network level means the production fallback path is what runs.
+    const rawDir = path.join(cfg.etl.dataDir, "raw");
+    const target = path.join(rawDir, "china-v6.txt");
+    const previous = "# CN IPv6 List\n2001:db8::/32\n";
+    await fs.writeFile(target, previous);
+    const requested: string[] = [];
+    // The refresh layer reports failure exactly the way the real one does
+    // when every mirror is down — but WITHOUT removing the cached copy the
+    // fetcher would have left in place.
+    const failingRefresh = async (spec: { destName: string }): Promise<never> => {
+      requested.push(spec.destName);
+      throw new Error("刷新失败、复用旧缓存: " + spec.destName + " (network down)");
+    };
+    try {
+      const result = await runPipeline({
+        cfg,
+        downloadFixed: failingRefresh as never,
+      });
+      expect(result.merged).toBeGreaterThan(0);
+      // The old cache is untouched.
+      expect(requested).toContain("china-v6.txt");
+      expect(await fs.readFile(target, "utf8")).toBe(previous);
+      // A failed refresh is a `failed` row, and it is NOT also a `skipped` one.
+      const [rows] = await pool.query<mysql.RowDataPacket[]>(
+        `SELECT dest_name, status FROM etl_run_downloads WHERE run_id = ?`,
+        [result.runId],
+      );
+      const byName = new Map(rows.map((row) => [row.dest_name as string, row.status as string]));
+      expect(byName.get("china-v6.txt")).toBe("failed");
+      expect(rows.some((row) => row.dest_name === "china-v6.txt" && row.status === "skipped")).toBe(false);
+      // The parse / insert tallies agree with the summary.
+      const last = await lastEtlRun(pool);
+      expect(last?.status).toBe("success");
+      const [parseRows] = await pool.query<mysql.RowDataPacket[]>(
+        `SELECT SUM(rows_emitted) AS total FROM etl_run_parses WHERE run_id = ?`,
+        [result.runId],
+      );
+      const [insertRows] = await pool.query<mysql.RowDataPacket[]>(
+        `SELECT SUM(rows_attempted) AS total FROM etl_run_inserts WHERE run_id = ?`,
+        [result.runId],
+      );
+      expect(Number(parseRows[0].total)).toBeGreaterThan(0);
+      expect(Number(insertRows[0].total)).toBeGreaterThan(0);
+    } finally {
+      await fs.rm(target, { force: true });
+      await fs.writeFile(target, previous);
+    }
+  });
+
+  it("pipeline fails without a valid old cache", async () => {
+    // With no cache at all, a failed refresh must stop the run: it must
+    // not swap a partial data set over the live table and must not claim
+    // success.
+    const rawDir = path.join(cfg.etl.dataDir, "raw");
+    const target = path.join(rawDir, "china-v6.txt");
+    const backup = path.join(cfg.etl.dataDir, "china-v6.txt.bak");
+    await fs.rename(target, backup);
+    const failingDownload = async (): Promise<[]> => [];
+    try {
+      await expect(runPipeline({ cfg, download: failingDownload })).rejects.toThrow(
+        /unavailable|vanished/i,
+      );
+      const last = await lastEtlRun(pool);
+      expect(last?.status).toBe("failed");
+      // The live table was not swapped for the failed run.
+      const [swapRows] = await pool.query<mysql.RowDataPacket[]>(
+        `SELECT run_id FROM etl_run_swaps WHERE run_id = ?`,
+        [last!.id],
+      );
+      expect(swapRows.length).toBe(0);
+      // The reusable-cache stage never ran for the missing file.
+      const [dlRows] = await pool.query<mysql.RowDataPacket[]>(
+        `SELECT dest_name, status FROM etl_run_downloads WHERE run_id = ?`,
+        [last!.id],
+      );
+      expect(dlRows.every((row) => row.status !== "skipped" || row.dest_name !== "china-v6.txt")).toBe(true);
+    } finally {
+      await fs.rename(backup, target);
+    }
+  });
 });

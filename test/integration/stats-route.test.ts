@@ -26,7 +26,7 @@ beforeAll(async () => {
   await runMigrations(pool);
   await markInitialized(pool);
   const id = await recordEtlStart(pool);
-  await recordEtlFinish(pool, id, "success", { mergedRecords: 42 });
+  await recordEtlFinish(pool, id, "success", { mergedRecords: 42, dbipRecords: 30 });
   await pool.end();
   app = await buildServer(cfg);
 });
@@ -48,5 +48,17 @@ describe("stats route", () => {
     expect(res.status).toBe(200);
     expect(res.body.lastRun.status).toBe("success");
     expect(res.body.lastRun.mergedRecords).toBe(42);
+  });
+  it("stats and MCP keep the DB-IP-only dbip counter", async () => {
+    // `mergedRecords` counts every row that reached the live table,
+    // including the GitHub-sourced ones. `sources.dbip.records` must
+    // keep meaning "rows that came from the DB-IP files" — widening it
+    // would make the "which source is this row from" question
+    // unanswerable on the run page.
+    const res = await request(app.server).get("/stats");
+    expect(res.status).toBe(200);
+    expect(res.body.lastRun.mergedRecords).toBe(42);
+    expect(res.body.lastRun.sources.dbip.records).toBe(30);
+    expect(res.body.lastRun.sources.dbip.records).not.toBe(res.body.lastRun.mergedRecords);
   });
 });

@@ -644,6 +644,14 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
         })
       : null;
     const swapDurationText = swap ? req.t("admin.etl.stages.duration", { ms: swap.durationMs ?? 0 }) : "";
+    // The seven ingestion labels are an open set (the source-note in the
+    // API docs says so), so a label without a translation falls back to
+    // the raw value rather than rendering as a missing key.
+    const sourceLabel = (raw: string): string => {
+      const key = `admin.etl.source.${raw}`;
+      const text = req.t(key);
+      return text === key ? raw : text;
+    };
     const skipLabels = {
       shortLine: req.t("admin.etl.stages.skipReason.shortLine"),
       headerRow: req.t("admin.etl.stages.skipReason.headerRow"),
@@ -654,6 +662,7 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
     };
     const downloadsView = downloads.map((d) => ({
       ...d,
+      sourceLabel: sourceLabel(d.source),
       statusKind:
         d.status === "success"
           ? "success"
@@ -663,6 +672,7 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
     }));
     const parsesView = parses.map((p) => ({
       ...p,
+      sourceLabel: sourceLabel(p.source),
       skippedTotal:
         p.rowsSkippedShort +
         p.rowsSkippedHeader +
@@ -672,6 +682,10 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
         p.rowsSkippedOther,
       skipLabels,
     }));
+    const insertsView = inserts.map((row) => ({
+      ...row,
+      sourceLabel: sourceLabel(row.source),
+    }));
     const swapRow = swap ? { ...swap, statusText: swapStatusText, durationText: swapDurationText } : null;
     return {
       run,
@@ -680,7 +694,7 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
       statusText,
       downloads: downloadsView,
       parses: parsesView,
-      inserts,
+      inserts: insertsView,
       dedupe,
       dedupeSummaryText,
       swap: swapRow,

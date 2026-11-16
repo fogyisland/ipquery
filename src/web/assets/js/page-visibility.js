@@ -24,8 +24,8 @@
 // This has to be an external file: an inline <script> is blocked by the
 // same CSP, silently, leaving the page polling as if this did not exist.
 (function () {
-  var POLL_ATTR = "hx-trigger";
-  var PAUSED_KEY = "data-poll-paused";
+  const POLL_ATTR = "hx-trigger";
+  const PAUSED_KEY = "data-poll-paused";
 
   function pause(el) {
     if (!el.hasAttribute(POLL_ATTR)) return;
@@ -40,9 +40,9 @@
   }
 
   function apply() {
-    var isHidden = document.visibilityState !== "visible";
-    var pollers = document.querySelectorAll("[" + POLL_ATTR + "], [" + PAUSED_KEY + "]");
-    for (var i = 0; i < pollers.length; i++) {
+    const isHidden = document.visibilityState !== "visible";
+    const pollers = document.querySelectorAll("[" + POLL_ATTR + "], [" + PAUSED_KEY + "]");
+    for (let i = 0; i < pollers.length; i++) {
       if (isHidden) pause(pollers[i]);
       else resume(pollers[i]);
     }

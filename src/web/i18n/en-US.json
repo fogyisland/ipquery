@@ -368,7 +368,16 @@
       "detail": {
         "title": "ETL Run #{id}"
       },
-      "alreadyRunning": "An ETL run is already in progress"
+      "alreadyRunning": "An ETL run is already in progress",
+      "source": {
+        "dbip-city": "DB-IP city-lite (city / coordinates / country)",
+        "dbip-country": "DB-IP country-lite (country)",
+        "dbip-asn": "DB-IP asn-lite (ASN / ISP)",
+        "metowolf-cn": "metowolf/iplist (mainland China IPv4)",
+        "runishiwo-cn": "runishiwo/ChinaIPlist (mainland China IPv4)",
+        "runishiwo-v6": "runishiwo/ChinaIPlist (mainland China IPv6)",
+        "sapics-user": "sapics/ip-location-db (user-reported country)"
+      }
     },
     "keys": {
       "title": "API Keys (global)",

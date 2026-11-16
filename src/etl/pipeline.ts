@@ -33,9 +33,13 @@ import {
   ALL_SPECS,
   EXTRA_SPECS,
   downloadAll,
+  fetchFixedOneWithAttempts,
   validateGzFile,
   type DownloadSpec,
+  type FixedSpec,
+  type DownloadResult,
 } from "./download";
+import type * as https from "node:https";
 import { parseMetowolfCidrStreamWithStats } from "./sources/cidr";
 import { parseRunishiwoV4CidrStreamWithStats, parseRunishiwoV6CidrStreamWithStats } from "./sources/cidr";
 import { parseSapicsCountryStreamWithStats } from "./sources/sapicsCountry";
@@ -303,6 +307,9 @@ async function runDownloadStage(
    *  only the files that are missing or corrupt, so a cached-and-valid
    *  file is never re-downloaded. */
   specs: ReadonlyArray<DownloadSpec> = ALL_SPECS,
+  /** Seam for the fixed-file refresh layer — see `runPipeline`'s
+   *  `downloadFixed`. Defaults to the real mirror-walking fetcher. */
+  fixedImpl: typeof fetchFixedOneWithAttempts = fetchFixedOneWithAttempts,
 ): Promise<EtlRunDownloadRow[]> {
   const t0 = Date.now();
   const { attempts, failures } = await downloadAll(
@@ -310,6 +317,8 @@ async function runDownloadStage(
     rawDir,
     now,
     sink ? (bytesDone, bytesTotal) => sink.onDownload(bytesDone, bytesTotal) : undefined,
+    undefined,
+    fixedImpl,
   );
   const elapsed = Date.now() - t0;
   if (sink) await sink.flush();
@@ -696,6 +705,31 @@ async function closeOpenStageRows(
   }
 }
 
+/** Signature of the fixed-file refresh layer. It owns the
+ *  "refresh failed, reuse the old cache" fallback: a mirror walk that
+ *  exhausts every URL throws, and the caller decides whether a cached
+ *  copy is still good enough to run. */
+export type FixedRefresh = (
+  spec: FixedSpec,
+  outDir: string,
+  onProgress?: (bytesDone: number, bytesTotal: number | null) => void,
+  getImpl?: typeof https.get,
+) => Promise<DownloadResult>;
+
+/** Signature of the download stage. `fixedImpl` is the fixed-file
+ *  refresh layer: it owns the "refresh failed, reuse the old cache"
+ *  fallback, and tests replace it to exercise that path without driving
+ *  the mirror-walking fetcher. */
+export type DownloadStage = (
+  pool: mysql.Pool,
+  runId: number,
+  rawDir: string,
+  now: Date,
+  sink: EtlProgressSink | undefined,
+  specs: ReadonlyArray<DownloadSpec>,
+  fixedImpl?: typeof fetchFixedOneWithAttempts,
+) => Promise<EtlRunDownloadRow[]>;
+
 // Single top-level orchestration entry-point. Stages run sequentially
 // because each depends on the previous (download → parse → insert →
 // swap). Within insert, files are processed in priority order so the
@@ -710,14 +744,12 @@ export async function runPipeline(opts: {
   /** Test seam: replace the network download stage. The default
    *  implementation fetches the real DB-IP files; tests inject a stub
    *  so a missing/corrupt-file scenario never touches the network. */
-  download?: (
-    pool: mysql.Pool,
-    runId: number,
-    rawDir: string,
-    now: Date,
-    sink: EtlProgressSink | undefined,
-    specs: ReadonlyArray<DownloadSpec>,
-  ) => Promise<EtlRunDownloadRow[]>;
+  download?: DownloadStage;
+  /** Test seam: replace the fixed-file refresh layer that owns the
+   *  "refresh failed, reuse the old cache" fallback. The default walks
+   *  every mirror for every fixed source and throws only when all of
+   *  them are down AND there is no cached copy to fall back on. */
+  downloadFixed?: FixedRefresh;
 }): Promise<PipelineResult> {
   const { cfg } = opts;
   const pool = await ensurePool(cfg);
@@ -750,14 +782,8 @@ async function runPipelineLocked(
     cfg: AppConfig;
     runId?: number;
     sink?: EtlProgressSink;
-    download?: (
-      pool: mysql.Pool,
-      runId: number,
-      rawDir: string,
-      now: Date,
-      sink: EtlProgressSink | undefined,
-      specs: ReadonlyArray<DownloadSpec>,
-    ) => Promise<EtlRunDownloadRow[]>;
+    download?: DownloadStage;
+    downloadFixed?: FixedRefresh;
   },
 ): Promise<PipelineResult> {
   const { cfg } = opts;
@@ -816,8 +842,9 @@ async function runPipelineLocked(
     );
     const specs = [...monthlySpecs, ...EXTRA_SPECS];
     sink.setStage("download");
+    const fixedImpl = opts.downloadFixed ?? fetchFixedOneWithAttempts;
     const download = opts.download ?? runDownloadStage;
-    await download(pool, runId, rawDir, now, sink, specs);
+    await download(pool, runId, rawDir, now, sink, specs, fixedImpl);
 
     // Re-check the disk: after the download stage, every file must be
     // present AND intact. A file that is still missing or corrupt at
