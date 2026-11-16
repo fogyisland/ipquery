@@ -495,11 +495,22 @@
         "unset": "(unset)"
       },
       "etl": {
-        "scheduleHint": "Cron expression",
+        "scheduleHint": "Cron expression (min hour day month weekday). Takes effect immediately — no restart.",
         "lastRunNever": "Never run",
         "lastRunOk": "success · merged {merged}",
         "lastRunFailed": "failed",
-        "lastRunRunning": "running…"
+        "lastRunRunning": "running…",
+        "scheduleSource": {
+          "saved": "In effect: the value saved here",
+          "env": "In effect: the ETL_SCHEDULE environment variable (never saved here)",
+          "default": "In effect: the default"
+        },
+        "preset": {
+          "daily": "Daily",
+          "weekly": "Weekly (Mon)",
+          "monthly": "Monthly (1st)"
+        },
+        "scheduleSave": "Save schedule"
       },
       "section": {
         "db": "Database",

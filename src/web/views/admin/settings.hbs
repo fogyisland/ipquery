@@ -239,13 +239,29 @@
       </div>
     </div>
   </div>
-  <div class="form-field">
+  <form method="POST" action="/admin/settings/etl-schedule" class="form-field">
+    <input type="hidden" name="csrf" value="{{csrfToken}}">
     <span class="form-field-label">{{req.t 'admin.settings.section.etl'}} · {{req.t 'admin.settings.field.schedule'}}</span>
     <div class="form-field-input">
-      <input type="text" readonly value="{{config.etl.schedule}}">
+      <input type="text" name="schedule" value="{{etlSchedule.schedule}}" required
+             placeholder="0 2 * * 1" autocomplete="off" spellcheck="false">
+      <input type="text" name="timezone" value="{{etlSchedule.timezone}}" required
+             placeholder="UTC" autocomplete="off" spellcheck="false">
       <span class="form-field-hint">{{req.t 'admin.settings.etl.scheduleHint'}}</span>
+      <span class="form-field-hint">{{etlSchedule.sourceLabel}}</span>
+      {{#if etlSchedule.warning}}
+        <span class="form-field-hint form-field-hint--warn">{{etlSchedule.warning}}</span>
+      {{/if}}
+      <div class="form-field-presets">
+        {{#each etlSchedule.presets}}
+          <button type="button" class="btn-ghost btn-sm" data-cron-preset="{{this.schedule}}">{{this.label}}</button>
+        {{/each}}
+      </div>
     </div>
-  </div>
+    <div class="form-field-action">
+      <button type="submit" class="btn-primary">{{req.t 'admin.settings.etl.scheduleSave'}}</button>
+    </div>
+  </form>
   <div class="form-field">
     <span class="form-field-label">{{req.t 'admin.settings.section.etl'}} · {{req.t 'admin.settings.metricStrip.etlLastRun'}}</span>
     <div class="form-field-action">

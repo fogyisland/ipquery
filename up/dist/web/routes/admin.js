@@ -39,6 +39,7 @@ const node_crypto_1 = require("node:crypto");
 const users_1 = require("../../storage/users");
 const password_1 = require("../auth/password");
 const csrf_1 = require("../plugins/csrf");
+const etlSchedule_1 = require("../../storage/etlSchedule");
 const pipeline_1 = require("../../etl/pipeline");
 const mysql_1 = require("../../storage/mysql");
 const unknownIpQueue_1 = require("../../storage/unknownIpQueue");
@@ -1245,6 +1246,13 @@ async function adminRoutes(app) {
         // must not exist anywhere in the rendered DOM: anything that can read
         // HTML source (DevTools, view-source, a cached page, a proxy log, or
         // an XSS in this page) would otherwise lift the live secrets.
+        // The schedule shown here is the one the scheduler is actually
+        // running: a saved setting, else the env seed, else the default. The
+        // env vars in `cfg.etl` are only the seed now.
+        const etlSchedule = await (0, etlSchedule_1.loadEtlScheduleConfig)(app.pool, {
+            schedule: cfg.etl.schedule,
+            timezone: cfg.etl.timezone,
+        });
         const display = {
             db: {
                 host: cfg.db.host,
@@ -1259,7 +1267,11 @@ async function adminRoutes(app) {
                 rateLimit: cfg.api.rateLimit,
                 trustProxy: cfg.api.trustProxy,
             },
-            etl: { schedule: cfg.etl.schedule, timezone: cfg.etl.timezone, dataDir: cfg.etl.dataDir },
+            etl: {
+                schedule: etlSchedule.schedule,
+                timezone: etlSchedule.timezone,
+                dataDir: cfg.etl.dataDir,
+            },
             web: {
                 baseUrl: cfg.web.baseUrl,
                 cookieDomain: cfg.web.cookieDomain,
@@ -1333,10 +1345,55 @@ async function adminRoutes(app) {
             etlLastRun,
             etlStatusKind,
             etlStatusText,
+            etlSchedule: {
+                ...etlSchedule,
+                sourceLabel: req.t(`admin.settings.etl.scheduleSource.${etlSchedule.source}`),
+                presets: etlSchedule_1.ETL_SCHEDULE_PRESETS.map((preset) => ({
+                    ...preset,
+                    label: req.t(`admin.settings.etl.preset.${preset.id}`),
+                })),
+            },
             flash: consumeEtlFlash(req, reply, req.t),
             req,
             csrfToken: req.csrfToken,
         });
+    });
+    app.post("/admin/settings/etl-schedule", async (req, reply) => {
+        if (!(0, csrf_1.verifyCsrfRequest)(req))
+            return (0, render_1.sendCsrfPage)(reply, 403);
+        req.auditAction = { action: "etl.schedule.update", targetType: "setting" };
+        const body = req.body;
+        const schedule = (body?.schedule ?? "").trim();
+        const timezone = (body?.timezone ?? "").trim();
+        try {
+            await (0, etlSchedule_1.saveEtlScheduleConfig)(app.pool, { schedule, timezone });
+        }
+        catch (err) {
+            // The validation message is written for the operator — show it
+            // rather than a generic failure. Nothing was written, so the
+            // previous schedule is still the one running.
+            reply.setCookie("etl_schedule_flash", JSON.stringify({
+                kind: "error",
+                message: err instanceof Error ? err.message : String(err),
+            }), { path: "/admin", maxAge: 30, httpOnly: true, sameSite: "lax" });
+            return reply.redirect("/admin/settings#integrations");
+        }
+        // Re-arm the live timer so the new cadence takes effect now. A
+        // failure here must not lose the save — the value is already stored,
+        // and a restart would pick it up.
+        let warning = null;
+        try {
+            const armed = await app.resyncEtlScheduler();
+            warning = armed.warning;
+        }
+        catch (err) {
+            req.log.error({ err }, "ETL schedule saved but re-arming failed");
+            warning = "调度已保存，但重新装载定时器失败，请重启服务。";
+        }
+        reply.setCookie("etl_schedule_flash", JSON.stringify(warning
+            ? { kind: "warning", message: `已保存，但有告警：${warning}` }
+            : { kind: "success", message: `已保存：${schedule}（${timezone}）` }), { path: "/admin", maxAge: 30, httpOnly: true, sameSite: "lax" });
+        return reply.redirect("/admin/settings#integrations");
     });
     app.post("/admin/settings/etl-restart", async (req, reply) => {
         if (!(0, csrf_1.verifyCsrfRequest)(req))

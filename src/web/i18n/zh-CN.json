@@ -496,11 +496,22 @@
         "unset": "(未设置)"
       },
       "etl": {
-        "scheduleHint": "定时任务表达式",
+        "scheduleHint": "cron 表达式（分 时 日 月 周）。保存后立即生效，无需重启。",
         "lastRunNever": "尚未运行",
         "lastRunOk": "成功 · 合并 {merged} 条",
         "lastRunFailed": "失败",
-        "lastRunRunning": "运行中…"
+        "lastRunRunning": "运行中…",
+        "scheduleSource": {
+          "saved": "当前生效：后台保存的设置",
+          "env": "当前生效：环境变量 ETL_SCHEDULE（尚未在后台保存过）",
+          "default": "当前生效：默认值"
+        },
+        "preset": {
+          "daily": "每天",
+          "weekly": "每周一",
+          "monthly": "每月 1 号"
+        },
+        "scheduleSave": "保存周期"
       },
       "section": {
         "db": "数据库",
