@@ -731,7 +731,11 @@
           "off": "已停用"
         },
         "save": "保存",
-        "apiKeyPlaceholder": "未填写"
+        "apiKeyPlaceholder": "未填写",
+        "apiKeyLabel": "API Key",
+        "apiKeyStored": "已保存（留空则不修改）",
+        "quotaChipTitle": "提供商公布的免费额度",
+        "enforcedChipTitle": "程序实际执行的限流（不会超过公布额度）"
       },
       "healthCard": {
         "statusOk": "正常",
@@ -758,7 +762,10 @@
         "calls": "调用",
         "err429": "429 限流",
         "failurePct": "失败率",
-        "last429": "最近一次 429"
+        "last429": "最近一次 429",
+        "window1hTitle": "最近 1 小时：{calls} 次调用，其中 {err429} 次限流",
+        "window24hTitle": "最近 24 小时：{calls} 次调用，其中 {err429} 次限流",
+        "window7dTitle": "最近 7 天：{calls} 次调用，其中 {err429} 次限流"
       },
       "runner": {
         "title": "运行控制",

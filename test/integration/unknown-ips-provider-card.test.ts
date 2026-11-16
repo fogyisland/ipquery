@@ -79,9 +79,12 @@ describe("GET /admin/providers — provider health card", () => {
     expect(r.text).toMatch(/1 小时/);
     expect(r.text).toMatch(/24 小时/);
     expect(r.text).toMatch(/7 天/);
-    // Calls / 429s / failure-rate labels rendered.
-    expect(r.text).toMatch(/429 限流/);
-    expect(r.text).toMatch(/失败率/);
+    // The card leads with the failure RATE and keeps the raw call / 429
+    // counts in the cell's tooltip: the rate is what answers "is this
+    // provider worth keeping on", and nine numbers in three columns was
+    // noise. Both the headline figure and the sentence still render.
+    expect(r.text).toMatch(/provider-health-window-figure/);
+    expect(r.text).toMatch(/次调用，其中 \d+ 次限流/);
     // Quota pill rendered (the per-minute quota × 24h × 60 = 64,800,
     // 100/64,800 rounded to 0%, but the pill text still includes the
     // "今日配额" prefix).
