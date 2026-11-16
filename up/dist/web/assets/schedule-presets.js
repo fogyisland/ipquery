@@ -10,20 +10,20 @@
   "use strict";
 
   function applyPreset(button) {
-    var expression = button.getAttribute("data-cron-preset");
+    const expression = button.getAttribute("data-cron-preset");
     if (!expression) return;
-    var form = button.closest("form");
+    const form = button.closest("form");
     if (!form) return;
-    var input = form.querySelector('input[name="schedule"]');
+    const input = form.querySelector('input[name="schedule"]');
     if (!input) return;
     input.value = expression;
     input.focus();
   }
 
   document.addEventListener("click", function (event) {
-    var target = event.target;
+    const target = event.target;
     if (!target || !target.closest) return;
-    var button = target.closest("[data-cron-preset]");
+    const button = target.closest("[data-cron-preset]");
     if (!button) return;
     event.preventDefault();
     applyPreset(button);
