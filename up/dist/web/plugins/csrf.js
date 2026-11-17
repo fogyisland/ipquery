@@ -57,10 +57,19 @@ async function registerCsrf(app) {
         req.csrfToken = token;
     });
 }
-function verifyCsrfRequest(req) {
+/**
+ * Does this request carry a token that proves it came from our own page?
+ *
+ * `bodyFields` lets a caller supply the token when `req.body` is not
+ * populated. A multipart request has no body object at all — its token is
+ * one of the parts — and the caller has already read it into a plain
+ * object. Passing it here keeps the check identical to the one a plain
+ * form gets: the same cookie triple and the same HMAC binding.
+ */
+function verifyCsrfRequest(req, bodyFields) {
     const cookieToken = req.cookies?.csrf;
     const bind = req.cookies?.csrf_bind;
-    const body = (req.body ?? {});
+    const body = (bodyFields ?? req.body ?? {});
     const bodyToken = typeof body.csrf === "string" ? body.csrf : undefined;
     if (!cookieToken || !bodyToken || !bind)
         return false;

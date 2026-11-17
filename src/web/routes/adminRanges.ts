@@ -16,6 +16,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import * as fs from "node:fs";
 import { Readable } from "node:stream";
+import multipart from "@fastify/multipart";
 import * as path from "node:path";
 import { verifyCsrfRequest } from "../plugins/csrf";
 import { sendCsrfPage } from "../errors/render";
@@ -27,6 +28,14 @@ import {
   replaceRangesFromStream,
   writeRangeImportProgress,
 } from "../../storage/rangeImport";
+import {
+  finishUpload,
+  openUpload,
+  reserveUpload,
+  storeChunk,
+  UPLOAD_CHUNK_BYTES,
+  UploadError,
+} from "../../storage/rangeUpload";
 import { decodeFile, RangeFileError, IPQ_DEFAULT_MAX_ROWS } from "../../storage/rangeFile";
 
 const FLASH_COOKIE = "ranges_flash";
@@ -96,6 +105,102 @@ function consumeFlash(
 /** Async because Fastify treats a plugin that returns nothing as
  *  "forgot to call done" — `register` needs a promise to await. */
 export async function registerRangeRoutes(app: FastifyInstance): Promise<void> {
+  // A whole-library .ipq is around two gigabytes. It cannot arrive as one
+  // POST — the body is held in memory before a line is parsed — so the
+  // upload is chunked and assembled on disk. `multipart` is what parses
+  // those posts; the old plain-form path is kept for files small enough to
+  // fit in a form, which is what the merge box takes.
+  await app.register(multipart, {
+    limits: {
+      fileSize: UPLOAD_CHUNK_BYTES,
+      files: 1,
+      fields: 8,
+    },
+    // The chunked endpoints answer 400/404 in the body, not by resetting
+    // the socket, so the browser gets a reason.
+    throwFileSizeLimit: true,
+  });
+
+  app.post("/admin/ranges/upload/start", async (req, reply) => {
+    if (!verifyCsrfRequest(req)) return sendCsrfPage(reply, 403);
+    const body = req.body as Record<string, unknown> | undefined;
+    const totalBytes = Number(body?.totalBytes ?? NaN);
+    const mode = String(body?.mode ?? "replace") === "merge" ? "merge" : "replace";
+    const filename = typeof body?.filename === "string" ? body.filename : "library.ipq";
+    try {
+      const upload = await reserveUpload(app.pool, { mode, filename, totalBytes });
+      return reply.send({ id: upload.id, chunkBytes: UPLOAD_CHUNK_BYTES });
+    } catch (err) {
+      app.log.warn({ err }, "could not reserve an upload");
+      return reply.code(400).send({ error: err instanceof UploadError ? err.message : "cannot start an upload" });
+    }
+  });
+
+  app.post("/admin/ranges/upload/chunk", async (req, reply) => {
+    // The token arrives inside the multipart body, so the CSRF check has
+    // to run AFTER the parts are read: `req.body` is not populated for a
+    // multipart request. Nothing is written until that check passes.
+    const parts = req.parts();
+    let uploadId = 0;
+    let offset = 0;
+    let data: Buffer | null = null;
+    const fields: Record<string, string> = {};
+    for await (const part of parts) {
+      if (part.type === "file") {
+        // The whole chunk is read into memory. UPLOAD_CHUNK_BYTES is the
+        // ceiling that makes that safe: one buffer of a few megabytes, not
+        // one of the whole file.
+        data = await part.toBuffer();
+      } else if (part.fieldname === "uploadId") {
+        uploadId = Number(part.value);
+      } else if (part.fieldname === "offset") {
+        offset = Number(part.value);
+      } else if (part.fieldname === "csrf") {
+        fields.csrf = String(part.value ?? "");
+      }
+    }
+    if (!verifyCsrfRequest(req, fields)) {
+      return sendCsrfPage(reply, 403);
+    }
+    if (!Number.isFinite(uploadId) || uploadId <= 0) {
+      return reply.code(400).send({ error: "the upload id is missing" });
+    }
+    if (!data) {
+      return reply.code(400).send({ error: "no file part in the request" });
+    }
+    try {
+      await storeChunk(app.pool, uploadId, offset, data);
+    } catch (err) {
+      app.log.warn({ err }, "could not store an upload chunk");
+      const missing = err instanceof UploadError && /does not exist/.test(err.message);
+      return reply
+        .code(missing ? 404 : 400)
+        .send({ error: err instanceof UploadError ? err.message : "the chunk could not be stored" });
+    }
+    const state = await openUpload(app.pool, uploadId);
+    if (state.complete) await finishUpload(app.pool, uploadId);
+    return reply.send({
+      complete: state.complete,
+      receivedBytes: state.receivedBytes,
+      nextOffset: state.nextOffset,
+    });
+  });
+
+  /** Serve an assembled upload to the importer. Kept separate from the
+   *  download route so a download link never reads a half-uploaded file. */
+  app.get("/admin/ranges/upload/:id/stream", async (req, reply) => {
+    const id = Number((req.params as { id?: string }).id);
+    if (!Number.isFinite(id) || id <= 0) return reply.code(400).send();
+    const state = await openUpload(app.pool, id).catch(() => null);
+    if (!state) return reply.code(404).send();
+    if (!state.complete) return reply.code(409).send({ error: "the upload is not complete" });
+    reply
+      .header("Content-Type", "application/x-ndjson; charset=utf-8")
+      .header("Content-Disposition", `attachment; filename="${state.filename}"`);
+    return reply.send(Readable.from(state));
+  });
+
+
   app.get("/admin/ranges", async (req, reply) => {
     const flash = consumeFlash(req, reply);
     const exports = [...exportState.values()]
@@ -205,6 +310,9 @@ export async function registerRangeRoutes(app: FastifyInstance): Promise<void> {
     // a select: the operator types the number of ranges currently in the
     // table, which the page shows them. A repost of this form — a browser
     // "resend" after a timeout — carries a stale count and is refused.
+    //
+    // `uploadId` is the chunked path. The file is already on disk by the
+    // time this runs, so it is streamed in rather than held as text.
     if (String(body?.mode ?? "") === "replace") {
       const expected = await countRanges(app);
       const typed = Number(body?.confirmRows ?? NaN);

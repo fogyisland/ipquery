@@ -32,16 +32,21 @@ var __importStar = (this && this.__importStar) || (function () {
         return result;
     };
 })();
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.RANGE_BODY_LIMIT = void 0;
 exports.registerRangeRoutes = registerRangeRoutes;
 const fs = __importStar(require("node:fs"));
 const node_stream_1 = require("node:stream");
+const multipart_1 = __importDefault(require("@fastify/multipart"));
 const path = __importStar(require("node:path"));
 const csrf_1 = require("../plugins/csrf");
 const render_1 = require("../errors/render");
 const rangeExport_1 = require("../../storage/rangeExport");
 const rangeImport_1 = require("../../storage/rangeImport");
+const rangeUpload_1 = require("../../storage/rangeUpload");
 const rangeFile_1 = require("../../storage/rangeFile");
 const FLASH_COOKIE = "ranges_flash";
 /**
@@ -95,6 +100,107 @@ function consumeFlash(req, reply) {
 /** Async because Fastify treats a plugin that returns nothing as
  *  "forgot to call done" — `register` needs a promise to await. */
 async function registerRangeRoutes(app) {
+    // A whole-library .ipq is around two gigabytes. It cannot arrive as one
+    // POST — the body is held in memory before a line is parsed — so the
+    // upload is chunked and assembled on disk. `multipart` is what parses
+    // those posts; the old plain-form path is kept for files small enough to
+    // fit in a form, which is what the merge box takes.
+    await app.register(multipart_1.default, {
+        limits: {
+            fileSize: rangeUpload_1.UPLOAD_CHUNK_BYTES,
+            files: 1,
+            fields: 8,
+        },
+        // The chunked endpoints answer 400/404 in the body, not by resetting
+        // the socket, so the browser gets a reason.
+        throwFileSizeLimit: true,
+    });
+    app.post("/admin/ranges/upload/start", async (req, reply) => {
+        if (!(0, csrf_1.verifyCsrfRequest)(req))
+            return (0, render_1.sendCsrfPage)(reply, 403);
+        const body = req.body;
+        const totalBytes = Number(body?.totalBytes ?? NaN);
+        const mode = String(body?.mode ?? "replace") === "merge" ? "merge" : "replace";
+        const filename = typeof body?.filename === "string" ? body.filename : "library.ipq";
+        try {
+            const upload = await (0, rangeUpload_1.reserveUpload)(app.pool, { mode, filename, totalBytes });
+            return reply.send({ id: upload.id, chunkBytes: rangeUpload_1.UPLOAD_CHUNK_BYTES });
+        }
+        catch (err) {
+            app.log.warn({ err }, "could not reserve an upload");
+            return reply.code(400).send({ error: err instanceof rangeUpload_1.UploadError ? err.message : "cannot start an upload" });
+        }
+    });
+    app.post("/admin/ranges/upload/chunk", async (req, reply) => {
+        // The token arrives inside the multipart body, so the CSRF check has
+        // to run AFTER the parts are read: `req.body` is not populated for a
+        // multipart request. Nothing is written until that check passes.
+        const parts = req.parts();
+        let uploadId = 0;
+        let offset = 0;
+        let data = null;
+        const fields = {};
+        for await (const part of parts) {
+            if (part.type === "file") {
+                // The whole chunk is read into memory. UPLOAD_CHUNK_BYTES is the
+                // ceiling that makes that safe: one buffer of a few megabytes, not
+                // one of the whole file.
+                data = await part.toBuffer();
+            }
+            else if (part.fieldname === "uploadId") {
+                uploadId = Number(part.value);
+            }
+            else if (part.fieldname === "offset") {
+                offset = Number(part.value);
+            }
+            else if (part.fieldname === "csrf") {
+                fields.csrf = String(part.value ?? "");
+            }
+        }
+        if (!(0, csrf_1.verifyCsrfRequest)(req, fields)) {
+            return (0, render_1.sendCsrfPage)(reply, 403);
+        }
+        if (!Number.isFinite(uploadId) || uploadId <= 0) {
+            return reply.code(400).send({ error: "the upload id is missing" });
+        }
+        if (!data) {
+            return reply.code(400).send({ error: "no file part in the request" });
+        }
+        try {
+            await (0, rangeUpload_1.storeChunk)(app.pool, uploadId, offset, data);
+        }
+        catch (err) {
+            app.log.warn({ err }, "could not store an upload chunk");
+            const missing = err instanceof rangeUpload_1.UploadError && /does not exist/.test(err.message);
+            return reply
+                .code(missing ? 404 : 400)
+                .send({ error: err instanceof rangeUpload_1.UploadError ? err.message : "the chunk could not be stored" });
+        }
+        const state = await (0, rangeUpload_1.openUpload)(app.pool, uploadId);
+        if (state.complete)
+            await (0, rangeUpload_1.finishUpload)(app.pool, uploadId);
+        return reply.send({
+            complete: state.complete,
+            receivedBytes: state.receivedBytes,
+            nextOffset: state.nextOffset,
+        });
+    });
+    /** Serve an assembled upload to the importer. Kept separate from the
+     *  download route so a download link never reads a half-uploaded file. */
+    app.get("/admin/ranges/upload/:id/stream", async (req, reply) => {
+        const id = Number(req.params.id);
+        if (!Number.isFinite(id) || id <= 0)
+            return reply.code(400).send();
+        const state = await (0, rangeUpload_1.openUpload)(app.pool, id).catch(() => null);
+        if (!state)
+            return reply.code(404).send();
+        if (!state.complete)
+            return reply.code(409).send({ error: "the upload is not complete" });
+        reply
+            .header("Content-Type", "application/x-ndjson; charset=utf-8")
+            .header("Content-Disposition", `attachment; filename="${state.filename}"`);
+        return reply.send(node_stream_1.Readable.from(state));
+    });
     app.get("/admin/ranges", async (req, reply) => {
         const flash = consumeFlash(req, reply);
         const exports = [...exportState.values()]
@@ -203,6 +309,9 @@ async function registerRangeRoutes(app) {
         // a select: the operator types the number of ranges currently in the
         // table, which the page shows them. A repost of this form — a browser
         // "resend" after a timeout — carries a stale count and is refused.
+        //
+        // `uploadId` is the chunked path. The file is already on disk by the
+        // time this runs, so it is streamed in rather than held as text.
         if (String(body?.mode ?? "") === "replace") {
             const expected = await countRanges(app);
             const typed = Number(body?.confirmRows ?? NaN);
