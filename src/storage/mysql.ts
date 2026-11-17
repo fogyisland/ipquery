@@ -70,6 +70,13 @@ export async function truncateNew(pool: mysql.Pool): Promise<void> {
 // are uniformly catchall /16-/3-style allocations where any one is fine.
 const MAX_RANGE_SIZE = (1n << 64n) - 1n;
 
+/** The size of a range, in addresses. Exported because the .ipq importer has
+ *  to compute the same value the ETL does — a file cannot be trusted to
+ *  supply a column the lookup sorts by. */
+export function computeRangeSize(startIp: Buffer, endIp: Buffer): bigint {
+  return rangeSize(startIp, endIp);
+}
+
 function rangeSize(startIp: Buffer, endIp: Buffer): bigint {
   // BINARY(16) values are 16-byte big-endian unsigned integers. range_size
   // = end - start, used by findRange to pick the smallest covering range.
@@ -280,7 +287,16 @@ export interface SwapResult {
  *  So before the swap, hand-authored rows are copied across. The ETL's
  *  own rows are not: they are the ones the refresh is meant to replace.
  */
-export const MANUAL_SOURCE_TAGS = ["multi-provider"] as const;
+/**
+ * Source tags whose rows the ETL treats as operator-owned and carries across
+ * a full refresh.
+ *
+ * `multi-provider` is written by the unknown-IP backfill. `import` is
+ * written by the .ipq import (/admin/ranges). Both are rows the ETL did not
+ * produce, and a rebuild that dropped them would silently undo the
+ * operator's work — which is exactly what an untagged import would do.
+ */
+export const MANUAL_SOURCE_TAGS = ["multi-provider", "import"] as const;
 
 export interface PreservedRows {
   /** Rows copied out of the live table into the staging table. */

@@ -1,0 +1,101 @@
+{{!-- SPDX-License-Identifier: MIT --}}
+{{!--
+  /admin/ranges — move IP ranges in and out as a .ipq file.
+
+  One page for both directions, because they are the same file: an operator
+  exports from one install and imports on another, and the page should read
+  as one idea rather than two unrelated tools.
+
+  The export list is per-process state. A restart clears it; the files stay
+  on disk, so a link the operator already has keeps working until the file
+  is cleaned up.
+--}}
+<h2>{{req.t 'admin.ranges.title'}}</h2>
+<p class="admin-section-help">{{req.t 'admin.ranges.help'}}</p>
+
+<div class="range-grid">
+  {{!-- ── Export ─────────────────────────────────────────────────── --}}
+  <section class="range-card" id="range-export">
+    <h3>{{req.t 'admin.ranges.export.title'}}</h3>
+    <p class="admin-section-help">{{req.t 'admin.ranges.export.help'}}</p>
+    <form method="post" action="/admin/ranges/export" data-confirm="{{req.t 'admin.ranges.export.confirm'}}">
+      <input type="hidden" name="csrf" value="{{csrfToken}}">
+      <div class="form-field">
+        <label class="form-field-label" for="export-country">{{req.t 'admin.ranges.export.country'}}</label>
+        <div class="form-field-input">
+          <input id="export-country" type="text" name="country" maxlength="2" placeholder="{{req.t 'admin.ranges.export.countryPlaceholder'}}" autocomplete="off">
+          <span class="form-field-hint">{{req.t 'admin.ranges.export.countryHint'}}</span>
+        </div>
+      </div>
+      <button type="submit" class="btn-primary">{{req.t 'admin.ranges.export.action'}}</button>
+    </form>
+
+    {{#if lastExport}}
+    {{!-- Named right above the button that produced it: the operator who just
+         clicked does not have to find the row in the table below. --}}
+    <p class="range-latest">
+      <a class="btn-secondary" href="{{downloadUrl}}">{{req.t 'admin.ranges.export.list.downloadLatest'}}</a>
+      <span class="form-field-hint">{{lastExport.rows}} {{req.t 'admin.ranges.export.list.rowsUnit'}} · {{lastExport.sizeLabel}}</span>
+    </p>
+    {{/if}}
+
+    {{#if exports.length}}
+    <table class="range-export-table">
+      <thead>
+        <tr>
+          <th>{{req.t 'admin.ranges.export.list.file'}}</th>
+          <th>{{req.t 'admin.ranges.export.list.rows'}}</th>
+          <th>{{req.t 'admin.ranges.export.list.size'}}</th>
+          <th>{{req.t 'admin.ranges.export.list.created'}}</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {{#each exports}}
+        <tr>
+          <td><code>{{this.id}}.ipq</code></td>
+          <td>{{this.rows}}</td>
+          <td>{{this.sizeLabel}}</td>
+          <td><time datetime="{{this.createdAtLabel}}">{{this.createdAtLabel}}</time></td>
+          <td><a class="btn-secondary" href="/admin/ranges/download/{{this.id}}">{{@root.req.t 'admin.ranges.export.list.download'}}</a></td>
+        </tr>
+        {{/each}}
+      </tbody>
+    </table>
+    {{else}}
+    <p class="form-field-hint">{{req.t 'admin.ranges.export.list.empty'}}</p>
+    {{/if}}
+  </section>
+
+  {{!-- ── Import ─────────────────────────────────────────────────── --}}
+  <section class="range-card" id="range-import">
+    <h3>{{req.t 'admin.ranges.import.title'}}</h3>
+    <p class="admin-section-help">{{req.t 'admin.ranges.import.help'}}</p>
+    <form method="post" action="/admin/ranges/import" enctype="multipart/form-data">
+      <input type="hidden" name="csrf" value="{{csrfToken}}">
+      <div class="form-field">
+        <label class="form-field-label" for="import-file">{{req.t 'admin.ranges.import.file'}}</label>
+        <div class="form-field-input">
+          <input id="import-file" type="file" name="file" accept=".ipq,application/x-ndjson,text/plain" required>
+          <span class="form-field-hint">{{req.t 'admin.ranges.import.fileHint'}}</span>
+        </div>
+      </div>
+      <button type="submit" class="btn-primary">{{req.t 'admin.ranges.import.action'}}</button>
+    </form>
+    <p class="form-field-hint">{{req.t 'admin.ranges.import.ceilingPre'}} {{maxRows}} {{req.t 'admin.ranges.import.ceilingPost'}}</p>
+  </section>
+</div>
+
+{{!-- ── Format ───────────────────────────────────────────────────────
+     The file is line-delimited JSON and is meant to be readable, so the
+     page shows what a row looks like instead of describing it. --}}
+<section class="range-card range-format">
+  <h3>{{req.t 'admin.ranges.format.title'}}</h3>
+  <p class="admin-section-help">{{req.t 'admin.ranges.format.help'}}</p>
+  <pre class="range-format-sample"><code>{{req.t 'admin.ranges.format.sample'}}</code></pre>
+  <ul class="range-format-notes">
+    <li>{{req.t 'admin.ranges.format.note1'}}</li>
+    <li>{{req.t 'admin.ranges.format.note2'}}</li>
+    <li>{{req.t 'admin.ranges.format.note3'}}</li>
+  </ul>
+</section>

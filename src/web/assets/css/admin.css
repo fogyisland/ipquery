@@ -2240,6 +2240,80 @@ color: var(--text-3);
    The one card on the system tab that can say "stop". A pending step that
    rebuilds a table has to look different from a plain data step, and both
    have to sit on the same surface as the readonly fields above them. */
+/* ── Range import / export ────────────────────────────────────────────
+   Two directions side by side; they are the same file, so they read as one
+   idea instead of two tools bolted together. */
+.range-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: var(--sp-4);
+  margin-bottom: var(--sp-4);
+}
+.range-card {
+  padding: var(--sp-4);
+  background: var(--surface);
+  border: var(--hairline);
+  border-radius: var(--radius);
+}
+.range-card h3 {
+  margin: 0 0 var(--sp-2);
+}
+.range-card form {
+  margin-top: var(--sp-3);
+}
+.range-latest {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  margin-top: var(--sp-3);
+  flex-wrap: wrap;
+}
+.range-export-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: var(--sp-4);
+  font-size: 13px;
+}
+.range-export-table th,
+.range-export-table td {
+  text-align: left;
+  padding: var(--sp-2);
+  border-bottom: var(--hairline);
+}
+.range-export-table th {
+  font-weight: 600;
+  color: var(--text-3);
+  font-size: 12px;
+}
+.range-export-table time {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-2);
+}
+/* The sample is the specification. Give it room to breathe and let it
+   scroll rather than wrap — a JSON line broken across four lines stops
+   looking like a line of a file. */
+.range-format-sample {
+  overflow-x: auto;
+  margin: var(--sp-3) 0;
+  padding: var(--sp-3);
+  background: var(--surface-2);
+  border: var(--hairline);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.6;
+}
+.range-format-notes {
+  margin: 0;
+  padding-left: var(--sp-5);
+  color: var(--text-2);
+  font-size: 13px;
+}
+.range-format-notes li + li {
+  margin-top: var(--sp-1);
+}
+
 .schema-report {
   margin-top: var(--sp-5);
   padding: var(--sp-4);

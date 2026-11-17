@@ -246,6 +246,15 @@ describe("the providers page carries no secret and no hardcoded label", () => {
     expect(view).toContain("admin.unknownIps.customProviders.methodCol");
   });
 
+  it("lays the range page out as two directions on one surface", () => {
+    // Two cards side by side, because export and import are the same file.
+    // A missing grid rule collapses them into a column of unstyled text.
+    const css = fs.readFileSync(CSS, "utf8");
+    for (const selector of [".range-grid", ".range-card", ".range-format-sample"]) {
+      expect(css, `${selector} must be styled`).toContain(`${selector} {`);
+    }
+  });
+
   it("styles the schema report the way the rest of the system tab reads", () => {
     // The card is the one place on this page that can say "stop" — a
     // pending step that rebuilds a table needs to look different from a

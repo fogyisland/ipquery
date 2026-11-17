@@ -34,6 +34,7 @@ import statsRoute from "./routes/stats";
 import marketingRoute from "../web/routes/marketing";
 import dashboardRoute from "../web/routes/dashboard";
 import adminRoute from "../web/routes/admin";
+import { registerRangeRoutes } from "../web/routes/adminRanges";
 import authRoute from "../web/routes/auth";
 import initRoute from "../web/routes/init";
 
@@ -439,6 +440,7 @@ export async function buildServer(
   await app.register(marketingRoute);
   await app.register(dashboardRoute);
   await app.register(adminRoute);
+  await app.register(async (instance) => registerRangeRoutes(instance));
   await app.register(authRoute);
   await app.register(initRoute);
   registerAuditLog(app);

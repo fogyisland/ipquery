@@ -56,7 +56,8 @@
         "access": "访问与身份",
         "system": "系统与治理"
       },
-      "mcpTokens": "MCP Tokens"
+      "mcpTokens": "MCP Tokens",
+      "ranges": "IP 段导入导出"
     },
     "logout": "登出",
     "history": "查询历史",
@@ -959,6 +960,52 @@
       "bulkRevokeConfirm": "确定吊销选中的 MCP Token?",
       "bulkSelectAll": "全选",
       "bulkSelectOne": "选择 Token #{id}"
+    },
+    "ranges": {
+      "title": "IP 段导入导出",
+      "help": "把 IP 段导出成 .ipq 文件，或把 .ipq 文件合并进当前库。导出和导入用的是同一个文件格式，所以可以在两台实例之间搬运数据。",
+      "exported": "导出完成，共 {rows} 条 IP 段",
+      "exportFailed": "导出失败：{error}",
+      "imported": "导入完成：写入 {inserted} 条，跳过 {failed} 条",
+      "importFailed": "导入失败：{error}",
+      "importRejected": "文件无法导入：{error}",
+      "tooLarge": "文件超过 16 MB，请改用命令行导入或拆分后重试",
+      "export": {
+        "title": "导出 IP 段",
+        "help": "把当前库里的 IP 段写成一个 .ipq 文件。导出是全量的，可以在生成后下载，也能直接交给另一台实例导入。",
+        "confirm": "确认导出全部 IP 段？数据量较大时需要等待一段时间。",
+        "country": "只导出某个国家",
+        "countryPlaceholder": "例如 CN",
+        "countryHint": "留空表示导出全部。填两位 ISO 国家代码可只导出该国。",
+        "action": "生成导出文件",
+        "list": {
+          "file": "文件",
+          "rows": "条数",
+          "size": "大小",
+          "created": "生成时间",
+          "download": "下载",
+          "empty": "本次运行还没有生成过导出文件。",
+          "downloadLatest": "下载刚才导出的文件",
+          "rowsUnit": "条"
+        }
+      },
+      "import": {
+        "title": "导入 IP 段",
+        "help": "上传一个 .ipq 文件，把里面的 IP 段合并进当前库。已存在的同一段会被更新，不会报错。",
+        "file": "选择文件",
+        "fileHint": "只接受 .ipq 文件，也就是本页导出的那种格式。",
+        "action": "导入",
+        "ceilingPre": "单次最多导入",
+        "ceilingPost": "条 IP 段。导入的段会被标记为 import，ETL 全量刷新时会保留。"
+      },
+      "format": {
+        "title": "文件格式",
+        "help": "每行一条 JSON 记录，第一行是文件头。可以直接用文本编辑器查看，也可以用 grep 或 diff 比对两份文件。",
+        "sample": "{\"format\":\"ipquery-ranges\",\"version\":1,\"exportedAt\":\"2026-11-17T04:12:00.000Z\",\"rows\":1}\n{\"start\":\"1.0.0.0\",\"end\":\"1.0.0.255\",\"country\":\"AU\",\"countryName\":\"Australia\",\"asn\":13335}",
+        "note1": "地址以文本形式保存，不依赖字节序，IPv4 和 IPv6 可以放在同一个文件里。",
+        "note2": "导入时会重新计算 range_size，文件里的任何该字段都不会被采信。",
+        "note3": "导入的行标记为 import，ETL 全量刷新时会像 multi-provider 行一样被保留。"
+      }
     }
   },
   "home": {
