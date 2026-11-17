@@ -55,6 +55,84 @@ describe("admin settings", () => {
     expect(r.text).toMatch(/super&#8230;|super…|…cdefgh|…efgh|cdefgh|efgh/);
   });
 
+  it("reports which migrations the database is missing", async () => {
+    // The schema report is the difference between "this deployment runs"
+    // and "this deployment runs the schema this code was written against".
+    // A page that shows the connection but not the version leaves an
+    // operator guessing after every upgrade.
+    await td.pool.query("DELETE FROM schema_migrations WHERE version = '031'");
+    try {
+      const r = await request(app.server)
+        .get("/admin/settings")
+        .set("Cookie", "sid=" + adminSid);
+      expect(r.status).toBe(200);
+      // The pending step is named, not just counted.
+      expect(r.text).toMatch(/031_retire_ipinfo/);
+    } finally {
+      await td.pool.query("INSERT INTO schema_migrations (version) VALUES ('031')");
+    }
+  });
+
+  it("says which pending steps rebuild a table", async () => {
+    // 027 rewrites three ETL stage tables. On a library-sized install that
+    // is a lock an operator has to plan a window for, so it cannot be
+    // presented as an ordinary pending step.
+    const before = await td.pool.query<import("mysql2/promise").RowDataPacket[]>(
+      "SELECT version FROM schema_migrations ORDER BY version",
+    );
+    const recorded = (before[0] as Array<{ version: string }>).map((r) => r.version);
+    await td.pool.query(
+      `DELETE FROM schema_migrations WHERE version IN ('027', '028')`,
+    );
+    try {
+      const r = await request(app.server)
+        .get("/admin/settings")
+        .set("Cookie", "sid=" + adminSid);
+      expect(r.status).toBe(200);
+      // Only 027 rebuilds a table; 028 deletes rows.
+      const flagged = r.text.split("schema-migration-item").filter((c) => /takes-table-lock/.test(c));
+      expect(flagged.join("|")).toMatch(/027_multi_source_etl/);
+      expect(flagged.join("|")).not.toMatch(/028_retire_dead_providers/);
+    } finally {
+      for (const v of ["027", "028"]) {
+        if (recorded.includes(v)) {
+          await td.pool.query("INSERT INTO schema_migrations (version) VALUES (?)", [v]);
+        }
+      }
+    }
+  });
+
+  it("surfaces a table whose structure the migrations cannot account for", async () => {
+    // The ledger and the table can disagree. Every migration recorded as
+    // applied, and a column somebody dropped by hand — `migrate` will not
+    // bring it back, so the page has to say which table is wrong rather
+    // than report "in step".
+    await td.pool.query("ALTER TABLE settings DROP COLUMN updated_at");
+    try {
+      const r = await request(app.server)
+        .get("/admin/settings")
+        .set("Cookie", "sid=" + adminSid);
+      expect(r.status).toBe(200);
+      expect(r.text).toMatch(/schema-drift/);
+      expect(r.text).toMatch(/settings\.updated_at/);
+    } finally {
+      await td.pool.query(
+        "ALTER TABLE settings ADD COLUMN updated_at DATETIME(3) NOT NULL " +
+          "DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3)",
+      );
+    }
+  });
+
+  it("says the schema is in step when there is nothing pending", async () => {
+    const r = await request(app.server)
+      .get("/admin/settings")
+      .set("Cookie", "sid=" + adminSid);
+    expect(r.status).toBe(200);
+    // The applied list is what an operator reads to confirm a deploy went
+    // through; without it the card can only report bad news.
+    expect(r.text).toMatch(/schema-migration-item/);
+  });
+
   it("shows whether the reverse-proxy header is trusted", async () => {
     // The trustProxy state is a deployment fact with a silent failure
     // mode: if it is off while a proxy is in front, every visitor shares

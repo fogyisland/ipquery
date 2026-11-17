@@ -33,7 +33,7 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.migrationStatus = exports.getAppliedVersions = exports.runMigrations = exports.MANUAL_SOURCE_TAGS = void 0;
+exports.buildSchemaReference = exports.listMigrationEntries = exports.getSchemaReportFrom = exports.getSchemaReport = exports.migrationStatus = exports.getAppliedVersions = exports.runMigrations = exports.MANUAL_SOURCE_TAGS = void 0;
 exports.createPool = createPool;
 exports.createPoolFor = createPoolFor;
 exports.truncateNew = truncateNew;
@@ -802,4 +802,8 @@ var runner_1 = require("./migrations/runner");
 Object.defineProperty(exports, "runMigrations", { enumerable: true, get: function () { return runner_1.runMigrations; } });
 Object.defineProperty(exports, "getAppliedVersions", { enumerable: true, get: function () { return runner_1.getAppliedVersions; } });
 Object.defineProperty(exports, "migrationStatus", { enumerable: true, get: function () { return runner_1.migrationStatus; } });
+Object.defineProperty(exports, "getSchemaReport", { enumerable: true, get: function () { return runner_1.getSchemaReport; } });
+Object.defineProperty(exports, "getSchemaReportFrom", { enumerable: true, get: function () { return runner_1.getSchemaReportFrom; } });
+Object.defineProperty(exports, "listMigrationEntries", { enumerable: true, get: function () { return runner_1.listMigrationEntries; } });
+Object.defineProperty(exports, "buildSchemaReference", { enumerable: true, get: function () { return runner_1.buildSchemaReference; } });
 //# sourceMappingURL=mysql.js.map

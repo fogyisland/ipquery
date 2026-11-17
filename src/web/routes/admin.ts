@@ -81,6 +81,7 @@ import {
 import { findRunningEtlRun } from "../../etl/runGuard";
 import type { EtlRun } from "../../types";
 import { assertSafeHttpUrl } from "../../storage/ssrf";
+import { getSchemaReport, type SchemaReport } from "../../storage/migrations/runner";
 import { GenericHttpProvider } from "../../etl/genericHttpProvider";
 import { bufferToString } from "../../ip";
 
@@ -1452,11 +1453,80 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
         etlStatusText = req.t("admin.settings.etl.lastRunRunning");
       }
     }
+    // Schema drift, read live. This is the one question the page exists to
+    // answer after an upgrade: does this database hold the schema the
+    // running code was written against. A failure here is reported rather
+    // than swallowed — an unreadable ledger is itself the finding.
+    let schema: SchemaReport;
+    try {
+      schema = await getSchemaReport(app.pool);
+    } catch (err) {
+      app.log.warn({ err }, "failed to read the migration ledger");
+      schema = {
+        applied: [],
+        pending: [],
+        pendingCount: 0,
+        hasLockRisk: false,
+        isCurrent: false,
+        latest: null,
+        appliedLatest: null,
+        error: err instanceof Error ? err.message : String(err),
+        drift: [],
+        structureError: null,
+      };
+    }
+    const schemaView = {
+      ...schema,
+      current: schema.isCurrent,
+      // Pre-resolved strings: `{{req.t key a=b}}` drops hash arguments, so
+      // every sentence that carries a value is built here instead of in the
+      // template. See the note above the ETL status pill.
+      statusKind: schema.error || schema.structureError
+        ? "danger"
+        : schema.isCurrent
+          ? "success"
+          : schema.hasLockRisk
+            ? "warning"
+            : "info",
+      statusText: schema.error
+        ? req.t("admin.settings.schema.statusError", { error: schema.error })
+        : schema.structureError
+          ? req.t("admin.settings.schema.statusStructureError", { error: schema.structureError })
+          : schema.isCurrent
+            ? req.t("admin.settings.schema.statusOk")
+            : req.t("admin.settings.schema.statusBehind", { count: schema.pendingCount }),
+      latestText: schema.appliedLatest
+        ? `${schema.appliedLatest.version}_${schema.appliedLatest.name}`
+        : req.t("admin.settings.schema.noneApplied"),
+      pending: schema.pending.map((p) => ({
+        ...p,
+        file: `${p.entry.version}_${p.entry.name}`,
+        kindLabel: req.t(`admin.settings.schema.kind.${p.entry.kind}`),
+        lockLabel: p.entry.takesTableLock ? req.t("admin.settings.schema.lockRisk") : "",
+      })),
+      drift: schema.drift.map((d) => ({
+        ...d,
+        label:
+          d.kind === "missing_table"
+            ? req.t("admin.settings.schema.drift.missingTable")
+            : req.t("admin.settings.schema.drift.missingColumn"),
+      })),
+      appliedTail: schema.applied
+        .slice(-8)
+        .map((e) => ({
+          ...e,
+          file: `${e.version}_${e.name}`,
+          kindLabel: req.t(`admin.settings.schema.kind.${e.kind}`),
+        }))
+        .reverse(),
+      appliedCount: schema.applied.length,
+    };
     return reply.view("admin/settings.hbs", {
       layout: "layouts/admin",
       title: req.t("admin.settings.title"),
       config: display,
       pool,
+      schema: schemaView,
       etlLastRun,
       etlStatusKind,
       etlStatusText,

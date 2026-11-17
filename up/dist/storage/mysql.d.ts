@@ -194,4 +194,4 @@ export interface EtlRunDedupeRow {
 }
 export declare function insertEtlRunDedupe(pool: mysql.Pool, row: EtlRunDedupeRow): Promise<void>;
 export declare function getEtlRunDedupe(pool: mysql.Pool, runId: number): Promise<EtlRunDedupeRow | null>;
-export { runMigrations, getAppliedVersions, migrationStatus } from "./migrations/runner";
+export { runMigrations, getAppliedVersions, migrationStatus, getSchemaReport, getSchemaReportFrom, listMigrationEntries, buildSchemaReference, type MigrationEntry, type PendingMigration, type SchemaDrift, type SchemaReference, type SchemaReport, } from "./migrations/runner";

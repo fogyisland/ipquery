@@ -1015,4 +1015,17 @@ export async function getEtlRunDedupe(
   return etlRunDedupeFromRow(rows[0]!);
 }
 
-export { runMigrations, getAppliedVersions, migrationStatus } from "./migrations/runner";
+export {
+  runMigrations,
+  getAppliedVersions,
+  migrationStatus,
+  getSchemaReport,
+  getSchemaReportFrom,
+  listMigrationEntries,
+  buildSchemaReference,
+  type MigrationEntry,
+  type PendingMigration,
+  type SchemaDrift,
+  type SchemaReference,
+  type SchemaReport,
+} from "./migrations/runner";

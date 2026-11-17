@@ -41,7 +41,14 @@ describe("health route", () => {
     try {
       const res = await request(app.server).get("/healthz");
       expect(res.status).toBe(200);
-      expect(res.body).toEqual({ status: "ok" });
+      // The body used to be exactly `{ status: "ok" }`. It now also reports
+      // the schema, because a load balancer that only knows "the process is
+      // up" will happily keep sending traffic to a deployment whose database
+      // is a migration behind the code that is about to query it.
+      expect(res.body).toEqual({
+        status: "ok",
+        schema: { current: true, pending: 0 },
+      });
     } finally {
       await app.close();
     }

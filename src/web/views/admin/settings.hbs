@@ -324,6 +324,83 @@
       <input type="text" readonly value="{{config.db.poolSize}}">
     </div>
   </div>
+
+  {{!-- 数据库架构版本 ────────────────────────────────────────────────
+       This card answers one question: does this database hold the schema
+       the running code was written against. A deployment that skipped
+       `migrate` is invisible everywhere else — the process starts, the
+       health check says ok, and the first query that touches a column that
+       does not exist is where it surfaces.
+
+       Every sentence carrying a value is resolved in the route: calling
+       req.t with hash arguments from a template attribute drops them and
+       prints the literal braces. --}}
+  <div class="schema-report" id="schema-report">
+    <div class="schema-report-head">
+      <h3>{{req.t 'admin.settings.schema.title'}}</h3>
+      {{> pill kind=schema.statusKind text=schema.statusText}}
+    </div>
+    <p class="admin-section-help">{{req.t 'admin.settings.schema.help'}}</p>
+
+    <div class="schema-report-facts">
+      <div class="schema-report-fact">
+        <span class="form-field-label">{{req.t 'admin.settings.schema.appliedLatest'}}</span>
+        <code>{{schema.latestText}}</code>
+      </div>
+      <div class="schema-report-fact">
+        <span class="form-field-label">{{req.t 'admin.settings.schema.pendingCount'}}</span>
+        <span>{{schema.pendingCount}}</span>
+      </div>
+      <div class="schema-report-fact">
+        <span class="form-field-label">{{req.t 'admin.settings.schema.shippedCount'}}</span>
+        <span>{{schema.appliedCount}}</span>
+      </div>
+    </div>
+
+    {{#if schema.pending.length}}
+    <ul class="schema-migration-list">
+      {{#each schema.pending}}
+      <li class="schema-migration-item{{#if this.entry.takesTableLock}} takes-table-lock{{/if}}">
+        <code class="schema-migration-file">{{this.file}}</code>
+        <span class="pill pill-muted">{{this.kindLabel}}</span>
+        {{#if this.entry.takesTableLock}}<span class="pill pill-warning">{{this.lockLabel}}</span>{{/if}}
+      </li>
+      {{/each}}
+    </ul>
+    {{else}}
+    <p class="form-field-hint">{{req.t 'admin.settings.schema.nothingPending'}}</p>
+    {{/if}}
+
+    {{!-- Structural drift is a different failure from a pending migration:
+         the ledger says the work is done and the table is not what the code
+         expects. It gets its own list because the remedy is different —
+         `migrate` will not fix a column someone dropped by hand. --}}
+    {{#if schema.drift.length}}
+    <div class="schema-drift">
+      <h4>{{req.t 'admin.settings.schema.drift.title'}}</h4>
+      <ul class="schema-migration-list">
+        {{#each schema.drift}}
+        <li class="schema-migration-item takes-table-lock">
+          <code class="schema-migration-file">{{this.table}}{{#if this.column}}.{{this.column}}{{/if}}</code>
+          <span class="pill pill-danger">{{this.label}}</span>
+        </li>
+        {{/each}}
+      </ul>
+    </div>
+    {{/if}}
+
+    <details class="schema-migration-details">
+      <summary>{{req.t 'admin.settings.schema.appliedRecently'}}</summary>
+      <ul class="schema-migration-list">
+        {{#each schema.appliedTail}}
+        <li class="schema-migration-item">
+          <code class="schema-migration-file">{{this.file}}</code>
+          <span class="pill pill-muted">{{this.kindLabel}}</span>
+        </li>
+        {{/each}}
+      </ul>
+    </details>
+  </div>
 </div>
 
 {{!-- ─── Tab + secret-reveal JS — external files (CSP blocks inline) ──── --}}

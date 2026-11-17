@@ -246,6 +246,17 @@ describe("the providers page carries no secret and no hardcoded label", () => {
     expect(view).toContain("admin.unknownIps.customProviders.methodCol");
   });
 
+  it("styles the schema report the way the rest of the system tab reads", () => {
+    // The card is the one place on this page that can say "stop" — a
+    // pending step that rebuilds a table needs to look different from a
+    // plain data step, and both need to sit on the same surface as the
+    // readonly config fields above them.
+    const css = fs.readFileSync(CSS, "utf8");
+    for (const selector of [".schema-report", ".schema-migration-item", ".takes-table-lock"]) {
+      expect(css, `${selector} must be styled`).toContain(`${selector} {`);
+    }
+  });
+
   it("keeps one heading per section", () => {
     // The custom-provider section used to open with two <h3> in a row —
     // `customSection` and `addTitle` — which reads as two sections and

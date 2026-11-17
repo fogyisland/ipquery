@@ -553,7 +553,31 @@
         "maxUsedConnections": "峰值连接"
       },
       "etlRestart": "立即运行 ETL",
-      "etlRestart.confirm": "手动触发 ETL 流水线(异步)"
+      "etlRestart.confirm": "手动触发 ETL 流水线(异步)",
+      "schema": {
+        "title": "数据库架构版本",
+        "help": "对比当前代码自带的迁移与数据库里已执行的记录。升级后如果这里显示有待执行项，说明这次发布漏了迁移步骤。",
+        "appliedLatest": "已应用到",
+        "pendingCount": "待执行",
+        "shippedCount": "已应用",
+        "appliedRecently": "最近应用的迁移",
+        "nothingPending": "没有待执行的迁移，数据库与当前代码一致。",
+        "statusOk": "架构已是最新",
+        "statusBehind": "落后 {count} 个迁移",
+        "statusError": "无法读取迁移记录：{error}",
+        "lockRisk": "会重建表",
+        "noneApplied": "(尚未执行任何迁移)",
+        "kind": {
+          "schema": "结构变更",
+          "data": "数据变更"
+        },
+        "statusStructureError": "无法比对表结构：{error}",
+        "drift": {
+          "title": "表结构与迁移记录不一致",
+          "missingTable": "缺少表",
+          "missingColumn": "缺少字段"
+        }
+      }
     },
     "unknownIps": {
       "title": "API 入库",
