@@ -2293,6 +2293,47 @@ color: var(--text-3);
 /* The sample is the specification. Give it room to breathe and let it
    scroll rather than wrap — a JSON line broken across four lines stops
    looking like a line of a file. */
+.range-replace {
+  margin-top: var(--sp-4);
+  padding-top: var(--sp-3);
+  border-top: var(--hairline);
+}
+.range-replace > summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--danger);
+}
+/* The warning has to be legible before the form is, so it is larger and
+   heavier than the hint text below it. */
+.range-replace-warning {
+  margin: var(--sp-2) 0;
+  padding: var(--sp-2) var(--sp-3);
+  background: rgba(185, 28, 28, 0.06);
+  border-left: 3px solid var(--danger);
+  font-size: 13px;
+}
+.range-import-bar {
+  display: block;
+  height: 6px;
+  background: var(--surface-3);
+  border-radius: 3px;
+  overflow: hidden;
+  margin-bottom: 2px;
+}
+.range-import-bar-fill {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+}
+.range-import-row.is-running .range-import-bar-fill {
+  background: var(--warning);
+}
+.range-import-error {
+  color: var(--danger);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
 .range-format-sample {
   overflow-x: auto;
   margin: var(--sp-3) 0;

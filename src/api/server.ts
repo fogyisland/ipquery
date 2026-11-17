@@ -34,7 +34,7 @@ import statsRoute from "./routes/stats";
 import marketingRoute from "../web/routes/marketing";
 import dashboardRoute from "../web/routes/dashboard";
 import adminRoute from "../web/routes/admin";
-import { registerRangeRoutes } from "../web/routes/adminRanges";
+import { registerRangeRoutes, RANGE_BODY_LIMIT } from "../web/routes/adminRanges";
 import authRoute from "../web/routes/auth";
 import initRoute from "../web/routes/init";
 
@@ -374,7 +374,18 @@ export async function buildServer(
   await app.register(cookie, {
     secret: cfg.web.sessionSecret || cfg.web.csrfSecret || "dev-only-secret-change-me",
   });
-  await app.register(formbody);
+  // The range import posts a whole .ipq file, and a file of a few thousand
+  // ranges is already several megabytes. `formbody` registers ONE parser for
+  // the whole application, and a parser is chosen before the route is — so a
+  // route-level `bodyLimit` on the range plugin never applies to it. The
+  // ceiling has to be raised here, on the parser itself.
+  //
+  // It is raised to the largest thing any form on this application may post
+  // (an .ipq export). Every other endpoint keeps rejecting oversized bodies;
+  // the difference is that they now reject 512 MB rather than 1 MB, which is
+  // still far below what would threaten the process, and the routes that
+  // accept a body all validate their own content afterwards.
+  await app.register(formbody, { bodyLimit: RANGE_BODY_LIMIT });
   await app.register(staticPlugin, { root: path.join(__dirname, "..", "web", "assets"), prefix: "/assets/" });
   await registerView(app, { baseUrl: cfg.web.baseUrl });
   await registerI18n(app);
@@ -440,7 +451,7 @@ export async function buildServer(
   await app.register(marketingRoute);
   await app.register(dashboardRoute);
   await app.register(adminRoute);
-  await app.register(async (instance) => registerRangeRoutes(instance));
+  await app.register(registerRangeRoutes);
   await app.register(authRoute);
   await app.register(initRoute);
   registerAuditLog(app);
