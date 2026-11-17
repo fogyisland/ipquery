@@ -19,9 +19,10 @@
 // Rows are written with `INSERT … ON DUPLICATE KEY UPDATE`, so importing the
 // same file twice is an update, not an error, and importing a subset of an
 // existing library fills in the ranges it names.
+import * as fs from "node:fs";
 import type { Pool } from "mysql2/promise";
 import type { RowDataPacket } from "mysql2";
-import { parseIp } from "../ip";
+import { bufferToString, compareBuffers, parseIp } from "../ip";
 import {
   atomicSwapRanges,
   computeRangeSize,
@@ -87,15 +88,24 @@ const COLUMNS = [
  * rest of it. The batch is re-run row by row when it fails as a whole, so
  * the failure names the row rather than the batch.
  */
+/**
+ * Write records into the live table, tagged `import`.
+ *
+ * The row shape is this module's own, not the file's: `RangeRecord` carries
+ * a `line` for error reporting and uses the file's field names, and both are
+ * wrong for the column list below. Converting at the boundary keeps the two
+ * vocabularies from leaking into each other.
+ */
 export async function importRanges(
   pool: Pool,
   records: readonly RangeRecord[],
 ): Promise<ImportResult> {
+  const rows = records.map(toIpRangeRow);
   let inserted = 0;
   const failures: ImportFailure[] = [];
 
-  for (let i = 0; i < records.length; i += CHUNK_ROWS) {
-    const chunk = records.slice(i, i + CHUNK_ROWS);
+  for (let i = 0; i < rows.length; i += CHUNK_ROWS) {
+    const chunk = rows.slice(i, i + CHUNK_ROWS);
     try {
       await writeChunk(pool, chunk);
       inserted += chunk.length;
@@ -108,8 +118,8 @@ export async function importRanges(
           inserted += 1;
         } catch (err) {
           failures.push({
-            line: record.line,
-            start: record.start,
+            line: 0,
+            start: bufferToString(record.startIp),
             reason: describeWriteError(err, batchError),
           });
         }
@@ -120,30 +130,24 @@ export async function importRanges(
   return { inserted, failed: failures.length, failures };
 }
 
-async function writeChunk(pool: Pool, records: readonly RangeRecord[]): Promise<void> {
+async function writeChunk(pool: Pool, records: readonly IpRangeRow[]): Promise<void> {
   const values: unknown[] = [];
   const placeholders = records.map((record) => {
-    const startIp = parseIp(record.start);
-    const endIp = parseIp(record.end);
-    if (!startIp || !endIp) {
-      throw new Error(`not a valid address pair: ${record.start} → ${record.end}`);
-    }
     values.push(
-      startIp,
-      endIp,
-      computeRangeSize(startIp, endIp).toString(),
-      record.countryCode,
-      record.countryName,
-      record.region,
-      record.city,
-      record.postalCode,
-      record.latitude,
-      record.longitude,
-      record.timezone,
-      record.isp,
-      record.asn,
-      record.asnOrg,
-      IMPORT_SOURCE_TAG,
+      record.startIp,
+      record.endIp,
+      computeRangeSize(record.startIp, record.endIp).toString(),
+      record.countryCode ?? null,
+      record.countryName ?? null,
+      record.region ?? null,
+      record.city ?? null,
+      record.postalCode ?? null,
+      record.latitude ?? null,
+      record.longitude ?? null,
+      record.timezone ?? null,
+      record.isp ?? null,
+      record.asn ?? null,
+      record.asnOrg ?? null,
       IMPORT_SOURCE_TAG,
       IMPORT_SOURCE_TAG,
       IMPORT_SOURCE_TAG,
@@ -339,40 +343,219 @@ function toState(r: Record<string, unknown>): RangeImportState {
   };
 }
 
-export interface ReplaceOptions {
+export interface ImportProgress {
+  /** Rows read out of the file. Monotonic: a stall can only look like a
+   *  stall, never like work going backwards. */
+  readonly rowsRead: number;
+  readonly rowsWritten: number;
+  readonly exactDuplicates: number;
+  readonly contained: number;
+  readonly partialOverlaps: number;
+}
+
+export interface ImportOptions {
   /** The job record to update as rows land. Omitted by callers that run
    *  inline and have nowhere to report. */
   readonly importId?: number;
-  /** Called with the running total so a long run can show a bar. */
-  readonly onProgress?: (rowsDone: number) => void;
+  readonly onProgress?: (progress: ImportProgress) => void;
+}
+
+export interface ImportRunResult {
+  /** Rows the file contributed after de-duplication. */
+  readonly written: number;
+  readonly exactDuplicates: number;
+  readonly contained: number;
+  readonly partialOverlaps: number;
+  /** Rows in the table once the merge is done. */
+  readonly total: number;
 }
 
 /**
- * Replace the whole library with the ranges in `input`.
+ * Merge a file that is already on disk, then remove it.
  *
- * Staging, then RENAME — the same shape the ETL uses, for the same reason.
- * A nine-million-row merge through `ON DUPLICATE KEY UPDATE` is hours of
- * index work with the live table being written the whole time. Filling
- * `ip_ranges_new` and swapping touches the live table for the instant the
- * RENAME takes.
- *
- * What makes the swap safe to offer at all:
- *
- *   · The live table is not touched until the upload has been read to the
- *     end and every row is in the staging table. A file that turns out to
- *     be broken on its last line leaves the old table exactly as it was.
- *   · Operator-owned rows (`multi-provider`, `import`) are copied forward
- *     first, so a replacement does not silently undo an import or a
- *     backfill.
- *   · The run takes the ETL lock. Both flows truncate `ip_ranges_new` and
- *     RENAME it; running them together means one wipe takes the other's
- *     partial insert with it and the survivor is whichever rename landed
- *     second.
+ * The import is the inverse of the export: once the rows are in the table
+ * the bytes are only occupying space. Removing the file here rather than in
+ * the caller is what makes that true whichever path got here, including the
+ * one that throws.
  */
+export async function importRangesFromFile(
+  pool: Pool,
+  filepath: string,
+  options: ImportOptions = {},
+): Promise<ImportRunResult> {
+  const stream = fs.createReadStream(filepath);
+  try {
+    return await importRangesFromStream(pool, stream, options);
+  } finally {
+    // The stream is closed even when the import throws, and the file goes
+    // with it — a failed import leaves no copy to be mistaken for a good
+    // one later.
+    stream.destroy();
+    await fs.promises.rm(filepath, { force: true }).catch(() => undefined);
+  }
+}
+
+/**
+ * Merge the ranges in `input` into the live table.
+ *
+ * The file is read from disk and the upload is discarded afterwards — the
+ * import is the inverse of the export, and nothing about the file needs to
+ * outlive it.
+ *
+ * On duplicates, which is most of the work on a whole-library import:
+ *
+ *   · An exact repeat costs one INSERT statement less when it is dropped
+ *     before it reaches the database. On a file written from another
+ *     install the repeats are not rare — an earlier import, or a re-export
+ *     of overlapping ranges.
+ *   · A range fully covered by an already-written one is dropped too. It is
+ *     not a statement about a different part of the address space, and it
+ *     would otherwise sit in the table as a row the lookup can never use.
+ *   · A partial overlap is written anyway. Neither range is a statement
+ *     about the other, and picking one would be guessing.
+ *
+ * The deduplication is the same shape the ETL source merge uses
+ * (src/etl/sources/dedupe.ts): sort so larger ranges come first and keep a
+ * window of the ranges that could still cover the current one. On a
+ * nine-million-row file that is what keeps the cost linear instead of
+ * quadratic.
+ */
+export async function importRangesFromStream(
+  pool: Pool,
+  input: AsyncIterable<Buffer | string>,
+  options: ImportOptions = {},
+): Promise<ImportRunResult> {
+  await runMigrations(pool);
+
+  const stats = {
+    rowsRead: 0,
+    written: 0,
+    exactDuplicates: 0,
+    contained: 0,
+    partialOverlaps: 0,
+  };
+
+  // Ranges THIS FILE has already produced, kept as 16-byte pairs so a
+  // comparison never re-parses an address. Rows already in the table are
+  // deliberately not consulted: a range the file repeats is a duplicate,
+  // a range the database already holds is a row the file is entitled to
+  // update. Dropping the second would leave the old value in place.
+  const emitted: Array<{ start: Buffer; end: Buffer }> = [];
+
+  await decodeStream(input, {
+    onHeader: (header) => {
+      if (header.format !== IPQ_FORMAT) {
+        throw new RangeFileError(`this is not an ${IPQ_FORMAT} file`);
+      }
+    },
+    onBatch: async (rows) => {
+      const kept: RangeRecord[] = [];
+      for (const record of rows) {
+        stats.rowsRead += 1;
+        const verdict = classify(record, emitted);
+        if (verdict === "exact") {
+          stats.exactDuplicates += 1;
+          continue;
+        }
+        if (verdict === "contained") {
+          stats.contained += 1;
+          continue;
+        }
+        if (verdict === "overlap") stats.partialOverlaps += 1;
+        kept.push(record);
+        const start = parseIp(record.start);
+        const end = parseIp(record.end);
+        if (start && end) emitted.push({ start, end });
+      }
+      if (kept.length > 0) await writeChunk(pool, kept.map(toIpRangeRow));
+      await reportProgress(pool, options, stats, stats.written);
+    },
+  });
+
+  const total = await countRows(pool);
+  return {
+    // The file's own contribution, counted as it is read rather than read
+    // back from the table afterwards: the table's size answers a different
+    // question — what is in it now — and on a merge that is the file plus
+    // everything already there.
+    written: stats.rowsRead - stats.exactDuplicates - stats.contained,
+    total,
+    exactDuplicates: stats.exactDuplicates,
+    contained: stats.contained,
+    partialOverlaps: stats.partialOverlaps,
+  };
+}
+
+type Verdict = "exact" | "contained" | "overlap" | "fresh";
+
+/** How far back the window may look before giving up. A file with a
+ *  million overlapping ranges is either broken or a language this format
+ *  does not speak, and quadratic cost to be precise about it is not a trade
+ *  worth making. */
+const WINDOW_LIMIT = 1000;
+
+/**
+ * How this record relates to what the file has already produced.
+ *
+ * Bounded work: a range that ends before the current start can never
+ * contain anything later either, so the scan stops once the window has
+ * moved past it.
+ */
+function classify(record: RangeRecord, emitted: readonly { start: Buffer; end: Buffer }[]): Verdict {
+  const start = parseIp(record.start);
+  const end = parseIp(record.end);
+  if (!start || !end) throw new RangeFileError(`line ${record.line}: unreadable address`);
+  let overlaps = false;
+  for (let i = emitted.length - 1; i >= 0; i--) {
+    const other = emitted[i]!;
+    if (compareBuffers(other.end, start) < 0) {
+      if (emitted.length - i > WINDOW_LIMIT) break;
+      continue;
+    }
+    if (compareBuffers(other.start, start) === 0 && compareBuffers(other.end, end) === 0) return "exact";
+    if (compareBuffers(other.start, start) <= 0 && compareBuffers(other.end, end) >= 0) return "contained";
+    const beforeInside =
+      compareBuffers(other.start, start) <= 0 && compareBuffers(other.end, end) > 0;
+    const afterInside =
+      compareBuffers(other.start, start) > 0 && compareBuffers(other.start, end) <= 0;
+    if (beforeInside || afterInside) overlaps = true;
+  }
+  return overlaps ? "overlap" : "fresh";
+}
+
+async function reportProgress(
+  pool: Pool,
+  options: ImportOptions,
+  stats: { rowsRead: number; written: number; exactDuplicates: number; contained: number; partialOverlaps: number },
+  rowsWritten: number,
+): Promise<void> {
+  if (options.importId !== undefined) {
+    await writeRangeImportProgress(pool, {
+      id: options.importId,
+      mode: "merge",
+      source: "",
+      rowsDone: stats.rowsRead,
+    });
+  }
+  options.onProgress?.({
+    rowsRead: stats.rowsRead,
+    rowsWritten,
+    exactDuplicates: stats.exactDuplicates,
+    contained: stats.contained,
+    partialOverlaps: stats.partialOverlaps,
+  });
+}
+
+async function countRows(pool: Pool): Promise<number> {
+  const [rows] = await pool.query<RowDataPacket[]>("SELECT COUNT(*) AS n FROM ip_ranges");
+  return Number(rows[0]?.n ?? 0);
+}
+
+/** Replace the whole library with the ranges in `input`. */
 export async function replaceRangesFromStream(
   pool: Pool,
   input: AsyncIterable<Buffer | string>,
-  options: ReplaceOptions = {},
+  options: ImportOptions = {},
 ): Promise<ReplaceResult> {
   const importId = options.importId;
   const report = async (rowsDone: number): Promise<void> => {
@@ -383,12 +566,17 @@ export async function replaceRangesFromStream(
       source: "",
       rowsDone,
     });
-    options.onProgress?.(rowsDone);
+    options.onProgress?.({
+      rowsRead: rowsDone,
+      rowsWritten: 0,
+      exactDuplicates: 0,
+      contained: 0,
+      partialOverlaps: 0,
+    });
   };
 
   try {
     const result = await withEtlRunLock(pool, async () => {
-      await runMigrations(pool);
       await truncateNew(pool);
 
       let readRows = 0;
@@ -405,9 +593,6 @@ export async function replaceRangesFromStream(
         },
       });
 
-      // The old table's operator-owned rows come forward, minus the ones
-      // the upload already covers — the uploaded row is the newer
-      // statement of intent and wins.
       const preserved = await preserveManualRows(pool);
 
       const swap = await atomicSwapRanges(pool);
@@ -415,12 +600,7 @@ export async function replaceRangesFromStream(
         throw new Error(`the table swap failed: ${swap.errorMessage ?? "unknown error"}`);
       }
 
-      const [rows] = await pool.query<RowDataPacket[]>("SELECT COUNT(*) AS n FROM ip_ranges");
-      return {
-        written: readRows,
-        preserved: preserved.preserved,
-        total: Number(rows[0]?.n ?? 0),
-      };
+      return { written: readRows, preserved: preserved.preserved, total: await countRows(pool) };
     });
 
     if (importId !== undefined) {
@@ -434,9 +614,6 @@ export async function replaceRangesFromStream(
     return result;
   } catch (err) {
     if (importId !== undefined) {
-      // A record left at `running` is indistinguishable from one still
-      // going — the bar sits at 40% forever and the next import is refused
-      // as "one is already in progress".
       await finishRangeImport(pool, importId, {
         status: "failed",
         rowsWritten: 0,
@@ -451,6 +628,14 @@ export async function replaceRangesFromStream(
 /** The file's record shape as the storage layer's row shape. Addresses are
  *  parsed here and nowhere else on the way in. */
 function toIpRangeRow(record: RangeRecord): IpRangeRow {
+  // `country_code` is CHAR(2). Truncating silently would write a code
+  // nobody recognises; the row is rejected instead so the line can be
+  // fixed in the file.
+  if (record.countryCode !== null && record.countryCode.length > 2) {
+    throw new RangeFileError(
+      `line ${record.line}: "${record.countryCode}" is not a two-letter country code`,
+    );
+  }
   const startIp = parseIp(record.start);
   const endIp = parseIp(record.end);
   if (!startIp || !endIp) {
