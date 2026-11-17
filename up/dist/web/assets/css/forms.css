@@ -36,13 +36,13 @@
 button[type="submit"],
 .btn-primary {
   /* The console, the wizard and the marketing pages all speak the same
-     accent now. This rule used to paint a terminal cyan with a 2px radius
+     accent now. This rule used to paint a terminal blue with a 2px radius
      and a monospace face, which left the sign-in pages looking like a
      different product from the admin console.
-     The teal here is the same value as `--accent` in admin.css and
+     The blue here is the same value as `--accent` in admin.css and
      `--boot-accent` in init.css. It is written out rather than referenced
      because this file is shared by shells that define neither variable. */
-  background: #0e7490;
+  background: #1d4ed8;
   color: #ffffff;
   padding: 7px 14px;
   border: 0;

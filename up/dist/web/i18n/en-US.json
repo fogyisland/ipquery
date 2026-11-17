@@ -730,7 +730,8 @@
           "off": "Disabled"
         },
         "save": "Save",
-        "apiKeyPlaceholder": "not set"
+        "apiKeyPlaceholder": "not set",
+        "saveWithKey": "Enter the API key before saving"
       },
       "healthCard": {
         "statusOk": "Healthy",
@@ -850,7 +851,9 @@
           "invalidUrl": "URL is invalid or blocked by SSRF guard",
           "nameConflict": "Name already exists or conflicts with a built-in provider",
           "invalidFieldPath": "Field path format invalid"
-        }
+        },
+        "apiCol": "Endpoint",
+        "methodCol": "Method"
       }
     },
     "providers": {
@@ -863,7 +866,10 @@
       "apiKeyLabel": "API key",
       "apiKeyStored": "Stored — leave blank to keep it",
       "enabledChip": "Enabled",
-      "disabledChip": "Disabled"
+      "disabledChip": "Disabled",
+      "neverRun": "Not called yet",
+      "neverRunHint": "The next random run or backfill will use this source",
+      "save": "Save"
     },
     "ingest": {
       "backfill": {

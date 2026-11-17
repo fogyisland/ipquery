@@ -6,6 +6,16 @@ import zhCN from "../../src/web/i18n/zh-CN.json";
 import enUS from "../../src/web/i18n/en-US.json";
 
 const CSS = path.join(__dirname, "..", "..", "src", "web", "assets", "css", "admin.css");
+const PROVIDERS_VIEW = path.join(
+  __dirname,
+  "..",
+  "..",
+  "src",
+  "web",
+  "views",
+  "admin",
+  "providers.hbs",
+);
 const LAYOUT = path.join(__dirname, "..", "..", "src", "web", "views", "layouts", "admin.hbs");
 
 function lookup(dict: Record<string, unknown>, dotted: string): unknown {
@@ -20,7 +30,7 @@ describe("commercial admin console shell", () => {
     const css = fs.readFileSync(CSS, "utf8");
     expect(css).toContain("color-scheme: light;");
     expect(css).not.toContain("@media (prefers-color-scheme: light)");
-    expect(css).toContain("--accent: #0e7490;");
+    expect(css).toContain("--accent: #1d4ed8;");
   });
 
   it("defines every colour used by the shell as a token", () => {
@@ -47,7 +57,7 @@ describe("commercial admin console shell", () => {
     expect(layout).toContain('content="#f5f7fa"');
   });
 
-  it("re-skins submit buttons so they share the teal accent", () => {
+  it("re-skins submit buttons so they share the accent", () => {
     // forms.css styles `button[type="submit"]` on its own, and that
     // selector beats `.btn-primary` on specificity — without an explicit
     // override the filter buttons stay cyan while everything else moves
@@ -119,7 +129,7 @@ describe("commercial admin console shell", () => {
 
   it("gives every shell the same accent colour", () => {
     // The product is one product: the console, the wizard and the
-    // sign-in pages share one teal. forms.css cannot reference a CSS
+    // sign-in pages share one blue. forms.css cannot reference a CSS
     // variable (the shells that load it define none), so the value is
     // written out — and this test is what keeps the three copies equal.
     const read = (name: string): string =>
@@ -132,14 +142,14 @@ describe("commercial admin console shell", () => {
     const init = read("init.css");
     const forms = read("forms.css");
 
-    expect(admin).toContain("--accent: #0e7490;");
-    expect(init).toContain("--boot-accent: #0e7490;");
+    expect(admin).toContain("--accent: #1d4ed8;");
+    expect(init).toContain("--boot-accent: #1d4ed8;");
 
     // The submit button rule: take the block and check the colour it paints.
     const start = forms.indexOf("button[type=\"submit\"],");
     expect(start).toBeGreaterThan(-1);
     const block = forms.slice(start, forms.indexOf("}", start));
-    expect(block).toContain("background: #0e7490;");
+    expect(block).toContain("background: #1d4ed8;");
     expect(block).toContain("color: #ffffff;");
     // The old terminal button was a 2px-radius monospace chip.
     expect(block).toContain("border-radius: 8px;");
@@ -192,5 +202,60 @@ describe("commercial admin console shell", () => {
     );
     expect(layout).toContain("body.layout-auth");
     expect(layout).toContain("color-scheme: light;");
+  });
+});
+
+describe("the providers page carries no secret and no hardcoded label", () => {
+  const view = fs.readFileSync(PROVIDERS_VIEW, "utf8");
+
+  it("never renders an api key into the page", () => {
+    // `{{apiKey}}` would print the stored secret into the HTML source. The
+    // key is write-only from the UI: the input is empty, and the placeholder
+    // says whether one is stored.
+    expect(view).not.toMatch(/\{\{\s*(this\.)?apiKey\s*\}\}/);
+  });
+
+  it("does not claim a key is stored when the field is empty", () => {
+    // The placeholder is the only place `hasApiKey` is shown, so it has to
+    // carry both branches — and the field has to be required when there is
+    // no key yet, or saving with a blank key stores nothing at all.
+    expect(view).toContain("admin.providers.apiKeyStored");
+    expect(view).toContain("{{#unless this.hasApiKey}}required{{/unless}}");
+  });
+
+  it("gives every form button a localised label", () => {
+    // `admin.unknownIps.providers.save` is the column header of the old
+    // providers table ("状态"-style column label), not a verb. The button
+    // wants `admin.providers.save`.
+    const labels = [...view.matchAll(/<button[^>]*>\{\{[^}]*'([^']+)'[^}]*\}\}<\/button>/g)].map(
+      (m) => m[1] ?? "",
+    );
+    expect(labels.length).toBeGreaterThan(0);
+    expect(labels).not.toContain("admin.unknownIps.providers.save");
+    for (const key of labels) {
+      expect(lookup(zhCN as Record<string, unknown>, key), `zh ${key}`).toEqual(expect.any(String));
+      expect(lookup(enUS as Record<string, unknown>, key), `en ${key}`).toEqual(expect.any(String));
+    }
+  });
+
+  it("localises every label on the custom-provider form", () => {
+    // A single hardcoded label among twenty localised ones reads as a bug in
+    // every non-English deployment.
+    expect(view).not.toMatch(/<span>API Key<\/span>/);
+    expect(view).toContain("admin.unknownIps.customProviders.apiCol");
+    expect(view).toContain("admin.unknownIps.customProviders.methodCol");
+  });
+
+  it("keeps one heading per section", () => {
+    // The custom-provider section used to open with two <h3> in a row —
+    // `customSection` and `addTitle` — which reads as two sections and
+    // breaks the heading outline. The count is per <h3> body, so a heading
+    // whose text is a translation call still counts once.
+    const bodies = view.split("<h3>").slice(1).map((chunk) => chunk.split("</h3>")[0] ?? "");
+    const custom = bodies.filter((body) => body.includes("admin.providers.customSection"));
+    expect(custom).toHaveLength(1);
+    // …and nothing else sits directly under it as another heading.
+    expect(bodies.some((body) => body.includes("customProviders.addTitle"))).toBe(false);
+    expect(view).toContain("admin-section-help");
   });
 });
