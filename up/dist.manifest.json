@@ -1,7 +1,7 @@
 {
   "formatVersion": 1,
-  "fileCount": 441,
-  "totalBytes": 2443332,
+  "fileCount": 445,
+  "totalBytes": 2474568,
   "files": {
     "api/dbBootstrap.d.ts": {
       "bytes": 8916,
@@ -739,17 +739,21 @@
       "bytes": 1367,
       "sha256": "118b4e4381f4a771a7e49d06e7fc93b6acd0b146985c567bc3c5c94b1471e479"
     },
+    "storage/migrations/033_range_uploads.sql": {
+      "bytes": 1409,
+      "sha256": "18905a28a69511a89c323b97a5f94781b33d0ed2352fcaf1b8b373da2332a8ec"
+    },
     "storage/migrations/runner.d.ts": {
       "bytes": 6776,
       "sha256": "8dc96cbbc7b1c2a5af3dc6e007cf349978bbe0b35d198a3cd9947270b1cece0a"
     },
     "storage/migrations/runner.js": {
-      "bytes": 68706,
-      "sha256": "e6fe7b64b18561e868e9b9ab9b3af80d85af879ed031a0e480e1c61f1a964b00"
+      "bytes": 70209,
+      "sha256": "92b8e5c536aed11367b3cc82bbdad90a494cc5e07560673892ad323108b2d867"
     },
     "storage/migrations/runner.js.map": {
-      "bytes": 12562,
-      "sha256": "58f3f2ae525be80ae3d787791f6a3d421430957d2305846c892001eeb87d69e4"
+      "bytes": 12613,
+      "sha256": "b4d787b0b25704afde6745ff40be9edbabaff6e8a03b84d91ceb905e6495fa97"
     },
     "storage/mysql.d.ts": {
       "bytes": 9743,
@@ -834,6 +838,18 @@
     "storage/rangeImport.js.map": {
       "bytes": 9529,
       "sha256": "232f348ea13186fc2014c2735ce91581d32cf661c5d9a04509fa32be6931da15"
+    },
+    "storage/rangeUpload.d.ts": {
+      "bytes": 2617,
+      "sha256": "09f675098b334326974b11dc189937015916b12372eabf965706052648c9b4bb"
+    },
+    "storage/rangeUpload.js": {
+      "bytes": 9434,
+      "sha256": "7be5cebad81dcd3e8430faf99e255281db7554731902ff17dc01c8802abff5e3"
+    },
+    "storage/rangeUpload.js.map": {
+      "bytes": 5688,
+      "sha256": "d1c5a3bf2f7cd35aae5db4c09ff04693065545e913d8b5262fce3340fafeeaba"
     },
     "storage/rateLimit.d.ts": {
       "bytes": 778,
@@ -1240,16 +1256,16 @@
       "sha256": "67d23108f899e2ffa84099c56f6810ccf3beb17203a23c1dd48d3260b31ddd5e"
     },
     "web/plugins/csrf.d.ts": {
-      "bytes": 305,
-      "sha256": "b61a3aab2c52a9f5dbd320094fed2c45f8a39c483b1bc935e9a0b3e82df399e4"
+      "bytes": 783,
+      "sha256": "98901e815d5f391f36d1ed0386dc9868fcfeb2789e9793f4ffe26b5a440b9a8d"
     },
     "web/plugins/csrf.js": {
-      "bytes": 3521,
-      "sha256": "a4331ebdb0abf72d09c9d16a27d1c900d061e19dc75c5162466f4a0a50df768b"
+      "bytes": 3987,
+      "sha256": "11ec14734945f49bbe26d73fa99e42322406ef00ec9fff06b9ae7eea996b9cce"
     },
     "web/plugins/csrf.js.map": {
-      "bytes": 2927,
-      "sha256": "09bd232f1576289c7a0334c367b80a33e2908c2521ffe7cf18ed9bc26630b118"
+      "bytes": 2965,
+      "sha256": "22fdd1548da22219a68f93117a675e810f4d0508bfed51411d2ca2f3b5a672d2"
     },
     "web/plugins/degradedGate.d.ts": {
       "bytes": 364,
@@ -1424,12 +1440,12 @@
       "sha256": "4625cfbd6a263eb06e840cd7b5eb660aab5cad4ce81d056c05871aa329d3ac62"
     },
     "web/routes/adminRanges.js": {
-      "bytes": 13728,
-      "sha256": "378fa2085447e707cf58ff30d592b1f4b2a31d05eecea84f4f69ef0267418f94"
+      "bytes": 19050,
+      "sha256": "9ef533c5d71473d93702a7510efed8ad522d89107eaff34e0e9fc1243aafeebc"
     },
     "web/routes/adminRanges.js.map": {
-      "bytes": 10430,
-      "sha256": "872ce4fd0db857ba1530cf5475f7edec7af97d5ae4b380be5d05554c64d438c0"
+      "bytes": 14660,
+      "sha256": "45a08dc7becd071164fdac8ae64cba7265aeff23a54180bb03e03ae7beea714e"
     },
     "web/routes/auth.d.ts": {
       "bytes": 121,
