@@ -1599,6 +1599,7 @@ async function adminRoutes(app) {
                 displayName: p.displayName,
                 freeQuota: p.freeQuota,
                 enforcedLimit: (0, ingestProviders_1.enforcedRateLimitLabel)(p.name),
+                hasAnyCalls: (health1h?.calls ?? 0) + (health24h?.calls ?? 0) + (health7d?.calls ?? 0) > 0,
                 enabled: p.enabled,
                 hasApiKey: Boolean(p.apiKey),
                 status,
@@ -2185,6 +2186,7 @@ async function adminRoutes(app) {
                 displayName: p.displayName,
                 freeQuota: p.freeQuota,
                 enforcedLimit: (0, ingestProviders_1.enforcedRateLimitLabel)(p.name),
+                hasAnyCalls: (health1h?.calls ?? 0) + (health24h?.calls ?? 0) + (health7d?.calls ?? 0) > 0,
                 enabled: p.enabled,
                 hasApiKey: Boolean(p.apiKey),
                 status,
@@ -2271,6 +2273,7 @@ async function adminRoutes(app) {
                 asnPath: c.customAsnPath ?? "",
                 timeoutMs: c.customTimeoutMs ?? 5000,
                 enforcedLimit: (0, ingestProviders_1.enforcedRateLimitLabel)(c.name),
+                hasAnyCalls: h1h.calls + h24h.calls + h7d.calls > 0,
                 health1h: {
                     calls: h1h.calls,
                     errors429: h1h.errors429,

@@ -9,7 +9,7 @@
 
    Design system (ui-ux-pro-max, "ip geolocation developer infrastructure
    saas enterprise light"):
-     palette   canvas #F6F8FB -> card #FFFFFF, accent #0E7490, success #15803D
+     palette   canvas #F6F8FB -> card #FFFFFF, accent #1D4ED8, success #15803D
      type      Plus Jakarta Sans (UI) / JetBrains Mono (data + micro-labels)
      effects   hairline borders, one soft ambient wash, no second accent
 
@@ -45,13 +45,13 @@
   --boot-muted: #64748b;
   --boot-faint: #94a3b8;
 
-  /* One accent. Teal-cyan keeps the product's existing signature (the
-     admin console's cyan) but dark enough to clear AA on white — the
-     admin's #22D3EE would sit at ~1.9:1 here. */
-  --boot-accent: #0e7490;
+  /* One accent. The business blue is shared with admin.css and forms.css
+     (see the "same accent" test in test/unit/admin-shell.test.ts); it is
+     dark enough to clear AA on white — the old #22D3EE sat at ~1.9:1. */
+  --boot-accent: #1d4ed8;
   --boot-accent-ink: #ffffff;
-  --boot-accent-soft: rgba(14, 116, 144, 0.08);
-  --boot-accent-line: rgba(14, 116, 144, 0.28);
+  --boot-accent-soft: rgba(29, 78, 216, 0.08);
+  --boot-accent-line: rgba(29, 78, 216, 0.28);
 
   --boot-ok: #15803d;
   --boot-ok-soft: rgba(21, 128, 61, 0.09);
@@ -64,8 +64,10 @@
   --boot-warn-line: rgba(180, 83, 9, 0.3);
   /* Aliases kept so layouts/public.hbs and the error views resolve the same
      tokens they did before the palette change. */
-  --boot-cyan: #0e7490;
-  --boot-cyan-bright: #0891b2;
+  /* Historical names: layouts/public.hbs and the error views still
+     resolve --boot-cyan*. The values are the business blue. */
+  --boot-cyan: #1d4ed8;
+  --boot-cyan-bright: #2563eb;
   --boot-line-strong: #cbd5e1;
   --boot-paper: #ffffff;
   --boot-paper-2: #f8fafc;
@@ -392,7 +394,7 @@ body.layout-setup .setup-step.is-active .setup-step-label {
   position: absolute;
   inset: 0;
   background:
-    radial-gradient(60rem 30rem at 70% -10%, rgba(14, 116, 144, 0.05), transparent 70%),
+    radial-gradient(60rem 30rem at 70% -10%, rgba(29, 78, 216, 0.05), transparent 70%),
     radial-gradient(40rem 24rem at 20% 110%, rgba(37, 99, 235, 0.045), transparent 70%);
   pointer-events: none;
 }
@@ -649,7 +651,7 @@ body.layout-setup button[type="submit"],
   cursor: pointer;
   box-shadow:
     0 1px 0 rgba(255, 255, 255, 0.18) inset,
-    0 8px 24px -10px rgba(14, 116, 144, 0.5);
+    0 8px 24px -10px rgba(29, 78, 216, 0.5);
   transition:
     background 160ms var(--boot-ease),
     box-shadow 160ms var(--boot-ease),
@@ -661,7 +663,7 @@ body.layout-setup button[type="submit"]:hover,
   background: #0b5c73;
   box-shadow:
     0 1px 0 rgba(255, 255, 255, 0.2) inset,
-    0 10px 28px -10px rgba(14, 116, 144, 0.55);
+    0 10px 28px -10px rgba(29, 78, 216, 0.55);
 }
 
 body.layout-setup button[type="submit"]:active,

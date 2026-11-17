@@ -44,7 +44,11 @@
     <div class="provider-health-card-head">
       <div class="provider-health-card-id">
         <span class="provider-health-card-name">{{this.displayName}}</span>
-        <code class="provider-health-card-slug">{{this.name}}</code>
+        <span class="provider-health-card-meta">
+          <code class="provider-health-card-slug">{{this.name}}</code>
+          <span class="provider-health-card-sep">·</span>
+          <span>{{this.freeQuota}}</span>
+        </span>
       </div>
       <div class="provider-health-card-flags">
         {{#if this.enabled}}
@@ -64,6 +68,7 @@
 
     <div class="provider-health-card-body">
       <div class="provider-health-card-left">
+        {{#if this.hasAnyCalls}}
         <div class="provider-health-window">
           <div class="provider-health-window-cell provider-health-window-cell--{{this.health1h.kind}}" title="{{this.health1h.title}}">
             <div class="provider-health-window-label">{{@root.req.t 'admin.unknownIps.healthCard.window1h'}}</div>
@@ -81,6 +86,12 @@
             <div class="provider-health-window-sub">{{this.health7d.calls}} {{@root.req.t 'admin.unknownIps.healthCard.calls'}}</div>
           </div>
         </div>
+        {{else}}
+        <div class="provider-health-empty">
+          <span class="provider-health-empty-title">{{@root.req.t 'admin.providers.neverRun'}}</span>
+          <span class="provider-health-empty-hint">{{@root.req.t 'admin.providers.neverRunHint'}}</span>
+        </div>
+        {{/if}}
 
         <div class="provider-health-card-facts">
           <span class="provider-fact">
@@ -141,23 +152,28 @@
           </label>
           <label class="provider-key-field">
             <span class="provider-key-field-label">{{@root.req.t 'admin.providers.apiKeyLabel'}}</span>
-            <input type="password" name="apiKey"
+            {{!-- Write-only: the stored key is never echoed back. The
+                 placeholder is the only signal that one exists, and the
+                 field is required until it does — otherwise saving with a
+                 blank key stores nothing and looks like it worked. --}}
+            <input type="password" name="apiKey" {{#unless this.hasApiKey}}required{{/unless}}
+                   title="{{#if this.hasApiKey}}{{@root.req.t 'admin.providers.apiKeyStored'}}{{else}}{{@root.req.t 'admin.unknownIps.providers.saveWithKey'}}{{/if}}"
                    placeholder="{{#if this.hasApiKey}}{{@root.req.t 'admin.providers.apiKeyStored'}}{{else}}{{@root.req.t 'admin.unknownIps.providers.apiKeyPlaceholder'}}{{/if}}"
                    autocomplete="off">
           </label>
-          <button type="submit" class="btn-primary btn-sm">{{@root.req.t 'admin.unknownIps.providers.save'}}</button>
+          <button type="submit" class="btn-primary btn-sm">{{@root.req.t 'admin.providers.save'}}</button>
         </form>
 
+        {{#if this.enforcedLimit}}
+        {{!-- The chip is reserved for the one place a limit is actually
+             enforced. Quotas the provider merely publishes are already on
+             the card head, and a "no limit" chip says nothing. --}}
         <div class="provider-health-card-limits">
-          <span class="provider-limit-chip" title="{{@root.req.t 'admin.providers.quotaChipTitle'}}">
-            {{this.freeQuota}}
+          <span class="provider-limit-chip provider-limit-chip--enforced" title="{{@root.req.t 'admin.providers.enforcedChipTitle'}}">
+            {{this.enforcedLimit}}
           </span>
-          {{#if this.enforcedLimit}}
-            <span class="provider-limit-chip provider-limit-chip--enforced" title="{{@root.req.t 'admin.providers.enforcedChipTitle'}}">
-              {{this.enforcedLimit}}
-            </span>
-          {{/if}}
         </div>
+        {{/if}}
       </div>
     </div>
   </div>
@@ -193,7 +209,7 @@
 </div>
 
 <h3>{{req.t 'admin.providers.customSection'}}</h3>
-<h3>{{@root.req.t 'admin.unknownIps.customProviders.addTitle'}}</h3>
+<p class="admin-section-help">{{@root.req.t 'admin.unknownIps.customProviders.addTitle'}}</p>
 <form method="POST" action="/admin/providers/custom" class="custom-provider-form">
   <input type="hidden" name="csrf" value="{{csrfToken}}">
   <div class="custom-provider-form-grid">
@@ -246,7 +262,7 @@
       <textarea name="requestBody" rows="2" placeholder='{"ip":"{ip}","key":"{apiKey}"}'></textarea>
     </label>
     <label>
-      <span>API Key</span>
+      <span>{{@root.req.t 'admin.providers.apiKeyLabel'}}</span>
       <input type="password" name="apiKey" autocomplete="off" placeholder="{{@root.req.t 'admin.unknownIps.providers.apiKeyPlaceholder'}}">
     </label>
     <label class="provider-toggle">
@@ -276,12 +292,12 @@
     </div>
 
     <div class="provider-health-card-grid">
-      <div class="provider-health-stat">
-        <span class="provider-health-stat-label">URL</span>
+      <div class="provider-health-stat provider-health-stat--wide">
+        <span class="provider-health-stat-label">{{@root.req.t 'admin.unknownIps.customProviders.apiCol'}}</span>
         <span class="provider-health-stat-value"><code>{{this.urlTemplate}}</code></span>
       </div>
       <div class="provider-health-stat">
-        <span class="provider-health-stat-label">{{@root.req.t 'admin.unknownIps.customProviders.method'}}</span>
+        <span class="provider-health-stat-label">{{@root.req.t 'admin.unknownIps.customProviders.methodCol'}}</span>
         <span class="provider-health-stat-value">{{this.method}} · {{this.responseFormat}}</span>
       </div>
       <div class="provider-health-stat">
@@ -293,21 +309,18 @@
     <div class="provider-health-window">
       <div class="provider-health-window-cell">
         <div class="provider-health-window-label">{{@root.req.t 'admin.unknownIps.healthCard.window1h'}}</div>
-        <div class="provider-health-window-value">{{this.health1h.calls}} {{@root.req.t 'admin.unknownIps.healthCard.calls'}}</div>
-        <div class="provider-health-window-value">{{this.health1h.errors429}} {{@root.req.t 'admin.unknownIps.healthCard.err429'}}</div>
-        <div class="provider-health-window-value">{{this.health1h.failurePct}}% {{@root.req.t 'admin.unknownIps.healthCard.failurePct'}}</div>
+        <div class="provider-health-window-figure">{{this.health1h.failurePct}}<span class="provider-health-window-unit">%</span></div>
+        <div class="provider-health-window-sub">{{this.health1h.calls}} {{@root.req.t 'admin.unknownIps.healthCard.calls'}} · {{this.health1h.errors429}} 429</div>
       </div>
       <div class="provider-health-window-cell">
         <div class="provider-health-window-label">{{@root.req.t 'admin.unknownIps.healthCard.window24h'}}</div>
-        <div class="provider-health-window-value">{{this.health24h.calls}} {{@root.req.t 'admin.unknownIps.healthCard.calls'}}</div>
-        <div class="provider-health-window-value">{{this.health24h.errors429}} {{@root.req.t 'admin.unknownIps.healthCard.err429'}}</div>
-        <div class="provider-health-window-value">{{this.health24h.failurePct}}% {{@root.req.t 'admin.unknownIps.healthCard.failurePct'}}</div>
+        <div class="provider-health-window-figure">{{this.health24h.failurePct}}<span class="provider-health-window-unit">%</span></div>
+        <div class="provider-health-window-sub">{{this.health24h.calls}} {{@root.req.t 'admin.unknownIps.healthCard.calls'}} · {{this.health24h.errors429}} 429</div>
       </div>
       <div class="provider-health-window-cell">
         <div class="provider-health-window-label">{{@root.req.t 'admin.unknownIps.healthCard.window7d'}}</div>
-        <div class="provider-health-window-value">{{this.health7d.calls}} {{@root.req.t 'admin.unknownIps.healthCard.calls'}}</div>
-        <div class="provider-health-window-value">{{this.health7d.errors429}} {{@root.req.t 'admin.unknownIps.healthCard.err429'}}</div>
-        <div class="provider-health-window-value">{{this.health7d.failurePct}}% {{@root.req.t 'admin.unknownIps.healthCard.failurePct'}}</div>
+        <div class="provider-health-window-figure">{{this.health7d.failurePct}}<span class="provider-health-window-unit">%</span></div>
+        <div class="provider-health-window-sub">{{this.health7d.calls}} {{@root.req.t 'admin.unknownIps.healthCard.calls'}} · {{this.health7d.errors429}} 429</div>
       </div>
     </div>
 
@@ -319,7 +332,8 @@
       </form>
       <form method="POST" action="/admin/providers/custom/{{this.name}}/test" class="custom-provider-test-form">
         <input type="hidden" name="csrf" value="{{@root.csrfToken}}">
-        <input type="text" name="ip" placeholder="{{@root.req.t 'admin.unknownIps.customProviders.testIp'}}" required>
+        <input type="text" name="ip" placeholder="{{@root.req.t 'admin.unknownIps.customProviders.testIp'}}"
+               aria-label="{{@root.req.t 'admin.unknownIps.customProviders.testIp'}}" required>
         <button type="submit" class="button">{{@root.req.t 'admin.unknownIps.customProviders.test'}}</button>
       </form>
       <code class="custom-provider-test-result" id="test-result-{{this.name}}"></code>

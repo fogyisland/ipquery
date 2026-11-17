@@ -731,7 +731,8 @@
           "off": "已停用"
         },
         "save": "保存",
-        "apiKeyPlaceholder": "未填写"
+        "apiKeyPlaceholder": "未填写",
+        "saveWithKey": "请填写 API Key 后再保存"
       },
       "healthCard": {
         "statusOk": "正常",
@@ -851,7 +852,9 @@
           "invalidUrl": "URL 无效或被 SSRF 防御拦截",
           "nameConflict": "名称已存在或与内置 Provider 冲突",
           "invalidFieldPath": "字段路径格式错误"
-        }
+        },
+        "apiCol": "接口地址",
+        "methodCol": "请求方式"
       }
     },
     "providers": {
@@ -864,7 +867,10 @@
       "apiKeyLabel": "API Key",
       "apiKeyStored": "已保存（留空则不修改）",
       "enabledChip": "已启用",
-      "disabledChip": "已停用"
+      "disabledChip": "已停用",
+      "neverRun": "尚未运行",
+      "neverRunHint": "第一次随机生成或回填时会从这里取数据",
+      "save": "保存"
     },
     "ingest": {
       "backfill": {

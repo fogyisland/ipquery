@@ -1739,6 +1739,8 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
           displayName: p.displayName,
           freeQuota: p.freeQuota,
           enforcedLimit: enforcedRateLimitLabel(p.name),
+          hasAnyCalls:
+            (health1h?.calls ?? 0) + (health24h?.calls ?? 0) + (health7d?.calls ?? 0) > 0,
           enabled: p.enabled,
           hasApiKey: Boolean(p.apiKey),
           status,
@@ -2328,6 +2330,10 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
      *  Null when nothing is enforced — the chip is then omitted rather
      *  than claiming "no limit", which reads as a caveat on every card. */
     enforcedLimit: string | null;
+    /** True once the provider has been called at least once in any window.
+     *  A never-called provider is not "0% failing" — the card shows a
+     *  waiting state instead of nine zeroes. */
+    hasAnyCalls: boolean;
     enabled: boolean;
     hasApiKey: boolean;
     status: "failing" | "disabled" | "recovering" | "healthy" | "idle";
@@ -2405,6 +2411,7 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
         displayName: p.displayName,
         freeQuota: p.freeQuota,
         enforcedLimit: enforcedRateLimitLabel(p.name),
+        hasAnyCalls: (health1h?.calls ?? 0) + (health24h?.calls ?? 0) + (health7d?.calls ?? 0) > 0,
         enabled: p.enabled,
         hasApiKey: Boolean(p.apiKey),
         status,
@@ -2484,6 +2491,7 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
     asnPath: string;
     timeoutMs: number;
     enforcedLimit: string | null;
+    hasAnyCalls: boolean;
     health1h: HealthWindow;
     health24h: HealthWindow;
     health7d: HealthWindow;
@@ -2516,6 +2524,7 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
           asnPath: c.customAsnPath ?? "",
           timeoutMs: c.customTimeoutMs ?? 5000,
           enforcedLimit: enforcedRateLimitLabel(c.name),
+          hasAnyCalls: h1h.calls + h24h.calls + h7d.calls > 0,
           health1h: {
             calls: h1h.calls,
             errors429: h1h.errors429,

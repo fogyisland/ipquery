@@ -11,12 +11,17 @@
    surface of the first-run wizard and the public error pages, while the
    data itself (IPs, IDs, counts, timestamps) keeps a monospace voice.
 
-   Visual identity:
-     · fixed light canvas, white cards, one deep teal accent
+   Visual identity — one business blue:
+     · the blue is not an accent on a neutral shell; it IS the shell: a
+       blue command bar across the top, a blue navigation rail down the
+       left, and the working surface set into it as white sheets on a
+       pale blue canvas
      · hairline borders, soft rounded corners, restrained elevation
-     · a persistent product topbar with a breadcrumb and live status
+     · a breadcrumb and a live status dot in the command bar
      · four navigation groups organised by the operator's task
      · monospace reserved for data, not for headings and labels
+     · the only other colour in the console is status: green, amber, red,
+       and it appears in exactly the places a decision turns on
 
    The palette is pinned light. A console that flips to near-black when the
    OS preference changes is two different products; this one is not.
@@ -36,7 +41,7 @@
    recognisable surface everywhere.
 
    This is now the SAME family as init.css: canvas #F4F6F9, white cards,
-   one deep teal accent (#0E7490), hairline borders and soft elevation. The
+   one deep business-blue accent (#1D4ED8), hairline borders and soft elevation. The
    palette is pinned to light — `color-scheme: light` also keeps native form
    controls and scrollbars from turning dark under a dark OS theme.
 
@@ -46,26 +51,28 @@
 :root {
   color-scheme: light;
 
-  /* Surface scale — lightest behind, brightest on top */
-  --bg: #f4f6f9; /* canvas */
-  --surface: #ffffff; /* card */
-  --surface-2: #f8fafc; /* interactive / nested */
-  --surface-3: #eef2f7; /* hover */
+  /* Surface scale. The canvas is a blue-grey rather than a neutral grey:
+     the chrome around it is a deep blue, and a neutral canvas next to that
+     reads as a second, unrelated product. */
+  --bg: #eef2f9; /* canvas */
+  --surface: #ffffff; /* sheet */
+  --surface-2: #f6f8fc; /* interactive / nested */
+  --surface-3: #e7edf6; /* hover */
 
-  --border: #e3e8ef;
-  --border-2: #d3dae4;
-  --border-3: #b9c3d0;
+  --border: #d9e1ee;
+  --border-2: #c4cfe1;
+  --border-3: #a8b6cb;
 
   --text: #0f172a;
   --text-2: #475569;
   --text-3: #7b8798;
 
   /* One accent. #0E7490 clears AA on white; the old #22D3EE did not. */
-  --accent: #0e7490;
-  --accent-dim: #0c5f77;
-  --accent-soft: rgba(14, 116, 144, 0.08);
-  --accent-glow: rgba(14, 116, 144, 0.1);
-  --accent-line: rgba(14, 116, 144, 0.28);
+  --accent: #1d4ed8;
+  --accent-dim: #1e40af;
+  --accent-soft: rgba(29, 78, 216, 0.08);
+  --accent-glow: rgba(29, 78, 216, 0.1);
+  --accent-line: rgba(29, 78, 216, 0.28);
   --on-accent: #ffffff;
 
   /* Status colors — dark enough to read on tinted light backgrounds */
@@ -151,19 +158,26 @@
   width: 100%;
 }
 
-/* ─── Admin topbar ──────────────────────────────────────────────────────── */
+/* ─── Command bar ────────────────────────────────────────────────────────
+   The bar and the navigation rail share one blue, so the console reads as a
+   single blue frame. The working surface below is the only light region,
+   which is exactly the hierarchy an operator needs: chrome around, data
+   in the middle. The breadcrumb keeps the accent, but as a pale tinted
+   strip — on a blue field a saturated blue label would disappear. */
 .admin-topbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--sp-4);
-  min-height: 56px;
+  min-height: 58px;
   padding: 0 var(--sp-6);
-  background: var(--surface);
-  border-bottom: var(--hairline);
+  background: #1e3a8a;
+  color: var(--rail-text);
+  border-bottom: 0;
   position: sticky;
   top: 0;
   z-index: 5;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.1);
 }
 .admin-topbar-context,
 .admin-topbar-meta {
@@ -176,29 +190,29 @@
   font-size: 13px;
   font-weight: 700;
   letter-spacing: -0.01em;
-  color: var(--text);
+  color: var(--rail-text-strong);
   white-space: nowrap;
 }
 .admin-topbar-group {
   font-size: 12px;
-  color: var(--text-2);
+  color: var(--rail-muted);
   white-space: nowrap;
 }
 .admin-topbar-current {
   font-size: 12px;
   font-weight: 600;
-  color: var(--accent);
+  color: var(--rail-text-strong);
   white-space: nowrap;
 }
 .admin-topbar-sep,
 .admin-topbar-divider {
-  color: var(--border-3);
+  color: rgba(255, 255, 255, 0.35);
   flex: none;
 }
 .admin-topbar-divider {
   width: 1px;
   height: 18px;
-  background: var(--border);
+  background: rgba(255, 255, 255, 0.18);
 }
 .admin-topbar-status {
   display: inline-flex;
@@ -206,7 +220,7 @@
   gap: 6px;
   font-size: 11px;
   font-family: var(--font-mono);
-  color: var(--success);
+  color: var(--rail-text);
   white-space: nowrap;
 }
 .admin-topbar-status-dot {
@@ -219,7 +233,7 @@
 .admin-topbar-account {
   font-family: var(--font-mono);
   font-size: 11px;
-  color: var(--text-2);
+  color: var(--rail-muted);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -228,42 +242,55 @@
 .admin-topbar-link {
   font-size: 12px;
   font-weight: 600;
-  color: var(--accent);
+  color: var(--rail-accent);
   text-decoration: none;
   white-space: nowrap;
 }
 .admin-topbar-link:hover {
   text-decoration: underline;
+  color: var(--rail-text-strong);
 }
 
 /* ─── Sidebar ───────────────────────────────────────────────────────────── */
+/* ─── Business-blue sidebar ─────────────────────────────────────────────
+   The navigation rail carries the same deep blue as the command bar, so the
+   console is read as one blue frame with white working sheets set into it.
+   Contrast separates the two regions; a hairline alone would not.
+
+   These variables are scoped to .sidebar: nothing outside the rail ever
+   inherits them. */
 .sidebar {
-  background: var(--surface);
-  border-right: var(--hairline);
+  --rail-bg: #1e3a8a;
+  --rail-bg-2: #24459c;
+  --rail-text: #d6e0f5;
+  --rail-text-strong: #ffffff;
+  --rail-muted: #9ab0d8;
+  --rail-line: rgba(255, 255, 255, 0.12);
+  --rail-hover: rgba(255, 255, 255, 0.09);
+  --rail-active: rgba(255, 255, 255, 0.16);
+  --rail-accent: #bfdbfe;
+}
+
+.sidebar {
+  background: var(--rail-bg);
+  border-right: 0;
   padding: var(--sp-5) 0 var(--sp-4);
   display: flex;
   flex-direction: column;
   gap: var(--sp-5);
-  color: var(--text);
+  color: var(--rail-text);
   position: sticky;
   top: 0;
   height: 100vh;
   overflow-y: auto;
+  scrollbar-color: rgba(255, 255, 255, 0.22) transparent;
 }
-.sidebar-brand {
-  font-weight: 700;
-  font-size: 15px;
-  letter-spacing: -0.02em;
-  color: var(--text);
-  text-decoration: none;
-  padding: 0 var(--sp-5);
-  display: flex;
-  align-items: center;
-  gap: var(--sp-3);
+.sidebar::-webkit-scrollbar {
+  width: 8px;
 }
-.sidebar-brand:hover {
-  text-decoration: none;
-  color: var(--text);
+.sidebar::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.18);
+  border-radius: 4px;
 }
 .sidebar-brand-mark {
   width: 32px;
@@ -272,9 +299,13 @@
   border-radius: 9px;
   display: grid;
   place-items: center;
-  background: var(--accent);
-  color: #ffffff;
-  box-shadow: 0 4px 12px -4px var(--accent-line);
+  /* The mark is the one saturated object on the rail — a white tile with a
+     blue glyph — which is what makes it read as a logo rather than a
+     button. */
+  background: var(--rail-text-strong);
+  color: var(--accent);
+  border: 0;
+  box-shadow: 0 4px 14px -4px rgba(0, 0, 0, 0.35);
 }
 .sidebar-brand-mark svg {
   width: 21px;
@@ -296,7 +327,7 @@
   font-weight: 500;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: var(--text-3);
+  color: var(--rail-muted);
   margin-top: 2px;
 }
 
@@ -315,7 +346,7 @@
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.02em;
-  color: var(--text-3);
+  color: var(--rail-muted);
   padding: 0 var(--sp-5) var(--sp-2);
 }
 .sidebar-group-block {
@@ -331,7 +362,7 @@
   font-size: 10px;
   font-weight: 600;
   letter-spacing: 0.06em;
-  color: var(--text-3);
+  color: var(--rail-muted);
   padding: var(--sp-3) var(--sp-5) var(--sp-1) calc(var(--sp-5) + 26px);
   opacity: 0.9;
 }
@@ -359,7 +390,7 @@
 }
 .sidebar-link.active .sidebar-icon {
   opacity: 1;
-  color: var(--accent);
+  color: var(--rail-accent);
 }
 
 /* Links without an icon (the personal section, the login/signup slot) must
@@ -379,7 +410,7 @@
   gap: 10px;
   padding: 8px var(--sp-4);
   margin: 0 var(--sp-3);
-  color: var(--text-2);
+  color: var(--rail-text);
   text-decoration: none;
   font-size: 13px;
   font-weight: 500;
@@ -397,13 +428,13 @@
     background 120ms ease;
 }
 .sidebar-link:hover {
-  background: var(--surface-2);
-  color: var(--text);
+  background: var(--rail-hover);
+  color: var(--rail-text-strong);
   text-decoration: none;
 }
 .sidebar-link.active {
-  background: var(--accent-soft);
-  color: var(--accent);
+  background: var(--rail-active);
+  color: var(--rail-text-strong);
   font-weight: 600;
 }
 .sidebar-link.active::before {
@@ -414,24 +445,24 @@
   bottom: 6px;
   width: 3px;
   border-radius: 0 3px 3px 0;
-  background: var(--accent);
+  background: var(--rail-accent);
 }
 .sidebar-link.active .sidebar-icon {
-  color: var(--accent);
+  color: var(--rail-accent);
   opacity: 1;
 }
 
 /* CTA variant — used as a single "switch context" link, not a full menu. */
 .sidebar-link--cta {
-  color: var(--accent);
+  color: var(--rail-accent);
   font-weight: 600;
 }
 .sidebar-link--cta::before {
   background: transparent !important;
 }
 .sidebar-link--cta:hover {
-  background: var(--surface-2);
-  color: var(--accent);
+  background: var(--rail-hover);
+  color: var(--rail-text-strong);
 }
 .sidebar-link-arrow {
   display: inline-block;
@@ -442,12 +473,12 @@
      without it the item grew the row past the viewport at 390px. */
   flex: none;
   font-family: var(--font-mono);
-  color: var(--accent);
+  color: var(--rail-accent);
 }
 
 /* Override: links INSIDE the sidebar are navigation, not primary CTAs —
    they should be muted gray until active/hover. The base rule below
-   colors every <a> cyan; this gives sidebar navigation a voice. */
+   colors every <a> the accent blue; this gives sidebar navigation a voice. */
 .layout-admin .sidebar-link:not(.active),
 .layout-dashboard .sidebar-link:not(.active),
 .layout-app .sidebar-link:not(.active) {
@@ -455,12 +486,12 @@
 }
 
 /* Override: forms.css's button[type="submit"] rule paints submit buttons
-   solid cyan with white text and no border-radius/font-family — which
+   solid accent blue with white text and no border-radius/font-family — which
    turns <button class="sidebar-link sidebar-logout"> into a full-width
-   cyan banner. Re-skin it as a sidebar link here.
+   solid accent banner. Re-skin it as a sidebar link here.
    `layouts/public` renders the same sidebar partial (error pages), so it
    needs the same override; without it a signed-in user who hits an error
-   page sees the cyan banner this rule exists to prevent. */
+   page sees the accent banner this rule exists to prevent. */
 .layout-admin button.sidebar-link,
 .layout-dashboard button.sidebar-link,
 .layout-app button.sidebar-link,
@@ -484,9 +515,9 @@
   color: var(--text);
 }
 
-/* Override: .btn-primary is text-on-cyan by design. The base rule that
-   colors every <a> cyan would otherwise paint the dark text the same
-   color as the cyan background, hiding the label. */
+/* Override: .btn-primary is text-on-accent by design. The base rule that
+   colors every <a> the accent blue would otherwise paint the dark text the same
+   color as the accent background, hiding the label. */
 .layout-admin a.btn-primary,
 .layout-dashboard a.btn-primary,
 .layout-app a.btn-primary,
@@ -497,7 +528,7 @@
 }
 
 .sidebar-footer {
-  border-top: var(--hairline);
+  border-top: 1px solid var(--rail-line);
   padding-top: var(--sp-3);
   display: flex;
   flex-direction: column;
@@ -506,7 +537,7 @@
 .sidebar-user {
   font-family: var(--font-mono);
   font-size: 11px;
-  color: var(--text-2);
+  color: var(--rail-muted);
   padding: var(--sp-2) var(--sp-5);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -516,10 +547,11 @@
   margin: 0;
 }
 .sidebar-logout {
-  color: var(--text-2);
+  color: var(--rail-muted);
 }
 .sidebar-logout:hover {
-  color: var(--danger);
+  color: var(--rail-text-strong);
+  background: var(--rail-hover);
 }
 
 @media (max-width: 768px) {
@@ -709,7 +741,7 @@ code {
 /* forms.css styles `button[type="submit"]` on its own; that selector is
    more specific than `.btn-primary` / `.button`, so every form's submit
    button would keep the old cyan terminal skin while its siblings moved
-   to the teal accent. Re-skin the submit button to the same token set
+   to the business-blue accent. Re-skin the submit button to the same token set
    the class-based rules use, so the console has one accent colour. */
 .layout-admin button[type="submit"],
 .layout-dashboard button[type="submit"],
@@ -1946,20 +1978,31 @@ color: var(--text-3);
 
 /* Provider health card — one card per provider on the Providers tab.
    Status color comes from --status-color set inline by the .provider-health-status modifier. */
+/* Cards sit in a responsive grid. Comparing three providers should be one
+   glance, not three scrolls — that is the whole job of this page. */
+/* One column. A grid squeezed each card until the two halves inside it
+   fought for room; a row per provider reads better and still fits three
+   on a screen. */
+.provider-health-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  margin-bottom: var(--sp-5);
+}
+
 .provider-health-card {
   background: var(--surface);
   border: var(--hairline);
   border-radius: var(--radius);
-  padding: var(--sp-4);
-  margin-bottom: var(--sp-3);
+  padding: 0;
   position: relative;
-  /* A quiet lift so four cards read as four objects rather than one
-     long list of rows. */
   box-shadow: var(--shadow-card);
   overflow: hidden;
 }
 .provider-health-card::before {
-  /* Left border stripe keyed to status — at-a-glance triage. */
+  /* The one bold move on this page: a full-height status spine. It makes a
+     failing provider obvious from across the room, and costs nothing when
+     everything is healthy. */
   content: "";
   position: absolute;
   left: 0;
@@ -1990,9 +2033,10 @@ color: var(--text-3);
    answer next to the control it justifies is the point. */
 .provider-health-card-body {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(260px, auto);
+  grid-template-columns: minmax(0, 1fr) minmax(240px, auto);
   gap: var(--sp-4);
   align-items: start;
+  padding: var(--sp-3) var(--sp-4) var(--sp-4) calc(var(--sp-4) + 4px);
 }
 .provider-health-card-left {
   display: flex;
@@ -2094,7 +2138,24 @@ color: var(--text-3);
   align-items: flex-start;
   justify-content: space-between;
   gap: var(--sp-3);
-  margin-bottom: var(--sp-3);
+  padding: var(--sp-4) var(--sp-4) 0 calc(var(--sp-4) + 4px);
+}
+.provider-health-card-id {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.provider-health-card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--sp-2);
+  font-size: 11px;
+  color: var(--text-3);
+}
+.provider-health-card-sep {
+  opacity: 0.45;
 }
 .provider-health-card-name {
   font-family: var(--font-mono);
@@ -2147,12 +2208,24 @@ color: var(--text-3);
   padding: var(--sp-2) var(--sp-3);
   background: var(--surface-2);
   border: var(--hairline);
+  border-radius: var(--radius-sm);
+  min-width: 0;
+}
+/* The endpoint template is a long unbreakable string; without a floor of its
+   own it forces the auto-fit column past the card. */
+.provider-health-stat--wide {
+  grid-column: 1 / -1;
+}
+.provider-health-stat--wide .provider-health-stat-value code {
+  display: block;
+  overflow-wrap: anywhere;
+  white-space: normal;
 }
 .provider-health-stat-label {
-font-size: 11px;
-font-weight: 600;
-letter-spacing: 0.01em;
-color: var(--text-3);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: var(--text-3);
 }
 .provider-health-stat-value {
   font-family: var(--font-mono);
@@ -2866,13 +2939,32 @@ color: var(--text-3);
   margin-bottom: var(--sp-3);
 }
 
+/* A provider that has never been called is not "0% failing" — it is
+   waiting. Printing nine zeroes made an idle install look broken, and it
+   gave three cards the same grey shape so none of them had a focal point. */
+.provider-health-empty {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--sp-4);
+  border-radius: var(--radius-sm);
+  border: 1px dashed var(--border-2);
+  background: var(--surface-2);
+}
+.provider-health-empty-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-2);
+}
+.provider-health-empty-hint {
+  font-size: 12px;
+  color: var(--text-3);
+}
+
 .provider-health-window {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: var(--sp-2);
-  margin-top: var(--sp-3);
-  padding-top: var(--sp-3);
-  border-top: var(--hairline);
 }
 .provider-health-window-cell {
   display: flex;

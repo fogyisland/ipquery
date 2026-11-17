@@ -1,7 +1,7 @@
 {
   "formatVersion": 1,
   "fileCount": 427,
-  "totalBytes": 2230493,
+  "totalBytes": 2236546,
   "files": {
     "api/dbBootstrap.d.ts": {
       "bytes": 8916,
@@ -1008,8 +1008,8 @@
       "sha256": "8c7cbeaf442c0998237bbe4146d3679cdda9fac91ff551a7f73864ca2ed732f1"
     },
     "web/assets/css/admin.css": {
-      "bytes": 78504,
-      "sha256": "8200aac0951f1a050f30767aedac88dc4631a47fefa443bced5a62b37bf2c6d0"
+      "bytes": 82275,
+      "sha256": "040d5883438480503f5a79e572044422428dda53238f00a39ad45d32634a8655"
     },
     "web/assets/css/base.css": {
       "bytes": 1554,
@@ -1021,11 +1021,11 @@
     },
     "web/assets/css/forms.css": {
       "bytes": 3543,
-      "sha256": "af1f9a978fc5a718014d7f269a4fbf94377f7dc68b5edaf7399285d7ed6cf2bf"
+      "sha256": "1c8e7676ffdcafe9f0065eb277f7f965aeabfb1b5b956798dbe88e315aba0507"
     },
     "web/assets/css/init.css": {
-      "bytes": 30246,
-      "sha256": "595045d8fc65b6afa3aca918064e55f2de7c19335c71abee1961ed93846baf94"
+      "bytes": 30404,
+      "sha256": "60bd64af404bd9534953e1baf1555b44b65cecf6974b0969c9c1cdb083128ef1"
     },
     "web/assets/css/layout.css": {
       "bytes": 2142,
@@ -1116,8 +1116,8 @@
       "sha256": "080b721f056d5350784d1dcca32fb83964e222582476c118dae2420b8a8565ee"
     },
     "web/i18n/en-US.json": {
-      "bytes": 51027,
-      "sha256": "bbef018c815b67cd05b3126ad50a2fac2a88156e0ec0baeeae675a83bee61739"
+      "bytes": 51282,
+      "sha256": "b07ffc9a1a7008b489826a7c0f15fe86bf57cd0cb1cc73db2aca96d9d1f54a26"
     },
     "web/i18n/index.d.ts": {
       "bytes": 309,
@@ -1136,8 +1136,8 @@
       "sha256": "33cd4e4a9a90a35dc5c3b8308e78a6449754c712719b9f1af35b2e25156641cc"
     },
     "web/i18n/zh-CN.json": {
-      "bytes": 50760,
-      "sha256": "a6f0b93c141b1ffa9965e10e529ef7d7386c7f0ca6b06962200dc807560e4f51"
+      "bytes": 51026,
+      "sha256": "2e92f91677f44487d9a68fff82237093ecea7656041b88aa5964e4f64310578e"
     },
     "web/maps/geo-map.d.ts": {
       "bytes": 1050,
@@ -1372,12 +1372,12 @@
       "sha256": "62752ec826ec66799efb98bbd9eeb3409e8efea5fa17e006460ee9a7b8982056"
     },
     "web/routes/admin.js": {
-      "bytes": 125937,
-      "sha256": "8d0f21204397d10d6b7bdaaef74ca71f314834739106674e6a522dcca4c12432"
+      "bytes": 126222,
+      "sha256": "4da84616eab0c6ff6a24d3089fca3a4b5cba2ba856ac1732432b9a9d4667c7ca"
     },
     "web/routes/admin.js.map": {
-      "bytes": 101480,
-      "sha256": "081023d42916a7921d1f8d7303876c0e1a4b29c1e278cf7caf0aa04f5b6df49e"
+      "bytes": 101846,
+      "sha256": "600dc25b2d100240fc1c568b5ed08c59c6bcda2f8405ddfc7442e482158b9c69"
     },
     "web/routes/auth.d.ts": {
       "bytes": 121,
@@ -1464,8 +1464,8 @@
       "sha256": "6ce7551f74fcf4381cd045d9ce60dbb1bdd9203fcd6120bf0bf912052cdc5267"
     },
     "web/views/admin/providers.hbs": {
-      "bytes": 18209,
-      "sha256": "5179571c2b520864e841f98ef1dddf0fde7fecc8f2c5ea3a96262868f1c2d97e"
+      "bytes": 19161,
+      "sha256": "485bf6bd0867328f966c7b945cc92779bd721d239e3e7b624bb51bdb5069d4ca"
     },
     "web/views/admin/queries.hbs": {
       "bytes": 4610,
