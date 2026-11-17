@@ -73,6 +73,7 @@ const stats_1 = __importDefault(require("./routes/stats"));
 const marketing_1 = __importDefault(require("../web/routes/marketing"));
 const dashboard_1 = __importDefault(require("../web/routes/dashboard"));
 const admin_1 = __importDefault(require("../web/routes/admin"));
+const adminRanges_1 = require("../web/routes/adminRanges");
 const auth_2 = __importDefault(require("../web/routes/auth"));
 const init_1 = __importDefault(require("../web/routes/init"));
 /**
@@ -431,6 +432,7 @@ async function buildServer(cfg, opts) {
     await app.register(marketing_1.default);
     await app.register(dashboard_1.default);
     await app.register(admin_1.default);
+    await app.register(async (instance) => (0, adminRanges_1.registerRangeRoutes)(instance));
     await app.register(auth_2.default);
     await app.register(init_1.default);
     (0, auditLog_1.registerAuditLog)(app);

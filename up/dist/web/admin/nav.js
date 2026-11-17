@@ -49,6 +49,7 @@ const ICON_KEY = '<circle cx="5.5" cy="8" r="2.5"/><path d="M8 8h5.5"/><path d="
 const ICON_PLUGIN = '<path d="M4 2.5h5v5H4z"/><path d="M7 7.5h5v5H7z"/><path d="M9.5 2.5v3.5"/><path d="M6.5 10.5v3"/><path d="M12.5 4.5h2"/><path d="M12.5 7.5h1.5"/>';
 const ICON_SHIELD = '<path d="M8 2.5l5 2v3.5c0 3-2.1 5-5 5.5-2.9-.5-5-2.5-5-5.5V4.5z"/><path d="M6 8l1.5 1.5L10.5 6.5"/>';
 const ICON_DOC = '<path d="M4 2.5h6l3 3v8a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-10a1 1 0 0 1 1-1z"/><path d="M5.5 7h5"/><path d="M5.5 9.5h5"/><path d="M5.5 12h3"/>';
+const ICON_SWAP = '<path d="M2.5 5.5h8l-2-2"/><path d="M13.5 10.5h-8l2 2"/>';
 const ICON_GEAR = '<circle cx="8" cy="8" r="2"/><path d="M8 1.5v1.8"/><path d="M8 12.7v1.8"/><path d="M1.5 8h1.8"/><path d="M12.7 8h1.8"/><path d="M3.4 3.4l1.3 1.3"/><path d="M11.3 11.3l1.3 1.3"/><path d="M12.6 3.4l-1.3 1.3"/><path d="M4.7 11.3l-1.3 1.3"/>';
 exports.ADMIN_NAV_GROUPS = [
     {
@@ -69,6 +70,9 @@ exports.ADMIN_NAV_GROUPS = [
             { href: "/admin/etl/runs", matchPath: "/admin/etl", labelKey: "nav.admin.etl", icon: ICON_PIPELINE, match: "prefix" },
             { href: "/admin/ingest", labelKey: "nav.admin.ingest", icon: ICON_DOWNLOAD, match: "prefix" },
             { href: "/admin/providers", labelKey: "nav.admin.providers", icon: ICON_SOURCE, match: "prefix" },
+            // Moving ranges between installs is a data-pipeline operation, so it
+            // sits with the sources rather than in system settings.
+            { href: "/admin/ranges", labelKey: "nav.admin.ranges", icon: ICON_SWAP, match: "prefix" },
         ],
     },
     {

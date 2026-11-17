@@ -31,6 +31,10 @@ export interface PoolConnection {
 }
 export declare function createPoolFor(conn: PoolConnection): mysql.Pool;
 export declare function truncateNew(pool: mysql.Pool): Promise<void>;
+/** The size of a range, in addresses. Exported because the .ipq importer has
+ *  to compute the same value the ETL does — a file cannot be trusted to
+ *  supply a column the lookup sorts by. */
+export declare function computeRangeSize(startIp: Buffer, endIp: Buffer): bigint;
 export declare function insertIntoNew(pool: mysql.Pool, rows: IpRangeRow[]): Promise<void>;
 export interface UpsertCount {
     attempted: number;
@@ -64,7 +68,16 @@ export interface SwapResult {
  *  So before the swap, hand-authored rows are copied across. The ETL's
  *  own rows are not: they are the ones the refresh is meant to replace.
  */
-export declare const MANUAL_SOURCE_TAGS: readonly ["multi-provider"];
+/**
+ * Source tags whose rows the ETL treats as operator-owned and carries across
+ * a full refresh.
+ *
+ * `multi-provider` is written by the unknown-IP backfill. `import` is
+ * written by the .ipq import (/admin/ranges). Both are rows the ETL did not
+ * produce, and a rebuild that dropped them would silently undo the
+ * operator's work — which is exactly what an untagged import would do.
+ */
+export declare const MANUAL_SOURCE_TAGS: readonly ["multi-provider", "import"];
 export interface PreservedRows {
     /** Rows copied out of the live table into the staging table. */
     preserved: number;

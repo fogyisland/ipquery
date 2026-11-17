@@ -14,7 +14,7 @@ function itemsOf(groupKey: string): AdminNavItem[] {
 }
 
 describe("admin navigation model", () => {
-  it("organises the ten admin pages into four task-oriented groups", () => {
+  it("organises the admin pages into four task-oriented groups", () => {
     expect(ADMIN_NAV_GROUPS.map((g) => g.key)).toEqual([
       "monitor",
       "data",
@@ -30,6 +30,7 @@ describe("admin navigation model", () => {
       "/admin/etl/runs",
       "/admin/ingest",
       "/admin/providers",
+      "/admin/ranges",
     ]);
     // /admin/audit (query_log rows) and /admin/audit-log (admin actions)
     // read different tables. They must not sit in the same group.
