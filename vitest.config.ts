@@ -7,7 +7,11 @@ import { defineConfig } from "vitest/config";
 export default defineConfig({
   test: {
     include: ["test/**/*.test.ts"],
-    testTimeout: 90_000,
+    // A test that builds a schema from empty and then runs the migrations
+    // again is not a slow test — it is doing 30 DDL statements, each an
+    // implicit commit with a durable metadata write. 90s was enough when the
+    // suite only ran `runMigrations`; the schema report runs it twice.
+    testTimeout: 180_000,
     // A fresh test database runs every migration from scratch, and each
     // CREATE/ALTER TABLE is an implicit commit whose metadata write is
     // durable. On a machine with a slow disk that is roughly a second

@@ -2236,6 +2236,82 @@ color: var(--text-3);
   color: var(--warning);
 }
 
+/* ── Database schema report ───────────────────────────────────────────
+   The one card on the system tab that can say "stop". A pending step that
+   rebuilds a table has to look different from a plain data step, and both
+   have to sit on the same surface as the readonly fields above them. */
+.schema-report {
+  margin-top: var(--sp-5);
+  padding: var(--sp-4);
+  background: var(--surface);
+  border: var(--hairline);
+  border-radius: var(--radius);
+}
+.schema-report-head {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  flex-wrap: wrap;
+}
+.schema-report-head h3 {
+  margin: 0;
+}
+.schema-report-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: var(--sp-2);
+  margin: var(--sp-3) 0;
+}
+.schema-report-fact {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--sp-2) var(--sp-3);
+  background: var(--surface-2);
+  border: var(--hairline);
+  border-radius: var(--radius-sm);
+}
+.schema-report-fact code {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.schema-migration-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+}
+.schema-migration-item {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  flex-wrap: wrap;
+  padding: var(--sp-1) var(--sp-2);
+  border-left: 3px solid transparent;
+  background: var(--surface-2);
+}
+/* A step that rebuilds a table blocks writes while it runs. Mark the row
+   itself, not just a chip inside it — this is the line an operator scans. */
+.schema-migration-item.takes-table-lock {
+  border-left-color: var(--warning);
+}
+.schema-migration-file {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.schema-migration-details {
+  margin-top: var(--sp-3);
+}
+.schema-migration-details > summary {
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--text-2);
+}
+
 .provider-health-card-error {
   font-family: var(--font-mono);
   font-size: 11px;

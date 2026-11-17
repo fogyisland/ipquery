@@ -552,7 +552,31 @@
         "maxUsedConnections": "Max used connections"
       },
       "etlRestart": "Run ETL now",
-      "etlRestart.confirm": "Trigger ETL pipeline manually (fire-and-forget)"
+      "etlRestart.confirm": "Trigger ETL pipeline manually (fire-and-forget)",
+      "schema": {
+        "title": "Schema version",
+        "help": "Compares the migrations this build ships against the ones the database has recorded. Anything listed here means the last deploy skipped a step.",
+        "appliedLatest": "Applied up to",
+        "pendingCount": "Pending",
+        "shippedCount": "Applied",
+        "appliedRecently": "Recently applied",
+        "nothingPending": "Nothing pending — the database matches this build.",
+        "statusOk": "Schema is current",
+        "statusBehind": "Behind by {count} migration(s)",
+        "statusError": "Cannot read the migration ledger: {error}",
+        "lockRisk": "Rebuilds a table",
+        "noneApplied": "(no migrations applied yet)",
+        "kind": {
+          "schema": "Schema",
+          "data": "Data"
+        },
+        "statusStructureError": "Cannot compare the table structure: {error}",
+        "drift": {
+          "title": "Structure differs from the migration record",
+          "missingTable": "Table missing",
+          "missingColumn": "Column missing"
+        }
+      }
     },
     "unknownIps": {
       "title": "API Ingest",

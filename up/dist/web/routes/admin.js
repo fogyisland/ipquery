@@ -63,6 +63,7 @@ const csv_1 = require("../admin/csv");
 const mysql_2 = require("../../storage/mysql");
 const runGuard_1 = require("../../etl/runGuard");
 const ssrf_1 = require("../../storage/ssrf");
+const runner_1 = require("../../storage/migrations/runner");
 const genericHttpProvider_1 = require("../../etl/genericHttpProvider");
 // /admin/* is already gated by the auth guard in src/web/plugins/auth.ts:
 // non-admins are 403-redirected before this handler runs, so req.user is
@@ -1338,11 +1339,80 @@ async function adminRoutes(app) {
                 etlStatusText = req.t("admin.settings.etl.lastRunRunning");
             }
         }
+        // Schema drift, read live. This is the one question the page exists to
+        // answer after an upgrade: does this database hold the schema the
+        // running code was written against. A failure here is reported rather
+        // than swallowed — an unreadable ledger is itself the finding.
+        let schema;
+        try {
+            schema = await (0, runner_1.getSchemaReport)(app.pool);
+        }
+        catch (err) {
+            app.log.warn({ err }, "failed to read the migration ledger");
+            schema = {
+                applied: [],
+                pending: [],
+                pendingCount: 0,
+                hasLockRisk: false,
+                isCurrent: false,
+                latest: null,
+                appliedLatest: null,
+                error: err instanceof Error ? err.message : String(err),
+                drift: [],
+                structureError: null,
+            };
+        }
+        const schemaView = {
+            ...schema,
+            current: schema.isCurrent,
+            // Pre-resolved strings: `{{req.t key a=b}}` drops hash arguments, so
+            // every sentence that carries a value is built here instead of in the
+            // template. See the note above the ETL status pill.
+            statusKind: schema.error || schema.structureError
+                ? "danger"
+                : schema.isCurrent
+                    ? "success"
+                    : schema.hasLockRisk
+                        ? "warning"
+                        : "info",
+            statusText: schema.error
+                ? req.t("admin.settings.schema.statusError", { error: schema.error })
+                : schema.structureError
+                    ? req.t("admin.settings.schema.statusStructureError", { error: schema.structureError })
+                    : schema.isCurrent
+                        ? req.t("admin.settings.schema.statusOk")
+                        : req.t("admin.settings.schema.statusBehind", { count: schema.pendingCount }),
+            latestText: schema.appliedLatest
+                ? `${schema.appliedLatest.version}_${schema.appliedLatest.name}`
+                : req.t("admin.settings.schema.noneApplied"),
+            pending: schema.pending.map((p) => ({
+                ...p,
+                file: `${p.entry.version}_${p.entry.name}`,
+                kindLabel: req.t(`admin.settings.schema.kind.${p.entry.kind}`),
+                lockLabel: p.entry.takesTableLock ? req.t("admin.settings.schema.lockRisk") : "",
+            })),
+            drift: schema.drift.map((d) => ({
+                ...d,
+                label: d.kind === "missing_table"
+                    ? req.t("admin.settings.schema.drift.missingTable")
+                    : req.t("admin.settings.schema.drift.missingColumn"),
+            })),
+            appliedTail: schema.applied
+                .slice(-8)
+                .map((e) => ({
+                ...e,
+                file: `${e.version}_${e.name}`,
+                kindLabel: req.t(`admin.settings.schema.kind.${e.kind}`),
+            }))
+                .reverse(),
+            appliedCount: schema.applied.length,
+        };
         return reply.view("admin/settings.hbs", {
             layout: "layouts/admin",
             title: req.t("admin.settings.title"),
             config: display,
             pool,
+            schema: schemaView,
             etlLastRun,
             etlStatusKind,
             etlStatusText,
