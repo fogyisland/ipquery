@@ -59,3 +59,28 @@ export interface DecodedRangeFile {
  * a pasted snippet, a fixture, and every test of the format itself.
  */
 export declare function decodeFile(text: string, options?: DecodeOptions): DecodedRangeFile;
+export interface StreamOptions {
+    readonly maxRows?: number;
+    /** Rows handed to `onBatch` at a time. One INSERT per row is what makes a
+     *  nine-million-row import take hours. */
+    readonly batchSize?: number;
+    /** Called once, before the first batch, with the parsed header. A refusal
+     *  belongs here: nothing should be written into a staging table for a file
+     *  this build cannot read. */
+    readonly onHeader: (header: RangeFileHeader) => void | Promise<void>;
+    readonly onBatch: (rows: readonly RangeRecord[]) => Promise<void>;
+}
+/**
+ * Read a .ipq file straight from a stream.
+ *
+ * The file is line-delimited, so the reader only has to hold the line it is
+ * in the middle of: memory is bounded by the longest line, not by the file.
+ * A whole-library export is around two gigabytes, which is more than a
+ * String can hold once, so reading it as text and splitting afterwards is
+ * not an option.
+ *
+ * A partial line at the end of a chunk is carried into the next one. Getting
+ * that wrong is the difference between "works" and "loses a row every 64 KB
+ * depending on where the socket happened to split".
+ */
+export declare function decodeStream(input: AsyncIterable<Buffer | string>, options: StreamOptions): Promise<void>;

@@ -181,6 +181,81 @@ describe("/admin/ranges", () => {
     expect(rows[0]!.city_source).toBe("import");
   });
 
+  it("replaces the whole library when asked to", async () => {
+    // The reason this mode exists: an operator who does not want to run the
+    // ETL uploads a file from another install and expects the library to BE
+    // that file. Merge would leave the old rows behind.
+    await td.pool.query(
+      `INSERT INTO ip_ranges (start_ip, end_ip, range_size, country_code, country_source)
+       VALUES (UNHEX('0000000000000000000000000A7E0000'), UNHEX('0000000000000000000000000A7E00FF'), 255, 'OL', 'dbip')`,
+    );
+    const body = [
+      header(),
+      encodeRange({
+        line: 0,
+        start: "10.70.0.0",
+        end: "10.70.0.255",
+        countryCode: "RP",
+        countryName: null,
+        region: null,
+        city: null,
+        postalCode: null,
+        latitude: null,
+        longitude: null,
+        timezone: null,
+        isp: null,
+        asn: null,
+        asnOrg: null,
+      }),
+    ].join(String.fromCharCode(10)) + String.fromCharCode(10);
+    const { cookie, token } = await csrf();
+    const r = await request(app.server)
+      .post("/admin/ranges/import")
+      .set("Cookie", "sid=" + adminSid + "; " + cookie)
+      .type("form")
+      // The page shows the current row count; a replacement has to repeat
+      // it, which is what makes an accidental resend harmless.
+      .send({ csrf: token, file: body, mode: "replace", confirmRows: "1" });
+    expect(r.status).toBe(302);
+
+    // The old library is gone; the uploaded row is there.
+    const [old] = await td.pool.query<import("mysql2/promise").RowDataPacket[]>(
+      "SELECT country_code FROM ip_ranges WHERE country_code = 'OL'",
+    );
+    expect(old).toHaveLength(0);
+    const [fresh] = await td.pool.query<import("mysql2/promise").RowDataPacket[]>(
+      "SELECT country_code FROM ip_ranges WHERE country_code = 'RP'",
+    );
+    expect(fresh).toHaveLength(1);
+  });
+
+  it("refuses a replacement posted without the confirmation field", async () => {
+    // Replace is the destructive one. A stray repost of the import form —
+    // a browser "resend" after a timeout — must not wipe the library, so the
+    // mode alone is not enough: the operator has to type the row count.
+    await td.pool.query(
+      `INSERT INTO ip_ranges (start_ip, end_ip, range_size, country_code, country_source)
+       VALUES (UNHEX('0000000000000000000000000A7F0000'), UNHEX('0000000000000000000000000A7F00FF'), 255, 'SF', 'dbip')`,
+    );
+    const body = [header(), encodeRange({
+      line: 0, start: "10.71.0.0", end: "10.71.0.255",
+      countryCode: "NR", countryName: null, region: null, city: null,
+      postalCode: null, latitude: null, longitude: null, timezone: null,
+      isp: null, asn: null, asnOrg: null,
+    })].join(String.fromCharCode(10)) + String.fromCharCode(10);
+    const { cookie, token } = await csrf();
+    const r = await request(app.server)
+      .post("/admin/ranges/import")
+      .set("Cookie", "sid=" + adminSid + "; " + cookie)
+      .type("form")
+      .send({ csrf: token, file: body, mode: "replace" });
+    expect(r.status).toBe(302);
+    const [still] = await td.pool.query<import("mysql2/promise").RowDataPacket[]>(
+      "SELECT country_code FROM ip_ranges WHERE country_code = 'SF'",
+    );
+    expect(still).toHaveLength(1);
+  });
+
   it("imports a file uploaded as a name field", async () => {
     // The page has to work without JavaScript, so the browser posts a
     // file input; this asserts the route is reachable and the CSRF check

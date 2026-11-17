@@ -15,18 +15,36 @@
 // and it is the path with no parser between the browser and this code.
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import * as fs from "node:fs";
+import { Readable } from "node:stream";
 import * as path from "node:path";
 import { verifyCsrfRequest } from "../plugins/csrf";
 import { sendCsrfPage } from "../errors/render";
 import { exportRangesToFile } from "../../storage/rangeExport";
-import { importRanges } from "../../storage/rangeImport";
+import {
+  importRanges,
+  listRangeImports,
+  readRangeImportState,
+  replaceRangesFromStream,
+  writeRangeImportProgress,
+} from "../../storage/rangeImport";
 import { decodeFile, RangeFileError, IPQ_DEFAULT_MAX_ROWS } from "../../storage/rangeFile";
 
 const FLASH_COOKIE = "ranges_flash";
 
-/** The paste field is bounded so a stray multi-megabyte body is refused by
- *  Fastify's own limit rather than parsed first. */
-const MAX_PASTE_BYTES = 16 * 1024 * 1024;
+/**
+ * The largest body these routes will parse.
+ *
+ * Fastify's default is 1 MB and `@fastify/formbody` inherits it. A .ipq
+ * export of a few thousand ranges is already several megabytes, so the
+ * default rejected the file the page itself produces — and it rejected it
+ * from inside a pre-parsing hook, which resets the socket instead of
+ * answering 413. The operator saw "connection reset" with no explanation.
+ *
+ * 512 MB is the ceiling for a whole-library file. It is a limit on the
+ * request body, not on the import: `importRanges` and the streaming reader
+ * keep their own bounds.
+ */
+export const RANGE_BODY_LIMIT = 512 * 1024 * 1024;
 
 export interface RangeExportState {
   readonly id: string;
@@ -75,7 +93,9 @@ function consumeFlash(
   }
 }
 
-export function registerRangeRoutes(app: FastifyInstance): void {
+/** Async because Fastify treats a plugin that returns nothing as
+ *  "forgot to call done" — `register` needs a promise to await. */
+export async function registerRangeRoutes(app: FastifyInstance): Promise<void> {
   app.get("/admin/ranges", async (req, reply) => {
     const flash = consumeFlash(req, reply);
     const exports = [...exportState.values()]
@@ -91,6 +111,17 @@ export function registerRangeRoutes(app: FastifyInstance): void {
       title: req.t("admin.ranges.title"),
       exports,
       maxRows: IPQ_DEFAULT_MAX_ROWS,
+      currentRows: await countRanges(app),
+      // The job is a row, not a request: a whole-library import outlives the
+      // tab that started it, and this is what shows how far it got.
+      imports: (await listRangeImports(app.pool, 10)).map((job) => ({
+        ...job,
+        isRunning: job.status === "running",
+        pct:
+          job.declaredRows && job.declaredRows > 0
+            ? Math.min(100, Math.round((job.rowsDone / job.declaredRows) * 100))
+            : null,
+      })),
       // The layout renders the flash partial; it reads flash.success /
       // flash.error. Passing the message under its own kind keeps the
       // partial's contract and the page free of markup for it.
@@ -166,10 +197,47 @@ export function registerRangeRoutes(app: FastifyInstance): void {
       // used, and a redirect would lose it.
       return reply.code(400).type("text/plain; charset=utf-8").send("no file was uploaded");
     }
-    if (Buffer.byteLength(text, "utf8") > MAX_PASTE_BYTES) {
+    if (Buffer.byteLength(text, "utf8") > RANGE_BODY_LIMIT) {
       setFlash(reply, "error", req.t("admin.ranges.tooLarge"));
       return reply.redirect("/admin/ranges");
     }
+    // Replacement is the destructive direction, so it is gated on more than
+    // a select: the operator types the number of ranges currently in the
+    // table, which the page shows them. A repost of this form — a browser
+    // "resend" after a timeout — carries a stale count and is refused.
+    if (String(body?.mode ?? "") === "replace") {
+      const expected = await countRanges(app);
+      const typed = Number(body?.confirmRows ?? NaN);
+      if (!Number.isFinite(typed) || typed !== expected) {
+        setFlash(
+          reply,
+          "error",
+          req.t("admin.ranges.replace.mismatch", { expected }),
+        );
+        return reply.redirect("/admin/ranges");
+      }
+      // The row count the file claims, so the progress bar has a denominator
+      // and the operator can see a short file at a glance.
+      const declaredRows = declaredRowCount(text);
+      const importId = await writeRangeImportProgress(app.pool, {
+        mode: "replace",
+        source: "upload",
+        declaredRows,
+      });
+      try {
+        const result = await replaceRangesFromStream(app.pool, Readable.from([text]), { importId });
+        setFlash(
+          reply,
+          "success",
+          req.t("admin.ranges.replace.done", { written: result.written, kept: result.preserved }),
+        );
+      } catch (err) {
+        app.log.error({ err }, "range replacement failed");
+        setFlash(reply, "error", req.t("admin.ranges.replace.failed", { error: messageOf(err) }));
+      }
+      return reply.redirect("/admin/ranges");
+    }
+
     let decoded;
     try {
       decoded = decodeFile(text);
@@ -209,6 +277,27 @@ function readUploadedText(body: Record<string, unknown> | undefined): string | n
     }
   }
   return null;
+}
+
+/** Rows currently in the live table. Shown on the page and required as the
+ *  confirmation for a replacement. */
+async function countRanges(app: FastifyInstance): Promise<number> {
+  const [rows] = await app.pool.query<import("mysql2").RowDataPacket[]>(
+    "SELECT COUNT(*) AS n FROM ip_ranges",
+  );
+  return Number(rows[0]?.n ?? 0);
+}
+
+/** The row count the header declares. A file that cannot say is left null —
+ *  a bar with no denominator is honest, a guessed one is not. */
+function declaredRowCount(text: string): number | null {
+  const first = text.split(String.fromCharCode(10))[0] ?? "";
+  try {
+    const parsed = JSON.parse(first) as { rows?: unknown };
+    return typeof parsed.rows === "number" ? parsed.rows : null;
+  } catch {
+    return null;
+  }
 }
 
 function readCountry(req: FastifyRequest): string | undefined {

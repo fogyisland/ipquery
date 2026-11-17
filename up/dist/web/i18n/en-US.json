@@ -1004,6 +1004,28 @@
         "note1": "Addresses are text, so byte order never comes into it and IPv4 and IPv6 can share one file.",
         "note2": "range_size is recomputed on import; the value in the file is never trusted.",
         "note3": "Imported ranges are tagged import and are kept across a full ETL refresh, like multi-provider rows."
+      },
+      "replace": {
+        "title": "Replace the whole library",
+        "warning": "Warning: the uploaded file replaces the IP range library outright. Rows that are yours — multi-provider and imported rows — are carried forward; everything else is discarded.",
+        "currentRows": "Ranges currently in this library:",
+        "confirmLabel": "Type that number to confirm",
+        "confirmHint": "This is the guard against a mistake: a number that does not match runs nothing, and a browser resend is refused with it.",
+        "action": "Replace the library",
+        "mismatch": "The confirmation number does not match ({expected} ranges) — nothing was replaced",
+        "done": "Replaced — {written} ranges written, {kept} of your rows kept",
+        "failed": "Replacement failed: {error}"
+      },
+      "jobs": {
+        "title": "Import history",
+        "help": "A whole-library import runs for hours and outlives the tab that started it. This records how far each one got and, when it failed, why.",
+        "started": "Started",
+        "mode": "Mode",
+        "progress": "Progress",
+        "outcome": "Outcome",
+        "running": "Running",
+        "wrote": "wrote",
+        "kept": "kept of yours"
       }
     }
   },

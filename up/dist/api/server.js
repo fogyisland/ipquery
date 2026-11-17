@@ -367,7 +367,18 @@ async function buildServer(cfg, opts) {
     await app.register(cookie_1.default, {
         secret: cfg.web.sessionSecret || cfg.web.csrfSecret || "dev-only-secret-change-me",
     });
-    await app.register(formbody_1.default);
+    // The range import posts a whole .ipq file, and a file of a few thousand
+    // ranges is already several megabytes. `formbody` registers ONE parser for
+    // the whole application, and a parser is chosen before the route is — so a
+    // route-level `bodyLimit` on the range plugin never applies to it. The
+    // ceiling has to be raised here, on the parser itself.
+    //
+    // It is raised to the largest thing any form on this application may post
+    // (an .ipq export). Every other endpoint keeps rejecting oversized bodies;
+    // the difference is that they now reject 512 MB rather than 1 MB, which is
+    // still far below what would threaten the process, and the routes that
+    // accept a body all validate their own content afterwards.
+    await app.register(formbody_1.default, { bodyLimit: adminRanges_1.RANGE_BODY_LIMIT });
     await app.register(static_1.default, { root: path.join(__dirname, "..", "web", "assets"), prefix: "/assets/" });
     await (0, view_1.registerView)(app, { baseUrl: cfg.web.baseUrl });
     await (0, i18n_1.registerI18n)(app);
@@ -432,7 +443,7 @@ async function buildServer(cfg, opts) {
     await app.register(marketing_1.default);
     await app.register(dashboard_1.default);
     await app.register(admin_1.default);
-    await app.register(async (instance) => (0, adminRanges_1.registerRangeRoutes)(instance));
+    await app.register(adminRanges_1.registerRangeRoutes);
     await app.register(auth_2.default);
     await app.register(init_1.default);
     (0, auditLog_1.registerAuditLog)(app);

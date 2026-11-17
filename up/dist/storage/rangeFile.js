@@ -4,6 +4,7 @@ exports.RangeFileError = exports.IPQ_DEFAULT_MAX_ROWS = exports.IPQ_VERSION = ex
 exports.encodeHeader = encodeHeader;
 exports.encodeRange = encodeRange;
 exports.decodeFile = decodeFile;
+exports.decodeStream = decodeStream;
 // SPDX-License-Identifier: MIT
 //
 // The .ipq range file format.
@@ -210,5 +211,72 @@ function readInteger(value, name, lineNumber) {
         throw new RangeFileError(`line ${lineNumber}: "${name}" must be a whole number`);
     }
     return n;
+}
+const DEFAULT_BATCH_SIZE = 500;
+/**
+ * Read a .ipq file straight from a stream.
+ *
+ * The file is line-delimited, so the reader only has to hold the line it is
+ * in the middle of: memory is bounded by the longest line, not by the file.
+ * A whole-library export is around two gigabytes, which is more than a
+ * String can hold once, so reading it as text and splitting afterwards is
+ * not an option.
+ *
+ * A partial line at the end of a chunk is carried into the next one. Getting
+ * that wrong is the difference between "works" and "loses a row every 64 KB
+ * depending on where the socket happened to split".
+ */
+async function decodeStream(input, options) {
+    const maxRows = options.maxRows ?? exports.IPQ_DEFAULT_MAX_ROWS;
+    const batchSize = options.batchSize ?? DEFAULT_BATCH_SIZE;
+    let buffer = "";
+    let lineNumber = 0;
+    let sawHeader = false;
+    let seenRows = 0;
+    let batch = [];
+    const flush = async () => {
+        if (batch.length === 0)
+            return;
+        const outgoing = batch;
+        batch = [];
+        await options.onBatch(outgoing);
+    };
+    const consumeLine = async (line) => {
+        lineNumber += 1;
+        if (lineNumber === 1) {
+            // A byte-order mark is what a Windows browser puts in front of a
+            // pasted file. Left in, the first line is not JSON.
+            const header = parseHeader(line.replace(/^﻿/, ""));
+            sawHeader = true;
+            await options.onHeader(header);
+            return;
+        }
+        if (line.trim() === "")
+            return;
+        seenRows += 1;
+        if (seenRows > maxRows) {
+            throw new RangeFileError(`this file holds more than ${maxRows} ranges; split it or raise the ceiling before importing`);
+        }
+        batch.push(parseRangeLine(line, lineNumber));
+        if (batch.length >= batchSize)
+            await flush();
+    };
+    for await (const chunk of input) {
+        buffer += typeof chunk === "string" ? chunk : chunk.toString("utf8");
+        let newline = buffer.indexOf("\n");
+        while (newline !== -1) {
+            const line = buffer.slice(0, newline).replace(/\r$/, "");
+            buffer = buffer.slice(newline + 1);
+            await consumeLine(line);
+            newline = buffer.indexOf("\n");
+        }
+    }
+    // A last line without a trailing newline is still a line.
+    if (buffer.trim() !== "")
+        await consumeLine(buffer.replace(/\r$/, ""));
+    if (!sawHeader) {
+        throw new RangeFileError("line 1: the file is empty — an .ipq file starts with a format header");
+    }
+    await flush();
 }
 //# sourceMappingURL=rangeFile.js.map

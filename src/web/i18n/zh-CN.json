@@ -1005,6 +1005,28 @@
         "note1": "地址以文本形式保存，不依赖字节序，IPv4 和 IPv6 可以放在同一个文件里。",
         "note2": "导入时会重新计算 range_size，文件里的任何该字段都不会被采信。",
         "note3": "导入的行标记为 import，ETL 全量刷新时会像 multi-provider 行一样被保留。"
+      },
+      "replace": {
+        "title": "整库替换",
+        "warning": "警告：导入的文件会完全取代当前的 IP 段库。当前库里不属于你的手工数据（multi-provider / import 标记的行）会保留，其余一律丢弃。",
+        "currentRows": "当前库中 IP 段条数：",
+        "confirmLabel": "输入上面的条数以确认",
+        "confirmHint": "这是防止误操作的门槛：数字对不上就不执行，浏览器自动重发也会被挡住。",
+        "action": "确认替换",
+        "mismatch": "确认数字不匹配（当前是 {expected} 条），没有执行任何替换",
+        "done": "替换完成：写入 {written} 条，保留手工数据 {kept} 条",
+        "failed": "替换失败：{error}"
+      },
+      "jobs": {
+        "title": "导入记录",
+        "help": "整库导入要跑很久，会超过发起它的那个页面。这里显示每次导入进行到哪一步、是否完成，失败时的原因也留在这里。",
+        "started": "开始时间",
+        "mode": "方式",
+        "progress": "进度",
+        "outcome": "结果",
+        "running": "进行中",
+        "wrote": "写入",
+        "kept": "保留手工数据"
       }
     }
   },

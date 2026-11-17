@@ -82,9 +82,85 @@
       </div>
       <button type="submit" class="btn-primary">{{req.t 'admin.ranges.import.action'}}</button>
     </form>
+
+    {{!-- Replacement is a different decision from merging, so it is a
+         different form with its own warning — not a checkbox tucked next to
+         the safe one. The confirmation is the current row count: the
+         operator has to look at the number and type it, which is what stops
+         a browser "resend" from wiping the library. --}}
+    <details class="range-replace">
+      <summary>{{req.t 'admin.ranges.replace.title'}}</summary>
+      <p class="range-replace-warning">{{req.t 'admin.ranges.replace.warning'}}</p>
+      <p class="form-field-hint">{{req.t 'admin.ranges.replace.currentRows'}} <strong>{{currentRows}}</strong></p>
+      <form method="post" action="/admin/ranges/import" enctype="multipart/form-data">
+        <input type="hidden" name="csrf" value="{{csrfToken}}">
+        <input type="hidden" name="mode" value="replace">
+        <div class="form-field">
+          <label class="form-field-label" for="replace-file">{{req.t 'admin.ranges.import.file'}}</label>
+          <div class="form-field-input">
+            <input id="replace-file" type="file" name="file" accept=".ipq,application/x-ndjson,text/plain" required>
+          </div>
+        </div>
+        <div class="form-field">
+          <label class="form-field-label" for="replace-confirm">{{req.t 'admin.ranges.replace.confirmLabel'}}</label>
+          <div class="form-field-input">
+            <input id="replace-confirm" type="number" name="confirmRows" min="0" required
+                   inputmode="numeric" placeholder="{{currentRows}}">
+            <span class="form-field-hint">{{req.t 'admin.ranges.replace.confirmHint'}}</span>
+          </div>
+        </div>
+        <button type="submit" class="btn-danger">{{req.t 'admin.ranges.replace.action'}}</button>
+      </form>
+    </details>
     <p class="form-field-hint">{{req.t 'admin.ranges.import.ceilingPre'}} {{maxRows}} {{req.t 'admin.ranges.import.ceilingPost'}}</p>
   </section>
 </div>
+
+{{!-- ── Recent imports ───────────────────────────────────────────────
+     A whole-library import runs for hours and outlives the tab that
+     started it. This list is the record of what happened: how far it got,
+     when it finished, and why it failed if it did. --}}
+{{#if imports.length}}
+<section class="range-card range-imports">
+  <h3>{{req.t 'admin.ranges.jobs.title'}}</h3>
+  <p class="admin-section-help">{{req.t 'admin.ranges.jobs.help'}}</p>
+  <table class="range-export-table">
+    <thead>
+      <tr>
+        <th>{{req.t 'admin.ranges.jobs.started'}}</th>
+        <th>{{req.t 'admin.ranges.jobs.mode'}}</th>
+        <th>{{req.t 'admin.ranges.jobs.progress'}}</th>
+        <th>{{req.t 'admin.ranges.jobs.outcome'}}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {{#each imports}}
+      <tr class="range-import-row{{#if this.isRunning}} is-running{{/if}}">
+        <td><time datetime="{{this.startedAt}}">{{this.startedAt}}</time></td>
+        <td>{{this.mode}}</td>
+        <td>
+          {{#if this.pct}}
+          <span class="range-import-bar"><span class="range-import-bar-fill" style="width: {{this.pct}}%"></span></span>
+          <span class="form-field-hint">{{this.rowsDone}} / {{this.declaredRows}} ({{this.pct}}%)</span>
+          {{else}}
+          <span class="form-field-hint">{{this.rowsDone}}</span>
+          {{/if}}
+        </td>
+        <td>
+          {{#if this.isRunning}}{{@root.req.t 'admin.ranges.jobs.running'}}{{/if}}
+          {{#if this.errorMessage}}
+          <span class="range-import-error">{{this.errorMessage}}</span>
+          {{/if}}
+          {{#unless this.errorMessage}}{{#unless this.isRunning}}
+          {{@root.req.t 'admin.ranges.jobs.wrote'}} {{this.rowsWritten}} · {{@root.req.t 'admin.ranges.jobs.kept'}} {{this.preserved}}
+          {{/unless}}{{/unless}}
+        </td>
+      </tr>
+      {{/each}}
+    </tbody>
+  </table>
+</section>
+{{/if}}
 
 {{!-- ── Format ───────────────────────────────────────────────────────
      The file is line-delimited JSON and is meant to be readable, so the
