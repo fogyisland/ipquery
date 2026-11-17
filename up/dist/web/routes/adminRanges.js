@@ -311,7 +311,36 @@ async function registerRangeRoutes(app) {
         // "resend" after a timeout — carries a stale count and is refused.
         //
         // `uploadId` is the chunked path. The file is already on disk by the
-        // time this runs, so it is streamed in rather than held as text.
+        // time this runs, so it is streamed in — and removed afterwards: the
+        // import is the inverse of the export and nothing about the file needs
+        // to outlive it.
+        // An upload id is the large-file path: the bytes are on disk already,
+        // so they are streamed in and removed once the rows are in the table.
+        const uploadId = Number(body?.uploadId ?? NaN);
+        if (Number.isFinite(uploadId) && uploadId > 0) {
+            const state = await (0, rangeUpload_1.openUpload)(app.pool, uploadId).catch(() => null);
+            if (!state || !state.complete) {
+                setFlash(reply, "error", req.t("admin.ranges.importRejected", { error: "the upload is not complete" }));
+                return reply.redirect("/admin/ranges");
+            }
+            const importId = await (0, rangeImport_1.writeRangeImportProgress)(app.pool, {
+                mode: "merge",
+                source: state.filename,
+                declaredRows: null,
+            });
+            try {
+                const result = await (0, rangeImport_1.importRangesFromFile)(app.pool, state.filepath, { importId });
+                setFlash(reply, "success", req.t("admin.ranges.importedFromUpload", {
+                    written: result.written,
+                    duplicates: result.exactDuplicates + result.contained,
+                }));
+            }
+            catch (err) {
+                app.log.error({ err }, "upload import failed");
+                setFlash(reply, "error", req.t("admin.ranges.importFailed", { error: messageOf(err) }));
+            }
+            return reply.redirect("/admin/ranges");
+        }
         if (String(body?.mode ?? "") === "replace") {
             const expected = await countRanges(app);
             const typed = Number(body?.confirmRows ?? NaN);

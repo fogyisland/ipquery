@@ -1027,7 +1027,8 @@
         "running": "进行中",
         "wrote": "写入",
         "kept": "保留手工数据"
-      }
+      },
+      "importedFromUpload": "导入完成：写入 {written} 条，跳过重复 {duplicates} 条，上传的文件已删除"
     }
   },
   "home": {

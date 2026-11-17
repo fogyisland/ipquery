@@ -1026,7 +1026,8 @@
         "running": "Running",
         "wrote": "wrote",
         "kept": "kept of yours"
-      }
+      },
+      "importedFromUpload": "Imported — {written} ranges written, {duplicates} duplicates skipped, the uploaded file removed"
     }
   },
   "home": {

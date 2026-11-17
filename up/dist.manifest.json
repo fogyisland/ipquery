@@ -1,7 +1,7 @@
 {
   "formatVersion": 1,
   "fileCount": 445,
-  "totalBytes": 2474568,
+  "totalBytes": 2492658,
   "files": {
     "api/dbBootstrap.d.ts": {
       "bytes": 8916,
@@ -828,16 +828,16 @@
       "sha256": "7d3ab67da2d95329c4a45e216a0b337d0dbe0ec7af3d9cab0803dc43d3ea4077"
     },
     "storage/rangeImport.d.ts": {
-      "bytes": 4984,
-      "sha256": "fa9a2821b97096a2c3736a2775a6effb3df0556bf86ffc0ac7afa90c496801ee"
+      "bytes": 6728,
+      "sha256": "2785e10c5e5f02936425e9e175142eb5dcc7fc9967c8b6eaa41ca7e47b20fe4c"
     },
     "storage/rangeImport.js": {
-      "bytes": 13686,
-      "sha256": "bd3ad3fa1f9e663157dd4a761ae03543f95378341af2fb55d169daca3fc619e0"
+      "bytes": 22283,
+      "sha256": "3e6813a84c110354bd08df5d11d8cf87cde66e6cc7e2540cd4d1d3850f61709b"
     },
     "storage/rangeImport.js.map": {
-      "bytes": 9529,
-      "sha256": "232f348ea13186fc2014c2735ce91581d32cf661c5d9a04509fa32be6931da15"
+      "bytes": 14161,
+      "sha256": "3dcee38c3e3928cf15fbe1824173d8563855d6112cb4098fb340b2e813333553"
     },
     "storage/rangeUpload.d.ts": {
       "bytes": 2617,
@@ -1172,8 +1172,8 @@
       "sha256": "080b721f056d5350784d1dcca32fb83964e222582476c118dae2420b8a8565ee"
     },
     "web/i18n/en-US.json": {
-      "bytes": 56384,
-      "sha256": "08df693489a2f3d282e4ebca97a04d5f8c1f7e87a6bba591c455f0e90ff4fca0"
+      "bytes": 56513,
+      "sha256": "b7d4e04d1de3fe07ad03e84d0dded199aaf03bd10b10163b8002680f473dedf5"
     },
     "web/i18n/index.d.ts": {
       "bytes": 309,
@@ -1192,8 +1192,8 @@
       "sha256": "33cd4e4a9a90a35dc5c3b8308e78a6449754c712719b9f1af35b2e25156641cc"
     },
     "web/i18n/zh-CN.json": {
-      "bytes": 56148,
-      "sha256": "9abe5c7d9c8467e8bbdc450b35a4614f486042de15ce6d466c6d252ae5da8a48"
+      "bytes": 56274,
+      "sha256": "7a0d518f53dc1b74f396f0834e4adf42c5c9b30d9245ceac3454b5f9ed97fc7f"
     },
     "web/maps/geo-map.d.ts": {
       "bytes": 1050,
@@ -1440,12 +1440,12 @@
       "sha256": "4625cfbd6a263eb06e840cd7b5eb660aab5cad4ce81d056c05871aa329d3ac62"
     },
     "web/routes/adminRanges.js": {
-      "bytes": 19050,
-      "sha256": "9ef533c5d71473d93702a7510efed8ad522d89107eaff34e0e9fc1243aafeebc"
+      "bytes": 20632,
+      "sha256": "724c8c7a9e293007593547245ce54fb5e580379a4fecce975f809a7a394eba76"
     },
     "web/routes/adminRanges.js.map": {
-      "bytes": 14660,
-      "sha256": "45a08dc7becd071164fdac8ae64cba7265aeff23a54180bb03e03ae7beea714e"
+      "bytes": 15940,
+      "sha256": "987c6a415c2c2892f907d3af138863e11c284146537a3862802ff99dd5439291"
     },
     "web/routes/auth.d.ts": {
       "bytes": 121,

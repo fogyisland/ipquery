@@ -23,6 +23,14 @@ export interface ImportResult {
  * rest of it. The batch is re-run row by row when it fails as a whole, so
  * the failure names the row rather than the batch.
  */
+/**
+ * Write records into the live table, tagged `import`.
+ *
+ * The row shape is this module's own, not the file's: `RangeRecord` carries
+ * a `line` for error reporting and uses the file's field names, and both are
+ * wrong for the column list below. Converting at the boundary keeps the two
+ * vocabularies from leaking into each other.
+ */
 export declare function importRanges(pool: Pool, records: readonly RangeRecord[]): Promise<ImportResult>;
 export interface ReplaceResult {
     /** Rows the uploaded file contributed. Does not include the rows the old
@@ -80,33 +88,64 @@ export declare function finishRangeImport(pool: Pool, id: number, outcome: {
 export declare function readRangeImportState(pool: Pool, id: number): Promise<RangeImportState | null>;
 /** The imports this install has seen, newest first. */
 export declare function listRangeImports(pool: Pool, limit?: number): Promise<RangeImportState[]>;
-export interface ReplaceOptions {
+export interface ImportProgress {
+    /** Rows read out of the file. Monotonic: a stall can only look like a
+     *  stall, never like work going backwards. */
+    readonly rowsRead: number;
+    readonly rowsWritten: number;
+    readonly exactDuplicates: number;
+    readonly contained: number;
+    readonly partialOverlaps: number;
+}
+export interface ImportOptions {
     /** The job record to update as rows land. Omitted by callers that run
      *  inline and have nowhere to report. */
     readonly importId?: number;
-    /** Called with the running total so a long run can show a bar. */
-    readonly onProgress?: (rowsDone: number) => void;
+    readonly onProgress?: (progress: ImportProgress) => void;
+}
+export interface ImportRunResult {
+    /** Rows the file contributed after de-duplication. */
+    readonly written: number;
+    readonly exactDuplicates: number;
+    readonly contained: number;
+    readonly partialOverlaps: number;
+    /** Rows in the table once the merge is done. */
+    readonly total: number;
 }
 /**
- * Replace the whole library with the ranges in `input`.
+ * Merge a file that is already on disk, then remove it.
  *
- * Staging, then RENAME — the same shape the ETL uses, for the same reason.
- * A nine-million-row merge through `ON DUPLICATE KEY UPDATE` is hours of
- * index work with the live table being written the whole time. Filling
- * `ip_ranges_new` and swapping touches the live table for the instant the
- * RENAME takes.
- *
- * What makes the swap safe to offer at all:
- *
- *   · The live table is not touched until the upload has been read to the
- *     end and every row is in the staging table. A file that turns out to
- *     be broken on its last line leaves the old table exactly as it was.
- *   · Operator-owned rows (`multi-provider`, `import`) are copied forward
- *     first, so a replacement does not silently undo an import or a
- *     backfill.
- *   · The run takes the ETL lock. Both flows truncate `ip_ranges_new` and
- *     RENAME it; running them together means one wipe takes the other's
- *     partial insert with it and the survivor is whichever rename landed
- *     second.
+ * The import is the inverse of the export: once the rows are in the table
+ * the bytes are only occupying space. Removing the file here rather than in
+ * the caller is what makes that true whichever path got here, including the
+ * one that throws.
  */
-export declare function replaceRangesFromStream(pool: Pool, input: AsyncIterable<Buffer | string>, options?: ReplaceOptions): Promise<ReplaceResult>;
+export declare function importRangesFromFile(pool: Pool, filepath: string, options?: ImportOptions): Promise<ImportRunResult>;
+/**
+ * Merge the ranges in `input` into the live table.
+ *
+ * The file is read from disk and the upload is discarded afterwards — the
+ * import is the inverse of the export, and nothing about the file needs to
+ * outlive it.
+ *
+ * On duplicates, which is most of the work on a whole-library import:
+ *
+ *   · An exact repeat costs one INSERT statement less when it is dropped
+ *     before it reaches the database. On a file written from another
+ *     install the repeats are not rare — an earlier import, or a re-export
+ *     of overlapping ranges.
+ *   · A range fully covered by an already-written one is dropped too. It is
+ *     not a statement about a different part of the address space, and it
+ *     would otherwise sit in the table as a row the lookup can never use.
+ *   · A partial overlap is written anyway. Neither range is a statement
+ *     about the other, and picking one would be guessing.
+ *
+ * The deduplication is the same shape the ETL source merge uses
+ * (src/etl/sources/dedupe.ts): sort so larger ranges come first and keep a
+ * window of the ranges that could still cover the current one. On a
+ * nine-million-row file that is what keeps the cost linear instead of
+ * quadratic.
+ */
+export declare function importRangesFromStream(pool: Pool, input: AsyncIterable<Buffer | string>, options?: ImportOptions): Promise<ImportRunResult>;
+/** Replace the whole library with the ranges in `input`. */
+export declare function replaceRangesFromStream(pool: Pool, input: AsyncIterable<Buffer | string>, options?: ImportOptions): Promise<ReplaceResult>;
