@@ -27,10 +27,12 @@ import {
   importRangesFromStream,
   listRangeImports,
   readRangeImportState,
+  replaceRangesFromFile,
   replaceRangesFromStream,
   writeRangeImportProgress,
 } from "../../storage/rangeImport";
 import {
+  discardUpload,
   finishUpload,
   openUpload,
   reserveUpload,
@@ -298,6 +300,75 @@ export async function registerRangeRoutes(app: FastifyInstance): Promise<void> {
   app.post("/admin/ranges/import", async (req, reply) => {
     if (!verifyCsrfRequest(req)) return sendCsrfPage(reply, 403);
     const body = req.body as Record<string, unknown> | undefined;
+
+    // `uploadId` is the chunked path. The bytes are already on disk by the
+    // time this runs, so they are streamed in — and removed afterwards: the
+    // import is the inverse of the export and nothing about the file needs
+    // to outlive it.
+    //
+    // This check comes first because the chunked path carries no file in
+    // the request body at all. Asking for the text first would refuse
+    // every chunked import with "no file was uploaded", which is exactly
+    // what the browser sends.
+    const uploadId = Number(body?.uploadId ?? NaN);
+    if (Number.isFinite(uploadId) && uploadId > 0) {
+      const state = await openUpload(app.pool, uploadId).catch(() => null);
+      if (!state || !state.complete) {
+        setFlash(reply, "error", req.t("admin.ranges.importRejected", { error: "the upload is not complete" }));
+        return reply.redirect("/admin/ranges");
+      }
+      // A replacement is the destructive direction, so it carries the same
+      // guard as the form does: the operator types the number of ranges
+      // currently in the table. A browser "resend" after a timeout
+      // carries a stale count and is refused.
+      const isReplace = String(body?.mode ?? "") === "replace";
+      if (isReplace) {
+        const expected = await countRanges(app);
+        const typed = Number(body?.confirmRows ?? NaN);
+        if (!Number.isFinite(typed) || typed !== expected) {
+          setFlash(reply, "error", req.t("admin.ranges.replace.mismatch", { expected }));
+          return reply.redirect("/admin/ranges");
+        }
+      }
+      const importId = await writeRangeImportProgress(app.pool, {
+        mode: isReplace ? "replace" : "merge",
+        source: state.filename,
+        declaredRows: null,
+      });
+      try {
+        if (isReplace) {
+          const result = await replaceRangesFromFile(app.pool, state.filepath, { importId });
+          setFlash(
+            reply,
+            "success",
+            req.t("admin.ranges.replace.done", { written: result.written, kept: result.preserved }),
+          );
+        } else {
+          const result = await importRangesFromFile(app.pool, state.filepath, { importId });
+          setFlash(
+            reply,
+            "success",
+            req.t("admin.ranges.importedFromUpload", {
+              written: result.written,
+              duplicates: result.exactDuplicates + result.contained,
+            }),
+          );
+        }
+      } catch (err) {
+        app.log.error({ err }, "upload import failed");
+        setFlash(reply, "error", req.t("admin.ranges.importFailed", { error: messageOf(err) }));
+      } finally {
+        // The bytes are the importer's business; the bookkeeping is ours.
+        // The upload row and its chunk rows go whatever the outcome — a
+        // failed import leaves no half-uploaded file for somebody to
+        // mistake for a good one.
+        await discardUpload(app.pool, uploadId).catch((err: unknown) => {
+          app.log.warn({ err, uploadId }, "could not clean up the upload");
+        });
+      }
+      return reply.redirect("/admin/ranges");
+    }
+
     const text = readUploadedText(body);
     if (text === null) {
       // Not a flash: the operator has to see this next to the field they
@@ -312,42 +383,6 @@ export async function registerRangeRoutes(app: FastifyInstance): Promise<void> {
     // a select: the operator types the number of ranges currently in the
     // table, which the page shows them. A repost of this form — a browser
     // "resend" after a timeout — carries a stale count and is refused.
-    //
-    // `uploadId` is the chunked path. The file is already on disk by the
-    // time this runs, so it is streamed in — and removed afterwards: the
-    // import is the inverse of the export and nothing about the file needs
-    // to outlive it.
-    // An upload id is the large-file path: the bytes are on disk already,
-    // so they are streamed in and removed once the rows are in the table.
-    const uploadId = Number(body?.uploadId ?? NaN);
-    if (Number.isFinite(uploadId) && uploadId > 0) {
-      const state = await openUpload(app.pool, uploadId).catch(() => null);
-      if (!state || !state.complete) {
-        setFlash(reply, "error", req.t("admin.ranges.importRejected", { error: "the upload is not complete" }));
-        return reply.redirect("/admin/ranges");
-      }
-      const importId = await writeRangeImportProgress(app.pool, {
-        mode: "merge",
-        source: state.filename,
-        declaredRows: null,
-      });
-      try {
-        const result = await importRangesFromFile(app.pool, state.filepath, { importId });
-        setFlash(
-          reply,
-          "success",
-          req.t("admin.ranges.importedFromUpload", {
-            written: result.written,
-            duplicates: result.exactDuplicates + result.contained,
-          }),
-        );
-      } catch (err) {
-        app.log.error({ err }, "upload import failed");
-        setFlash(reply, "error", req.t("admin.ranges.importFailed", { error: messageOf(err) }));
-      }
-      return reply.redirect("/admin/ranges");
-    }
-
     if (String(body?.mode ?? "") === "replace") {
       const expected = await countRanges(app);
       const typed = Number(body?.confirmRows ?? NaN);

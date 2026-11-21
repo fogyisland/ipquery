@@ -1,10 +1,13 @@
 // SPDX-License-Identifier: MIT
 import { describe, it, expect, beforeAll, beforeEach, afterAll } from "vitest";
 import * as mysql from "mysql2/promise";
+import * as fs from "node:fs";
+import * as os from "node:os";
+import * as path from "node:path";
 import { Readable } from "node:stream";
 import { loadConfig } from "../../src/config";
 import { runMigrations } from "../../src/storage/migrations/runner";
-import { importRanges, replaceRangesFromStream } from "../../src/storage/rangeImport";
+import { importRanges, replaceRangesFromFile, replaceRangesFromStream } from "../../src/storage/rangeImport";
 import { encodeHeader, encodeRange, RangeFileError } from "../../src/storage/rangeFile";
 import { findRange } from "../../src/storage/mysql";
 import { parseIp } from "../../src/ip";
@@ -12,6 +15,7 @@ import { acquireEtlRunLock } from "../../src/etl/runGuard";
 
 const TEST_DB = "ipquery_range_replace_test";
 let pool: mysql.Pool;
+let dir: string;
 
 beforeAll(async () => {
   const cfg = loadConfig();
@@ -36,6 +40,7 @@ beforeAll(async () => {
     timezone: "Z",
   });
   await runMigrations(pool);
+  dir = fs.mkdtempSync(path.join(os.tmpdir(), "ipq-replace-"));
 });
 
 beforeEach(async () => {
@@ -45,6 +50,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await pool.end();
+  fs.rmSync(dir, { recursive: true, force: true });
   const cfg = loadConfig();
   const root = await mysql.createConnection({
     host: cfg.db.host,
@@ -190,5 +196,30 @@ describe("replaceRangesFromStream", () => {
     expect(result.written).toBe(3);
     const [counted] = await pool.query<mysql.RowDataPacket[]>("SELECT COUNT(*) AS n FROM ip_ranges");
     expect(Number(counted[0]!.n)).toBe(3);
+  });
+
+  it("replaces from a file on disk and removes it afterwards", async () => {
+    // The large-file path for a replacement: the bytes are uploaded in
+    // chunks, assembled on disk, and then streamed in here. The file has
+    // to go the moment the rows are in the table — it is two gigabytes
+    // of something nobody needs again.
+    const file = path.join(dir, "library.ipq");
+    fs.writeFileSync(
+      file,
+      [
+        encodeHeader({ exportedAt: "x", rows: 1 }),
+        encodeRange(rec("10.9.0.0", "10.9.0.255")),
+      ].join("\n") + "\n",
+    );
+    const result = await replaceRangesFromFile(pool, file);
+    expect(result.written).toBe(1);
+    expect(fs.existsSync(file)).toBe(false);
+  });
+
+  it("removes the file when a replacement fails too", async () => {
+    const file = path.join(dir, "broken.ipq");
+    fs.writeFileSync(file, encodeHeader({ exportedAt: "x", rows: 1 }) + "\n{oops\n");
+    await expect(replaceRangesFromFile(pool, file)).rejects.toThrow();
+    expect(fs.existsSync(file)).toBe(false);
   });
 });

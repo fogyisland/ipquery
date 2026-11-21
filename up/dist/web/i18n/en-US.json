@@ -1027,6 +1027,17 @@
         "wrote": "wrote",
         "kept": "kept of yours"
       },
+      "upload": {
+        "title": "Upload a large file",
+        "help": "A whole-library .ipq can run to hundreds of megabytes or gigabytes, which does not fit in one form post. This path slices the file in the browser and sends it a piece at a time; the server assembles the pieces on disk and imports them. A dropped connection resumes where it left off instead of starting over.",
+        "file": "Choose a file",
+        "fileHint": "Only .ipq files. If the page is reloaded mid-upload, choosing the same file continues the transfer.",
+        "mode": "How to import",
+        "modeMerge": "Merge — keep what is already here",
+        "modeReplace": "Replace — discard what is already here",
+        "modeHint": "A merge writes the ranges in the file; a range that already exists is updated. A replace makes the file the library.",
+        "action": "Start the upload"
+      },
       "importedFromUpload": "Imported — {written} ranges written, {duplicates} duplicates skipped, the uploaded file removed"
     }
   },

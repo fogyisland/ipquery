@@ -149,3 +149,13 @@ export declare function importRangesFromFile(pool: Pool, filepath: string, optio
 export declare function importRangesFromStream(pool: Pool, input: AsyncIterable<Buffer | string>, options?: ImportOptions): Promise<ImportRunResult>;
 /** Replace the whole library with the ranges in `input`. */
 export declare function replaceRangesFromStream(pool: Pool, input: AsyncIterable<Buffer | string>, options?: ImportOptions): Promise<ReplaceResult>;
+/**
+ * Replace the library with the contents of a file on disk.
+ *
+ * The large-file path for a replacement: the bytes arrive in chunks, are
+ * assembled on disk, and are streamed in from there rather than held in
+ * memory. The file is removed afterwards — a replacement has the same
+ * answer as an import, and two gigabytes of nothing is still two
+ * gigabytes.
+ */
+export declare function replaceRangesFromFile(pool: Pool, filepath: string, options?: ImportOptions): Promise<ReplaceResult>;

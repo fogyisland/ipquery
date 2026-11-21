@@ -116,6 +116,54 @@
   </section>
 </div>
 
+{{!-- ── Large file ─────────────────────────────────────────────────
+     A whole-library .ipq is around two gigabytes, and a form POST holds
+     the whole body in memory before a byte can be parsed. So this path
+     slices the file in the browser and sends it a chunk at a time; the
+     server assembles the chunks on disk and streams the result into the
+     table when the last one lands.
+
+     The progress line is the point of this card. An operator watching a
+     two-gigabyte transfer needs to see that it is moving. --}}
+<section class="range-card" id="range-upload">
+  <h3>{{req.t 'admin.ranges.upload.title'}}</h3>
+  <p class="admin-section-help">{{req.t 'admin.ranges.upload.help'}}</p>
+  <form id="range-upload-form" data-csrf="{{csrfToken}}">
+    <div class="form-field">
+      <label class="form-field-label" for="range-upload-file">{{req.t 'admin.ranges.upload.file'}}</label>
+      <div class="form-field-input">
+        <input id="range-upload-file" type="file" accept=".ipq,application/x-ndjson,text/plain">
+        <span class="form-field-hint">{{req.t 'admin.ranges.upload.fileHint'}}</span>
+      </div>
+    </div>
+    <div class="form-field">
+      <label class="form-field-label" for="range-upload-mode">{{req.t 'admin.ranges.upload.mode'}}</label>
+      <div class="form-field-input">
+        <select id="range-upload-mode">
+          <option value="merge">{{req.t 'admin.ranges.upload.modeMerge'}}</option>
+          <option value="replace">{{req.t 'admin.ranges.upload.modeReplace'}}</option>
+        </select>
+        <span class="form-field-hint">{{req.t 'admin.ranges.upload.modeHint'}}</span>
+      </div>
+    </div>
+    {{!-- The replacement guard, in the large-file path too. The operator
+         types the number of ranges currently in the table; a number that
+         does not match runs nothing. --}}
+    <div class="form-field" id="range-upload-confirm-field" hidden>
+      <label class="form-field-label" for="range-upload-confirm">{{req.t 'admin.ranges.replace.confirmLabel'}}</label>
+      <div class="form-field-input">
+        <input id="range-upload-confirm" type="number" min="0" inputmode="numeric" placeholder="{{currentRows}}">
+        <span class="form-field-hint">{{req.t 'admin.ranges.replace.confirmHint'}}</span>
+      </div>
+    </div>
+    <div class="range-upload-progress">
+      <progress id="range-upload-progress" max="100" value="0"></progress>
+      <span id="range-upload-status" class="form-field-hint"></span>
+    </div>
+    <button type="button" id="range-upload-start" class="btn-primary">{{req.t 'admin.ranges.upload.action'}}</button>
+  </form>
+</section>
+
 {{!-- ── Recent imports ───────────────────────────────────────────────
      A whole-library import runs for hours and outlives the tab that
      started it. This list is the record of what happened: how far it got,
@@ -175,3 +223,5 @@
     <li>{{req.t 'admin.ranges.format.note3'}}</li>
   </ul>
 </section>
+
+<script src="/assets/range-upload.js" defer></script>

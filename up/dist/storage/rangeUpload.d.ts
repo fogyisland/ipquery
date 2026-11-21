@@ -55,3 +55,17 @@ export interface OpenUpload extends UploadState {
  * have as a string, and the importer wants it a line at a time anyway.
  */
 export declare function openUpload(pool: Pool, id: number): Promise<OpenUpload>;
+/**
+ * Throw an upload away: the file on disk, the row that described it, and
+ * the row for every chunk that was sent.
+ *
+ * The import is the inverse of the export, and nothing about an uploaded
+ * file needs to outlive it. The chunk rows matter as much as the file: one
+ * per chunk means a two-gigabyte upload leaves a hundred and twenty-eight
+ * of them, and a year of imports is a table nobody reads and nobody dares
+ * delete.
+ *
+ * Doing this twice is not an error — the import path discards the upload
+ * and so does the sweep that clears abandoned ones.
+ */
+export declare function discardUpload(pool: Pool, id: number): Promise<void>;

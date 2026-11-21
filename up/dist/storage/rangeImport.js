@@ -42,6 +42,7 @@ exports.listRangeImports = listRangeImports;
 exports.importRangesFromFile = importRangesFromFile;
 exports.importRangesFromStream = importRangesFromStream;
 exports.replaceRangesFromStream = replaceRangesFromStream;
+exports.replaceRangesFromFile = replaceRangesFromFile;
 // SPDX-License-Identifier: MIT
 //
 // Writing ranges back into the live table.
@@ -485,6 +486,28 @@ async function replaceRangesFromStream(pool, input, options = {}) {
             }).catch(() => undefined);
         }
         throw err;
+    }
+}
+/**
+ * Replace the library with the contents of a file on disk.
+ *
+ * The large-file path for a replacement: the bytes arrive in chunks, are
+ * assembled on disk, and are streamed in from there rather than held in
+ * memory. The file is removed afterwards — a replacement has the same
+ * answer as an import, and two gigabytes of nothing is still two
+ * gigabytes.
+ */
+async function replaceRangesFromFile(pool, filepath, options = {}) {
+    const stream = fs.createReadStream(filepath);
+    try {
+        return await replaceRangesFromStream(pool, stream, options);
+    }
+    finally {
+        // The stream is closed even when the replacement throws, and the file
+        // goes with it — a failed replacement leaves no copy to be mistaken
+        // for a good one later.
+        stream.destroy();
+        await fs.promises.rm(filepath, { force: true }).catch(() => undefined);
     }
 }
 /** The file's record shape as the storage layer's row shape. Addresses are

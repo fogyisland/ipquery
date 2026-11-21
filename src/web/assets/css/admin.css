@@ -2354,6 +2354,29 @@ color: var(--text-3);
 .range-format-notes li + li {
   margin-top: var(--sp-1);
 }
+/* The upload's progress line. The bar and the sentence sit together: the
+   bar says how far, the sentence says what is happening right now. */
+.range-upload-progress {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  margin: var(--sp-3) 0;
+}
+.range-upload-progress progress {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 8px;
+  accent-color: var(--accent);
+}
+.range-upload-progress #range-upload-status {
+  flex: 0 0 auto;
+  max-width: 55%;
+}
+/* An error has to be legible as an error, not as another hint. */
+#range-upload-status[data-error] {
+  color: var(--danger);
+  font-weight: 600;
+}
 
 .schema-report {
   margin-top: var(--sp-5);

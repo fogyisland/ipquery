@@ -1,9 +1,17 @@
 // SPDX-License-Identifier: MIT
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import * as mysql from "mysql2/promise";
+import * as fs from "node:fs";
 import { loadConfig } from "../../src/config";
 import { runMigrations } from "../../src/storage/migrations/runner";
-import { reserveUpload, storeChunk, openUpload, finishUpload, UploadError } from "../../src/storage/rangeUpload";
+import {
+  reserveUpload,
+  storeChunk,
+  openUpload,
+  finishUpload,
+  discardUpload,
+  UploadError,
+} from "../../src/storage/rangeUpload";
 
 const TEST_DB = "ipquery_range_upload_test";
 let pool: mysql.Pool;
@@ -123,5 +131,54 @@ describe("the resumable upload", () => {
     const parts: Buffer[] = [];
     for await (const chunk of stream) parts.push(chunk as Buffer);
     expect(Buffer.concat(parts).toString("utf8")).toBe("abcdef");
+  });
+
+  it("leaves nothing behind when the upload is discarded", async () => {
+    // Every upload leaves two rows behind if they are not cleaned up, and
+    // the chunk row is one per chunk — a two-gigabyte file is a hundred
+    // and twenty-eight of them. A year of imports is a table nobody reads
+    // and nobody dares delete.
+    const upload = await reserveUpload(pool, { mode: "merge", filename: "library.ipq", totalBytes: 12 });
+    await storeChunk(pool, upload.id, 0, "hello");
+    await storeChunk(pool, upload.id, 5, "world!");
+    await finishUpload(pool, upload.id);
+
+    await discardUpload(pool, upload.id);
+
+    const [uploads] = await pool.query<mysql.RowDataPacket[]>("SELECT id FROM range_uploads WHERE id = ?", [
+      upload.id,
+    ]);
+    expect(uploads.length).toBe(0);
+    const [chunks] = await pool.query<mysql.RowDataPacket[]>(
+      "SELECT upload_id FROM range_upload_chunks WHERE upload_id = ?",
+      [upload.id],
+    );
+    expect(chunks.length).toBe(0);
+    // The bytes on disk go too.
+    expect(fs.existsSync(upload.filepath)).toBe(false);
+  });
+
+  it("discards an upload that was never finished", async () => {
+    // The operator picked the wrong file and started again. The half-made
+    // upload has a file on disk and rows in the table, and it is not going
+    // to be resumed.
+    const upload = await reserveUpload(pool, { mode: "merge", filename: "wrong.ipq", totalBytes: 20 });
+    await storeChunk(pool, upload.id, 0, "partial");
+
+    await discardUpload(pool, upload.id);
+
+    const [rows] = await pool.query<mysql.RowDataPacket[]>("SELECT id FROM range_uploads WHERE id = ?", [
+      upload.id,
+    ]);
+    expect(rows.length).toBe(0);
+    expect(fs.existsSync(upload.filepath)).toBe(false);
+  });
+
+  it("does not fail when the upload is already gone", async () => {
+    // The import path discards the upload, and so does the cleanup that
+    // sweeps abandoned ones. Doing it twice must not throw.
+    const upload = await reserveUpload(pool, { mode: "merge", filename: "library.ipq", totalBytes: 4 });
+    await discardUpload(pool, upload.id);
+    await expect(discardUpload(pool, upload.id)).resolves.toBeUndefined();
   });
 });

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 import { describe, it, expect, beforeAll, beforeEach, afterAll, vi } from "vitest";
 import request from "supertest";
+import * as mysql from "mysql2/promise";
 import { createTestDb, dropTestDb, type TestDb } from "../helpers/db";
 import { loadConfig } from "../../src/config";
 import { buildServer } from "../../src/api/server";
@@ -58,6 +59,28 @@ function flashCookieOf(res: request.Response): string {
   return cookie ? cookie.split(";")[0]! : "";
 }
 
+/** multipart/form-data with one file part. Supertest cannot build one, so
+ *  the boundary and the body are assembled here. */
+function multipart(fields: Record<string, string>, files: Record<string, { name: string; body: Buffer }>) {
+  const boundary = "----ipq" + Math.random().toString(36).slice(2);
+  const parts: Buffer[] = [];
+  for (const [key, value] of Object.entries(fields)) {
+    parts.push(Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="${key}"\r\n\r\n${value}\r\n`));
+  }
+  for (const [key, file] of Object.entries(files)) {
+    parts.push(
+      Buffer.from(
+        `--${boundary}\r\nContent-Disposition: form-data; name="${key}"; filename="${file.name}"\r\n` +
+          "Content-Type: application/octet-stream\r\n\r\n",
+      ),
+    );
+    parts.push(file.body);
+    parts.push(Buffer.from("\r\n"));
+  }
+  parts.push(Buffer.from(`--${boundary}--\r\n`));
+  return { body: Buffer.concat(parts), contentType: `multipart/form-data; boundary=${boundary}` };
+}
+
 describe("/admin/ranges", () => {
   it("renders the page with both directions", async () => {
     const r = await request(app.server)
@@ -68,6 +91,27 @@ describe("/admin/ranges", () => {
     expect(r.text).toMatch(/导入 IP 段/);
     // The format name appears so the operator knows what the file is.
     expect(r.text).toContain(IPQ_FORMAT);
+  });
+
+  it("offers the chunked upload path with the elements the script binds to", async () => {
+    // The browser script finds its elements by id. A rename on one side
+    // only would leave the page looking fine and the upload doing
+    // nothing, so the ids are pinned here.
+    const r = await request(app.server)
+      .get("/admin/ranges")
+      .set("Cookie", "sid=" + adminSid);
+    expect(r.status).toBe(200);
+    for (const id of [
+      "range-upload-form",
+      "range-upload-file",
+      "range-upload-start",
+      "range-upload-progress",
+      "range-upload-status",
+    ]) {
+      expect(r.text, `the page must carry #${id}`).toContain(`id="${id}"`);
+    }
+    // The script has to be loaded, and it must be the real one.
+    expect(r.text).toContain('/assets/range-upload.js');
   });
 
   it("exports a downloadable .ipq file", async () => {
@@ -290,6 +334,115 @@ describe("/admin/ranges", () => {
       .get("/admin/ranges")
       .set("Cookie", "sid=" + adminSid + "; " + flashCookieOf(r));
     expect(page.text).toMatch(/line 1|不是|not an ipquery-ranges/i);
+  });
+
+  it("imports an uploaded file and cleans up after itself", async () => {
+    // The chunked path: the bytes arrive in pieces, are assembled on disk,
+    // are streamed into the table, and then the upload is gone — the file
+    // and both sets of rows. An import that leaves its upload behind
+    // accumulates a row per chunk for every file ever sent.
+    const { cookie, token } = await csrf();
+    const body = [
+      encodeHeader({ exportedAt: "x", rows: 1 }),
+      encodeRange({
+        line: 0,
+        start: "10.9.0.0",
+        end: "10.9.0.255",
+        countryCode: "UU",
+        countryName: null,
+        region: null,
+        city: null,
+        postalCode: null,
+        latitude: null,
+        longitude: null,
+        timezone: null,
+        isp: null,
+        asn: null,
+        asnOrg: null,
+      }),
+    ].join("\n") + "\n";
+
+    const started = await request(app.server)
+      .post("/admin/ranges/upload/start")
+      .set("Cookie", "sid=" + adminSid + "; " + cookie)
+      .type("form")
+      .send({ csrf: token, mode: "merge", filename: "library.ipq", totalBytes: String(body.length) });
+    expect(started.status).toBe(200);
+    const uploadId = started.body.id as number;
+
+    const chunk = multipart(
+      { csrf: token, uploadId: String(uploadId), offset: "0" },
+      { file: { name: "library.ipq", body: Buffer.from(body, "utf8") } },
+    );
+    const uploaded = await request(app.server)
+      .post("/admin/ranges/upload/chunk")
+      .set("Cookie", "sid=" + adminSid + "; " + cookie)
+      .set("Content-Type", chunk.contentType)
+      .send(chunk.body);
+    expect(uploaded.status).toBe(200);
+    expect(uploaded.body.complete).toBe(true);
+
+    const imported = await request(app.server)
+      .post("/admin/ranges/import")
+      .set("Cookie", "sid=" + adminSid + "; " + cookie)
+      .type("form")
+      .send({ csrf: token, uploadId: String(uploadId), mode: "merge" });
+    expect(imported.status).toBe(302);
+
+    const [rows] = await td.pool.query<mysql.RowDataPacket[]>(
+      "SELECT country_code FROM ip_ranges WHERE country_code = 'UU'",
+    );
+    expect(rows.length).toBe(1);
+
+    // Nothing is left behind: not the rows, not the chunk rows.
+    const [uploads] = await td.pool.query<mysql.RowDataPacket[]>(
+      "SELECT id FROM range_uploads WHERE id = ?",
+      [uploadId],
+    );
+    expect(uploads.length).toBe(0);
+    const [chunks] = await td.pool.query<mysql.RowDataPacket[]>(
+      "SELECT upload_id FROM range_upload_chunks WHERE upload_id = ?",
+      [uploadId],
+    );
+    expect(chunks.length).toBe(0);
+  });
+
+  it("refuses to replace the library when the confirmation number is wrong", async () => {
+    // A replacement asked for with an upload is still a replacement, and
+    // the guard that protects the library has to apply to it too. A
+    // browser "resend" after a timeout carries a stale count.
+    const { cookie, token } = await csrf();
+    const body = encodeHeader({ exportedAt: "x", rows: 0 }) + "\n";
+
+    const started = await request(app.server)
+      .post("/admin/ranges/upload/start")
+      .set("Cookie", "sid=" + adminSid + "; " + cookie)
+      .type("form")
+      .send({ csrf: token, mode: "replace", filename: "library.ipq", totalBytes: String(body.length) });
+    const uploadId = started.body.id as number;
+
+    const chunk = multipart(
+      { csrf: token, uploadId: String(uploadId), offset: "0" },
+      { file: { name: "library.ipq", body: Buffer.from(body, "utf8") } },
+    );
+    await request(app.server)
+      .post("/admin/ranges/upload/chunk")
+      .set("Cookie", "sid=" + adminSid + "; " + cookie)
+      .set("Content-Type", chunk.contentType)
+      .send(chunk.body);
+
+    const imported = await request(app.server)
+      .post("/admin/ranges/import")
+      .set("Cookie", "sid=" + adminSid + "; " + cookie)
+      .type("form")
+      .send({ csrf: token, uploadId: String(uploadId), mode: "replace", confirmRows: "999999" });
+    expect(imported.status).toBe(302);
+
+    // Nothing was replaced: the flash says the number did not match.
+    const page = await request(app.server)
+      .get("/admin/ranges")
+      .set("Cookie", "sid=" + adminSid + "; " + flashCookieOf(imported));
+    expect(page.text).toMatch(/不匹配|does not match/i);
   });
 });
 

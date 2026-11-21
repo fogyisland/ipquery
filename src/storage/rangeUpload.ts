@@ -180,6 +180,28 @@ export async function openUpload(pool: Pool, id: number): Promise<OpenUpload> {
   return state;
 }
 
+/**
+ * Throw an upload away: the file on disk, the row that described it, and
+ * the row for every chunk that was sent.
+ *
+ * The import is the inverse of the export, and nothing about an uploaded
+ * file needs to outlive it. The chunk rows matter as much as the file: one
+ * per chunk means a two-gigabyte upload leaves a hundred and twenty-eight
+ * of them, and a year of imports is a table nobody reads and nobody dares
+ * delete.
+ *
+ * Doing this twice is not an error — the import path discards the upload
+ * and so does the sweep that clears abandoned ones.
+ */
+export async function discardUpload(pool: Pool, id: number): Promise<void> {
+  await runMigrations(pool);
+  await pool.query("DELETE FROM range_upload_chunks WHERE upload_id = ?", [id]);
+  await pool.query("DELETE FROM range_uploads WHERE id = ?", [id]);
+  // The file is removed last: if the rows are gone the upload is already
+  // unusable, and a file left on disk is a file somebody has to sweep.
+  await fs.promises.rm(path.join(uploadDir(), safeName(id)), { force: true }).catch(() => undefined);
+}
+
 async function readUploadRow(pool: Pool, id: number): Promise<UploadState> {
   const [rows] = await pool.query<RowDataPacket[]>(
     `SELECT id, mode, filename, total_bytes, received_bytes, filepath
@@ -190,12 +212,18 @@ async function readUploadRow(pool: Pool, id: number): Promise<UploadState> {
   if (!r) throw new UploadError(`upload ${id} does not exist`);
   const totalBytes = Number(r.total_bytes);
   const receivedBytes = Number(r.received_bytes);
+  // The column holds the file's name, not its path: the install's data
+  // directory can move between runs, and a path stored in the database
+  // would then point nowhere. The path is rebuilt here, which is also
+  // what `reserveUpload` hands back — the two must agree, or the importer
+  // opens a file that is not there.
+  const name = path.basename(String(r.filepath ?? safeName(Number(r.id))));
   return {
     id: Number(r.id),
     mode: r.mode === "merge" ? "merge" : "replace",
     filename: String(r.filename ?? ""),
     totalBytes,
-    filepath: String(r.filepath ?? safeName(Number(r.id))),
+    filepath: path.join(uploadDir(), name),
     receivedBytes,
     nextOffset: Math.min(receivedBytes, totalBytes),
     complete: receivedBytes >= totalBytes,
