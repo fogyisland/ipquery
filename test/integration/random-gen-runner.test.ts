@@ -108,14 +108,13 @@ describe("tickNow persistence", () => {
 describe("runRandomGeneration in runner context", () => {
   // Direct call to runRandomGeneration with no providers — exercises the
   // "skip if 0 providers" path independently of the runner module.
-  it("no-ops gracefully when there are no enabled providers", async () => {
+  it("does not generate or count IPs when there are no enabled providers", async () => {
     const summary = await runRandomGeneration(td.pool, [], {
       count: 3,
       logger: { log: () => {}, warn: () => {}, error: () => {} },
     });
-    // considered=0 because pickRandomIpsNotInRanges still picks 3 reserved
-    // IPs but no providers were supplied so processIp returns allAbstained
-    // for each. We only assert the no-crash invariant.
-    expect(summary.generatedIps.length).toBe(3);
+    expect(summary.considered).toBe(0);
+    expect(summary.generatedIps).toEqual([]);
+    expect(summary.allAbstained).toBe(0);
   });
 });

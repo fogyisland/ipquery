@@ -4,11 +4,8 @@
 //
 // Flow:
 //   1. pickRandomIpsNotInRanges(pool, count) — generates random IPv4s
-//      from the RFC 5737 / RFC 6890 reserved pools (see the comment
-//      block on that function for why not the full 0.0.0.0/0 space) and
-//      keeps ones that are NOT covered by any existing ip_ranges row.
-//      Retries up to DEFAULT_MAX_TRIES times per slot to absorb
-//      duplicates within the reserved pool.
+//      from the RFC 5737 / RFC 6890 reserved pools. The existing IPv6
+//      catchall makes findRange-based coverage checks unusable here.
 //   2. For each picked IP, calls processIp() from unknownIpBackfill —
 //      same fan-out + vote + write logic the queue-driven backfill uses,
 //      minus the queue-row bookkeeping.
@@ -104,6 +101,27 @@ export async function runRandomGeneration(
   const log = opts.logger ?? console;
 
   const startedAt = Date.now();
+
+  // Avoid presenting random addresses as attempted work when there is no
+  // provider that can look them up. The continuous runner normally filters
+  // this case, but callers of this function directly should get a true no-op.
+  if (providers.length === 0) {
+    return {
+      considered: 0,
+      merged: 0,
+      duplicates: 0,
+      noConsensus: 0,
+      noCountry: 0,
+      allAbstained: 0,
+      alreadyCovered: 0,
+      exhaustedRetries: 0,
+      generatedIps: [],
+      startedAt,
+      finishedAt: Date.now(),
+      providers: {},
+      providersDisabled: [],
+    };
+  }
 
   // processIp() updates summary.providers in place. We use a BackfillSummary
   // here even though this flow doesn't touch the queue — the fields are
