@@ -19,7 +19,7 @@ afterAll(async () => {
 beforeEach(async () => {
   await td.pool.query("TRUNCATE TABLE unknown_ip_queue");
   await td.pool.query("TRUNCATE TABLE ip_ranges");
-  for (const name of ["ip-api", "ipinfo"]) {
+  for (const name of ["ip-api", "ip-sb"]) {
     await updateProviderConfig(td.pool, name, {
       enabled: true,
       autoReenableAt: null,
@@ -66,15 +66,15 @@ describe("reapProviders (circuit-breaker cooldown)", () => {
     await insertOrIncrement(td.pool, buf, ip);
 
     const goodA = new FakeProvider("ip-api", { [ip]: rec({ countryCode: "US" }) });
-    const goodB = new FakeProvider("ipinfo", { [ip]: rec({ countryCode: "US" }) });
-    const throttled = new FakeProvider("ipinfo", {});
+    const goodB = new FakeProvider("ip-sb", { [ip]: rec({ countryCode: "US" }) });
+    const throttled = new FakeProvider("ip-sb", {});
     throttled.rateLimit = true;
 
     const summary = await runBackfill(td.pool, [goodA, goodB, throttled], { batchLimit: 50 });
-    expect(summary.providersDisabled).toContain("ipinfo");
+    expect(summary.providersDisabled).toContain("ip-sb");
 
     const configs = await listProviderConfigs(td.pool);
-    const ipi = configs.find((r) => r.name === "ipinfo")!;
+    const ipi = configs.find((r) => r.name === "ip-sb")!;
     expect(ipi.enabled).toBe(false);
     // autoReenableAt was stamped ~ cooldownMinutes ahead — should be in
     // the future, within (0, 60min] window.
@@ -127,7 +127,7 @@ describe("reapProviders (circuit-breaker cooldown)", () => {
     // we're testing the reaper's WHERE-clause filter, not the disable
     // decision logic.
     const future = new Date(Date.now() + 60 * 60_000);
-    await updateProviderConfig(td.pool, "ipinfo", {
+    await updateProviderConfig(td.pool, "ip-sb", {
       enabled: false,
       autoReenableAt: future,
       autoDisabledReason: "manual test",
@@ -135,6 +135,6 @@ describe("reapProviders (circuit-breaker cooldown)", () => {
     const reaped = await reapProviders(td.pool);
     expect(reaped).toBe(0);
     const configs = await listProviderConfigs(td.pool);
-    expect(configs.find((r) => r.name === "ipinfo")!.enabled).toBe(false);
+    expect(configs.find((r) => r.name === "ip-sb")!.enabled).toBe(false);
   });
 });

@@ -35,7 +35,7 @@ afterAll(async () => {
 
 beforeEach(async () => {
   // Reset every provider to known state before each test.
-  for (const name of ["ip-api", "ipinfo"]) {
+  for (const name of ["ip-api", "ip-sb"]) {
     await updateProviderConfig(td.pool, name, {
       enabled: true,
       autoReenableAt: null,
@@ -84,7 +84,7 @@ describe("POST /admin/providers/:name — manual toggle wins over reaper", () =>
     // The reaper's WHERE clause filters on auto_reenable_at <= NOW()
     // so this row is OUT of scope — manual toggle should win.
     const future = new Date(Date.now() + 60 * 60_000); // 1h ahead
-    await updateProviderConfig(td.pool, "ipinfo", {
+    await updateProviderConfig(td.pool, "ip-sb", {
       enabled: false,
       autoReenableAt: future,
       autoDisabledReason: "429 rate limited",
@@ -92,7 +92,7 @@ describe("POST /admin/providers/:name — manual toggle wins over reaper", () =>
 
     const { cookie, token } = await csrfPair();
     const r = await request(app.server)
-      .post("/admin/providers/ipinfo")
+      .post("/admin/providers/ip-sb")
       .set("Cookie", "sid=" + adminSid + "; " + cookie)
       .type("form")
       .send({ csrf: token, enabled: "on", apiKey: "" });
@@ -102,7 +102,7 @@ describe("POST /admin/providers/:name — manual toggle wins over reaper", () =>
     // touch this row because the WHERE clause filters on
     // auto_reenable_at <= NOW().
     const configs = await listProviderConfigs(td.pool);
-    const row = configs.find((r) => r.name === "ipinfo")!;
+    const row = configs.find((r) => r.name === "ip-sb")!;
     expect(row.enabled).toBe(true);
   });
 
@@ -115,7 +115,7 @@ describe("POST /admin/providers/:name — manual toggle wins over reaper", () =>
     // same either way — but the POST must complete cleanly (reap
     // doesn't error on a row that already exists with the right state).
     const past = new Date(Date.now() - 5 * 60_000); // 5min ago
-    await updateProviderConfig(td.pool, "ipinfo", {
+    await updateProviderConfig(td.pool, "ip-sb", {
       enabled: false,
       autoReenableAt: past,
       autoDisabledReason: "429 rate limited",
@@ -123,7 +123,7 @@ describe("POST /admin/providers/:name — manual toggle wins over reaper", () =>
 
     const { cookie, token } = await csrfPair();
     const r = await request(app.server)
-      .post("/admin/providers/ipinfo")
+      .post("/admin/providers/ip-sb")
       .set("Cookie", "sid=" + adminSid + "; " + cookie)
       .type("form")
       .send({ csrf: token, enabled: "off", apiKey: "" });
@@ -131,6 +131,6 @@ describe("POST /admin/providers/:name — manual toggle wins over reaper", () =>
 
     // Final state: disabled (admin won).
     const configs = await listProviderConfigs(td.pool);
-    expect(configs.find((r) => r.name === "ipinfo")!.enabled).toBe(false);
+    expect(configs.find((r) => r.name === "ip-sb")!.enabled).toBe(false);
   });
 });

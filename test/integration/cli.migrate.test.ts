@@ -5,6 +5,7 @@ import { promisify } from "node:util";
 import * as path from "node:path";
 import * as mysql from "mysql2/promise";
 import { loadConfig } from "../../src/config";
+import { listMigrationFiles } from "../../src/storage/migrations/runner";
 
 const exec = promisify(execFile);
 
@@ -58,7 +59,11 @@ describe("ipq migrate", () => {
   it("applies all migrations to a fresh DB", async () => {
     await dropAndCreateDb();
     const { stdout } = await exec("node", [TSX_BIN, CLI_SRC, "migrate"], { env: makeEnv() });
-    expect(stdout).toMatch(/applied 24 migration/);
+    // The count comes from the runner's own manifest, so adding a
+    // migration does not turn this into a failing test about a number
+    // nobody remembers to update.
+    const total = (await listMigrationFiles()).length;
+    expect(stdout).toMatch(new RegExp(`applied ${total} migration`));
 
     const cfg = loadConfig();
     const pool = mysql.createPool({

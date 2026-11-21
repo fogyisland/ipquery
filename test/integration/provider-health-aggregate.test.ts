@@ -7,6 +7,7 @@ import {
   _resetProviderHealthCache,
   getAggregateProviderHealthAllCached,
 } from "../../src/storage/providerErrorLog";
+import { KNOWN_PROVIDERS } from "../../src/storage/ingestProviders";
 
 let td: TestDb;
 beforeAll(async () => {
@@ -60,10 +61,10 @@ describe("aggregateProviderHealth", () => {
       `INSERT INTO provider_call_counter
          (provider_name, day_utc, calls_total, calls_429, calls_timeout,
           calls_network_err, calls_other_err, last_called_at)
-       VALUES ('ipinfo', CURDATE() - INTERVAL 1 DAY, 4, 2, 0, 0, 0, NOW(3) - INTERVAL 25 HOUR),
-              ('ipinfo', CURDATE(), 6, 1, 0, 0, 0, NOW(3))`,
+       VALUES ('ip-sb', CURDATE() - INTERVAL 1 DAY, 4, 2, 0, 0, 0, NOW(3) - INTERVAL 25 HOUR),
+              ('ip-sb', CURDATE(), 6, 1, 0, 0, 0, NOW(3))`,
     );
-    const agg = await aggregateProviderHealth(td.pool, "ipinfo", 7 * 24 * 60 * 60 * 1000);
+    const agg = await aggregateProviderHealth(td.pool, "ip-sb", 7 * 24 * 60 * 60 * 1000);
     // 7d window uses day_utc, so BOTH rows match (yesterday is within
     // the 7 calendar-day range).
     expect(agg.calls).toBe(10);
@@ -76,9 +77,9 @@ describe("aggregateProviderHealth", () => {
       `INSERT INTO provider_call_counter
          (provider_name, day_utc, calls_total, calls_429, calls_timeout,
           calls_network_err, calls_other_err, last_called_at)
-       VALUES ('ipinfo', CURDATE(), 10, 3, 2, 1, 1, NOW(3))`,
+       VALUES ('ip-sb', CURDATE(), 10, 3, 2, 1, 1, NOW(3))`,
     );
-    const agg = await aggregateProviderHealth(td.pool, "ipinfo", 24 * 60 * 60 * 1000);
+    const agg = await aggregateProviderHealth(td.pool, "ip-sb", 24 * 60 * 60 * 1000);
     expect(agg.calls).toBe(10);
     expect(agg.errors429).toBe(3);
     expect(agg.errorsOther).toBe(4); // 2 + 1 + 1
@@ -89,10 +90,11 @@ describe("aggregateProviderHealth", () => {
 describe("aggregateProviderHealthAll", () => {
   it("returns one row per provider in the catalog, even with no data", async () => {
     const all = await aggregateProviderHealthAll(td.pool, 24 * 60 * 60 * 1000);
-    // The two providers left after migration 028 retired the three that
-    // never answered.
-    expect(all.length).toBe(2);
-    expect(all.map((r) => r.providerName).sort()).toEqual(["ip-api", "ipinfo"]);
+    // One row per provider the catalog knows about — derived from the
+    // catalog itself rather than written out by hand, so a provider
+    // being added or retired does not make this test stale.
+    expect(all.length).toBe(KNOWN_PROVIDERS.length);
+    expect(all.map((r) => r.providerName).sort()).toEqual([...KNOWN_PROVIDERS].sort());
     for (const row of all) {
       expect(row.calls).toBe(0);
       expect(row.failureRatePct).toBe(0);
@@ -101,7 +103,7 @@ describe("aggregateProviderHealthAll", () => {
   });
 
   it("produces counts and rates that match a seeded fixture", async () => {
-    // Seed mixed traffic: ip-api gets 100 OK + 10 429; ipinfo gets 50 with
+    // Seed mixed traffic: ip-api gets 100 OK + 10 429; ip-sb gets 50 with
     // a few mixed failures; the rest get nothing.
     await td.pool.query(
       `INSERT INTO provider_call_counter
@@ -109,7 +111,7 @@ describe("aggregateProviderHealthAll", () => {
           calls_network_err, calls_other_err, last_called_at)
        VALUES
          ('ip-api',   CURDATE(), 110, 10, 0,  0,  0, NOW(3)),
-         ('ipinfo',   CURDATE(), 50,  5,  2,  1,  2, NOW(3))`,
+         ('ip-sb',   CURDATE(), 50,  5,  2,  1,  2, NOW(3))`,
     );
     const all = await aggregateProviderHealthAll(td.pool, 24 * 60 * 60 * 1000);
     const ipApi = all.find((r) => r.providerName === "ip-api")!;
@@ -118,12 +120,12 @@ describe("aggregateProviderHealthAll", () => {
     expect(ipApi.failureRatePct).toBeCloseTo(9.1, 1);
     expect(ipApi.rateLimitedRatePct).toBeCloseTo(9.1, 1);
 
-    const ipinfo = all.find((r) => r.providerName === "ipinfo")!;
-    expect(ipinfo.calls).toBe(50);
-    expect(ipinfo.errors429).toBe(5);
-    expect(ipinfo.errorsOther).toBe(5);
-    expect(ipinfo.failureRatePct).toBe(20); // (5+5)/50
-    expect(ipinfo.rateLimitedRatePct).toBe(10);
+    const ipSb = all.find((r) => r.providerName === "ip-sb")!;
+    expect(ipSb.calls).toBe(50);
+    expect(ipSb.errors429).toBe(5);
+    expect(ipSb.errorsOther).toBe(5);
+    expect(ipSb.failureRatePct).toBe(20); // (5+5)/50
+    expect(ipSb.rateLimitedRatePct).toBe(10);
   });
 });
 

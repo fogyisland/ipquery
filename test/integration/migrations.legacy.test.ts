@@ -4,7 +4,7 @@ import * as mysql from "mysql2/promise";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { loadConfig } from "../../src/config";
-import { runMigrations } from "../../src/storage/migrations/runner";
+import { runMigrations, listMigrationFiles } from "../../src/storage/migrations/runner";
 
 const TEST_DB_LEGACY = "ipquery_mig_legacy_test";
 let pool: mysql.Pool;
@@ -69,34 +69,11 @@ describe("migrations legacy upgrade", () => {
       "SELECT version FROM schema_migrations ORDER BY version ASC",
     );
     const versions = (applied[0] as Array<{ version: string }>).map((r) => r.version);
-    expect(versions).toEqual([
-      "001",
-      "002",
-      "003",
-      "004",
-      "005",
-      "006",
-      "007",
-      "008",
-      "010",
-      "011",
-      "012",
-      "013",
-      "014",
-      "015",
-      "016",
-      "017",
-      "018",
-      "019",
-      "020",
-      "021",
-      "022",
-      "023",
-      "024",
-      "025",
-      "026",
-      "027",
-    ]);
+    // Every migration the runner knows about ends up recorded — derived
+    // from the runner's manifest rather than written out by hand, so
+    // adding a migration does not make this test stale.
+    const expected = (await listMigrationFiles()).map((file) => file.slice(0, 3)).sort();
+    expect(versions).toEqual(expected);
 
     // The 13 expected tables all still exist after the upgrade.
     const [rows] = await pool.query<mysql.RowDataPacket[]>("SHOW TABLES");

@@ -21,7 +21,7 @@ beforeEach(async () => {
   await td.pool.query("TRUNCATE TABLE ip_ranges");
   // Re-enable all providers at the start of every test so an earlier
   // run's auto-disable doesn't bleed across cases.
-  for (const name of ["ip-api", "ipinfo"]) {
+  for (const name of ["ip-api", "ip-sb"]) {
     await updateProviderConfig(td.pool, name, { enabled: true });
   }
 });
@@ -67,23 +67,23 @@ describe("runBackfill auto-disable on 429", () => {
     await insertOrIncrement(td.pool, buf, ip);
 
     // Use real seeded provider names so listProviderConfigs / update
-    // actually find a row. ip-api + ipinfo agree; ipinfo is throttled.
+    // actually find a row. ip-api + ip-sb agree; ip-sb is throttled.
     const goodA = new FakeProvider("ip-api", { [ip]: rec({ countryCode: "US" }) });
-    const goodB = new FakeProvider("ipinfo", { [ip]: rec({ countryCode: "US" }) });
-    const throttled = new FakeProvider("ipinfo", {});
+    const goodB = new FakeProvider("ip-sb", { [ip]: rec({ countryCode: "US" }) });
+    const throttled = new FakeProvider("ip-sb", {});
     throttled.rateLimit = true;
 
     const summary = await runBackfill(td.pool, [goodA, goodB, throttled], { batchLimit: 50 });
-    expect(summary.providersDisabled).toContain("ipinfo");
+    expect(summary.providersDisabled).toContain("ip-sb");
     // Disabled provider is removed from per-provider stats so the UI
     // doesn't show ongoing failures for a thing we just turned off.
-    expect(summary.providers.ipinfo).toBeUndefined();
+    expect(summary.providers["ip-sb"]).toBeUndefined();
     // The two good providers still reached consensus on countryCode.
     expect(summary.merged).toBe(1);
 
     // And the provider row is actually disabled in the catalog.
     const configs = await listProviderConfigs(td.pool);
-    const c = configs.find((r) => r.name === "ipinfo")!;
+    const c = configs.find((r) => r.name === "ip-sb")!;
     expect(c.enabled).toBe(false);
   });
 
@@ -94,8 +94,8 @@ describe("runBackfill auto-disable on 429", () => {
 
     const providers = [
       new FakeProvider("ip-api", { [ip]: rec({ countryCode: "JP" }) }),
-      new FakeProvider("ipinfo", { [ip]: rec({ countryCode: "JP" }) }),
-      new FakeProvider("ipinfo", { [ip]: rec({ countryCode: "JP" }) }),
+      new FakeProvider("ip-sb", { [ip]: rec({ countryCode: "JP" }) }),
+      new FakeProvider("ip-sb", { [ip]: rec({ countryCode: "JP" }) }),
     ];
     const summary = await runBackfill(td.pool, providers, { batchLimit: 50 });
     expect(summary.providersDisabled).toEqual([]);

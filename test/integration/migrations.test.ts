@@ -2,10 +2,25 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import * as mysql from "mysql2/promise";
 import { loadConfig } from "../../src/config";
-import { runMigrations, getAppliedVersions } from "../../src/storage/migrations/runner";
+import {
+  runMigrations,
+  getAppliedVersions,
+  listMigrationFiles,
+} from "../../src/storage/migrations/runner";
 
 const TEST_DB = "ipquery_mig_test";
 let pool: mysql.Pool;
+
+/** Every migration version the runner knows about, in order.
+ *
+ *  Derived from the runner's own manifest rather than written out by
+ *  hand. A hardcoded list has to be edited every time a migration is
+ *  added, and the day somebody forgets, the test fails for a reason that
+ *  has nothing to do with the migration it was meant to cover. */
+async function expectedVersions(): Promise<string[]> {
+  const files = await listMigrationFiles();
+  return files.map((file) => file.slice(0, 3)).sort();
+}
 
 beforeAll(async () => {
   const cfg = loadConfig();
@@ -38,75 +53,13 @@ afterAll(async () => {
 describe("migrations", () => {
   it("applies all versions on fresh DB", async () => {
     const r = await runMigrations(pool);
-    expect(r.applied.sort()).toEqual([
-      "001",
-      "002",
-      "003",
-      "004",
-      "005",
-      "006",
-      "007",
-      "008",
-      "010",
-      "011",
-      "012",
-      "013",
-      "014",
-      "015",
-      "016",
-      "017",
-      "018",
-      "019",
-      "020",
-      "021",
-      "022",
-      "023",
-      "024",
-      "025",
-      "026",
-      "027",
-      "028",
-      "029",
-      "030",
-      "031",
-    ]);
+    expect(r.applied.sort()).toEqual(await expectedVersions());
   });
 
   it("is idempotent on second run", async () => {
     const r = await runMigrations(pool);
     expect(r.applied).toEqual([]);
-    expect(r.skipped.sort()).toEqual([
-      "001",
-      "002",
-      "003",
-      "004",
-      "005",
-      "006",
-      "007",
-      "008",
-      "010",
-      "011",
-      "012",
-      "013",
-      "014",
-      "015",
-      "016",
-      "017",
-      "018",
-      "019",
-      "020",
-      "021",
-      "022",
-      "023",
-      "024",
-      "025",
-      "026",
-      "027",
-      "028",
-      "029",
-      "030",
-      "031",
-    ]);
+    expect(r.skipped.sort()).toEqual(await expectedVersions());
   });
 
   it("all expected tables exist", async () => {
@@ -131,7 +84,7 @@ describe("migrations", () => {
     const before = await getAppliedVersions(pool);
     expect(before.has("003")).toBe(true);
     const r = await runMigrations(pool);
-    expect(r.skipped.length).toBe(30);
+    expect(r.skipped.length).toBe((await expectedVersions()).length);
   });
 
   it("records apply timestamps", async () => {
