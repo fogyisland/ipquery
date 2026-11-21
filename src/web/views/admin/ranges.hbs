@@ -93,7 +93,7 @@
         <label class="form-field-label" for="import-file">{{req.t 'admin.ranges.import.file'}}</label>
         <div class="form-field-input">
           <input id="import-file" type="file" name="file" accept=".ipq,application/x-ndjson,text/plain" required>
-          <span class="form-field-hint">{{req.t 'admin.ranges.import.fileHint'}}</span>
+          <span class="form-field-hint">{{req.t 'admin.ranges.import.fileHint' ceiling=ceilingLabel limit=limitLabel}}</span>
         </div>
       </div>
       <button type="submit" class="btn-primary">{{req.t 'admin.ranges.import.action'}}</button>
@@ -149,7 +149,7 @@
       <label class="form-field-label" for="range-upload-file">{{req.t 'admin.ranges.upload.file'}}</label>
       <div class="form-field-input">
         <input id="range-upload-file" type="file" accept=".ipq,application/x-ndjson,text/plain">
-        <span class="form-field-hint">{{req.t 'admin.ranges.upload.fileHint'}}</span>
+        <span class="form-field-hint">{{req.t 'admin.ranges.upload.fileHint' ceiling=ceilingLabel}}</span>
       </div>
     </div>
     <div class="form-field">
@@ -199,15 +199,17 @@
     </thead>
     <tbody>
       {{#each imports}}
-      <tr class="range-import-row{{#if this.isRunning}} is-running{{/if}}">
+      <tr class="range-import-row{{#if this.isRunning}} is-running{{/if}}"
+          data-import-id="{{this.id}}"
+          {{#unless this.isRunning}}data-poll="off"{{/unless}}>
         <td><time datetime="{{this.startedAt}}">{{this.startedAt}}</time></td>
         <td>{{this.mode}}</td>
         <td>
           {{#if this.pct}}
           <span class="range-import-bar"><span class="range-import-bar-fill" style="width: {{this.pct}}%"></span></span>
-          <span class="form-field-hint">{{this.rowsDone}} / {{this.declaredRows}} ({{this.pct}}%)</span>
+          <span class="form-field-hint range-import-progress-text">{{this.rowsDone}} / {{this.declaredRows}} ({{this.pct}}%)</span>
           {{else}}
-          <span class="form-field-hint">{{this.rowsDone}}</span>
+          <span class="form-field-hint range-import-progress-text">{{this.rowsDone}}</span>
           {{/if}}
         </td>
         <td>
@@ -225,6 +227,10 @@
   </table>
 </section>
 {{/if}}
+
+{{!-- The bar moves while the page is open: the script polls the job's
+     progress endpoint and stops on its own when the job is over. --}}
+<script src="/assets/range-progress.js" defer></script>
 
 {{!-- ── Format ───────────────────────────────────────────────────────
      The file is line-delimited JSON and is meant to be readable, so the

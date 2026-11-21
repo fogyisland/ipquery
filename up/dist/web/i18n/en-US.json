@@ -968,7 +968,7 @@
       "importRejected": "This file cannot be imported: {error}",
       "importStarted": "The import has started in the background. Progress is in the import log below — you can close this page.",
       "importBusy": "An import is already running. Wait for it to finish before starting another.",
-      "tooLarge": "The file is over 16 MB — split it or import it from the command line",
+      "tooLarge": "The file is over {limit} — split it, or use the chunked upload above, which takes files up to {ceiling}.",
       "export": {
         "title": "Export ranges",
         "help": "Write the ranges in this database to an .ipq file. The export is complete; download it here or hand it to another install to import.",
@@ -993,7 +993,7 @@
         "title": "Import ranges",
         "help": "Upload an .ipq file to merge its ranges into this database. A range that already exists is updated rather than rejected.",
         "file": "Choose a file",
-        "fileHint": "Only .ipq files — the format the export on this page writes.",
+        "fileHint": "Only .ipq files — the format the export on this page writes. One file may be up to {ceiling}; the box on this page takes files up to {limit}.",
         "action": "Import",
         "ceilingPre": "One import reads at most",
         "ceilingPost": "ranges. Imported ranges are tagged import and survive a full ETL refresh."
@@ -1032,7 +1032,7 @@
         "title": "Upload a large file",
         "help": "A whole-library .ipq can run to hundreds of megabytes or gigabytes, which does not fit in one form post. This path slices the file in the browser and sends it a piece at a time; the server assembles the pieces on disk and imports them. A dropped connection resumes where it left off instead of starting over.",
         "file": "Choose a file",
-        "fileHint": "Only .ipq files. If the page is reloaded mid-upload, choosing the same file continues the transfer.",
+        "fileHint": "Only .ipq files, up to {ceiling}. If the page is reloaded mid-upload, choosing the same file continues the transfer.",
         "mode": "How to import",
         "modeMerge": "Merge — keep what is already here",
         "modeReplace": "Replace — discard what is already here",

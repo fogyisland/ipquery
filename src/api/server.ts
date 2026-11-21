@@ -22,6 +22,7 @@ import { registerAuditLog } from "../web/plugins/auditLog";
 import { registerInitGuard } from "../web/plugins/initGuard";
 import { registerSessionPurger } from "../web/plugins/sessionPurger";
 import { registerProbeRetention } from "../web/plugins/probeRetention";
+import { registerUploadSweeper } from "../web/plugins/uploadSweeper";
 import { registerRandomGenRunner } from "../web/plugins/randomIpGeneratorRunner";
 import { registerEtlScheduler } from "../web/plugins/etlScheduler";
 import { _resetForTests as resetLoginLimit } from "../web/plugins/loginRateLimit";
@@ -415,6 +416,11 @@ export async function buildServer(
   // configurable via the `random_probe_retention_days` setting (0 = keep
   // forever).
   registerProbeRetention(app, () => app.pool);
+  // Sweep the uploads that were started and never finished — the tab
+  // closed, the laptop slept, the transfer died halfway. Each one holds a
+  // file on disk that can be two gigabytes, and nothing about it will
+  // ever be imported.
+  registerUploadSweeper(app, () => app.pool);
   const randomGenRunner = registerRandomGenRunner(app, () => app.pool);
   // The ETL schedule lives in the server, not the CLI, so that it can be
   // armed AFTER the wizard has configured the database. A server that came

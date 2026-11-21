@@ -184,6 +184,25 @@ describe("/admin/ranges", () => {
     expect(r.text).toContain('/assets/range-upload.js');
   });
 
+  it("tells the operator how big a file may be before they try one", async () => {
+    // The ceiling was 512 MB in the code and "16 MB" in the message, and
+    // neither was on the page: the operator found out by failing. The
+    // page states the real number.
+    const r = await request(app.server)
+      .get("/admin/ranges")
+      .set("Cookie", "sid=" + adminSid);
+    expect(r.status).toBe(200);
+    expect(r.text).toMatch(/512(\.0)?\s*MB/);
+    // The chunked path's own ceiling is a different number, and it is on
+    // the page too — an operator reading "512 MB" would not know the
+    // upload beside it takes three gigabytes.
+    expect(r.text).toMatch(/3(\.0+)?\s*GB/);
+    // The hint under the file input is where the operator looks. The
+    // placeholder has to be substituted, not printed as "{ceiling}".
+    expect(r.text).not.toContain("{ceiling}");
+    expect(r.text).not.toContain("{limit}");
+  });
+
   it("exports a downloadable .ipq file", async () => {
     await td.pool.query(
       `INSERT INTO ip_ranges (start_ip, end_ip, range_size, country_code, country_source)
@@ -701,6 +720,74 @@ describe("/admin/ranges", () => {
       (n) => n === 0,
       30_000,
     );
+  });
+
+  // ── Watching it happen ─────────────────────────────────────────────
+  //
+  // An import that takes hours is one the operator has to be able to
+  // watch. The page shows the progress, but only when it is loaded — so
+  // there is an endpoint that reports where the job has got to, and the
+  // page polls it while a job is running.
+
+  it("reports where a running import has got to", async () => {
+    const { cookie, token } = await csrf();
+    const body = encodeHeader({ exportedAt: "x", rows: 1 }) + "\n" + encodeRange({
+      line: 0,
+      start: "10.7.0.0",
+      end: "10.7.0.255",
+      countryCode: "ZZ",
+      countryName: null,
+      region: null,
+      city: null,
+      postalCode: null,
+      latitude: null,
+      longitude: null,
+      timezone: null,
+      isp: null,
+      asn: null,
+      asnOrg: null,
+    }) + "\n";
+
+    const started = await request(app.server)
+      .post("/admin/ranges/upload/start")
+      .set("Cookie", "sid=" + adminSid + "; " + cookie)
+      .type("form")
+      .send({ csrf: token, mode: "merge", filename: "live.ipq", totalBytes: String(body.length) });
+    const uploadId = started.body.id as number;
+
+    const chunk = multipart(
+      { csrf: token, uploadId: String(uploadId), offset: "0" },
+      { file: { name: "live.ipq", body: Buffer.from(body, "utf8") } },
+    );
+    await request(app.server)
+      .post("/admin/ranges/upload/chunk")
+      .set("Cookie", "sid=" + adminSid + "; " + cookie)
+      .set("Content-Type", chunk.contentType)
+      .send(chunk.body);
+
+    await request(app.server)
+      .post("/admin/ranges/import")
+      .set("Cookie", "sid=" + adminSid + "; " + cookie)
+      .type("form")
+      .send({ csrf: token, uploadId: String(uploadId), mode: "merge" });
+
+    // The job's own record is the answer; the endpoint reads it.
+    const job = await waitForImportToFinish();
+    expect(job.status).toBe("success");
+
+    const progress = await request(app.server)
+      .get(`/admin/ranges/imports/${job.id}/progress`)
+      .set("Cookie", "sid=" + adminSid);
+    // A finished job has nothing left to report, and the page stops
+    // polling when the endpoint says so.
+    expect(progress.status).toBe(204);
+  });
+
+  it("refuses a progress request for an import that does not exist", async () => {
+    const r = await request(app.server)
+      .get("/admin/ranges/imports/999999/progress")
+      .set("Cookie", "sid=" + adminSid);
+    expect(r.status).toBe(404);
   });
 });
 

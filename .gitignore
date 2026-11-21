@@ -31,6 +31,13 @@ scripts/dev/*.zip
 *-result.json
 integration-result.json
 
+# The E2E ETL pipeline writes its downloaded library data here. The
+# `*.csv` rules above cover the finished files, but the directory and the
+# `.part-` files a download-in-progress leaves behind are not matched by
+# any of them — and an interrupted download is the normal case on a slow
+# link.
+test/tmp-data-e2e/
+
 # Local verification scratch installs — an isolated copy of the build with
 # its own .env (which holds generated secrets). Never committed.
 verify-tmp/

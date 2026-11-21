@@ -76,6 +76,17 @@ function exportDir(dataDir) {
 }
 /** Generated names only — a caller never supplies the path that is opened. */
 const EXPORT_ID = /^[a-z0-9-]{8,64}$/;
+/**
+ * How often the page may poll a running import's progress.
+ *
+ * The page polls every two seconds while a job is running, so 120 a
+ * minute covers one open tab with plenty of room and bounds what a
+ * hijacked admin session can spend.
+ */
+const RANGE_POLL_RATE_LIMIT = {
+    max: 120,
+    timeWindow: "1 minute",
+};
 function setFlash(reply, kind, message) {
     reply.setCookie(FLASH_COOKIE, JSON.stringify({ kind, message }), {
         path: "/admin/ranges",
@@ -133,7 +144,9 @@ async function registerRangeRoutes(app) {
         }
         catch (err) {
             app.log.warn({ err }, "could not reserve an upload");
-            return reply.code(400).send({ error: err instanceof rangeUpload_1.UploadError ? err.message : "cannot start an upload" });
+            return reply
+                .code(400)
+                .send({ error: err instanceof rangeUpload_1.UploadError ? err.message : "cannot start an upload" });
         }
     });
     app.post("/admin/ranges/upload/chunk", async (req, reply) => {
@@ -206,6 +219,39 @@ async function registerRangeRoutes(app) {
             .header("Content-Disposition", `attachment; filename="${state.filename}"`);
         return reply.send(node_stream_1.Readable.from(state));
     });
+    /**
+     * Where a running import has got to.
+     *
+     * The page shows the progress, but only when it is loaded. An import
+     * that takes hours needs to be watchable while it runs, so this is the
+     * endpoint the page polls.
+     *
+     * The counters are enough for the bar and nothing more: the page does
+     * not re-render itself from this, it reads the numbers.
+     *
+     * A finished job answers 204 rather than a body with zeros. That is how
+     * the page knows to stop polling — a job that is over has no progress
+     * left to report, and a client that kept polling a finished job would
+     * be asking the database for nothing forever.
+     */
+    app.get("/admin/ranges/imports/:id/progress", { config: { rateLimit: RANGE_POLL_RATE_LIMIT } }, async (req, reply) => {
+        const id = Number(req.params.id);
+        if (!Number.isFinite(id) || id <= 0)
+            return reply.code(400).send();
+        const job = await (0, rangeImport_1.readRangeImportState)(app.pool, id);
+        if (!job)
+            return reply.code(404).send();
+        if (job.status !== "running")
+            return reply.code(204).send();
+        return reply.send({
+            id: job.id,
+            mode: job.mode,
+            rowsDone: job.rowsDone,
+            declaredRows: job.declaredRows,
+            rowsWritten: job.rowsWritten,
+            preserved: job.preserved,
+        });
+    });
     app.get("/admin/ranges", async (req, reply) => {
         const flash = consumeFlash(req, reply);
         // The list comes from the database, not from this process's memory: a
@@ -240,6 +286,11 @@ async function registerRangeRoutes(app) {
             // to hunt the list for it after a redirect.
             lastExport: exports[0] ?? null,
             downloadUrl: exports[0] ? `/admin/ranges/download/${exports[0].id}` : "",
+            // The two ceilings, stated on the page. The operator finds out the
+            // limit by failing otherwise, and the two are different: the form
+            // is bounded by the request body, the chunked upload by the file.
+            limitLabel: formatBytes(exports.RANGE_BODY_LIMIT),
+            ceilingLabel: formatBytes(rangeUpload_1.UPLOAD_MAX_BYTES),
             req,
             csrfToken: req.csrfToken,
         });
@@ -386,7 +437,10 @@ async function registerRangeRoutes(app) {
             return reply.code(400).type("text/plain; charset=utf-8").send("no file was uploaded");
         }
         if (Buffer.byteLength(text, "utf8") > exports.RANGE_BODY_LIMIT) {
-            setFlash(reply, "error", req.t("admin.ranges.tooLarge"));
+            setFlash(reply, "error", req.t("admin.ranges.tooLarge", {
+                limit: formatBytes(exports.RANGE_BODY_LIMIT),
+                ceiling: formatBytes(rangeUpload_1.UPLOAD_MAX_BYTES),
+            }));
             return reply.redirect("/admin/ranges");
         }
         // Replacement is the destructive direction, so it is gated on more than

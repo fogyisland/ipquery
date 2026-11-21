@@ -1,7 +1,7 @@
 {
   "formatVersion": 1,
-  "fileCount": 453,
-  "totalBytes": 2554272,
+  "fileCount": 457,
+  "totalBytes": 2571413,
   "files": {
     "api/dbBootstrap.d.ts": {
       "bytes": 8916,
@@ -80,12 +80,12 @@
       "sha256": "2cf62cef5b2ffb6034c27d59a2bb1a9bdde2115a402bfd9f243bc9337ad111f0"
     },
     "api/server.js": {
-      "bytes": 23490,
-      "sha256": "f44c698f9ff6f1616dc9dfcc8ddf442790781a0b126809bf8ad8e898b5321567"
+      "bytes": 23873,
+      "sha256": "74e4b8fd1228c02925aeaf6f31f04bed8b38849d04896e83d2642d630ffc4114"
     },
     "api/server.js.map": {
-      "bytes": 8760,
-      "sha256": "35bd1bd065b4965ddb771bca193595fa030060f485b940ae9582dcdb8c375170"
+      "bytes": 8898,
+      "sha256": "33ee2a73088b7c628cb5d0db081169c37e3978b963148717222623fc9fb55436"
     },
     "cli.d.ts": {
       "bytes": 31,
@@ -868,16 +868,16 @@
       "sha256": "bf043c9c71b356ebba76a3470f5e7d39abf245ae0adb69c04491db45d921acfc"
     },
     "storage/rangeUpload.d.ts": {
-      "bytes": 3842,
-      "sha256": "008cc3637541f946e0c7b2e1190e7ce83afbd0414b734eea1b3431274e65b258"
+      "bytes": 5201,
+      "sha256": "54b406e4822afd59a8aa13a7bcded47b840c0e6ae9a0416658a5fcaa86fdcb83"
     },
     "storage/rangeUpload.js": {
-      "bytes": 11786,
-      "sha256": "ed0806653d74890ad82c0ae5be7eae29e0af6d107b22285558b8648dc1abd46f"
+      "bytes": 13825,
+      "sha256": "a91be2cc5add8deb975fe669897528c101a9249bb8dec9bd8929023745a52663"
     },
     "storage/rangeUpload.js.map": {
-      "bytes": 6758,
-      "sha256": "fe7332a69b6ea28a6e86e267ec3ea9df3a37e8f4745070f5fe4094c028ff56a7"
+      "bytes": 7483,
+      "sha256": "82edc1c59c8717c39791c69efd7f6974ee9db431565874a9d6743a1dd0472c72"
     },
     "storage/rateLimit.d.ts": {
       "bytes": 778,
@@ -1147,6 +1147,10 @@
       "bytes": 3100,
       "sha256": "46d3c052645ae7f94a2c9c6ac16920750c5a6dec3a92797f3bd3fb42333f17c5"
     },
+    "web/assets/range-progress.js": {
+      "bytes": 5104,
+      "sha256": "6e774ef2f62c20b1fefe29f3a2cb5348ab1b3e36ce5083e67f6ec0a6165bce78"
+    },
     "web/assets/range-upload.js": {
       "bytes": 14410,
       "sha256": "01f30a937c3a702dd3c2bde68a7e4fe6db414f56403d5ef623d3622a42e4ca79"
@@ -1204,8 +1208,8 @@
       "sha256": "080b721f056d5350784d1dcca32fb83964e222582476c118dae2420b8a8565ee"
     },
     "web/i18n/en-US.json": {
-      "bytes": 57638,
-      "sha256": "86969d9737d23fa7e5d2a4af1b6c470a55e171fc8edcfb7811795805f736c123"
+      "bytes": 57772,
+      "sha256": "9ce7fdfbf2f432a9825dc5e0e5e96c9b8034f06dc8f26af36036e279d1fe2471"
     },
     "web/i18n/index.d.ts": {
       "bytes": 309,
@@ -1224,8 +1228,8 @@
       "sha256": "33cd4e4a9a90a35dc5c3b8308e78a6449754c712719b9f1af35b2e25156641cc"
     },
     "web/i18n/zh-CN.json": {
-      "bytes": 57278,
-      "sha256": "2b81310d54b775106a2b04bb74dd0bed00d3ad3fe4c366eb0123fd9ad21a25fa"
+      "bytes": 57402,
+      "sha256": "d3efaa2a8910349fd4b40b967dbe655ff6d9a04fc65f3d06a8a4f80fd1a61d26"
     },
     "web/maps/geo-map.d.ts": {
       "bytes": 1050,
@@ -1431,6 +1435,18 @@
       "bytes": 1461,
       "sha256": "b54ae1f9f2de8ae24d289ff9beecf75e52433cdfe82c6ac140ce5b552a95a477"
     },
+    "web/plugins/uploadSweeper.d.ts": {
+      "bytes": 267,
+      "sha256": "51823aa3b01277626c20895b98e253c9861516aefb12e10c81d3603d3788b079"
+    },
+    "web/plugins/uploadSweeper.js": {
+      "bytes": 1712,
+      "sha256": "fc30ac0c97b146960665b87deff6de77a38a50108732efbd6d6fbaac11504f8b"
+    },
+    "web/plugins/uploadSweeper.js.map": {
+      "bytes": 1309,
+      "sha256": "b0188851b739f39bf5e4259eec1cfa83660c93fba16b674144c55f44ce3c73c5"
+    },
     "web/plugins/verifyResendCooldown.d.ts": {
       "bytes": 453,
       "sha256": "c00d4f900b5cd9c29d3c52658cf443ba666878a192f4d57328df80984e215aef"
@@ -1472,12 +1488,12 @@
       "sha256": "43027b613a35bc6d104688d313d52ea6e0970c750987eee2ac00097d3d2c7e2e"
     },
     "web/routes/adminRanges.js": {
-      "bytes": 24826,
-      "sha256": "3e230019ecf0148fef527f780ec7c51bac135531437b7216bf994b99eba370a3"
+      "bytes": 27117,
+      "sha256": "555d2979c4b1710eef72de26d5cc815580701655a9ca237f210ea9deeaa6d90a"
     },
     "web/routes/adminRanges.js.map": {
-      "bytes": 17651,
-      "sha256": "03e36405d2920cb188a580fa0f3b45be437a58dc56af03dcac49fca8aeb28639"
+      "bytes": 18793,
+      "sha256": "bbf885fc56c752f111ab1f7f80f282c0ea0ad0f048e4c4f6a39ff118d52d2e74"
     },
     "web/routes/auth.d.ts": {
       "bytes": 121,
@@ -1572,8 +1588,8 @@
       "sha256": "f74a8bf11252f6d734b5efb241bfee19ca2510b9f21bdea97186c5f96f05febe"
     },
     "web/views/admin/ranges.hbs": {
-      "bytes": 12452,
-      "sha256": "9b8cc8851443a7fc194eb9e82662ceded80dc9a6273b5a84c44fee17e8d82b71"
+      "bytes": 12866,
+      "sha256": "c8e7bcf81f8fad6a14a927d09b5bb9d6a7e32b120a5e2ac78d5fd6cef033d2af"
     },
     "web/views/admin/settings.hbs": {
       "bytes": 21642,

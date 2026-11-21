@@ -125,7 +125,12 @@ afterAll(async () => {
 /** Write a .ipq file with the given rows and return its path. */
 function writeIpqFile(rows: ReadonlyArray<{ start: string; end: string; countryCode: string }>): string {
   const lines: string[] = [
-    JSON.stringify({ format: "ipquery-ranges", version: 1, exportedAt: "2026-11-21T00:00:00.000Z", rows: rows.length }),
+    JSON.stringify({
+      format: "ipquery-ranges",
+      version: 1,
+      exportedAt: "2026-11-21T00:00:00.000Z",
+      rows: rows.length,
+    }),
   ];
   for (const row of rows) {
     lines.push(
@@ -263,9 +268,7 @@ describe("Chunked range upload — browser E2E", () => {
   }, 60_000);
 
   it("refuses a replacement the operator has not confirmed", async () => {
-    const filepath = writeIpqFile([
-      { start: "192.0.2.0", end: "192.0.2.255", countryCode: "FR" },
-    ]);
+    const filepath = writeIpqFile([{ start: "192.0.2.0", end: "192.0.2.255", countryCode: "FR" }]);
     const page = await adminPage();
     try {
       await page.goto(`${baseUrl}/admin/ranges`, { waitUntil: "domcontentloaded" });
@@ -291,9 +294,7 @@ describe("Chunked range upload — browser E2E", () => {
 
       // And nothing was uploaded: the guard runs before the transfer.
       expect(await rangeCount()).toBe(before);
-      const [rows] = await app.pool.query<mysql.RowDataPacket[]>(
-        "SELECT COUNT(*) AS n FROM range_uploads",
-      );
+      const [rows] = await app.pool.query<mysql.RowDataPacket[]>("SELECT COUNT(*) AS n FROM range_uploads");
       expect(Number(rows[0]?.n ?? 0)).toBe(0);
     } finally {
       await page.close();
@@ -314,9 +315,7 @@ describe("Chunked range upload — browser E2E", () => {
         if (hidden) hidden.value = "not-a-real-token";
       });
 
-      const filepath = writeIpqFile([
-        { start: "192.0.2.128", end: "192.0.2.255", countryCode: "GB" },
-      ]);
+      const filepath = writeIpqFile([{ start: "192.0.2.128", end: "192.0.2.255", countryCode: "GB" }]);
       await page.setInputFiles("#range-upload-file", filepath);
       await page.click("#range-upload-start");
 
@@ -329,10 +328,92 @@ describe("Chunked range upload — browser E2E", () => {
 
       // The status line carries the error attribute so it is styled as a
       // failure, not as ordinary progress.
-      const isError = await page
-        .locator("#range-upload-status")
-        .getAttribute("data-error");
+      const isError = await page.locator("#range-upload-status").getAttribute("data-error");
       expect(isError).toBe("1");
+    } finally {
+      await page.close();
+    }
+  }, 60_000);
+});
+
+describe("The import progress bar — browser E2E", () => {
+  it("polls the running job and moves the bar while the page is open", async () => {
+    // The unit suite proves the script's arithmetic inside a sandbox.
+    // It cannot prove that the page the server actually renders has the
+    // elements the script binds to — a renamed class or a missing
+    // data attribute would leave the unit test green and the operator
+    // watching a bar that never moves.
+    //
+    // So: upload a file, let the import start, and watch the real
+    // browser's bar.
+    const filepath = writeIpqFile([
+      { start: "198.18.0.0", end: "198.18.3.255", countryCode: "NL" },
+      { start: "198.18.4.0", end: "198.18.7.255", countryCode: "SE" },
+    ]);
+    const page = await adminPage();
+    try {
+      await page.goto(`${baseUrl}/admin/ranges`, { waitUntil: "domcontentloaded" });
+      await page.setInputFiles("#range-upload-file", filepath);
+      await page.click("#range-upload-start");
+
+      // Wait for the import job to exist. The page renders one row per
+      // job, and the row is what the script polls.
+      const jobId = await waitFor(
+        async () => {
+          const [rows] = await app.pool.query<mysql.RowDataPacket[]>(
+            "SELECT id FROM range_imports ORDER BY id DESC LIMIT 1",
+          );
+          return rows[0] ? Number(rows[0].id) : 0;
+        },
+        (value) => value > 0,
+        60_000,
+      );
+      expect(jobId).toBeGreaterThan(0);
+
+      // The script is on the page, and it is a separate file — the CSP
+      // forbids an inline script, so an inline one would never run.
+      const scriptSrc = await page.getAttribute("script[src*='range-progress.js']", "src");
+      expect(scriptSrc).toBe("/assets/range-progress.js");
+
+      // The row carries the job id the endpoint is addressed by, and the
+      // elements the script writes into.
+      await page.reload({ waitUntil: "domcontentloaded" });
+      const row = page.locator(`.range-import-row[data-import-id="${jobId}"]`);
+      await row.waitFor({ state: "attached", timeout: 15_000 });
+      expect(await row.locator(".range-import-bar-fill").count()).toBe(1);
+      expect(await row.locator(".range-import-progress-text").count()).toBe(1);
+
+      // The endpoint answered, so the bar has a width. The exact number
+      // depends on how fast the import finished, but a bar that never
+      // moved would have no width at all.
+      const width = await row
+        .locator(".range-import-bar-fill")
+        .evaluate((el) => (el as HTMLElement).style.width);
+      expect(width).toMatch(/^\d+(\.\d+)?%$/);
+
+      // And the text says how far it got.
+      const raw = await row.locator(".range-import-progress-text").textContent();
+      expect((raw ?? "").trim().length).toBeGreaterThan(0);
+    } finally {
+      await page.close();
+    }
+  }, 120_000);
+
+  it("does not poll a job that already finished", async () => {
+    // A finished job has no progress left. The page marks the row so the
+    // script skips it: a client that keeps asking about a finished job
+    // is asking the database for nothing, forever.
+    const page = await adminPage();
+    try {
+      await page.goto(`${baseUrl}/admin/ranges`, { waitUntil: "domcontentloaded" });
+
+      // Every finished job's row must carry the marker.
+      const rows = page.locator(".range-import-row[data-poll='off']");
+      const total = await page.locator(".range-import-row").count();
+      const off = await rows.count();
+      // Whatever the history, every row that is not running is marked.
+      const running = await page.locator(".range-import-row.is-running").count();
+      expect(off).toBe(total - running);
     } finally {
       await page.close();
     }

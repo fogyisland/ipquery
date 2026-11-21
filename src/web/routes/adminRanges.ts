@@ -20,15 +20,8 @@ import multipart from "@fastify/multipart";
 import * as path from "node:path";
 import { verifyCsrfRequest } from "../plugins/csrf";
 import { sendCsrfPage } from "../errors/render";
-import {
-  listRangeExports,
-  readRangeExport,
-  startRangeExport,
-} from "../../storage/rangeExportJob";
-import {
-  listRangeImports,
-  readRangeImportState,
-} from "../../storage/rangeImport";
+import { listRangeExports, readRangeExport, startRangeExport } from "../../storage/rangeExportJob";
+import { listRangeImports, readRangeImportState } from "../../storage/rangeImport";
 import { isRangeImportRunning, startRangeImport } from "../../storage/rangeImportJob";
 import {
   discardUpload,
@@ -38,6 +31,7 @@ import {
   stageImportFile,
   storeChunk,
   UPLOAD_CHUNK_BYTES,
+  UPLOAD_MAX_BYTES,
   UploadError,
 } from "../../storage/rangeUpload";
 import { decodeFile, RangeFileError, IPQ_DEFAULT_MAX_ROWS } from "../../storage/rangeFile";
@@ -73,6 +67,18 @@ function exportDir(dataDir: string): string {
 
 /** Generated names only — a caller never supplies the path that is opened. */
 const EXPORT_ID = /^[a-z0-9-]{8,64}$/;
+
+/**
+ * How often the page may poll a running import's progress.
+ *
+ * The page polls every two seconds while a job is running, so 120 a
+ * minute covers one open tab with plenty of room and bounds what a
+ * hijacked admin session can spend.
+ */
+const RANGE_POLL_RATE_LIMIT = {
+  max: 120,
+  timeWindow: "1 minute",
+} as const;
 
 function setFlash(reply: FastifyReply, kind: "success" | "error", message: string): void {
   reply.setCookie(FLASH_COOKIE, JSON.stringify({ kind, message }), {
@@ -132,7 +138,9 @@ export async function registerRangeRoutes(app: FastifyInstance): Promise<void> {
       return reply.send({ id: upload.id, chunkBytes: UPLOAD_CHUNK_BYTES });
     } catch (err) {
       app.log.warn({ err }, "could not reserve an upload");
-      return reply.code(400).send({ error: err instanceof UploadError ? err.message : "cannot start an upload" });
+      return reply
+        .code(400)
+        .send({ error: err instanceof UploadError ? err.message : "cannot start an upload" });
     }
   });
 
@@ -200,6 +208,40 @@ export async function registerRangeRoutes(app: FastifyInstance): Promise<void> {
     return reply.send(Readable.from(state));
   });
 
+  /**
+   * Where a running import has got to.
+   *
+   * The page shows the progress, but only when it is loaded. An import
+   * that takes hours needs to be watchable while it runs, so this is the
+   * endpoint the page polls.
+   *
+   * The counters are enough for the bar and nothing more: the page does
+   * not re-render itself from this, it reads the numbers.
+   *
+   * A finished job answers 204 rather than a body with zeros. That is how
+   * the page knows to stop polling — a job that is over has no progress
+   * left to report, and a client that kept polling a finished job would
+   * be asking the database for nothing forever.
+   */
+  app.get<{ Params: { id: string } }>(
+    "/admin/ranges/imports/:id/progress",
+    { config: { rateLimit: RANGE_POLL_RATE_LIMIT } },
+    async (req, reply) => {
+      const id = Number((req.params as { id?: string }).id);
+      if (!Number.isFinite(id) || id <= 0) return reply.code(400).send();
+      const job = await readRangeImportState(app.pool, id);
+      if (!job) return reply.code(404).send();
+      if (job.status !== "running") return reply.code(204).send();
+      return reply.send({
+        id: job.id,
+        mode: job.mode,
+        rowsDone: job.rowsDone,
+        declaredRows: job.declaredRows,
+        rowsWritten: job.rowsWritten,
+        preserved: job.preserved,
+      });
+    },
+  );
 
   app.get("/admin/ranges", async (req, reply) => {
     const flash = consumeFlash(req, reply);
@@ -236,6 +278,11 @@ export async function registerRangeRoutes(app: FastifyInstance): Promise<void> {
       // to hunt the list for it after a redirect.
       lastExport: exports[0] ?? null,
       downloadUrl: exports[0] ? `/admin/ranges/download/${exports[0].id}` : "",
+      // The two ceilings, stated on the page. The operator finds out the
+      // limit by failing otherwise, and the two are different: the form
+      // is bounded by the request body, the chunked upload by the file.
+      limitLabel: formatBytes(RANGE_BODY_LIMIT),
+      ceilingLabel: formatBytes(UPLOAD_MAX_BYTES),
       req,
       csrfToken: req.csrfToken,
     });
@@ -340,7 +387,11 @@ export async function registerRangeRoutes(app: FastifyInstance): Promise<void> {
     if (Number.isFinite(uploadId) && uploadId > 0) {
       const state = await openUpload(app.pool, uploadId).catch(() => null);
       if (!state || !state.complete) {
-        setFlash(reply, "error", req.t("admin.ranges.importRejected", { error: "the upload is not complete" }));
+        setFlash(
+          reply,
+          "error",
+          req.t("admin.ranges.importRejected", { error: "the upload is not complete" }),
+        );
         return reply.redirect("/admin/ranges");
       }
       // A replacement is the destructive direction, so it carries the same
@@ -387,7 +438,14 @@ export async function registerRangeRoutes(app: FastifyInstance): Promise<void> {
       return reply.code(400).type("text/plain; charset=utf-8").send("no file was uploaded");
     }
     if (Buffer.byteLength(text, "utf8") > RANGE_BODY_LIMIT) {
-      setFlash(reply, "error", req.t("admin.ranges.tooLarge"));
+      setFlash(
+        reply,
+        "error",
+        req.t("admin.ranges.tooLarge", {
+          limit: formatBytes(RANGE_BODY_LIMIT),
+          ceiling: formatBytes(UPLOAD_MAX_BYTES),
+        }),
+      );
       return reply.redirect("/admin/ranges");
     }
     // Replacement is the destructive direction, so it is gated on more than
@@ -399,11 +457,7 @@ export async function registerRangeRoutes(app: FastifyInstance): Promise<void> {
       const expected = await countRanges(app);
       const typed = Number(body?.confirmRows ?? NaN);
       if (!Number.isFinite(typed) || typed !== expected) {
-        setFlash(
-          reply,
-          "error",
-          req.t("admin.ranges.replace.mismatch", { expected }),
-        );
+        setFlash(reply, "error", req.t("admin.ranges.replace.mismatch", { expected }));
         return reply.redirect("/admin/ranges");
       }
     }
@@ -436,7 +490,10 @@ export async function registerRangeRoutes(app: FastifyInstance): Promise<void> {
       uploadId: null,
       declaredRows: declaredRowCount(text),
     });
-    app.log.info({ importId, mode: isReplace ? "replace" : "merge", rows: decoded.ranges.length }, "the range import started");
+    app.log.info(
+      { importId, mode: isReplace ? "replace" : "merge", rows: decoded.ranges.length },
+      "the range import started",
+    );
     setFlash(reply, "success", req.t("admin.ranges.importStarted"));
     return reply.redirect("/admin/ranges");
   });

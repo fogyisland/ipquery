@@ -33,7 +33,8 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.UPLOAD_MAX_BYTES = exports.UPLOAD_CHUNK_BYTES = exports.UploadError = void 0;
+exports.UPLOAD_ABANDONED_AFTER_HOURS = exports.UPLOAD_MAX_BYTES = exports.UPLOAD_CHUNK_BYTES = exports.UploadError = void 0;
+exports.purgeAbandonedUploads = purgeAbandonedUploads;
 exports.stageImportFile = stageImportFile;
 exports.reserveUpload = reserveUpload;
 exports.storeChunk = storeChunk;
@@ -84,6 +85,51 @@ function ensureDir(dir) {
  *  upload directory when joined back together. */
 function safeName(id) {
     return `upload-${id}.ipq`;
+}
+/**
+ * How long an upload may sit unfinished before it is treated as
+ * abandoned.
+ *
+ * Two days is a judgement, not a measurement. The upload is abandoned
+ * when the operator will not come back for it: the tab closed, the
+ * laptop slept, the transfer died halfway. Two days is long enough that
+ * somebody who came back on Monday still finds their upload on Saturday,
+ * and short enough that the disk is not filling with two-gigabyte files
+ * that nobody will ever import.
+ */
+exports.UPLOAD_ABANDONED_AFTER_HOURS = 48;
+/**
+ * Throw away the uploads nobody came back for.
+ *
+ * An upload that was started and never finished is dead weight: the rows
+ * that describe it, the row for every chunk that landed, and — the real
+ * cost — the assembled file on disk, which for a whole-library upload is
+ * two gigabytes. Nothing about it will ever be used.
+ *
+ * Only unfinished uploads are swept. One that is `ready` is waiting to be
+ * imported and the operator may still press the button; one that is
+ * `importing` is being read right now.
+ *
+ * The files go too. A file left on disk is a file somebody has to sweep
+ * by hand, and the whole point of this is that the install does not make
+ * the operator do that.
+ *
+ * Returns the number of uploads removed.
+ */
+async function purgeAbandonedUploads(pool) {
+    await (0, runner_1.runMigrations)(pool);
+    const [rows] = await pool.query(`SELECT id FROM range_uploads
+      WHERE status = 'uploading'
+        AND started_at < NOW(3) - INTERVAL ? HOUR`, [exports.UPLOAD_ABANDONED_AFTER_HOURS]);
+    const ids = rows.map((r) => Number(r.id)).filter((id) => Number.isFinite(id) && id > 0);
+    if (ids.length === 0)
+        return 0;
+    // `discardUpload` removes the file as well as the rows, so the sweep
+    // goes through it rather than deleting the rows itself.
+    for (const id of ids) {
+        await discardUpload(pool, id).catch(() => undefined);
+    }
+    return ids.length;
 }
 /**
  * Put a file that arrived in one piece on disk, ready to be imported.
