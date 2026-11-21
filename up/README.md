@@ -125,9 +125,15 @@ node dist/cli.js db --host "$DB_HOST" --user "$DB_USER" --name "$DB_NAME" --save
 3. **`DATA_DIR` 是相对路径**，相对于进程工作目录。用 systemd / pm2 托管时
    `WorkingDirectory` 必须指向安装根目录，否则 ETL 数据落到别处。
 
+4. **MCP 服务（可选）**：这个包里带一个 MCP server（`dist/mcp/server.js`），
+   给 Claude Code、Cursor 这类客户端查 IP 用。**要开就设
+   `MCP_REQUIRE_TOKEN=true`** —— 不设就是免认证模式，7 个工具全开，谁起得来
+   谁就能查。它走 stdio，不占 HTTP 端口。
+
 ## 相关
 
 - 详细版部署手册：[`../docs/setup.md`](../docs/setup.md)
 - 源码部署方式（拷贝整个仓库、服务器上编译）：[`../docs/source-deploy.md`](../docs/source-deploy.md)
+- MCP server 说明（7 个工具、权限范围、接入方式）：[`../docs/mcp.md`](../docs/mcp.md)
 - 命令总览：`node dist/cli.js --help`
 - 迁移状态：`node dist/cli.js migrate:status`（每行都该是 `applied`）

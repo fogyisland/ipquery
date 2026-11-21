@@ -509,6 +509,66 @@ gzip -t data/raw/*.csv.gz && echo "all intact"
 
 ---
 
+## 10.1 MCP 服务（可选，给 AI 客户端用）
+
+Web 服务之外，这个项目还带一个 **MCP server**，让 Claude Code、Cursor、
+Claude Desktop 之类的客户端直接查 IP 归属地、看运维状态。它是**可选**的 ——
+不接 AI 客户端就完全不用管这一节。
+
+它是一个独立进程，不随 `node dist/cli.js serve` 启动，由 AI 客户端自己拉起。
+
+### 生产环境必做：打开强制 token
+
+**MCP server 起来了就能查数据，不需要登录、不需要 API Key。** 它读的是
+数据库里的数据，而数据库的口令就在这台机器上。所以生产环境必须设：
+
+```bash
+MCP_REQUIRE_TOKEN=true
+```
+
+放进 `.env` 或 MCP 客户端配置的环境变量里都行。这一项的作用是：没有 token
+的 server **启动即失败**，而不是退化成「7 个工具全开」。
+
+反过来说，**这一项没设 = 没设成 true = 免认证模式**。`docs/mcp.md` 里说的
+local 模式是给本机开发用的，不是给生产用的。
+
+### 申请一枚 token
+
+token 要在控制台里申请、管理员批准后���生效：
+
+1. 用户在 `/dashboard/mcp-tokens` 申请（`lookup` 或 `ops` 两种范围）
+2. 管理员在 `/admin/mcp-tokens` 批准
+3. 拿到 `ipqt_` 开头的明文
+
+范围区别：`lookup` 只给 `ipquery_lookup`；`ops` 给全部 7 个工具（其中
+`ipquery_queries_recent` 能看到用户邮箱和 API Key 前缀）。
+
+### 接进 Claude Code
+
+```bash
+claude mcp add --scope user ipquery -- \
+  --env IPQUERY_MCP_TOKEN=ipqt_xxxxxxxx \
+  --env MCP_REQUIRE_TOKEN=true \
+  node /绝对路径/IPQuery/dist/mcp/server.js
+```
+
+装成 npm 包之后也可以直接用 bin 名字：
+
+```bash
+claude mcp add --scope user ipquery -- ipquery-mcp
+```
+
+完整说明（7 个工具的清单、权限范围、隐私处理、`--mcp-config` 用法）见
+[`docs/mcp.md`](./mcp.md)。
+
+### 上线核对
+
+- [ ] `MCP_REQUIRE_TOKEN=true`（**只有真的要开 MCP 才需要**）
+- [ ] server 不对外监听端口 —— 它走 stdio，不开 HTTP 口
+- [ ] `dist/mcp/server.js` 在服务器上存在（源码部署时 `npm run build` 会带出来）
+
+---
+
 ## 附：命令速查
 
 | 命令                        | 作用                                                                            |

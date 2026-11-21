@@ -125,4 +125,58 @@ describe("MCP client configuration", () => {
       typeof bin["ipquery-mcp"] === "string" ? bin["ipquery-mcp"] : "dist/mcp/server.js";
     assertNodeEntryIsRunnable(path.join(root, "up", relativeEntry));
   });
+
+  it("offers the MCP safety switch in both env templates", () => {
+    // MCP_REQUIRE_TOKEN is the switch that makes a tokenless server
+    // refuse to start. Without it in the template, an operator who
+    // deploys from the template alone runs the MCP server wide open
+    // on a production box — the docs are the only place it is
+    // mentioned, and the docs are not what the template is read from.
+    const documentation = fs.readFileSync(path.join(root, "docs", "mcp.md"), "utf8");
+    expect(documentation).toContain("MCP_REQUIRE_TOKEN");
+
+    for (const template of [".env.example", path.join("up", ".env.example")]) {
+      const contents = fs.readFileSync(path.join(root, template), "utf8");
+      expect(contents, `${template} must offer MCP_REQUIRE_TOKEN`).toContain(
+        "MCP_REQUIRE_TOKEN",
+      );
+    }
+  });
+
+  it("keeps the two env templates in step with each other", () => {
+    // The deploy bundle carries its own copy of the template. If the
+    // two drift, the operator gets whichever one they happened to be
+    // handed — so a variable that exists in one and not the other is a
+    // configuration bug waiting to happen.
+    const sourceKeys = envTemplateKeys(path.join(root, ".env.example"));
+    const deployKeys = envTemplateKeys(path.join(root, "up", ".env.example"));
+    expect(deployKeys).toEqual(sourceKeys);
+  });
+
+  it("tells a deploying operator how to run the MCP server", () => {
+    // The MCP server ships in the deploy bundle and the release
+    // manifest exports its bin, but a deployment guide that never
+    // mentions it leaves the operator with a binary and no instructions
+    // — and, more to the point, with no mention of the switch that
+    // stops it from serving every tool to anyone who can start it.
+    for (const document of ["setup.md", "source-deploy.md"]) {
+      const contents = fs.readFileSync(path.join(root, "docs", document), "utf8");
+      expect(contents, `${document} must mention the MCP server`).toMatch(/MCP/);
+      expect(contents, `${document} must name the MCP safety switch`).toContain(
+        "MCP_REQUIRE_TOKEN",
+      );
+    }
+  });
 });
+
+/** The variable names a dotenv file declares, in file order.
+ *  Comments, blanks and indentation do not count. */
+function envTemplateKeys(absolutePath: string): string[] {
+  return fs
+    .readFileSync(absolutePath, "utf8")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line !== "" && !line.startsWith("#"))
+    .map((line) => line.split("=")[0]!.trim())
+    .filter((key) => /^[A-Z][A-Z0-9_]*$/.test(key));
+}
