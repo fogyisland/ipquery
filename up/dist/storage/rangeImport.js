@@ -321,45 +321,71 @@ async function importRangesFromStream(pool, input, options = {}) {
     // a range the database already holds is a row the file is entitled to
     // update. Dropping the second would leave the old value in place.
     const emitted = [];
-    await (0, rangeFile_1.decodeStream)(input, {
-        onHeader: (header) => {
-            if (header.format !== rangeFile_1.IPQ_FORMAT) {
-                throw new rangeFile_1.RangeFileError(`this is not an ${rangeFile_1.IPQ_FORMAT} file`);
-            }
-        },
-        onBatch: async (rows) => {
-            const kept = [];
-            for (const record of rows) {
-                stats.rowsRead += 1;
-                const verdict = classify(record, emitted);
-                if (verdict === "exact") {
-                    stats.exactDuplicates += 1;
-                    continue;
+    try {
+        await (0, rangeFile_1.decodeStream)(input, {
+            onHeader: (header) => {
+                if (header.format !== rangeFile_1.IPQ_FORMAT) {
+                    throw new rangeFile_1.RangeFileError(`this is not an ${rangeFile_1.IPQ_FORMAT} file`);
                 }
-                if (verdict === "contained") {
-                    stats.contained += 1;
-                    continue;
+            },
+            onBatch: async (rows) => {
+                const kept = [];
+                for (const record of rows) {
+                    stats.rowsRead += 1;
+                    const verdict = classify(record, emitted);
+                    if (verdict === "exact") {
+                        stats.exactDuplicates += 1;
+                        continue;
+                    }
+                    if (verdict === "contained") {
+                        stats.contained += 1;
+                        continue;
+                    }
+                    if (verdict === "overlap")
+                        stats.partialOverlaps += 1;
+                    kept.push(record);
+                    const start = (0, ip_1.parseIp)(record.start);
+                    const end = (0, ip_1.parseIp)(record.end);
+                    if (start && end)
+                        emitted.push({ start, end });
                 }
-                if (verdict === "overlap")
-                    stats.partialOverlaps += 1;
-                kept.push(record);
-                const start = (0, ip_1.parseIp)(record.start);
-                const end = (0, ip_1.parseIp)(record.end);
-                if (start && end)
-                    emitted.push({ start, end });
-            }
-            if (kept.length > 0)
-                await writeChunk(pool, kept.map(toIpRangeRow));
-            await reportProgress(pool, options, stats, stats.written);
-        },
-    });
+                if (kept.length > 0)
+                    await writeChunk(pool, kept.map(toIpRangeRow));
+                await reportProgress(pool, options, stats, stats.written);
+            },
+        });
+    }
+    catch (err) {
+        // A job that never leaves `running` is a job the operator reads as
+        // "still going" for the rest of the install's life. The merge path
+        // used to report progress and then stop, without ever saying how it
+        // ended.
+        if (options.importId !== undefined) {
+            await finishRangeImport(pool, options.importId, {
+                status: "failed",
+                rowsWritten: 0,
+                preserved: 0,
+                errorMessage: err instanceof Error ? err.message : String(err),
+            });
+        }
+        throw err;
+    }
     const total = await countRows(pool);
+    const written = stats.rowsRead - stats.exactDuplicates - stats.contained;
+    if (options.importId !== undefined) {
+        await finishRangeImport(pool, options.importId, {
+            status: "success",
+            rowsWritten: written,
+            preserved: 0,
+            errorMessage: null,
+        });
+    }
     return {
         // The file's own contribution, counted as it is read rather than read
         // back from the table afterwards: the table's size answers a different
         // question — what is in it now — and on a merge that is the file plus
         // everything already there.
-        written: stats.rowsRead - stats.exactDuplicates - stats.contained,
+        written,
         total,
         exactDuplicates: stats.exactDuplicates,
         contained: stats.contained,

@@ -72,6 +72,7 @@ describe("mysql storage", () => {
       "provider_error_log",
       "query_log",
       "random_probe_log",
+      "range_exports",
       "range_imports",
       "range_upload_chunks",
       "range_uploads",

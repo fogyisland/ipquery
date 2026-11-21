@@ -963,11 +963,11 @@
     "ranges": {
       "title": "Range import and export",
       "help": "Write IP ranges to an .ipq file, or merge an .ipq file into this database. Both directions use the same file, so ranges can move between two installs.",
-      "exported": "Export finished — {rows} ranges written",
       "exportFailed": "Export failed: {error}",
-      "imported": "Import finished — {inserted} written, {failed} skipped",
-      "importFailed": "Import failed: {error}",
+      "exportStarted": "The export has started in the background. The file appears in the export list below when it is ready — you can close this page.",
       "importRejected": "This file cannot be imported: {error}",
+      "importStarted": "The import has started in the background. Progress is in the import log below — you can close this page.",
+      "importBusy": "An import is already running. Wait for it to finish before starting another.",
       "tooLarge": "The file is over 16 MB — split it or import it from the command line",
       "export": {
         "title": "Export ranges",
@@ -984,6 +984,7 @@
           "created": "Created",
           "download": "Download",
           "empty": "No export has been built since this process started.",
+          "failed": "Export failed",
           "downloadLatest": "Download the file just built",
           "rowsUnit": "ranges"
         }

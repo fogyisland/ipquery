@@ -6,9 +6,14 @@
   exports from one install and imports on another, and the page should read
   as one idea rather than two unrelated tools.
 
-  The export list is per-process state. A restart clears it; the files stay
-  on disk, so a link the operator already has keeps working until the file
-  is cleaned up.
+  Both directions run in the background. A whole-library file is around two
+  gigabytes and takes long enough that a request held open for it is a
+  request a proxy kills -- so the request answers as soon as the job is
+  accepted, and the list below is where the operator watches it.
+
+  The export list is a table, not per-process state. A restart used to
+  clear it while the files stayed on disk, so a link the operator already
+  had stopped working.
 --}}
 <h2>{{req.t 'admin.ranges.title'}}</h2>
 <p class="admin-section-help">{{req.t 'admin.ranges.help'}}</p>
@@ -32,11 +37,14 @@
 
     {{#if lastExport}}
     {{!-- Named right above the button that produced it: the operator who just
-         clicked does not have to find the row in the table below. --}}
+         clicked does not have to find the row in the table below. Only a
+         finished export has a file to offer, so a running one waits. --}}
+    {{#unless lastExport.isRunning}}
     <p class="range-latest">
       <a class="btn-secondary" href="{{downloadUrl}}">{{req.t 'admin.ranges.export.list.downloadLatest'}}</a>
       <span class="form-field-hint">{{lastExport.rows}} {{req.t 'admin.ranges.export.list.rowsUnit'}} · {{lastExport.sizeLabel}}</span>
     </p>
+    {{/unless}}
     {{/if}}
 
     {{#if exports.length}}
@@ -57,7 +65,15 @@
           <td>{{this.rows}}</td>
           <td>{{this.sizeLabel}}</td>
           <td><time datetime="{{this.createdAtLabel}}">{{this.createdAtLabel}}</time></td>
-          <td><a class="btn-secondary" href="/admin/ranges/download/{{this.id}}">{{@root.req.t 'admin.ranges.export.list.download'}}</a></td>
+          <td>
+            {{#if this.isRunning}}
+            <span class="pill pill-info">{{@root.req.t 'admin.ranges.jobs.running'}}</span>
+            {{else if this.errorMessage}}
+            <span class="pill pill-danger">{{@root.req.t 'admin.ranges.export.list.failed'}}</span>
+            {{else}}
+            <a class="btn-secondary" href="/admin/ranges/download/{{this.id}}">{{@root.req.t 'admin.ranges.export.list.download'}}</a>
+            {{/if}}
+          </td>
         </tr>
         {{/each}}
       </tbody>

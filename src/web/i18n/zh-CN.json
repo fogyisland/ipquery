@@ -964,11 +964,11 @@
     "ranges": {
       "title": "IP 段导入导出",
       "help": "把 IP 段导出成 .ipq 文件，或把 .ipq 文件合并进当前库。导出和导入用的是同一个文件格式，所以可以在两台实例之间搬运数据。",
-      "exported": "导出完成，共 {rows} 条 IP 段",
       "exportFailed": "导出失败：{error}",
-      "imported": "导入完成：写入 {inserted} 条，跳过 {failed} 条",
-      "importFailed": "导入失败：{error}",
+      "exportStarted": "导出已在后台开始。文件写好后出现在下方的导出记录里，可以关掉这个页面。",
       "importRejected": "文件无法导入：{error}",
+      "importStarted": "导入已在后台开始。进度显示在下方的导入记录里，可以关掉这个页面。",
+      "importBusy": "已经有一个导入在进行中，请等它结束后再开始下一个。",
       "tooLarge": "文件超过 16 MB，请改用命令行导入或拆分后重试",
       "export": {
         "title": "导出 IP 段",
@@ -985,6 +985,7 @@
           "created": "生成时间",
           "download": "下载",
           "empty": "本次运行还没有生成过导出文件。",
+          "failed": "导出失败",
           "downloadLatest": "下载刚才导出的文件",
           "rowsUnit": "条"
         }

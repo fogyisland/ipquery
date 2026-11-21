@@ -442,43 +442,70 @@ export async function importRangesFromStream(
   // update. Dropping the second would leave the old value in place.
   const emitted: Array<{ start: Buffer; end: Buffer }> = [];
 
-  await decodeStream(input, {
-    onHeader: (header) => {
-      if (header.format !== IPQ_FORMAT) {
-        throw new RangeFileError(`this is not an ${IPQ_FORMAT} file`);
-      }
-    },
-    onBatch: async (rows) => {
-      const kept: RangeRecord[] = [];
-      for (const record of rows) {
-        stats.rowsRead += 1;
-        const verdict = classify(record, emitted);
-        if (verdict === "exact") {
-          stats.exactDuplicates += 1;
-          continue;
+  try {
+    await decodeStream(input, {
+      onHeader: (header) => {
+        if (header.format !== IPQ_FORMAT) {
+          throw new RangeFileError(`this is not an ${IPQ_FORMAT} file`);
         }
-        if (verdict === "contained") {
-          stats.contained += 1;
-          continue;
+      },
+      onBatch: async (rows) => {
+        const kept: RangeRecord[] = [];
+        for (const record of rows) {
+          stats.rowsRead += 1;
+          const verdict = classify(record, emitted);
+          if (verdict === "exact") {
+            stats.exactDuplicates += 1;
+            continue;
+          }
+          if (verdict === "contained") {
+            stats.contained += 1;
+            continue;
+          }
+          if (verdict === "overlap") stats.partialOverlaps += 1;
+          kept.push(record);
+          const start = parseIp(record.start);
+          const end = parseIp(record.end);
+          if (start && end) emitted.push({ start, end });
         }
-        if (verdict === "overlap") stats.partialOverlaps += 1;
-        kept.push(record);
-        const start = parseIp(record.start);
-        const end = parseIp(record.end);
-        if (start && end) emitted.push({ start, end });
-      }
-      if (kept.length > 0) await writeChunk(pool, kept.map(toIpRangeRow));
-      await reportProgress(pool, options, stats, stats.written);
-    },
-  });
+        if (kept.length > 0) await writeChunk(pool, kept.map(toIpRangeRow));
+        await reportProgress(pool, options, stats, stats.written);
+      },
+    });
+  } catch (err) {
+    // A job that never leaves `running` is a job the operator reads as
+    // "still going" for the rest of the install's life. The merge path
+    // used to report progress and then stop, without ever saying how it
+    // ended.
+    if (options.importId !== undefined) {
+      await finishRangeImport(pool, options.importId, {
+        status: "failed",
+        rowsWritten: 0,
+        preserved: 0,
+        errorMessage: err instanceof Error ? err.message : String(err),
+      });
+    }
+    throw err;
+  }
 
   const total = await countRows(pool);
+  const written = stats.rowsRead - stats.exactDuplicates - stats.contained;
+
+  if (options.importId !== undefined) {
+    await finishRangeImport(pool, options.importId, {
+      status: "success",
+      rowsWritten: written,
+      preserved: 0,
+      errorMessage: null,
+    });
+  }
+
   return {
     // The file's own contribution, counted as it is read rather than read
     // back from the table afterwards: the table's size answers a different
     // question — what is in it now — and on a merge that is the file plus
     // everything already there.
-    written: stats.rowsRead - stats.exactDuplicates - stats.contained,
+    written,
     total,
     exactDuplicates: stats.exactDuplicates,
     contained: stats.contained,

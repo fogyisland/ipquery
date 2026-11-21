@@ -44,8 +44,9 @@ const multipart_1 = __importDefault(require("@fastify/multipart"));
 const path = __importStar(require("node:path"));
 const csrf_1 = require("../plugins/csrf");
 const render_1 = require("../errors/render");
-const rangeExport_1 = require("../../storage/rangeExport");
+const rangeExportJob_1 = require("../../storage/rangeExportJob");
 const rangeImport_1 = require("../../storage/rangeImport");
+const rangeImportJob_1 = require("../../storage/rangeImportJob");
 const rangeUpload_1 = require("../../storage/rangeUpload");
 const rangeFile_1 = require("../../storage/rangeFile");
 const FLASH_COOKIE = "ranges_flash";
@@ -63,9 +64,13 @@ const FLASH_COOKIE = "ranges_flash";
  * keep their own bounds.
  */
 exports.RANGE_BODY_LIMIT = 512 * 1024 * 1024;
-/** Exports written by this process. A restart clears the list; the files
- *  stay on disk, so a download link that is still valid keeps working. */
-const exportState = new Map();
+/** Where the export files live. The data directory moves between installs,
+ *  so it is resolved at the moment the file is written or read rather than
+ *  stored anywhere. */
+function exportTargetDir(app) {
+    const targets = [app.cfg.etl.dataDir, path.join(process.cwd(), "data")];
+    return targets[0] ?? process.cwd();
+}
 function exportDir(dataDir) {
     return path.join(dataDir, "exports");
 }
@@ -203,13 +208,14 @@ async function registerRangeRoutes(app) {
     });
     app.get("/admin/ranges", async (req, reply) => {
         const flash = consumeFlash(req, reply);
-        const exports = [...exportState.values()]
-            .sort((a, b) => b.createdAt - a.createdAt)
-            .slice(0, 10)
-            .map((e) => ({
+        // The list comes from the database, not from this process's memory: a
+        // restart used to empty it while the files stayed on disk, so a link
+        // that had worked stopped working.
+        const exports = (await (0, rangeExportJob_1.listRangeExports)(app.pool, 10)).map((e) => ({
             ...e,
             sizeLabel: formatBytes(e.bytes),
-            createdAtLabel: new Date(e.createdAt).toISOString(),
+            createdAtLabel: (e.startedAt ?? new Date()).toISOString(),
+            isRunning: e.status === "running",
         }));
         return reply.view("admin/ranges.hbs", {
             layout: "layouts/admin",
@@ -243,25 +249,29 @@ async function registerRangeRoutes(app) {
             return (0, render_1.sendCsrfPage)(reply, 403);
         const country = readCountry(req);
         const id = `exp-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
-        const targets = [app.cfg.etl.dataDir, path.join(process.cwd(), "data")];
-        const targetDir = targets[0] ?? process.cwd();
+        const targetDir = exportTargetDir(app);
+        const file = path.join(exportDir(targetDir), `${id}.ipq`);
         try {
             await fs.promises.mkdir(exportDir(targetDir), { recursive: true });
-            const file = path.join(exportDir(targetDir), `${id}.ipq`);
-            const result = await (0, rangeExport_1.exportRangesToFile)(app.pool, file, country ? { countryCode: country } : {});
-            exportState.set(id, {
-                id,
-                file,
-                rows: result.rows,
-                bytes: result.bytes,
-                createdAt: Date.now(),
-            });
-            setFlash(reply, "success", req.t("admin.ranges.exported", { rows: result.rows }));
         }
         catch (err) {
-            app.log.error({ err }, "range export failed");
+            // The directory could not be made, so no export can start. This is
+            // the one failure the request can still report: the job has not
+            // started, so there is no job to record.
+            app.log.error({ err }, "could not create the export directory");
             setFlash(reply, "error", req.t("admin.ranges.exportFailed", { error: messageOf(err) }));
+            return reply.redirect("/admin/ranges");
         }
+        // The export runs detached. A library-sized export takes long enough
+        // that a request held open for it is a request a proxy kills — and
+        // when the proxy kills it, the export goes with it.
+        await (0, rangeExportJob_1.startRangeExport)(app.pool, app.log, {
+            id,
+            filepath: file,
+            countryCode: country || null,
+        });
+        app.log.info({ exportId: id, country: country || null }, "the range export started");
+        setFlash(reply, "success", req.t("admin.ranges.exportStarted"));
         return reply.redirect("/admin/ranges");
     });
     app.get("/admin/ranges/download/:id", async (req, reply) => {
@@ -269,15 +279,32 @@ async function registerRangeRoutes(app) {
         if (!EXPORT_ID.test(id)) {
             return reply.code(404).type("text/plain").send("not found");
         }
-        const entry = exportState.get(id);
+        // The job record is the authority on whether an export exists. It
+        // survives a restart, which the old in-process list did not.
+        const entry = await (0, rangeExportJob_1.readRangeExport)(app.pool, id);
         if (!entry) {
             return reply
                 .code(404)
                 .type("text/plain; charset=utf-8")
                 .send("this export is no longer listed — export again to get a fresh file");
         }
-        const data = await fs.promises.readFile(entry.file).catch(() => null);
-        if (!data) {
+        if (entry.status !== "success") {
+            // A running export has no file to send yet, and a failed one has
+            // none to send at all.
+            return reply
+                .code(409)
+                .type("text/plain; charset=utf-8")
+                .send(entry.status === "running"
+                ? "this export is still being written — come back in a moment"
+                : `this export failed: ${entry.errorMessage ?? "no reason was recorded"}`);
+        }
+        // The file's name is recorded, not its path: the install's data
+        // directory can move between runs, and a path stored in the database
+        // would then point nowhere.
+        const targetDir = exportTargetDir(app);
+        const filepath = path.join(exportDir(targetDir), path.basename(entry.filename));
+        const stat = await fs.promises.stat(filepath).catch(() => null);
+        if (!stat || !stat.isFile()) {
             return reply
                 .code(410)
                 .type("text/plain; charset=utf-8")
@@ -288,8 +315,13 @@ async function registerRangeRoutes(app) {
         // document is not a download. The extension carries the format.
         reply
             .header("Content-Type", "application/octet-stream")
+            .header("Content-Length", String(stat.size))
             .header("Content-Disposition", `attachment; filename="ipquery-ranges-${id}.ipq"`);
-        return reply.send(data);
+        // The file is streamed, not read. A two-gigabyte file read into memory
+        // is two gigabytes of heap the process does not have — and the
+        // download is exactly as long as the file, which is the reason the
+        // export writes to disk first.
+        return reply.send(fs.createReadStream(filepath));
     });
     app.post("/admin/ranges/import", async (req, reply) => {
         if (!(0, csrf_1.verifyCsrfRequest)(req))
@@ -324,37 +356,27 @@ async function registerRangeRoutes(app) {
                     return reply.redirect("/admin/ranges");
                 }
             }
-            const importId = await (0, rangeImport_1.writeRangeImportProgress)(app.pool, {
+            // One import at a time in this process. Two would fight over the
+            // same rows, and a replacement must not start while a merge is
+            // still writing.
+            if ((0, rangeImportJob_1.isRangeImportRunning)()) {
+                setFlash(reply, "error", req.t("admin.ranges.importBusy"));
+                return reply.redirect("/admin/ranges");
+            }
+            // The bytes are already on disk, so the file's header can be read
+            // for the row count the progress bar needs as a denominator.
+            const declaredRows = await declaredRowsOfFile(state.filepath);
+            // The import runs detached. The request answers as soon as the job
+            // is on record — a whole-library import takes hours, and a request
+            // held open for hours is a request a proxy kills.
+            const importId = await (0, rangeImportJob_1.startRangeImport)(app.pool, app.log, {
                 mode: isReplace ? "replace" : "merge",
-                source: state.filename,
-                declaredRows: null,
+                filepath: state.filepath,
+                uploadId,
+                declaredRows,
             });
-            try {
-                if (isReplace) {
-                    const result = await (0, rangeImport_1.replaceRangesFromFile)(app.pool, state.filepath, { importId });
-                    setFlash(reply, "success", req.t("admin.ranges.replace.done", { written: result.written, kept: result.preserved }));
-                }
-                else {
-                    const result = await (0, rangeImport_1.importRangesFromFile)(app.pool, state.filepath, { importId });
-                    setFlash(reply, "success", req.t("admin.ranges.importedFromUpload", {
-                        written: result.written,
-                        duplicates: result.exactDuplicates + result.contained,
-                    }));
-                }
-            }
-            catch (err) {
-                app.log.error({ err }, "upload import failed");
-                setFlash(reply, "error", req.t("admin.ranges.importFailed", { error: messageOf(err) }));
-            }
-            finally {
-                // The bytes are the importer's business; the bookkeeping is ours.
-                // The upload row and its chunk rows go whatever the outcome — a
-                // failed import leaves no half-uploaded file for somebody to
-                // mistake for a good one.
-                await (0, rangeUpload_1.discardUpload)(app.pool, uploadId).catch((err) => {
-                    app.log.warn({ err, uploadId }, "could not clean up the upload");
-                });
-            }
+            app.log.info({ importId, uploadId, mode: isReplace ? "replace" : "merge" }, "the range import started");
+            setFlash(reply, "success", req.t("admin.ranges.importStarted"));
             return reply.redirect("/admin/ranges");
         }
         const text = readUploadedText(body);
@@ -371,31 +393,27 @@ async function registerRangeRoutes(app) {
         // a select: the operator types the number of ranges currently in the
         // table, which the page shows them. A repost of this form — a browser
         // "resend" after a timeout — carries a stale count and is refused.
-        if (String(body?.mode ?? "") === "replace") {
+        const isReplace = String(body?.mode ?? "") === "replace";
+        if (isReplace) {
             const expected = await countRanges(app);
             const typed = Number(body?.confirmRows ?? NaN);
             if (!Number.isFinite(typed) || typed !== expected) {
                 setFlash(reply, "error", req.t("admin.ranges.replace.mismatch", { expected }));
                 return reply.redirect("/admin/ranges");
             }
-            // The row count the file claims, so the progress bar has a denominator
-            // and the operator can see a short file at a glance.
-            const declaredRows = declaredRowCount(text);
-            const importId = await (0, rangeImport_1.writeRangeImportProgress)(app.pool, {
-                mode: "replace",
-                source: "upload",
-                declaredRows,
-            });
-            try {
-                const result = await (0, rangeImport_1.replaceRangesFromStream)(app.pool, node_stream_1.Readable.from([text]), { importId });
-                setFlash(reply, "success", req.t("admin.ranges.replace.done", { written: result.written, kept: result.preserved }));
-            }
-            catch (err) {
-                app.log.error({ err }, "range replacement failed");
-                setFlash(reply, "error", req.t("admin.ranges.replace.failed", { error: messageOf(err) }));
-            }
+        }
+        if ((0, rangeImportJob_1.isRangeImportRunning)()) {
+            setFlash(reply, "error", req.t("admin.ranges.importBusy"));
             return reply.redirect("/admin/ranges");
         }
+        // The small-file path. The text is already in memory — it arrived as
+        // a form field — but it still goes through the same job as the
+        // chunked path: one import at a time, one way to watch it, one
+        // place that records how it ended.
+        //
+        // A malformed file is refused here rather than in the job: the
+        // operator is still on the page, and a redirect that says "bad file"
+        // is more use than a job that fails a second later.
         let decoded;
         try {
             decoded = (0, rangeFile_1.decodeFile)(text);
@@ -405,14 +423,15 @@ async function registerRangeRoutes(app) {
             setFlash(reply, "error", req.t("admin.ranges.importRejected", { error: detail }));
             return reply.redirect("/admin/ranges");
         }
-        try {
-            const result = await (0, rangeImport_1.importRanges)(app.pool, decoded.ranges);
-            setFlash(reply, result.failed > 0 ? "error" : "success", req.t("admin.ranges.imported", { inserted: result.inserted, failed: result.failed }));
-        }
-        catch (err) {
-            app.log.error({ err }, "range import failed");
-            setFlash(reply, "error", req.t("admin.ranges.importFailed", { error: messageOf(err) }));
-        }
+        const filepath = await (0, rangeUpload_1.stageImportFile)(text);
+        const importId = await (0, rangeImportJob_1.startRangeImport)(app.pool, app.log, {
+            mode: isReplace ? "replace" : "merge",
+            filepath,
+            uploadId: null,
+            declaredRows: declaredRowCount(text),
+        });
+        app.log.info({ importId, mode: isReplace ? "replace" : "merge", rows: decoded.ranges.length }, "the range import started");
+        setFlash(reply, "success", req.t("admin.ranges.importStarted"));
         return reply.redirect("/admin/ranges");
     });
 }
@@ -452,6 +471,29 @@ function declaredRowCount(text) {
     }
     catch {
         return null;
+    }
+}
+/** The row count the file on disk declares.
+ *
+ *  Only the header is read — the file can be two gigabytes, and the
+ *  header is the first line. A file that cannot say is left null. */
+async function declaredRowsOfFile(filepath) {
+    let handle = null;
+    try {
+        handle = await fs.promises.open(filepath, "r");
+        const buffer = Buffer.alloc(4096);
+        const { bytesRead } = await handle.read(buffer, 0, buffer.length, 0);
+        const first = buffer.subarray(0, bytesRead).toString("utf8").split(String.fromCharCode(10))[0] ?? "";
+        const parsed = JSON.parse(first);
+        return typeof parsed.rows === "number" ? parsed.rows : null;
+    }
+    catch {
+        // A file whose header cannot be read is a file the import will reject
+        // anyway; the job records why.
+        return null;
+    }
+    finally {
+        await handle?.close().catch(() => undefined);
     }
 }
 function readCountry(req) {

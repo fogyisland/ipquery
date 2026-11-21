@@ -13,13 +13,6 @@ import type { FastifyInstance } from "fastify";
  * keep their own bounds.
  */
 export declare const RANGE_BODY_LIMIT: number;
-export interface RangeExportState {
-    readonly id: string;
-    readonly file: string;
-    readonly rows: number;
-    readonly bytes: number;
-    readonly createdAt: number;
-}
 /** Async because Fastify treats a plugin that returns nothing as
  *  "forgot to call done" — `register` needs a promise to await. */
 export declare function registerRangeRoutes(app: FastifyInstance): Promise<void>;

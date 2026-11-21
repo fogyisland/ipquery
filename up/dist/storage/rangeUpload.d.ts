@@ -26,6 +26,18 @@ export declare const UPLOAD_CHUNK_BYTES: number;
 /** Nothing may be uploaded larger than this. Two gigabytes covers a
  *  whole-library .ipq with room for the fields that make it readable. */
 export declare const UPLOAD_MAX_BYTES: number;
+/**
+ * Put a file that arrived in one piece on disk, ready to be imported.
+ *
+ * The small-file path gets the text as a form field, so it is already in
+ * memory — but the import runs detached, and a detached job cannot read
+ * the request's memory. The file has to be on disk for the job to find.
+ *
+ * The name is generated, never taken from the upload, and it lands in the
+ * same directory the chunked path uses so the importer has one place to
+ * look. The caller removes it when the job ends.
+ */
+export declare function stageImportFile(text: string): Promise<string>;
 export declare function reserveUpload(pool: Pool, fields: {
     mode: "merge" | "replace";
     filename: string;

@@ -34,6 +34,7 @@ var __importStar = (this && this.__importStar) || (function () {
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.UPLOAD_MAX_BYTES = exports.UPLOAD_CHUNK_BYTES = exports.UploadError = void 0;
+exports.stageImportFile = stageImportFile;
 exports.reserveUpload = reserveUpload;
 exports.storeChunk = storeChunk;
 exports.finishUpload = finishUpload;
@@ -83,6 +84,24 @@ function ensureDir(dir) {
  *  upload directory when joined back together. */
 function safeName(id) {
     return `upload-${id}.ipq`;
+}
+/**
+ * Put a file that arrived in one piece on disk, ready to be imported.
+ *
+ * The small-file path gets the text as a form field, so it is already in
+ * memory — but the import runs detached, and a detached job cannot read
+ * the request's memory. The file has to be on disk for the job to find.
+ *
+ * The name is generated, never taken from the upload, and it lands in the
+ * same directory the chunked path uses so the importer has one place to
+ * look. The caller removes it when the job ends.
+ */
+async function stageImportFile(text) {
+    ensureDir(uploadDir());
+    const name = `import-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}.ipq`;
+    const filepath = path.join(uploadDir(), name);
+    await fs.promises.writeFile(filepath, text, "utf8");
+    return filepath;
 }
 async function reserveUpload(pool, fields) {
     await (0, runner_1.runMigrations)(pool);

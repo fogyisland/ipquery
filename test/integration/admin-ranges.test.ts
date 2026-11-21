@@ -81,6 +81,76 @@ function multipart(fields: Record<string, string>, files: Record<string, { name:
   return { body: Buffer.concat(parts), contentType: `multipart/form-data; boundary=${boundary}` };
 }
 
+/** Poll `read` until it satisfies `done`, or give up. Used for the parts
+ *  that change on their own — the background import finishing after the
+ *  request that started it has already returned. */
+async function waitFor<T>(
+  read: () => Promise<T>,
+  done: (value: T) => boolean,
+  timeoutMs = 30_000,
+  intervalMs = 100,
+): Promise<T> {
+  const deadline = Date.now() + timeoutMs;
+  let last = await read();
+  while (Date.now() < deadline) {
+    if (done(last)) return last;
+    await new Promise((resolve) => setTimeout(resolve, intervalMs));
+    last = await read();
+  }
+  throw new Error(`waitFor timed out after ${timeoutMs}ms; last value = ${JSON.stringify(last)}`);
+}
+
+/**
+ * Wait for the export that was just started to reach a terminal state.
+ *
+ * The export runs detached, so the file is not on disk until the job has
+ * finished writing it. Every assertion about the file has to wait for the
+ * job to say it is done — otherwise the test is a race that usually loses.
+ */
+async function waitForExportToFinish(timeoutMs = 30_000): Promise<void> {
+  await waitFor(
+    async () => {
+      const [rows] = await td.pool.query<mysql.RowDataPacket[]>(
+        "SELECT status FROM range_exports ORDER BY started_at DESC, id DESC LIMIT 1",
+      );
+      return rows[0] ? String(rows[0].status) : null;
+    },
+    (status) => status === "success" || status === "failed",
+    timeoutMs,
+  );
+}
+
+/**
+ * Wait for the import that was just started to reach a terminal state.
+ *
+ * The import runs detached, so "the rows are in the table" is only true
+ * some time after the request answered. Every assertion about the
+ * database has to wait for the job to say it is done — otherwise the test
+ * is a race that usually loses.
+ */
+async function waitForImportToFinish(timeoutMs = 30_000): Promise<NonNullable<Awaited<ReturnType<typeof newestJob>>>> {
+  const job = await waitFor(
+    newestJob,
+    (j) => j !== null && (j.status === "success" || j.status === "failed"),
+    timeoutMs,
+  );
+  return job!;
+}
+
+/** The state of the newest import job. */
+async function newestJob(): Promise<{
+  id: number;
+  status: string;
+  rows_done: number;
+  rows_written: number;
+  error_message: string | null;
+} | null> {
+  const [rows] = await td.pool.query<mysql.RowDataPacket[]>(
+    "SELECT id, status, rows_done, rows_written, error_message FROM range_imports ORDER BY id DESC LIMIT 1",
+  );
+  return rows[0] ?? null;
+}
+
 describe("/admin/ranges", () => {
   it("renders the page with both directions", async () => {
     const r = await request(app.server)
@@ -126,9 +196,10 @@ describe("/admin/ranges", () => {
       .type("form")
       .send({ csrf: token });
     expect(r.status).toBe(302);
-    // The POST redirects to the page, not to the file: the download link is
-    // what the page renders, because the row list is the record of what was
-    // produced and the operator may want an older file.
+
+    // The export runs in the background, so the file appears in the list
+    // once the job has finished writing it.
+    await waitForExportToFinish();
     const page = await request(app.server)
       .get("/admin/ranges")
       .set("Cookie", "sid=" + adminSid);
@@ -182,7 +253,15 @@ describe("/admin/ranges", () => {
     const page = await request(app.server)
       .get("/admin/ranges")
       .set("Cookie", "sid=" + adminSid + "; " + flash);
-    expect(page.text).toMatch(/导入完成|imported/i);
+    // The request answers before the import has run, so the flash says the
+    // job started — not that it finished.
+    expect(page.text).toMatch(/后台开始|started/i);
+
+    // The job record is where the operator finds out how it ended.
+    const job = await waitForImportToFinish();
+    expect(job.status).toBe("success");
+    expect(job.rows_written).toBe(1);
+    expect(job.error_message).toBeNull();
   });
 
   it("round-trips through the two routes: export one install, import into another", async () => {
@@ -215,6 +294,7 @@ describe("/admin/ranges", () => {
       .type("form")
       .send({ csrf: token, file: body });
     expect(r.status).toBe(302);
+    await waitForImportToFinish();
 
     const [rows] = await td.pool.query<import("mysql2/promise").RowDataPacket[]>(
       "SELECT country_code, city, city_source FROM ip_ranges WHERE country_code = 'ZZ'",
@@ -261,6 +341,7 @@ describe("/admin/ranges", () => {
       // it, which is what makes an accidental resend harmless.
       .send({ csrf: token, file: body, mode: "replace", confirmRows: "1" });
     expect(r.status).toBe(302);
+    await waitForImportToFinish();
 
     // The old library is gone; the uploaded row is there.
     const [old] = await td.pool.query<import("mysql2/promise").RowDataPacket[]>(
@@ -388,6 +469,7 @@ describe("/admin/ranges", () => {
       .type("form")
       .send({ csrf: token, uploadId: String(uploadId), mode: "merge" });
     expect(imported.status).toBe(302);
+    await waitForImportToFinish();
 
     const [rows] = await td.pool.query<mysql.RowDataPacket[]>(
       "SELECT country_code FROM ip_ranges WHERE country_code = 'UU'",
@@ -395,6 +477,21 @@ describe("/admin/ranges", () => {
     expect(rows.length).toBe(1);
 
     // Nothing is left behind: not the rows, not the chunk rows.
+    //
+    // The cleanup happens after the job row is marked finished, so waiting
+    // for the row is not enough: the row flips first and the upload goes a
+    // moment later. Wait for the upload itself.
+    await waitFor(
+      async () => {
+        const [rows] = await td.pool.query<mysql.RowDataPacket[]>(
+          "SELECT id FROM range_uploads WHERE id = ?",
+          [uploadId],
+        );
+        return rows.length;
+      },
+      (n) => n === 0,
+      30_000,
+    );
     const [uploads] = await td.pool.query<mysql.RowDataPacket[]>(
       "SELECT id FROM range_uploads WHERE id = ?",
       [uploadId],
@@ -443,6 +540,167 @@ describe("/admin/ranges", () => {
       .get("/admin/ranges")
       .set("Cookie", "sid=" + adminSid + "; " + flashCookieOf(imported));
     expect(page.text).toMatch(/不匹配|does not match/i);
+  });
+
+  // ── The import runs in the background ───────────────────────────────
+  //
+  // A whole-library .ipq is around two gigabytes, and importing it takes
+  // hours. If that work runs inside the request, the request is held open
+  // for hours — and any proxy in front of this server kills it long
+  // before that. The request has to answer as soon as the job is
+  // accepted, and the job has to keep going on its own.
+
+  it("answers the import request before the import has finished", async () => {
+    const { cookie, token } = await csrf();
+    const body = encodeHeader({ exportedAt: "x", rows: 1 }) + "\n" + encodeRange({
+      line: 0,
+      start: "10.8.0.0",
+      end: "10.8.0.255",
+      countryCode: "ZZ",
+      countryName: null,
+      region: null,
+      city: null,
+      postalCode: null,
+      latitude: null,
+      longitude: null,
+      timezone: null,
+      isp: null,
+      asn: null,
+      asnOrg: null,
+    }) + "\n";
+
+    const started = await request(app.server)
+      .post("/admin/ranges/upload/start")
+      .set("Cookie", "sid=" + adminSid + "; " + cookie)
+      .type("form")
+      .send({ csrf: token, mode: "merge", filename: "bg.ipq", totalBytes: String(body.length) });
+    const uploadId = started.body.id as number;
+
+    const chunk = multipart(
+      { csrf: token, uploadId: String(uploadId), offset: "0" },
+      { file: { name: "bg.ipq", body: Buffer.from(body, "utf8") } },
+    );
+    await request(app.server)
+      .post("/admin/ranges/upload/chunk")
+      .set("Cookie", "sid=" + adminSid + "; " + cookie)
+      .set("Content-Type", chunk.contentType)
+      .send(chunk.body);
+
+    const posted = await request(app.server)
+      .post("/admin/ranges/import")
+      .set("Cookie", "sid=" + adminSid + "; " + cookie)
+      .type("form")
+      .send({ csrf: token, uploadId: String(uploadId), mode: "merge" });
+
+    // The request answers with a redirect, not with the finished import.
+    expect(posted.status).toBe(302);
+
+    // The job is on record as running, and it finishes on its own after
+    // the request has already answered.
+    const job = await waitFor(
+      newestJob,
+      (j) => j !== null && (j.status === "success" || j.status === "failed"),
+      30_000,
+    );
+    expect(job!.status).toBe("success");
+    expect(job!.error_message).toBeNull();
+
+    const [rows] = await td.pool.query<mysql.RowDataPacket[]>(
+      "SELECT country_code FROM ip_ranges WHERE country_code = 'ZZ'",
+    );
+    expect(rows.length).toBe(1);
+  });
+
+  it("records a background import that fails, so the operator sees why", async () => {
+    const { cookie, token } = await csrf();
+    // A file whose header is not the format: the import cannot start.
+    const body = JSON.stringify({ format: "not-ipquery", version: 1, rows: 0 }) + "\n";
+
+    const started = await request(app.server)
+      .post("/admin/ranges/upload/start")
+      .set("Cookie", "sid=" + adminSid + "; " + cookie)
+      .type("form")
+      .send({ csrf: token, mode: "merge", filename: "bad.ipq", totalBytes: String(body.length) });
+    const uploadId = started.body.id as number;
+
+    const chunk = multipart(
+      { csrf: token, uploadId: String(uploadId), offset: "0" },
+      { file: { name: "bad.ipq", body: Buffer.from(body, "utf8") } },
+    );
+    await request(app.server)
+      .post("/admin/ranges/upload/chunk")
+      .set("Cookie", "sid=" + adminSid + "; " + cookie)
+      .set("Content-Type", chunk.contentType)
+      .send(chunk.body);
+
+    await request(app.server)
+      .post("/admin/ranges/import")
+      .set("Cookie", "sid=" + adminSid + "; " + cookie)
+      .type("form")
+      .send({ csrf: token, uploadId: String(uploadId), mode: "merge" });
+
+    // A job that never leaves `running` is a job the operator reads as
+    // "still going" for the rest of the install's life.
+    const job = await waitFor(
+      newestJob,
+      (j) => j !== null && (j.status === "success" || j.status === "failed"),
+      30_000,
+    );
+    expect(job!.status).toBe("failed");
+    expect(job!.error_message).toBeTruthy();
+  });
+
+  it("cleans up the upload even when the background import fails", async () => {
+    const { cookie, token } = await csrf();
+    const body = JSON.stringify({ format: "not-ipquery", version: 1, rows: 0 }) + "\n";
+
+    const started = await request(app.server)
+      .post("/admin/ranges/upload/start")
+      .set("Cookie", "sid=" + adminSid + "; " + cookie)
+      .type("form")
+      .send({ csrf: token, mode: "merge", filename: "bad2.ipq", totalBytes: String(body.length) });
+    const uploadId = started.body.id as number;
+
+    const chunk = multipart(
+      { csrf: token, uploadId: String(uploadId), offset: "0" },
+      { file: { name: "bad2.ipq", body: Buffer.from(body, "utf8") } },
+    );
+    await request(app.server)
+      .post("/admin/ranges/upload/chunk")
+      .set("Cookie", "sid=" + adminSid + "; " + cookie)
+      .set("Content-Type", chunk.contentType)
+      .send(chunk.body);
+
+    await request(app.server)
+      .post("/admin/ranges/import")
+      .set("Cookie", "sid=" + adminSid + "; " + cookie)
+      .type("form")
+      .send({ csrf: token, uploadId: String(uploadId), mode: "merge" });
+
+    await waitFor(
+      newestJob,
+      (j) => j !== null && j.status === "failed",
+      30_000,
+    );
+
+    // The upload is cleaned up on the failure path too — a failed import
+    // must not leave a half-uploaded file for somebody to mistake for a
+    // good one.
+    //
+    // The cleanup happens after the job row is marked failed, so waiting
+    // for the row is not enough: the row flips first and the upload goes a
+    // moment later. Wait for the upload itself.
+    await waitFor(
+      async () => {
+        const [rows] = await td.pool.query<mysql.RowDataPacket[]>(
+          "SELECT id FROM range_uploads WHERE id = ?",
+          [uploadId],
+        );
+        return rows.length;
+      },
+      (n) => n === 0,
+      30_000,
+    );
   });
 });
 

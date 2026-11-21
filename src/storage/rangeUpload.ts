@@ -68,6 +68,25 @@ function safeName(id: number): string {
   return `upload-${id}.ipq`;
 }
 
+/**
+ * Put a file that arrived in one piece on disk, ready to be imported.
+ *
+ * The small-file path gets the text as a form field, so it is already in
+ * memory — but the import runs detached, and a detached job cannot read
+ * the request's memory. The file has to be on disk for the job to find.
+ *
+ * The name is generated, never taken from the upload, and it lands in the
+ * same directory the chunked path uses so the importer has one place to
+ * look. The caller removes it when the job ends.
+ */
+export async function stageImportFile(text: string): Promise<string> {
+  ensureDir(uploadDir());
+  const name = `import-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}.ipq`;
+  const filepath = path.join(uploadDir(), name);
+  await fs.promises.writeFile(filepath, text, "utf8");
+  return filepath;
+}
+
 export async function reserveUpload(
   pool: Pool,
   fields: { mode: "merge" | "replace"; filename: string; totalBytes: number },
