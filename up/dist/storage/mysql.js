@@ -125,7 +125,22 @@ function createPoolFor(conn) {
         connectionLimit: conn.poolSize,
         waitForConnections: true,
         multipleStatements: true,
-        timezone: "Z",
+        // Read and write DATETIME in the SERVER's own clock.
+        //
+        // `timezone` is a client-side setting and nothing else: it tells the
+        // driver how to interpret the wall-clock literals MySQL sends back,
+        // and how to render a Date parameter on the way out. It does NOT
+        // tell the server which zone to use — that is `SET time_zone`, and
+        // mysql2 never issues it. So the server stamps `CURRENT_TIMESTAMP`
+        // and `NOW()` in its own zone (SYSTEM), and a reader that assumes
+        // UTC reads every one of them shifted by the server's offset from
+        // UTC: on a +08:00 host a row created a moment ago comes back eight
+        // hours in the future, and the console says so.
+        //
+        // "local" makes the driver interpret the literal the way the server
+        // wrote it. The server's SYSTEM zone is this host's zone and the
+        // process runs on the same host, so the two agree.
+        timezone: "local",
         dateStrings: false,
         ...(conn.connectTimeout === undefined ? {} : { connectTimeout: conn.connectTimeout }),
     });

@@ -28,7 +28,10 @@ export interface RandomGenRunnerHandle {
  *
  *  Idempotent — only matches enabled=0 AND auto_reenable_at IS NOT NULL
  *  AND auto_reenable_at <= NOW(3), so calling more than once per minute
- *  is harmless. Returns the count re-enabled for the caller's logs. */
+ *  is harmless. Returns the count re-enabled for the caller's logs.
+ *
+ *  `auto_reenable_at` is written by the application as a Date, so it
+ *  lives in the server's clock — the one NOW(3) reports. */
 export declare function reapProviders(pool: Pool): Promise<number>;
 export declare function registerRandomGenRunner(app: FastifyInstance, pool: Pool | (() => Pool), opts?: RandomGenRunnerOptions): RandomGenRunnerHandle;
 /** Read the persisted state for the admin dashboard. Returns nulls

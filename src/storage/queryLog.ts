@@ -2,6 +2,7 @@
 import type { Pool } from "mysql2/promise";
 import type { QueryLogEntry } from "../types";
 import { findRange, OPTIONAL_READ_LOCK_WAIT_SECONDS } from "./mysql";
+import { formatDbTimestamp } from "./dbTimestamp";
 
 export interface QueryLogInsertable {
   ip: Buffer;
@@ -259,15 +260,18 @@ export async function getLastUserQuery(pool: Pool, userId: number): Promise<Last
   }
 }
 export async function countQueriesByDay(pool: Pool, days: number): Promise<DailyBucket[]> {
-  // Bucket in UTC end to end. query_log.ts is written with the pool's
-  // timezone: "Z" (UTC), so both the `since` bound and the day keys must
-  // be UTC too — mixing local-midnight bounds with ISO (UTC) keys shifted
-  // every bucket by the server's UTC offset.
+  // Bucket in UTC end to end. `ts` is stamped by MySQL in the server's
+  // own clock, and a day key has to be a UTC day, so the value is
+  // converted out of the server's clock on the way to DATE(). The
+  // `since` bound travels the other way — the driver writes the
+  // parameter in the server's clock — so the comparison itself stays in
+  // one clock and only the bucket label is UTC. Mixing the two shifted
+  // every bucket by the server's offset from UTC.
   const since = new Date();
   since.setUTCHours(0, 0, 0, 0);
   since.setUTCDate(since.getUTCDate() - (days - 1));
   const [rows] = await pool.query(
-    `SELECT DATE(CONVERT_TZ(ts, @@session.time_zone, '+00:00')) AS d, status, COUNT(*) AS c
+    `SELECT DATE_FORMAT(CONVERT_TZ(ts, @@session.time_zone, '+00:00'), '%Y-%m-%d') AS d, status, COUNT(*) AS c
        FROM query_log
        WHERE ts >= ?
        GROUP BY d, status
@@ -276,7 +280,11 @@ export async function countQueriesByDay(pool: Pool, days: number): Promise<Daily
   );
   const byDate = new Map<string, { hit: number; miss: number; invalid: number }>();
   for (const r of rows as Record<string, unknown>[]) {
-    const d = r.d instanceof Date ? (r.d as Date).toISOString().slice(0, 10) : String(r.d);
+    // The day label arrives as text on purpose. A DATE column read back
+    // through the driver becomes a Date at local midnight, and
+    // rendering that as an ISO date shifts the label by the driver's
+    // offset — so the driver never gets to see it.
+    const d = String(r.d);
     const cur = byDate.get(d) ?? { hit: 0, miss: 0, invalid: 0 };
     const k = r.status as "hit" | "miss" | "invalid";
     cur[k] = Number(r.c);
@@ -337,7 +345,7 @@ export async function streamQueryLogsCsv(
     for (const r of rows) {
       const cells = [
         r.id,
-        (r.ts as Date).toISOString(),
+        formatDbTimestamp(r.ts as Date),
         JSON.stringify(r.ip_text),
         r.status,
         JSON.stringify(r.user_email ?? ""),

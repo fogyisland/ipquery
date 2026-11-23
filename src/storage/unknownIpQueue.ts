@@ -13,6 +13,7 @@
 //   intentional: a stale row from before a recent ETL merge shouldn't be
 //   re-queued just because someone rebuilds ip_ranges.
 import type { Pool, RowDataPacket, ResultSetHeader } from "mysql2/promise";
+import { formatDbTimestamp } from "./dbTimestamp";
 
 export interface UnknownIpRow {
   id: number;
@@ -238,7 +239,9 @@ export async function exportPendingCsv(pool: Pool): Promise<string> {
   for (const r of rows) {
     const esc = (s: string | number | null | Date) => {
       if (s == null) return "";
-      const v = s instanceof Date ? s.toISOString() : String(s);
+      // A timestamp the database wrote is printed in the clock the
+      // database keeps it in, so the export agrees with the console.
+      const v = s instanceof Date ? formatDbTimestamp(s) : String(s);
       // Quote if it contains comma / quote / newline.
       return /[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v;
     };

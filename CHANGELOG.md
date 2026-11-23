@@ -314,6 +314,72 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **控制台把「刚刚创建的用户」显示成「大约 8 小时后」**: CI 修好之后，`database` job
+  只剩一个用例红着：`public vs authed chrome > writes relative timestamps in the
+  reader's language`。它指向的是一个真的、用户看得见的缺陷。
+  根因是**驱动和服务器各说各话**：
+  - MySQL 用 `DEFAULT CURRENT_TIMESTAMP` / `NOW()` 打的时间戳，用的是**服务器自己
+    那口钟**（本机 `@@global.time_zone` = `SYSTEM` = 中国标准时间，+08:00）
+  - 连接池写的是 `timezone: "Z"`，也就是**按 UTC 解读**驱动发回来的字面量
+  - 两者一叠加：**每一个由 MySQL 写入的时间戳，读出来都往未来偏 8 小时**
+  - 于是刚建好的用户在控制台上是「大约 8 小时后」，query_log 的「最近 24 小时」
+    实际是 32 小时，后台的日期筛选也跟着偏 8 小时
+  - `timezone` 是**纯客户端**设置：它只告诉驱动「怎么解读字面量」「怎么把 Date
+    参数序列化出去」，**从不发 `SET time_zone`**——服务器那口钟仍然是 SYSTEM
+  修法是让**读的那一侧跟上服务器**：池子改成 `timezone: "local"`（服务器用哪口钟，
+  进程就跑在哪台机器上，两边一致），三处 `UTC_TIMESTAMP(3)` 的比较改成 `NOW(3)`，
+  `formatDate` 按本机壁钟渲染。改完之后**控制台上的数字一个都没变**，
+  变的是相对时间和那个 24 小时窗口
+  - `sessions.expires_at` 这类**应用自己写的**时间戳也一起归位：驱动现在按服务器
+    那口钟序列化 `Date` 参数，于是迁移 `036_server_clock_timestamps.sql` 把已有的
+    15 个应用写入列整体前移「服务器与 UTC 的偏移」。偏移取自
+    `@@global.time_zone`（不是 session，所以与连接落在哪个时区无关），
+    在 UTC 机器上是 0，什么都不改
+  - ETL 的五个阶段表（`etl_run_downloads` / `parses` / `inserts` / `swaps` /
+    `dedupe`）也在名单里：流水线**读回自己写的 `started_at` 去和 `NOW(3)` 比**，
+    跨两口钟算出来的阶段耗时是错的
+  - 导出 CSV 的时间戳一并改口径：以前用 `toISOString()`，等于把壁钟谎称成 UTC；
+    现在按 `formatDbTimestamp()` 打印**壁钟数字 + 真实偏移**
+    （`2026-11-24T01:16:05.193+08:00`），和页面上的时间对得上
+  - 新增 `test/integration/timestamps.test.ts`（6 个用例）与
+    `test/unit/db-timestamp.test.ts`（8 个用例）：断言不点名任何偏移，
+    在 UTC 机器和 +08 机器上都成立
+- **日桶的日期标签偏一天**（`countQueriesByDay`）: 改口径这件事本身带出了两个
+  只在「时区不是 0」的机器上才看得见的洞
+  - **`DATE` 列读回来会变成本地零点**: 驱动把 `DATE '2026-11-23'` 解析成一个
+    **本地午夜**的 `Date`，于是 `.toISOString().slice(0,10)` 把它印成
+    `2026-11-22`——**标签整整差一天**。后果是仪表盘七天柱状图的**最后一根永远是空的**，
+    今天的查询被记到昨天头上，而 `queries_daily` 这个 MCP 工具同样
+    修法是**日标签在 SQL 里就算好、以文本返回**（`DATE_FORMAT(..., '%Y-%m-%d')`），
+    驱动根本没机会碰它
+  - **七天窗口用错了日历**: `provider_call_counter.day_utc` 存的是 **UTC 日期**
+    （写入方是 `UTC_DATE()`），而七天窗口的下界却拿 `CURDATE()`（**服务器本地日期**）
+    去比。两者每二十四小时里有八小时不是同一天：这段时间里窗口**短了一天**
+    （够不到该够的那天），或者**宽了一天**（多算了一天）。
+    改成 `UTC_DATE()`，和列自己的口径对齐
+  - 两个用例都用**显式设置会话时区**的方式让「本地日 ≠ UTC 日」必然成立
+    （`SET time_zone`），所以在任何时区的机器上都真的能咬住这个 bug，
+    而不是「本地日恰好等于 UTC 日时恒绿」
+  - MySQL 5.7 只接受**整点、且在 -12:00..+13:00 之间**的偏移量：
+    `+14:00`、`-13:00`、`+13:59` 一律报 `Unknown or incorrect time zone`
+- **`sidebar` 用例把「坏行为」写进了断言**: 那条用例断言英文页面出现
+  `in about 8 hours`——那是 date-fns 描述**未来**时间的说法，而一个刚创建的用户
+  本该是**过去**（`less than a minute ago`）。也就是说这条用例在 +08 机器上恒真、
+  在正确的 UTC 机器上恒假：它把当时那个 bug 的样子固化成了期望。
+  断言改成「必须是过去式、且不得出现未来式」，两种机器上都成立，
+  而且**现在真的能抓住偏移**
+- **迁移版本号撞车，两个文件共用 `035`**: runner 的账本以**文件名的数字前缀**为键
+  （`schema_migrations.version` 是主键），而 `035_fix_single_address_ranges.sql`
+  已经占了 `035`。新迁移再叫 `035` 就有两种结局：
+  - 全新库上：账本插入报 `Duplicate entry '035' for key 'PRIMARY'`，
+    **报错信息既不点名文件，也不说这是版本号冲突**
+  - 已经跑过 `035` 的库上：**更糟**——runner 看到账本里有 `035`，把**两个文件一起
+    跳过**，第二个迁移**永远不会执行**，而且没有任何提示
+  现在 runner 在碰数据库**之前**就检查前缀是否重复，冲突时抛出点名版本和两个
+  文件的错误（错误不带驱动 `code`，所以启动路径不会把它误判成「数据库连不上」
+  而降级成向导）；新迁移改号 `036`。新增 `test/unit/migration-version-collision.test.ts`
+  （4 个用例）钉住「先拒绝、再碰库」
+
 - **CI 从来没有绿过一次**: 查了 `gh run list` 的全部 51 条记录——
   **50 条 failure，0 条 success**，从 2026-11-10 工作流第一次跑就是这样。
   根因不在测试本身，在 workflow 里：`unit` job 没有数据库服务，而

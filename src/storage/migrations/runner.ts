@@ -171,7 +171,7 @@ export async function listMigrationEntries(): Promise<readonly MigrationEntry[]>
   const files = await settledFiles();
   return files.map((file) => {
     const match = MIGRATION_FILE_RE.exec(file);
-    const version = match?.[1] ?? file.slice(0, 3);
+    const version = match?.[1] ?? versionOf(file);
     const name = match?.[2] ?? file;
     return { version, name, file, ...classify(MIGRATION_SQL.get(file) ?? "") };
   });
@@ -201,15 +201,73 @@ export interface MigrationResult {
   skipped: string[];
 }
 
+/**
+ * The version a migration file claims: the numeric prefix of its name.
+ *
+ * The ledger stores the version as the PRIMARY KEY of `schema_migrations`,
+ * so it has to be unique across the files a build ships.
+ */
+function versionOf(file: string): string {
+  return file.slice(0, 3);
+}
+
+/**
+ * The versions that more than one file claims.
+ *
+ * A collision is a defect in the build, not in the database: two files
+ * cannot both be version 035. Left alone it plays out two ways, and both
+ * are bad.
+ *
+ *   · On a fresh database the ledger insert fails with MySQL's
+ *     `Duplicate entry '035' for key 'PRIMARY'` — which names neither of
+ *     the two files, and arrives from inside the driver.
+ *   · On a database that has already applied version 035, the runner sees
+ *     035 in the ledger, skips BOTH files, and never runs the second one.
+ *     A migration that silently never runs leaves the data in the old
+ *     shape, and nothing says so.
+ */
+function duplicateVersions(files: readonly string[]): Map<string, string[]> {
+  const byVersion = new Map<string, string[]>();
+  for (const file of files) {
+    const version = versionOf(file);
+    const bucket = byVersion.get(version);
+    if (bucket) bucket.push(file);
+    else byVersion.set(version, [file]);
+  }
+  const duplicates = new Map<string, string[]>();
+  for (const [version, list] of byVersion) {
+    if (list.length > 1) duplicates.set(version, list);
+  }
+  return duplicates;
+}
+
 export async function runMigrations(pool: mysql.Pool): Promise<MigrationResult> {
   const files = await settledFiles();
+
+  // Refuse a build whose step list contradicts itself BEFORE the database
+  // is touched. The steps depend on each other, so applying half of them
+  // and then failing leaves the database in a state no build describes.
+  //
+  // The error carries no driver `code`, which is what makes it a hard
+  // failure: the boot path treats a coded error as "the database is
+  // unreachable" and degrades to the setup wizard, and a broken step list
+  // must not be mistaken for a database that is not there.
+  const collisions = duplicateVersions(files);
+  if (collisions.size > 0) {
+    const detail = [...collisions.entries()]
+      .map(([version, list]) => `${version} (${list.join(", ")})`)
+      .join("; ");
+    throw new Error(
+      `duplicate migration version: ${detail}. Each migration file needs its own numeric prefix.`,
+    );
+  }
 
   const applied = await getAppliedVersions(pool);
   const newlyApplied: string[] = [];
   const skipped: string[] = [];
 
   for (const file of files) {
-    const version = file.slice(0, 3);
+    const version = versionOf(file);
     if (applied.has(version)) {
       skipped.push(version);
       continue;
@@ -560,7 +618,7 @@ export async function migrationStatus(pool: mysql.Pool): Promise<{
   pending: string[];
 }> {
   const files = await settledFiles();
-  const allVersions = files.map((f) => f.slice(0, 3));
+  const allVersions = files.map(versionOf);
   const applied = await getAppliedVersions(pool);
   return {
     applied: allVersions.filter((v) => applied.has(v)),

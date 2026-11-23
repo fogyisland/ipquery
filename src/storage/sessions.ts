@@ -28,8 +28,12 @@ export async function createSession(
 }
 
 export async function loadSession(pool: Pool, id: string): Promise<Session | null> {
+  // `expires_at` is written by the application as a Date, which the
+  // driver serialises in the server's own clock — the same clock that
+  // NOW() reports. Comparing the two across clocks is how a session
+  // ends up either dead on arrival or immortal.
   const [rows] = await pool.query<RowDataPacket[]>(
-    `SELECT * FROM sessions WHERE id = ? AND expires_at > UTC_TIMESTAMP(3)`,
+    `SELECT * FROM sessions WHERE id = ? AND expires_at > NOW(3)`,
     [id],
   );
   return rows[0] ? mapRow(rows[0]) : null;
@@ -59,7 +63,7 @@ export async function destroyAllForUserExcept(pool: Pool, userId: number, keepSi
 
 export async function purgeExpired(pool: Pool): Promise<number> {
   const [res] = await pool.query<ResultSetHeader>(
-    `DELETE FROM sessions WHERE expires_at <= UTC_TIMESTAMP(3)`,
+    `DELETE FROM sessions WHERE expires_at <= NOW(3)`,
   );
   return res.affectedRows;
 }

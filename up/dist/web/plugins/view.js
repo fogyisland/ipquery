@@ -44,6 +44,7 @@ const fs = __importStar(require("node:fs"));
 const date_fns_1 = require("date-fns");
 const locale_1 = require("date-fns/locale");
 const nav_1 = require("../admin/nav");
+const dbTimestamp_1 = require("../../storage/dbTimestamp");
 const wrapped = new WeakSet();
 /**
  * The build's version, read once from the package manifest at startup.
@@ -251,12 +252,17 @@ async function registerView(app, cfg) {
         })
             .join(" ");
     });
-    Handlebars.registerHelper("formatDate", (d) => {
-        if (!d)
-            return "";
-        const date = typeof d === "string" ? new Date(d) : d;
-        return date.toISOString().replace("T", " ").slice(0, 19);
-    });
+    /** Print a timestamp as it is kept: the wall clock of this host.
+     *
+     *  A DATETIME read out of the database IS the server's wall clock —
+     *  MySQL wrote it that way — so printing it through `toISOString()`
+     *  would shift every absolute time in the console by the host's
+     *  offset from UTC.
+     *
+     *  The relative helper below needs no such care: it measures the
+     *  distance between two instants, and a zone does not change a
+     *  distance. */
+    Handlebars.registerHelper("formatDate", (d) => (0, dbTimestamp_1.formatLocalTimestamp)(d));
     /** Format a timestamp as "3 minutes ago". The relative wording follows the
      *  reader's language, so the request is passed in for its locale — the
      *  same reason `adminNavLabel` goes through `req.t`. */

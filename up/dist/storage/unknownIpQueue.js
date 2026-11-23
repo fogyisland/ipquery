@@ -8,6 +8,7 @@ exports.topByQueryCount = topByQueryCount;
 exports.queueStats = queueStats;
 exports.clearPending = clearPending;
 exports.exportPendingCsv = exportPendingCsv;
+const dbTimestamp_1 = require("./dbTimestamp");
 function toRow(r) {
     return {
         id: Number(r.id),
@@ -158,7 +159,9 @@ async function exportPendingCsv(pool) {
         const esc = (s) => {
             if (s == null)
                 return "";
-            const v = s instanceof Date ? s.toISOString() : String(s);
+            // A timestamp the database wrote is printed in the clock the
+            // database keeps it in, so the export agrees with the console.
+            const v = s instanceof Date ? (0, dbTimestamp_1.formatDbTimestamp)(s) : String(s);
             // Quote if it contains comma / quote / newline.
             return /[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v;
         };

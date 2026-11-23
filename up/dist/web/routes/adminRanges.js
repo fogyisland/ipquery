@@ -45,6 +45,7 @@ const path = __importStar(require("node:path"));
 const csrf_1 = require("../plugins/csrf");
 const render_1 = require("../errors/render");
 const rangeExportJob_1 = require("../../storage/rangeExportJob");
+const dbTimestamp_1 = require("../../storage/dbTimestamp");
 const rangeImport_1 = require("../../storage/rangeImport");
 const rangeImportJob_1 = require("../../storage/rangeImportJob");
 const rangeUpload_1 = require("../../storage/rangeUpload");
@@ -260,7 +261,7 @@ async function registerRangeRoutes(app) {
         const exports = (await (0, rangeExportJob_1.listRangeExports)(app.pool, 10)).map((e) => ({
             ...e,
             sizeLabel: formatBytes(e.bytes),
-            createdAtLabel: (e.startedAt ?? new Date()).toISOString(),
+            createdAtLabel: (0, dbTimestamp_1.formatDbTimestamp)(e.startedAt ?? new Date()),
             isRunning: e.status === "running",
         }));
         return reply.view("admin/ranges.hbs", {

@@ -113,15 +113,25 @@ describe("public vs authed chrome", () => {
       .set("Cookie", `sid=${adminSid}; lang=zh-CN`);
     expect(zh.status).toBe(200);
     // date-fns words a fresh row as "不到 1 分钟前" and an older one as
-    // "大约 8 小时内"; either one proves the Chinese locale is in play.
-    expect(zh.text).toMatch(/(不到\s*1\s*分钟前|大约\s*\d+\s*(分钟|小时|天)(前|内))/);
+    // "大约 8 小时前"; either one proves the Chinese locale is in play.
+    expect(zh.text).toMatch(/(不到\s*1\s*分钟前|(?:大约\s+)?\d+\s*(?:分钟|小时|天)\s*前)/);
+    // And it has to be the PAST form. "大约 8 小时内" is how date-fns
+    // words a moment in the FUTURE — which is what the console showed
+    // when it read the server's clock in the wrong zone: a user created
+    // a moment ago, dated eight hours ahead.
+    expect(zh.text).not.toMatch(/大约\s*\d+\s*(?:分钟|小时|天)\s*内/);
 
     const en = await request(app.server)
       .get("/admin/users")
       .set("Cookie", `sid=${adminSid}; lang=en-US`);
     expect(en.status).toBe(200);
-    // date-fns phrases a row created a moment ago as "in about 8 hours".
-    expect(en.text).toMatch(/in about\s*\d+\s*(minute|hour|day)s?/);
+    // The English past forms are "less than a minute ago" and "about 8
+    // hours ago". "in about 8 hours" is the future form, and it is what
+    // a row dated eight hours ahead reads like.
+    expect(en.text).toMatch(
+      /less than a minute ago|(?:about\s+)?\d+\s+(?:minute|hour|day|month|year)s?\s+ago/,
+    );
+    expect(en.text).not.toMatch(/in\s+(?:about\s+)?\d+\s+(?:minute|hour|day|month|year)s?\b/);
     expect(en.text).not.toMatch(/不到|大约/);
   });
 

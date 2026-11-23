@@ -43,6 +43,7 @@ const etlSchedule_1 = require("../../storage/etlSchedule");
 const pipeline_1 = require("../../etl/pipeline");
 const mysql_1 = require("../../storage/mysql");
 const unknownIpQueue_1 = require("../../storage/unknownIpQueue");
+const dbTimestamp_1 = require("../../storage/dbTimestamp");
 const unknownIpBackfill_1 = require("../../etl/unknownIpBackfill");
 const ingestProviders_1 = require("../../storage/ingestProviders");
 const randomIpGenerator_1 = require("../../etl/randomIpGenerator");
@@ -380,7 +381,7 @@ async function adminRoutes(app) {
             { header: "role", get: (r) => r.role },
             { header: "email_verified", get: (r) => r.email_verified },
             { header: "is_disabled", get: (r) => r.is_disabled },
-            { header: "created_at", get: (r) => r.created_at.toISOString() },
+            { header: "created_at", get: (r) => (0, dbTimestamp_1.formatDbTimestamp)(r.created_at) },
         ]));
         reply.header("Content-Type", "text/csv; charset=utf-8");
         reply.header("Content-Disposition", 'attachment; filename="users.csv"');
@@ -551,8 +552,8 @@ async function adminRoutes(app) {
         const [rows] = await app.pool.query(`SELECT * FROM etl_runs ${whereSql} ${orderBy}`, params);
         const csv = (0, csv_1.withBom)((0, csv_1.csvForRows)(rows, [
             { header: "id", get: (r) => r.id },
-            { header: "started_at", get: (r) => r.started_at.toISOString() },
-            { header: "finished_at", get: (r) => (r.finished_at ? r.finished_at.toISOString() : "") },
+            { header: "started_at", get: (r) => (0, dbTimestamp_1.formatDbTimestamp)(r.started_at) },
+            { header: "finished_at", get: (r) => (0, dbTimestamp_1.formatDbTimestamp)(r.finished_at) },
             { header: "status", get: (r) => r.status },
             { header: "maxmind_records", get: (r) => r.maxmind_records ?? "" },
             { header: "ip2region_records", get: (r) => r.ip2region_records ?? "" },
@@ -890,8 +891,8 @@ async function adminRoutes(app) {
             { header: "user_email", get: (r) => r.owner_email },
             { header: "label", get: (r) => r.label },
             { header: "key_prefix", get: (r) => r.key_prefix },
-            { header: "created_at", get: (r) => r.created_at.toISOString() },
-            { header: "revoked_at", get: (r) => (r.revoked_at ? r.revoked_at.toISOString() : "") },
+            { header: "created_at", get: (r) => (0, dbTimestamp_1.formatDbTimestamp)(r.created_at) },
+            { header: "revoked_at", get: (r) => (0, dbTimestamp_1.formatDbTimestamp)(r.revoked_at) },
         ]));
         reply.header("Content-Type", "text/csv; charset=utf-8");
         reply.header("Content-Disposition", 'attachment; filename="api-keys.csv"');
@@ -1233,7 +1234,7 @@ async function adminRoutes(app) {
         const { rows } = await (0, auditLog_1.listAuditLog)(app.pool, opts);
         const csv = (0, csv_1.withBom)((0, csv_1.csvForRows)(rows, [
             { header: "id", get: (r) => r.id },
-            { header: "created_at", get: (r) => r.created_at.toISOString() },
+            { header: "created_at", get: (r) => (0, dbTimestamp_1.formatDbTimestamp)(r.created_at) },
             { header: "actor_email", get: (r) => r.actor_email },
             { header: "action", get: (r) => r.action },
             { header: "target_type", get: (r) => r.target_type ?? "" },
@@ -1295,7 +1296,7 @@ async function adminRoutes(app) {
          ${whereSql}
          ORDER BY q.ts DESC`, params);
         const csv = (0, csv_1.withBom)((0, csv_1.csvForRows)(rows, [
-            { header: "ts", get: (r) => r.ts.toISOString() },
+            { header: "ts", get: (r) => (0, dbTimestamp_1.formatDbTimestamp)(r.ts) },
             { header: "ip_text", get: (r) => r.ip_text },
             { header: "status", get: (r) => r.status },
             { header: "user_email", get: (r) => r.user_email ?? "" },

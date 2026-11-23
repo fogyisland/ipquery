@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 import { describe, it, expect, beforeAll, beforeEach, afterAll } from "vitest";
+import type { Pool } from "mysql2/promise";
 import { createTestDb, dropTestDb, type TestDb } from "../helpers/db";
 import {
   aggregateProviderHealthAll,
@@ -84,6 +85,49 @@ describe("aggregateProviderHealth", () => {
     expect(agg.errors429).toBe(3);
     expect(agg.errorsOther).toBe(4); // 2 + 1 + 1
     expect(agg.failureRatePct).toBe(70); // (3 + 4) / 10 = 70%
+  });
+
+  it("measures a multi-day window in the UTC days the column holds", async () => {
+    // `day_utc` holds a UTC date — UTC_DATE() is what writes it — so a
+    // window over it has to be measured in UTC days too. The server's
+    // LOCAL day is a different day for part of every twenty-four
+    // hours, and in those hours the window covers the wrong set of
+    // days: a day short of what it should reach, or a day too wide.
+    //
+    // The session's time zone is set explicitly here, so the local day
+    // and the UTC day really do differ whatever hour this test runs at.
+    const conn = await td.pool.getConnection();
+    try {
+      const [probe] = await conn.query("SELECT HOUR(UTC_TIMESTAMP()) AS h");
+      const utcHour = Number(probe[0].h);
+      // +13:00 puts the local calendar day AHEAD of the UTC one from
+      // 11:00 UTC onward; -12:00 puts it BEHIND before noon UTC. MySQL
+      // 5.7 accepts whole-hour offsets only, and only within this
+      // range.
+      await conn.query(`SET time_zone = '${utcHour >= 11 ? "+13:00" : "-12:00"}'`);
+
+      await conn.query(
+        `INSERT INTO provider_call_counter
+           (provider_name, day_utc, calls_total, calls_429, calls_timeout,
+            calls_network_err, calls_other_err, last_called_at)
+         VALUES ('ip-sb', UTC_DATE() - INTERVAL 7 DAY, 5, 1, 0, 0, 0, NOW(3)),
+                ('ip-sb', UTC_DATE() - INTERVAL 8 DAY, 9, 0, 0, 0, 0, NOW(3))`,
+      );
+
+      // The aggregate has to run on THAT connection: the session's time
+      // zone is what decides which day CURDATE() names.
+      const onThisSession = {
+        query: ((sql: string, params?: unknown[]) => conn.query(sql, params)) as unknown as Pool["query"],
+      } as unknown as Pool;
+
+      const agg = await aggregateProviderHealth(onThisSession, "ip-sb", 7 * 24 * 60 * 60 * 1000);
+      // Seven days back and no further: the 5-call row is inside the
+      // window, the 9-call row is outside it.
+      expect(agg.calls).toBe(5);
+      expect(agg.errors429).toBe(1);
+    } finally {
+      conn.release();
+    }
   });
 });
 

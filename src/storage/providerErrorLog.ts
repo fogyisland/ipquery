@@ -216,7 +216,13 @@ export async function aggregateProviderHealth(
   } else {
     const days = Math.max(1, Math.ceil(windowMs / (24 * 60 * 60 * 1000)));
     args.push(days);
-    callsCol = `day_utc >= (CURDATE() - INTERVAL ? DAY)`;
+    // UTC_DATE(), not CURDATE(): `day_utc` holds a UTC date (UTC_DATE()
+    // is what writes it), so the window has to be counted in UTC days.
+    // The server's LOCAL day is a different day for part of every
+    // twenty-four hours, and in those hours the window covers the wrong
+    // set of days — a day short of what it should reach, or a day too
+    // wide.
+    callsCol = `day_utc >= (UTC_DATE() - INTERVAL ? DAY)`;
   }
   const [rows] = await pool.query<RowDataPacket[]>(
     `SELECT

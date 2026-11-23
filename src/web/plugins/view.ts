@@ -8,6 +8,7 @@ import { formatDistanceToNow } from "date-fns";
 import { zhCN, enUS } from "date-fns/locale";
 import { ADMIN_NAV_GROUPS, findAdminNav, isAdminNavActive } from "../admin/nav";
 import type { AdminNavItem } from "../admin/nav";
+import { formatLocalTimestamp } from "../../storage/dbTimestamp";
 
 type ReplyView = (
   page: string,
@@ -236,11 +237,19 @@ export async function registerView(app: FastifyInstance, cfg: { baseUrl: string 
         .join(" ");
     },
   );
-  Handlebars.registerHelper("formatDate", (d: Date | string | null | undefined) => {
-    if (!d) return "";
-    const date = typeof d === "string" ? new Date(d) : d;
-    return date.toISOString().replace("T", " ").slice(0, 19);
-  });
+  /** Print a timestamp as it is kept: the wall clock of this host.
+   *
+   *  A DATETIME read out of the database IS the server's wall clock —
+   *  MySQL wrote it that way — so printing it through `toISOString()`
+   *  would shift every absolute time in the console by the host's
+   *  offset from UTC.
+   *
+   *  The relative helper below needs no such care: it measures the
+   *  distance between two instants, and a zone does not change a
+   *  distance. */
+  Handlebars.registerHelper("formatDate", (d: Date | string | null | undefined) =>
+    formatLocalTimestamp(d),
+  );
   /** Format a timestamp as "3 minutes ago". The relative wording follows the
    *  reader's language, so the request is passed in for its locale — the
    *  same reason `adminNavLabel` goes through `req.t`. */

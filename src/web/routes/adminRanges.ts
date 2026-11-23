@@ -21,6 +21,7 @@ import * as path from "node:path";
 import { verifyCsrfRequest } from "../plugins/csrf";
 import { sendCsrfPage } from "../errors/render";
 import { listRangeExports, readRangeExport, startRangeExport } from "../../storage/rangeExportJob";
+import { formatDbTimestamp } from "../../storage/dbTimestamp";
 import { listRangeImports, readRangeImportState } from "../../storage/rangeImport";
 import { isRangeImportRunning, startRangeImport } from "../../storage/rangeImportJob";
 import {
@@ -251,7 +252,7 @@ export async function registerRangeRoutes(app: FastifyInstance): Promise<void> {
     const exports = (await listRangeExports(app.pool, 10)).map((e) => ({
       ...e,
       sizeLabel: formatBytes(e.bytes),
-      createdAtLabel: (e.startedAt ?? new Date()).toISOString(),
+      createdAtLabel: formatDbTimestamp(e.startedAt ?? new Date()),
       isRunning: e.status === "running",
     }));
     return reply.view("admin/ranges.hbs", {

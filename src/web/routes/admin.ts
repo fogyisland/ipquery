@@ -21,6 +21,7 @@ import {
 import { runPipeline } from "../../etl/pipeline";
 import { recordEtlStart, getEtlRunProgress } from "../../storage/mysql";
 import { topByQueryCount, queueStats } from "../../storage/unknownIpQueue";
+import { formatDbTimestamp } from "../../storage/dbTimestamp";
 import { runBackfill } from "../../etl/unknownIpBackfill";
 import { enforcedRateLimitLabel } from "../../storage/ingestProviders";
 import { runRandomGeneration } from "../../etl/randomIpGenerator";
@@ -467,7 +468,7 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
         { header: "role", get: (r) => r.role },
         { header: "email_verified", get: (r) => r.email_verified },
         { header: "is_disabled", get: (r) => r.is_disabled },
-        { header: "created_at", get: (r) => (r.created_at as Date).toISOString() },
+        { header: "created_at", get: (r) => formatDbTimestamp(r.created_at as Date) },
       ]),
     );
     reply.header("Content-Type", "text/csv; charset=utf-8");
@@ -647,8 +648,8 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
     const csv = withBom(
       csvForRows(rows as RowDataPacket[], [
         { header: "id", get: (r) => r.id },
-        { header: "started_at", get: (r) => (r.started_at as Date).toISOString() },
-        { header: "finished_at", get: (r) => (r.finished_at ? (r.finished_at as Date).toISOString() : "") },
+        { header: "started_at", get: (r) => formatDbTimestamp(r.started_at as Date) },
+        { header: "finished_at", get: (r) => formatDbTimestamp(r.finished_at as Date | null) },
         { header: "status", get: (r) => r.status },
         { header: "maxmind_records", get: (r) => r.maxmind_records ?? "" },
         { header: "ip2region_records", get: (r) => r.ip2region_records ?? "" },
@@ -1026,8 +1027,8 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
         { header: "user_email", get: (r) => r.owner_email },
         { header: "label", get: (r) => r.label },
         { header: "key_prefix", get: (r) => r.key_prefix },
-        { header: "created_at", get: (r) => (r.created_at as Date).toISOString() },
-        { header: "revoked_at", get: (r) => (r.revoked_at ? (r.revoked_at as Date).toISOString() : "") },
+        { header: "created_at", get: (r) => formatDbTimestamp(r.created_at as Date) },
+        { header: "revoked_at", get: (r) => formatDbTimestamp(r.revoked_at as Date | null) },
       ]),
     );
     reply.header("Content-Type", "text/csv; charset=utf-8");
@@ -1352,7 +1353,7 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
     const csv = withBom(
       csvForRows(rows as unknown as RowDataPacket[], [
         { header: "id", get: (r) => r.id },
-        { header: "created_at", get: (r) => (r.created_at as Date).toISOString() },
+        { header: "created_at", get: (r) => formatDbTimestamp(r.created_at as Date) },
         { header: "actor_email", get: (r) => r.actor_email },
         { header: "action", get: (r) => r.action },
         { header: "target_type", get: (r) => r.target_type ?? "" },
@@ -1417,7 +1418,7 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
     );
     const csv = withBom(
       csvForRows(rows as RowDataPacket[], [
-        { header: "ts", get: (r) => (r.ts as Date).toISOString() },
+        { header: "ts", get: (r) => formatDbTimestamp(r.ts as Date) },
         { header: "ip_text", get: (r) => r.ip_text },
         { header: "status", get: (r) => r.status },
         { header: "user_email", get: (r) => r.user_email ?? "" },

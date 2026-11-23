@@ -47,12 +47,15 @@ const LAST_SKIP_REASON_KEY = "random_gen_last_skip_reason";
  *
  *  Idempotent — only matches enabled=0 AND auto_reenable_at IS NOT NULL
  *  AND auto_reenable_at <= NOW(3), so calling more than once per minute
- *  is harmless. Returns the count re-enabled for the caller's logs. */
+ *  is harmless. Returns the count re-enabled for the caller's logs.
+ *
+ *  `auto_reenable_at` is written by the application as a Date, so it
+ *  lives in the server's clock — the one NOW(3) reports. */
 async function reapProviders(pool) {
     const [rows] = await pool.query(`SELECT name FROM ingest_providers
        WHERE enabled = 0
          AND auto_reenable_at IS NOT NULL
-         AND auto_reenable_at <= UTC_TIMESTAMP(3)`);
+         AND auto_reenable_at <= NOW(3)`);
     let count = 0;
     for (const r of rows) {
         const name = String(r.name);

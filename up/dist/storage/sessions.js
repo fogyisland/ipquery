@@ -26,7 +26,11 @@ async function createSession(pool, id, userId, expiresAt) {
     return mapRow(rows[0]);
 }
 async function loadSession(pool, id) {
-    const [rows] = await pool.query(`SELECT * FROM sessions WHERE id = ? AND expires_at > UTC_TIMESTAMP(3)`, [id]);
+    // `expires_at` is written by the application as a Date, which the
+    // driver serialises in the server's own clock — the same clock that
+    // NOW() reports. Comparing the two across clocks is how a session
+    // ends up either dead on arrival or immortal.
+    const [rows] = await pool.query(`SELECT * FROM sessions WHERE id = ? AND expires_at > NOW(3)`, [id]);
     return rows[0] ? mapRow(rows[0]) : null;
 }
 async function destroySession(pool, id) {
@@ -49,7 +53,7 @@ async function destroyAllForUserExcept(pool, userId, keepSid) {
     return res.affectedRows;
 }
 async function purgeExpired(pool) {
-    const [res] = await pool.query(`DELETE FROM sessions WHERE expires_at <= UTC_TIMESTAMP(3)`);
+    const [res] = await pool.query(`DELETE FROM sessions WHERE expires_at <= NOW(3)`);
     return res.affectedRows;
 }
 //# sourceMappingURL=sessions.js.map
