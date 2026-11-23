@@ -265,6 +265,11 @@ export async function registerRangeRoutes(app: FastifyInstance): Promise<void> {
       // tab that started it, and this is what shows how far it got.
       imports: (await listRangeImports(app.pool, 10)).map((job) => ({
         ...job,
+        // The page shows a wall clock with the zone it is in, so a reader
+        // in another zone can place it — and so the `datetime` attribute
+        // of the <time> element holds a date string rather than a raw
+        // JavaScript Date. Same treatment as the export list above.
+        startedAtLabel: formatDbTimestamp(job.startedAt),
         isRunning: job.status === "running",
         pct:
           job.declaredRows && job.declaredRows > 0

@@ -1,7 +1,7 @@
 {
   "formatVersion": 1,
   "fileCount": 475,
-  "totalBytes": 2722315,
+  "totalBytes": 2722843,
   "files": {
     "api/dbBootstrap.d.ts": {
       "bytes": 8916,
@@ -1548,12 +1548,12 @@
       "sha256": "43027b613a35bc6d104688d313d52ea6e0970c750987eee2ac00097d3d2c7e2e"
     },
     "web/routes/adminRanges.js": {
-      "bytes": 29392,
-      "sha256": "8a4e39a41f4a5f7c9a2b7b154a73b515ec8cf868ffc7013b18d5657ce6310554"
+      "bytes": 29800,
+      "sha256": "a1d90240f84ba60346b8361e0cced6dccc4800256f6e0fc88c68455364b41e77"
     },
     "web/routes/adminRanges.js.map": {
-      "bytes": 19563,
-      "sha256": "ce26540df3c7cfa1572699a5567033fd9e6232245be446331251e0cb82f04acf"
+      "bytes": 19673,
+      "sha256": "c511e5a28544fd05757c0c08dfb3c8e8355a65a943e1833ddf058173f834b34b"
     },
     "web/routes/auth.d.ts": {
       "bytes": 121,
@@ -1648,8 +1648,8 @@
       "sha256": "f74a8bf11252f6d734b5efb241bfee19ca2510b9f21bdea97186c5f96f05febe"
     },
     "web/views/admin/ranges.hbs": {
-      "bytes": 12866,
-      "sha256": "c8e7bcf81f8fad6a14a927d09b5bb9d6a7e32b120a5e2ac78d5fd6cef033d2af"
+      "bytes": 12876,
+      "sha256": "5e00ebdf67f10bd2d944454db7ad258a4c0585b104433971fb7f3735e18fe943"
     },
     "web/views/admin/settings.hbs": {
       "bytes": 20307,

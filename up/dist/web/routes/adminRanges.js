@@ -274,6 +274,11 @@ async function registerRangeRoutes(app) {
             // tab that started it, and this is what shows how far it got.
             imports: (await (0, rangeImport_1.listRangeImports)(app.pool, 10)).map((job) => ({
                 ...job,
+                // The page shows a wall clock with the zone it is in, so a reader
+                // in another zone can place it — and so the `datetime` attribute
+                // of the <time> element holds a date string rather than a raw
+                // JavaScript Date. Same treatment as the export list above.
+                startedAtLabel: (0, dbTimestamp_1.formatDbTimestamp)(job.startedAt),
                 isRunning: job.status === "running",
                 pct: job.declaredRows && job.declaredRows > 0
                     ? Math.min(100, Math.round((job.rowsDone / job.declaredRows) * 100))

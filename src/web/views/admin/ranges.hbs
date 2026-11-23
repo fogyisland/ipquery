@@ -202,7 +202,7 @@
       <tr class="range-import-row{{#if this.isRunning}} is-running{{/if}}"
           data-import-id="{{this.id}}"
           {{#unless this.isRunning}}data-poll="off"{{/unless}}>
-        <td><time datetime="{{this.startedAt}}">{{this.startedAt}}</time></td>
+        <td><time datetime="{{this.startedAtLabel}}">{{this.startedAtLabel}}</time></td>
         <td>{{this.mode}}</td>
         <td>
           {{#if this.pct}}

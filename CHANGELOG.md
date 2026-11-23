@@ -398,6 +398,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     `expected '2026-01-15 03:04:05' to be '2026-01-15 03:04:05 +08:00'` 和
     `a timestamp was rendered without its zone: expected [ '2026-11-24 02:01:34' ] to deeply equal []`
 
+- **导入任务的时间戳渲染成了 JavaScript 的 `Date.toString()`**: `/admin/ranges` 上有
+  两张任务表。**导出**那张在改口径时一并改成了 `formatDbTimestamp()`，**导入**那张
+  漏了：模板里写的是 `{{this.startedAt}}`，而 `startedAt` 是一个 JS `Date` 对象，
+  Handlebars 对它调用 `toString()`，于是页面显示的是
+  `Tue Nov 24 2026 03:19:57 GMT+0800 (中国标准时间)`，并且 `<time datetime="…">`
+  的属性值里塞进了这么一串**不是合法 HTML 日期串**的东西
+  - 这是全部 75 个视图、42 处 `formatDate` / `formatRelative` 调用之外，
+    **唯一**一处把原始 Date 直接交给模板的地方
+  - 改法与同页的导出表一致：路由给导入任务补一个
+    `startedAtLabel: formatDbTimestamp(job.startedAt)`，模板改用
+    `<time datetime="{{this.startedAtLabel}}">{{this.startedAtLabel}}</time>`。
+    两张表的格式统一了，`datetime` 属性也成了可解析的 ISO 8601
+  - 新增 `test/integration/ranges-timestamp-display.test.ts`（2 个用例）：
+    断言页面上那个 `<time>` 的属性和文本都是**数据库存的那串字面值**加偏移，
+    并且页面上不再出现 `GMT±0800 (…)` 这种 `Date.toString()` 形状。
+    同样先 RED 过——失败输出里直接躺着
+    `<time datetime="Tue Nov 24 2026 03:19:57 GMT+0800 (中国标准时间)">`
+
 - **CI 从来没有绿过一次**: 查了 `gh run list` 的全部 51 条记录——
   **50 条 failure，0 条 success**，从 2026-11-10 工作流第一次跑就是这样。
   根因不在测试本身，在 workflow 里：`unit` job 没有数据库服务，而
