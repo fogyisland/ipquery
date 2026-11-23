@@ -13,18 +13,26 @@ describe("config", () => {
   it("returns defaults when env vars are unset", () => {
     delete process.env.DB_HOST;
     delete process.env.DB_PORT;
-    delete process.env.MAXMIND_LICENSE_KEY;
     const cfg = loadConfig();
     expect(cfg.db.host).toBe("localhost");
     expect(cfg.db.port).toBe(3306);
-    expect(cfg.maxmind.editions).toEqual(["GeoLite2-City", "GeoLite2-ASN"]);
-    expect(cfg.maxmind.licenseKey).toBeUndefined();
   });
 
-  it("parses comma-separated editions list", () => {
-    process.env.MAXMIND_EDITIONS = "GeoLite2-City,GeoLite2-ASN,GeoLite2-Country";
-    const cfg = loadConfig();
-    expect(cfg.maxmind.editions).toEqual(["GeoLite2-City", "GeoLite2-ASN", "GeoLite2-Country"]);
+  it("carries no MaxMind configuration", () => {
+    // MaxMind was never wired into the pipeline: the ETL downloads
+    // DB-IP and three GitHub-hosted lists and nothing else. The config
+    // section for it is gone, so a deployment that still exports
+    // MAXMIND_LICENSE_KEY is setting a variable the code ignores.
+    //
+    // The alternative — keeping the section so an old .env keeps
+    // working — would keep advertising a source the project does not
+    // use, which is the same false claim the marketing copy used to
+    // make.
+    delete process.env.MAXMIND_LICENSE_KEY;
+    delete process.env.MAXMIND_EDITIONS;
+    const cfg = loadConfig() as unknown as Record<string, unknown>;
+    expect(cfg).not.toHaveProperty("maxmind");
+    expect(cfg).not.toHaveProperty("ip2region");
   });
 
   it("throws on invalid cron expression", () => {

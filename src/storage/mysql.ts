@@ -298,6 +298,57 @@ export interface SwapResult {
  */
 export const MANUAL_SOURCE_TAGS = ["multi-provider", "import"] as const;
 
+/**
+ * The source labels the ETL pipeline writes.
+ *
+ * Derived from the pipeline's own file table would be ideal, but
+ * pipeline.ts imports this module, so the list is written down here and
+ * `test/unit/source-normalize.test.ts` keeps the two in step.
+ *
+ * The manual tags are in the list because they are real provenance:
+ * the backfill writes 'multi-provider' and the range importer writes
+ * 'import', and the ETL's swap preserves exactly those rows. Dropping
+ * them here would erase the record of who wrote a row — and the swap
+ * would then have nothing to key on.
+ *
+ * 'seed' is here for the same reason but is NOT in
+ * MANUAL_SOURCE_TAGS: the demo loader writes it, and findRange()
+ * demotes a seed row below any real ETL row. It is a real tag on a
+ * real row, so normalizing it away would be wrong — but the ETL is
+ * meant to replace those rows, so they are not carried across a
+ * refresh the way the other two are.
+ */
+const KNOWN_SOURCES: ReadonlySet<string> = new Set([
+  "unknown",
+  "dbip",
+  "dbip-country",
+  "dbip-asn",
+  "metowolf-cn",
+  "runishiwo-cn",
+  "sapics-user",
+  "seed",
+  ...MANUAL_SOURCE_TAGS,
+]);
+
+/**
+ * Normalize a source value read out of the database.
+ *
+ * The source columns on `ip_ranges` are free-form text, and they
+ * predate the source tracking: a row inserted by hand, by an older
+ * build, or by a backfill carries whatever was there. Two of those
+ * values are "maxmind" and "ipinfo" — labels of sources this project
+ * never wired into the pipeline.
+ *
+ * Casting such a value to the `Source` type and returning it would
+ * make the API claim the data came from MaxMind for a row MaxMind
+ * never touched. An unrecognized label is normalized to "unknown",
+ * which is what it actually is.
+ */
+export function normalizeSource(value: unknown): Source {
+  if (typeof value !== "string") return "unknown";
+  return KNOWN_SOURCES.has(value) ? (value as Source) : "unknown";
+}
+
 export interface PreservedRows {
   /** Rows copied out of the live table into the staging table. */
   preserved: number;
@@ -489,11 +540,11 @@ export async function findRange(pool: mysql.Pool, ipBuf: Buffer): Promise<IpRang
     isp: r.isp,
     asn: r.asn == null ? undefined : Number(r.asn),
     asnOrg: r.asn_org,
-    countrySource: r.country_source as Source | undefined,
-    citySource: r.city_source as Source | undefined,
-    ispSource: r.isp_source as Source | undefined,
-    asnSource: r.asn_source as Source | undefined,
-    geoSource: r.geo_source as Source | undefined,
+    countrySource: normalizeSource(r.country_source),
+    citySource: normalizeSource(r.city_source),
+    ispSource: normalizeSource(r.isp_source),
+    asnSource: normalizeSource(r.asn_source),
+    geoSource: normalizeSource(r.geo_source),
   };
 }
 

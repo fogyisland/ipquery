@@ -43,28 +43,39 @@ export async function doLookupCore(pool: Pool, log: CoreLogger, ip: string): Pro
   const lastRun = await lastSuccessfulEtl(pool);
   const etag = lastRun ? lastRun.toISOString() : "never";
   // `country_name` is NULL for every row the ETL loads: DB-IP's free CSVs
-  // carry a country code only, and MaxMind — the one source with a name
-  // column — has never run through the pipeline (it needs a licence key
-  // this project doesn't have). Fall back to the ISO 3166-1 name for the
-  // code, so the API answers "Hong Kong" rather than a bare "HK" with a
-  // null name. An unknown code still yields no name: inventing one for
-  // a code we don't recognise would be worse than admitting we don't.
+  // carry a country code only, and no source in the pipeline fills a
+  // name. Fall back to the ISO 3166-1 name for the code, so the API
+  // answers "Hong Kong" rather than a bare "HK" with a null name. An
+  // unknown code still yields no name: inventing one for a code we don't
+  // recognise would be worse than admitting we don't.
+  //
+  // The `?? "unknown"` fallbacks on the source fields are the last
+  // resort for a row that carries no source at all. The normal path
+  // never reaches them: findRange() normalizes every source column
+  // through normalizeSource(), so a row that names a source the
+  // pipeline never wrote comes back as "unknown" already.
+  //
+  // The fallback used to say "maxmind". The pipeline has never fetched
+  // MaxMind, so every one of those rows was answered with a source
+  // this project never used — a false claim about where the data came
+  // from, made by the field whose whole job is to say where the data
+  // came from. "unknown" says what is actually true.
   const countryName = row.countryName ?? englishCountryName(row.countryCode) ?? undefined;
   return {
     ip,
-    country: { code: row.countryCode, name: countryName, source: row.countrySource ?? "maxmind" },
+    country: { code: row.countryCode, name: countryName, source: row.countrySource ?? "unknown" },
     region: row.region,
-    city: row.city ? { name: row.city, source: row.citySource ?? "maxmind" } : undefined,
+    city: row.city ? { name: row.city, source: row.citySource ?? "unknown" } : undefined,
     postalCode: row.postalCode,
     location:
       row.latitude !== undefined && row.longitude !== undefined
-        ? { lat: row.latitude, lon: row.longitude, source: row.geoSource ?? "maxmind" }
+        ? { lat: row.latitude, lon: row.longitude, source: row.geoSource ?? "unknown" }
         : undefined,
     timezone: row.timezone,
-    isp: row.isp ? { name: row.isp, source: row.ispSource ?? "maxmind" } : undefined,
+    isp: row.isp ? { name: row.isp, source: row.ispSource ?? "unknown" } : undefined,
     asn:
       row.asn !== undefined
-        ? { number: row.asn, org: row.asnOrg, source: row.asnSource ?? "maxmind" }
+        ? { number: row.asn, org: row.asnOrg, source: row.asnSource ?? "unknown" }
         : undefined,
     etag,
   };

@@ -29,7 +29,7 @@ beforeAll(async () => {
       endIp: Buffer.from([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 8, 8, 8, 255]),
       countryCode: "US",
       countryName: "United States",
-      countrySource: "maxmind",
+      countrySource: "dbip",
     },
   ]);
   await atomicSwapRanges(seedPool);

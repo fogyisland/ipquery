@@ -61,4 +61,21 @@ describe("stats route", () => {
     expect(res.body.lastRun.sources.dbip.records).toBe(30);
     expect(res.body.lastRun.sources.dbip.records).not.toBe(res.body.lastRun.mergedRecords);
   });
+  it("reports the sources the pipeline runs, and no others", async () => {
+    // The old response advertised MaxMind and ip2region next to DB-IP.
+    // Neither was ever fetched or parsed: the live table's
+    // `country_source` column held `dbip` and `dbip-country` and
+    // nothing else. The source list is now derived from the pipeline's
+    // own file table, so a source that is not wired in cannot be
+    // advertised.
+    const res = await request(app.server).get("/stats");
+    expect(res.status).toBe(200);
+    const sources = res.body.lastRun.sources as Record<string, unknown>;
+    expect(sources.ip2region).toBeUndefined();
+    expect(sources.maxmind).toBeUndefined();
+    // The DB-IP counter is still there — it is the one counter the run
+    // row actually carries.
+    expect(sources.dbip).toBeDefined();
+    expect((sources.dbip as { records: number }).records).toBe(30);
+  });
 });

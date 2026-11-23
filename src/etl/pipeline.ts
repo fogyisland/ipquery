@@ -61,7 +61,14 @@ import type { Source, NormalizedRecord, IpRangeRow, EtlStage } from "../types";
 // a later, lower-priority file (inserted later) doesn't clobber a value
 // already filled by an earlier, higher-priority one. Higher priority wins
 // because COALESCE(existing, new) keeps the already-present value.
-const SOURCE_FILES: ReadonlyArray<StreamFile> = [
+/**
+ * The files the ETL pipeline fetches and parses, in priority order.
+ *
+ * Exported so the source list the API and the MCP server report can be
+ * derived from it. A hand-written list of sources is a promise the code
+ * does not keep — see `src/etl/sources/labels.ts`.
+ */
+export const SOURCE_FILES: ReadonlyArray<StreamFile> = [
   {
     source: "dbip",
     etlSource: "dbip-city",

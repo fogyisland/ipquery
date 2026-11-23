@@ -519,8 +519,7 @@
         "etl": "ETL",
         "web": "Web",
         "smtp": "SMTP",
-        "security": "Security",
-        "maxmind": "MaxMind"
+        "security": "Security"
       },
       "field": {
         "host": "Host",
@@ -1046,7 +1045,7 @@
     "title": "IPQuery · IP Geolocation",
     "heroEyebrow": "IP Geolocation API",
     "heroTitleAccent": "Look up any <em>IP address</em>,<br>get <strong>trustworthy country, city, and ASN</strong>",
-    "heroSubLong": "Aggregates MaxMind GeoLite2, ip2region, and DB-IP using a field-complementary strategy. 100% self-hosted. Sub-100ms median latency.",
+    "heroSubLong": "Aggregates DB-IP, China range lists and open IP-location data using a field-complementary strategy. 100% self-hosted. Sub-100ms median latency.",
     "ipRanges": "IP ranges",
     "metaSources": "data sources",
     "metaLatency": "median latency",
@@ -1064,7 +1063,7 @@
       "sources": {
         "mark": "01 / aggregation",
         "title": "Multi-source merge",
-        "sub": "MaxMind / ip2region / DB-IP back each other up. Field coverage is far higher than single-source solutions.",
+        "sub": "DB-IP, China range lists and open IP-location data back each other up. Field coverage is far higher than single-source solutions.",
         "stat": "data sources"
       },
       "coverage": {
@@ -1115,7 +1114,7 @@
       "company": "Company"
     },
     "heroTitle": "IP Geolocation Lookup",
-    "heroSubtitle": "Aggregating MaxMind / ip2region / DB-IP with daily ETL refresh",
+    "heroSubtitle": "Aggregating DB-IP, China range lists and open IP-location data with daily ETL refresh",
     "quickQuery": "Quick lookup",
     "status": "API status",
     "online": "Online",
@@ -1135,7 +1134,7 @@
     "principles": {
       "sources": {
         "title": "Multi-source merge",
-        "sub": "Each field carries its source ( maxmind / ip2region / dbip ) for audit and traceability."
+        "sub": "Each field carries its source ( dbip / metowolf / runishiwo / sapics ) for audit and traceability."
       },
       "speed": {
         "title": "Index-first",
@@ -1158,20 +1157,20 @@
       "handlebars": "Server-side templates. Zero client dependencies. Lean to the bone."
     },
     "licenseTitle": "License & data",
-    "licenseBody": "Source code is MIT licensed. Data files are downloaded and consumed under each upstream's own license terms (MaxMind / ip2region / DB-IP).",
+    "licenseBody": "Source code is MIT licensed. Data files are downloaded and consumed under each upstream's own license terms (DB-IP and the open range lists).",
     "timelineTitle": "How we got here",
     "timeline": {
       "2024": {
         "title": "First commit",
-        "desc": "Initial schema, MaxMind-only loader, and a Fastify server. Single-table design, one source."
+        "desc": "Initial schema, a MaxMind-only loader, and a Fastify server. Single-table design, one source."
       },
       "2025": {
-        "title": "ip2region + DB-IP integration",
-        "desc": "Three-source merge strategy with field-level source tracking. Range-size index for sub-100ms lookups."
+        "title": "DB-IP integration",
+        "desc": "Range-based merge strategy with field-level source tracking. Range-size index for sub-100ms lookups."
       },
       "2026": {
         "title": "Production-ready release",
-        "desc": "Auth, rate limiting, ETL scheduling, dashboard, multi-locale. Open-sourced under MIT."
+        "desc": "Auth, rate limiting, ETL scheduling, dashboard, multi-locale, and a widened source set. Open-sourced under MIT."
       }
     }
   },

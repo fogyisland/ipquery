@@ -135,6 +135,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **ETL 守卫测试不再依赖网络**: `etl-guards.test.ts` 只写了 city 一个 fixture，
   而 ETL 现在会按份判断缓存、缺失即重下——于是这个测试会真的去下载约 93 MB 的
   DB-IP 数据并插入约 120 万行，撑爆 90s 超时，还留下「运行中」的 ETL 行连累
+- **死数据源清理**: ip2region 与 MaxMind 的解析器此前躺在仓库里，**没有任何
+  下载规格喂它们、没有任何流水线步骤读它们**，但它们养着一整套对外声明：
+  首页、营销页 meta、README、NOTICE、后台设置页、启动横幅、`.env.example`
+  都在说「聚合 MaxMind、ip2region 与 DB-IP，一个查询，三个来源」。查线上
+  `ip_ranges.country_source` 得到的只有 `dbip` 与 `dbip-country`——**没有一行
+  来自 MaxMind，没有一行来自 ip2region**。声明是一张欠条，而没有任何东西会
+  因为它变成假而失败。现在：
+  1. 解析器与两个 fixture 文件删除
+  2. **数据源清单改为从流水线自己的文件表派生**（`src/etl/sources/labels.ts`），
+     把源加进流水线而不加进标签表，测试会失败
+  3. 首页的「N 个数据源」改为派生值：**4**（DB-IP / metowolf / runishiwo /
+     sapics）——流水线取 7 个文件，来自 4 个地方。说「七个数据源」读起来像
+     七个独立提供方
+  4. `IpinfoProvider` 一并删除：migration 031 已把 ipinfo.io 从扇出里退役，
+     类还导出着，但永远不会被实例化
+  5. 守卫测试防止回潮：营销页、README/NOTICE/docs、后台设置页、config 与
+     两份 `.env.example` 各有一道
+
   同文件其余用例。现补齐 country／asn fixture 并用 `runPipeline` 的下载缝
   替换下载阶段，测试不再碰网络
 - `/admin/unknown-ips` 更名为 `/admin/ingest`（旧路径保留重定向）；`/admin/providers`
@@ -177,6 +195,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
      并写入 `seed.loaded=true`；成功面板另带 3 秒 `meta refresh`，
      已经打开的旧页面自己就走完这一步
   2. **`etl.setup.inProgress` 设置与运行行状态重复**。两个信号由**不同的代码路径**写入
+- **API 不再说「这些数据来自 MaxMind」**: 上一条把营销页上的假声明清干净了，
+  但 **JSON 接口里那句假话还在**——而且它出现在**唯一一个本该说实话的字段**上。
+  `country.source` / `city.source` / `isp.source` / `asn.source` / `location.source`
+  的作用就是「说明数据来自哪里」，而查不到来源的行一律回落到 `"maxmind"`。
+  流水线从来没有抓取过 MaxMind，所以这些回落是纯粹的假声明。线上实际影响：
+  **198,157 行** `country_source` 为空（连 `country_code` 也是空的）、
+  **8,152,112 行** `isp_source` 为空。
+  1. `Source` 类型去掉 `"maxmind"` 与 `"ipinfo"`（两者都不是流水线能产生的值），
+     改为加上 `"unknown"`——**「不知道」是「哪里来的」这个问题的一个真实答案**
+  2. 归一化放在**读的那一端**：`normalizeSource()` 把任何不认识的来源列
+     归一为 `"unknown"`。此前 `findRange()` 用的是 `as Source` 的无检查类型断言，
+     一行写着 `"maxmind"` 的历史数据会原样穿过断言——那个断言让类型成了谎言
+  3. 试查页（`/try`）与 API 用同一套归一化；实测一条手工插入的无来源行，
+     接口回答 `"source": "unknown"`，不再是 `"maxmind"`
+  4. **但本项目自己写的三个标签不能被归一化掉**：`multi-provider`（未知 IP
+     回填）、`import`（网段导入）、`seed`（演示数据）。它们不是流水线写的，
+     却是「这一行是谁写的」的唯一记录——归一化成 `"unknown"` 等于把来源记录
+     抹掉。其中 `multi-provider` 与 `import` 还正是 ETL 换表时要带过去的行，
+     没有它们那条 SQL 就无从下手。`seed` 则相反：演示行本来就该被一次刷新
+     替换掉，所以它**不在** `MANUAL_SOURCE_TAGS` 里，但读回来时仍要如实
+     报出 `"seed"`
+- **Provider 分钟级计数器的测试有时会自己失败**: `provider_call_counter_minute`
+  的分钟桶来自**数据库自己的时钟**（`UTC_TIMESTAMP()`），逐次调用各算一次——
+  所以一串调用跨过分钟边界就会被拆成两行，这是分钟表的正确行为。测试却断言
+  「四行变一行」，于是在整点附近必挂一次（同一份代码连续两次跑，一次过一次挂）。
+  生产代码的窗口查询本来就是**跨行求和**的，测试现在也照它那样求和。
+
      （向导起的后台任务 vs. ETL 流水线），可能各说各话；服务器在两者之间重启，
      设置就永远停在 `true`，把操作员困在一个几小时前就已结束的运行进度面板上。
      现该标志彻底删除，`etl_runs.status` 是唯一真相——信号写在干活的地方，就不会漂移

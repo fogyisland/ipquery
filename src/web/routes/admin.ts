@@ -1357,13 +1357,13 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
 
   app.get("/admin/settings", async (req, reply) => {
     const cfg = app.cfg;
-    // Secrets (db.password, web.sessionSecret, web.csrfSecret, smtp.pass,
-    // maxmind.licenseKey) are redactSecret()-ed BEFORE they reach the
-    // template. The eye-icon reveal toggles between the bullet mask and
-    // the redacted form (first4…last4) — never the raw value. Raw secrets
-    // must not exist anywhere in the rendered DOM: anything that can read
-    // HTML source (DevTools, view-source, a cached page, a proxy log, or
-    // an XSS in this page) would otherwise lift the live secrets.
+    // Secrets (db.password, web.sessionSecret, web.csrfSecret, smtp.pass)
+    // are redactSecret()-ed BEFORE they reach the template. The eye-icon
+    // reveal toggles between the bullet mask and the redacted form
+    // (first4…last4) — never the raw value. Raw secrets must not exist
+    // anywhere in the rendered DOM: anything that can read HTML source
+    // (DevTools, view-source, a cached page, a proxy log, or an XSS in
+    // this page) would otherwise lift the live secrets.
     // The schedule shown here is the one the scheduler is actually
     // running: a saved setting, else the env seed, else the default. The
     // env vars in `cfg.etl` are only the seed now.
@@ -1407,10 +1407,6 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
         from: cfg.smtp.from,
       },
       security: { ...cfg.security },
-      maxmind: {
-        licenseKey: cfg.maxmind.licenseKey ? redactSecret(cfg.maxmind.licenseKey) : "",
-        editions: cfg.maxmind.editions,
-      },
     };
     let pool: Record<string, string> = {};
     let etlLastRun: EtlRun | null = null;

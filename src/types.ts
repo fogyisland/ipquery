@@ -1,14 +1,35 @@
 // SPDX-License-Identifier: MIT
+//
+// Which source filled a field on a row.
+//
+// Every member here names a source the ETL pipeline actually parses —
+// a member nothing can produce is a value a row can never hold, and a
+// lie about where data came from. The list is derived from the
+// pipeline's own file table (see src/etl/sources/labels.ts), and
+// `test/unit/etl-source-labels.test.ts` keeps the two in step.
+//
+// "unknown" is the one member that names no source: it is what a row
+// whose source column is empty falls back to. It is the honest answer
+// — the row's origin was not recorded — and it is what the API reports
+// for the rows the ETL loaded before the source columns existed.
+//
+// The three "manual" members name a human rather than a file: the
+// unknown-IP backfill tags its findings 'multi-provider', the range
+// importer tags its rows 'import', and the demo loader tags its rows
+// 'seed'. All three are written by this project itself, so all three
+// are real provenance — and the ETL's swap preserves the first two,
+// which is why the tags have to survive a read.
 export type Source =
-  | "maxmind"
-  | "ip2region"
+  | "unknown"
   | "dbip"
   | "dbip-country"
   | "dbip-asn"
-  | "ipinfo"
   | "metowolf-cn"
   | "runishiwo-cn"
-  | "sapics-user";
+  | "sapics-user"
+  | "multi-provider"
+  | "import"
+  | "seed";
 
 export interface NormalizedRecord {
   startIp: Buffer;

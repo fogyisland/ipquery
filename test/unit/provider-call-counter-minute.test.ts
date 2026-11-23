@@ -45,6 +45,19 @@ beforeEach(async () => {
   await td.pool.query("TRUNCATE TABLE provider_call_counter_minute");
 });
 
+/**
+ * The total of a counter spread over several minute rows.
+ *
+ * The minute bucket comes from the database's own clock
+ * (UTC_TIMESTAMP()), evaluated per call, so a sequence of calls that
+ * straddles a minute boundary is split across two rows. That is the
+ * table working as designed — the production window query sums the
+ * same way — so the tests sum rather than assume a single row.
+ */
+function sumCalls(values: number[]): number {
+  return values.reduce((sum, v) => sum + v, 0);
+}
+
 describe("provider_call_counter_minute mirror", () => {
   it("records a call in the minute table as well as the daily table", async () => {
     await touchProviderCalled(td.pool, "ip-api", {});
@@ -64,8 +77,12 @@ describe("provider_call_counter_minute mirror", () => {
       `SELECT calls_total FROM provider_call_counter_minute WHERE provider_name = ?`,
       ["ip-api"],
     );
-    expect(rows.length).toBe(1);
-    expect(Number(rows[0]!.calls_total)).toBe(3);
+    // The three calls land in one row — unless the sequence straddles a
+    // UTC minute boundary, in which case the server's clock puts them
+    // in two buckets. That is the correct behaviour for a per-minute
+    // table, so the assertion is on the total, not on the row count.
+    expect(rows.length).toBeGreaterThanOrEqual(1);
+    expect(sumCalls(rows.map((r) => Number(r.calls_total)))).toBe(3);
   });
 
   it("mirrors the error buckets, not just the total", async () => {
@@ -86,11 +103,15 @@ describe("provider_call_counter_minute mirror", () => {
          FROM provider_call_counter_minute WHERE provider_name = ?`,
       ["ipinfo"],
     );
-    expect(Number(rows[0]!.calls_total)).toBe(4);
-    expect(Number(rows[0]!.calls_429)).toBe(1);
-    expect(Number(rows[0]!.calls_timeout)).toBe(1);
-    expect(Number(rows[0]!.calls_network_err)).toBe(1);
-    expect(Number(rows[0]!.calls_other_err)).toBe(1);
+    // Each bucket is summed over the provider's minute rows: the four
+    // calls can straddle a UTC minute boundary, and a per-minute table
+    // is supposed to split them then. The production window query
+    // sums the same way.
+    expect(sumCalls(rows.map((r) => Number(r.calls_total)))).toBe(4);
+    expect(sumCalls(rows.map((r) => Number(r.calls_429)))).toBe(1);
+    expect(sumCalls(rows.map((r) => Number(r.calls_timeout)))).toBe(1);
+    expect(sumCalls(rows.map((r) => Number(r.calls_network_err)))).toBe(1);
+    expect(sumCalls(rows.map((r) => Number(r.calls_other_err)))).toBe(1);
   });
 
   it("truncates minute_utc to the minute", async () => {
@@ -99,6 +120,7 @@ describe("provider_call_counter_minute mirror", () => {
       `SELECT minute_utc FROM provider_call_counter_minute WHERE provider_name = ?`,
       ["ipinfo"],
     );
+    expect(rows.length).toBe(1);
     const bucket = rows[0]!.minute_utc;
     expect(bucket.getUTCSeconds()).toBe(0);
     expect(bucket.getUTCMilliseconds()).toBe(0);

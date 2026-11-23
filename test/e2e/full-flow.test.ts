@@ -25,14 +25,10 @@ beforeAll(async () => {
   const csv =
     "ip_start,ip_end,continent,country,stateprov,city,latitude,longitude\n8.8.8.0,8.8.8.255,NA,US,California,Mountain View,37.4056,-122.0775\n";
   await fs.writeFile(path.join(rawDir, "dbip.csv.gz"), zlib.gzipSync(Buffer.from(csv)));
-  await fs.writeFile(
-    path.join(rawDir, "ip2region.xdb"),
-    JSON.stringify([{ start: "8.8.8.0", end: "8.8.8.255", country: "美国", city: "Mountain View" }]),
-  );
-  await fs.copyFile(
-    path.join(__dirname, "..", "..", "fixtures", "maxmind-sample.mmdb"),
-    path.join(rawDir, "maxmind.mmdb"),
-  );
+  // The pipeline parses DB-IP and the three GitHub-hosted lists. The
+  // ip2region and MaxMind parsers are gone, so no fixture is staged
+  // for them: writing files nothing reads would only hide the fact
+  // that those sources are not part of the pipeline.
 
   const root = await mysql.createConnection({
     host: cfg.db.host,

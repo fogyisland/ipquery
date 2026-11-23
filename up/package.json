@@ -1,7 +1,7 @@
 {
   "name": "ipquery",
   "version": "0.1.0",
-  "description": "IP geolocation aggregator over MaxMind, ip2region, DB-IP",
+  "description": "IP geolocation aggregator over DB-IP and open range lists",
   "license": "MIT",
   "type": "commonjs",
   "engines": {
@@ -37,7 +37,6 @@
     "dotenv": "^17.4.2",
     "fastify": "^4.28.0",
     "handlebars": "^4.7.9",
-    "maxmind": "^4.3.10",
     "mysql2": "^3.11.0",
     "node-cron": "^3.0.3",
     "nodemailer": "^9.0.5"

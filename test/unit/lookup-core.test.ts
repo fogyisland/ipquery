@@ -68,11 +68,11 @@ function rawRangeRow(overrides: Record<string, unknown> = {}) {
     isp: "Google LLC",
     asn: 15169,
     asn_org: "GOOGLE",
-    country_source: "maxmind",
-    city_source: "maxmind",
-    isp_source: "maxmind",
-    asn_source: "maxmind",
-    geo_source: "maxmind",
+    country_source: "dbip",
+    city_source: "dbip",
+    isp_source: "dbip",
+    asn_source: "dbip-asn",
+    geo_source: "dbip",
     range_size: "256",
     ...overrides,
   };
@@ -101,14 +101,14 @@ describe("doLookupCore", () => {
     const result = await doLookupCore(pool as never, log, "8.8.8.8");
 
     expect(result.ip).toBe("8.8.8.8");
-    expect(result.country).toEqual({ code: "US", name: "United States", source: "maxmind" });
+    expect(result.country).toEqual({ code: "US", name: "United States", source: "dbip" });
     expect(result.region).toBe("California");
-    expect(result.city).toEqual({ name: "Mountain View", source: "maxmind" });
+    expect(result.city).toEqual({ name: "Mountain View", source: "dbip" });
     expect(result.postalCode).toBe("94043");
-    expect(result.location).toEqual({ lat: 37.4056, lon: -122.0775, source: "maxmind" });
+    expect(result.location).toEqual({ lat: 37.4056, lon: -122.0775, source: "dbip" });
     expect(result.timezone).toBe("America/Los_Angeles");
-    expect(result.isp).toEqual({ name: "Google LLC", source: "maxmind" });
-    expect(result.asn).toEqual({ number: 15169, org: "GOOGLE", source: "maxmind" });
+    expect(result.isp).toEqual({ name: "Google LLC", source: "dbip" });
+    expect(result.asn).toEqual({ number: 15169, org: "GOOGLE", source: "dbip-asn" });
     expect(result.etag).toBe("2026-11-01T00:00:00.000Z");
   });
 
@@ -125,7 +125,7 @@ describe("doLookupCore", () => {
 
     const result = await doLookupCore(pool as never, log, "8.8.8.8");
 
-    expect(result.country).toEqual({ code: "HK", name: "Hong Kong", source: "maxmind" });
+    expect(result.country).toEqual({ code: "HK", name: "Hong Kong", source: "dbip" });
   });
 
   it("keeps the name null for a country code it does not know", async () => {

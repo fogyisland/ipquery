@@ -51,15 +51,6 @@ beforeAll(async () => {
   const asnCsv = "start_ip,end_ip,asn,asn_name\n9.9.9.0,9.9.9.255,64500,Example ISP\n";
   await fs.writeFile(path.join(rawDir, "dbip-asn.csv.gz"), zlib.gzipSync(Buffer.from(asnCsv)));
   await writeFixedFixtures(rawDir);
-  await fs.writeFile(
-    path.join(rawDir, "ip2region.xdb"),
-    JSON.stringify([{ start: "9.9.9.0", end: "9.9.9.255", country: "英国", city: "London" }]),
-  );
-  // Re-use the existing maxmind-sample.mmdb from fixtures/
-  await fs.copyFile(
-    path.join(__dirname, "..", "..", "fixtures", "maxmind-sample.mmdb"),
-    path.join(rawDir, "maxmind.mmdb"),
-  );
 
   const root = await mysql.createConnection({
     host: cfg.db.host,

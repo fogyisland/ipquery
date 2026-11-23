@@ -1,19 +1,17 @@
 # IPQuery
 
-IP geolocation aggregator over **MaxMind GeoLite2**, **ip2region**, and **DB-IP**. Code under MIT; data files downloaded at runtime and **never redistributed** by this repository.
+IP geolocation aggregator over **DB-IP** and **open range lists** (metowolf/iplist, runishiwo/ChinaIPlist, sapics/ip-location-db). Code under MIT; data files downloaded at runtime and **never redistributed** by this repository.
 
 See [`docs/superpowers/specs/`](docs/superpowers/specs/) for design and [`docs/superpowers/plans/`](docs/superpowers/plans/) for the implementation plan.
 
 ## Quick start
 
 ```bash
-# 1. Get a free MaxMind license key
-#    https://www.maxmind.com/en/geolite2/signup
-# 2. Configure
+# 1. Configure
 cp .env.example .env
-# Edit .env, set MAXMIND_LICENSE_KEY
+# Edit .env, set DB_* (MySQL connection)
 
-# 3. Run
+# 2. Run
 make install build run    # local node + uses local MySQL
 ```
 
@@ -50,11 +48,12 @@ MCP access is controlled by **MCP tokens**: a user requests one at `/dashboard/m
 
 ## Data sources & licenses
 
-| Source                                                  | License                                 | Notes                                          |
-| ------------------------------------------------------- | --------------------------------------- | ---------------------------------------------- |
-| [MaxMind GeoLite2](https://www.maxmind.com/en/geolite2) | GeoLite2 EULA (free, no redistribution) | User registers and sets `MAXMIND_LICENSE_KEY`. |
-| [ip2region](https://github.com/lionsoul2014/ip2region)  | Apache-2.0                              | Attribution preserved in NOTICE.               |
-| [DB-IP](https://db-ip.com/db/download/ip-to-city)       | CC-BY 4.0                               | Attribution required in derivative UI.         |
+| Source                                                        | License                                 | Notes                                          |
+| ------------------------------------------------------------- | --------------------------------------- | ---------------------------------------------- |
+| [DB-IP](https://db-ip.com/db/download/ip-to-city) (lite, monthly) | CC-BY 4.0                               | Attribution required in derivative UI.         |
+| [metowolf/iplist](https://github.com/metowolf/iplist)         | MIT                                     | China IPv4 CIDR list.                          |
+| [runishiwo/ChinaIPlist](https://github.com/runishiwo/ChinaIPlist) | MIT                                 | China IPv4 + IPv6 CIDR lists.                  |
+| [sapics/ip-location-db](https://github.com/sapics/ip-location-db) | MIT                                 | Per-country CIDR list.                         |
 
 This repository contains **no data files**. You are responsible for downloading and complying with each source's license.
 
@@ -96,8 +95,7 @@ make lint
 
 ## Limitations
 
-- MaxMind parser uses a sparse-probe MVP. Full tree-walking iterator is post-MVP work.
-- ip2region parser reads the JSON-export form, not the binary .xdb. Future work.
+- Country-level coverage comes from DB-IP and the open range lists; city-level coverage is DB-IP's alone.
 - Single-process, single-host. No horizontal scaling.
 - IPv6 support is functional but coverage is uneven across sources.
 

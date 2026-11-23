@@ -17,7 +17,6 @@
 | Node.js      | **>= 20**（CI 用 20）        | `node -v` 确认                                  |
 | MySQL        | **5.7 / 8.0+**，需 `utf8mb4` | 迁移里含 `utf8mb4_unicode_ci` 与 JSON 列        |
 | 操作系统     | Windows / Linux / macOS      | 构建与启动不依赖 Docker                         |
-| MaxMind 许可 | 可选                         | 仅影响 MaxMind 数据源；DB-IP / ip2region 不需要 |
 | 数据库磁盘   | **>= 20 GB**                 | 全量 ETL 后 `ip_ranges` 约 3 GB（815 万行）+ 临时表 + 索引 |
 | `DATA_DIR`   | **>= 1 GB**                  | DB-IP 原始 CSV.gz 共约 93 MB |
 
@@ -94,7 +93,6 @@ WEB_BASE_URL=http://localhost:3880
 PORT=3880
 
 # --- 可选 ---
-MAXMIND_LICENSE_KEY=     # 留空即跳过 MaxMind，DB-IP 数据源不受影响
 SMTP_HOST=               # 留空时验证/重置邮件打印到 stdout
 ```
 
@@ -115,7 +113,7 @@ node -e "console.log(require('crypto').randomBytes(48).toString('base64'))"
 >   不会静默降级到内置默认值。已初始化的系统正是开始签发真实登录 Cookie 的地方，
 >   用仓库里写死的 `"dev-only-secret-change-me"` 签名等于把会话密钥公开。
 > - **系统尚未初始化**时允许用占位值启动，让首次运行向导能跑起来 ——
->   向导不采集密钥（它管的是数据库、站点、种子模式和��员账号），
+>   向导不采集密钥（它管的是数据库、站点、种子模式和管理员账号），
 >   此时若拒绝启动，`/init` 就永远打不开，安装无法完成。
 > - 环境判定：`NODE_ENV` 未设或不是 `development`/`test` 时，一律按生产对待。
 >   （项目里没有任何地方会设置 `NODE_ENV`，所以"未设"就是生产的默认状态。）
@@ -534,7 +532,7 @@ local 模式是给本机开发用的，不是给生产用的。
 
 ### 申请一枚 token
 
-token 要在控制台里申请、管理员批准后���生效：
+token 要在控制台里申请、管理员批准后即生效：
 
 1. 用户在 `/dashboard/mcp-tokens` 申请（`lookup` 或 `ops` 两种范围）
 2. 管理员在 `/admin/mcp-tokens` 批准

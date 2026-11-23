@@ -92,8 +92,8 @@ describe("mysql storage", () => {
       countryCode: "US",
       countryName: "United States",
       city: "Mountain View",
-      countrySource: "maxmind" as const,
-      citySource: "maxmind" as const,
+      countrySource: "dbip" as const,
+      citySource: "dbip" as const,
     };
     await insertIntoNew(pool, [row]);
     await atomicSwapRanges(pool);

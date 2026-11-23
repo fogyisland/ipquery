@@ -22,7 +22,6 @@ beforeAll(async () => {
   cfg.web.sessionSecret = "super-secret-session-key-abcdefgh";
   cfg.web.csrfSecret = "csrf-secret-key-1234567890";
   cfg.smtp.pass = "smtp-pass-secret-ABC";
-  cfg.maxmind.licenseKey = "mm-license-key-9999";
   app = await buildServer(cfg);
   const admin = await createUser(app.pool, {
     email: "admin@x",

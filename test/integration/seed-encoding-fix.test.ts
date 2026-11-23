@@ -191,17 +191,17 @@ describe("migration 023 repairs the seed encoding", () => {
          (start_ip, end_ip, country_code, country_source, city_source, isp_source, geo_source)
        VALUES (UNHEX('0000000000000000000000000A0B0C0D'),
                UNHEX('0000000000000000000000000A0B0C0D'),
-               'XX', 'maxmind', 'maxmind', 'maxmind', 'maxmind')`,
+               'XX', 'dbip', 'dbip', 'dbip', 'dbip')`,
     );
     try {
       await runFixMigration();
       const [rows] = await pool.query<Array<{ start_hex: string }>>(
-        `SELECT HEX(start_ip) AS start_hex FROM ip_ranges WHERE country_source = 'maxmind'`,
+        `SELECT HEX(start_ip) AS start_hex FROM ip_ranges WHERE country_source = 'dbip'`,
       );
       expect(rows).toHaveLength(1);
       expect(rows[0]!.start_hex).toBe("0000000000000000000000000A0B0C0D");
     } finally {
-      await pool.query(`DELETE FROM ip_ranges WHERE country_source = 'maxmind'`);
+      await pool.query(`DELETE FROM ip_ranges WHERE country_source = 'dbip'`);
     }
   });
 });

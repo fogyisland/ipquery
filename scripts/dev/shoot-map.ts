@@ -50,7 +50,7 @@ async function seedRow(): Promise<void> {
        (start_ip, end_ip, range_size, country_code, country_name, region, city,
         latitude, longitude, geo_source, country_source, city_source)
      VALUES (UNHEX(?), UNHEX(?), 255, 'ZZ', 'Testland', 'Test Region', 'Test City',
-             35.6762, 139.6503, 'maxmind', 'maxmind', 'maxmind')`,
+             35.6762, 139.6503, 'dbip', 'dbip', 'dbip')`,
     [START, END],
   );
   await pool.end();

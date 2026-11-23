@@ -81,7 +81,7 @@ describe("formatCoordinate", () => {
 });
 
 describe("renderWorldMap", () => {
-  const options = { label: "test label", source: "maxmind" };
+  const options = { label: "test label", source: "dbip" };
 
   it("returns null when there is no position", () => {
     expect(renderWorldMap(undefined, options)).toBeNull();
@@ -106,7 +106,7 @@ describe("renderWorldMap", () => {
       { lat: 0, lon: 0 },
       {
         label: 'evil" onload="alert(1)',
-        source: "maxmind",
+        source: "dbip",
       },
     )!;
     expect(rendered.svg).not.toContain('onload="alert(1)"');

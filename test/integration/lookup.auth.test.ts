@@ -31,9 +31,9 @@ beforeAll(async () => {
       latitude: 37.4056,
       longitude: -122.0775,
       timezone: "America/Los_Angeles",
-      countrySource: "maxmind",
-      citySource: "maxmind",
-      geoSource: "maxmind",
+      countrySource: "dbip",
+      citySource: "dbip",
+      geoSource: "dbip",
     },
   ]);
   await atomicSwapRanges(seedPool);

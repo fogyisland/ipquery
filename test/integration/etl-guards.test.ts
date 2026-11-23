@@ -100,14 +100,9 @@ async function writeFixtures(): Promise<void> {
     path.join(rawDir, "sapics-user-country.csv"),
     "2.0.0.0,2.0.0.255,CN\n",
   );
-  await fs.writeFile(
-    path.join(rawDir, "ip2region.xdb"),
-    JSON.stringify([{ start: "9.9.9.0", end: "9.9.9.255", country: "英国", city: "London" }]),
-  );
-  await fs.copyFile(
-    path.join(__dirname, "..", "..", "fixtures", "maxmind-sample.mmdb"),
-    path.join(rawDir, "maxmind.mmdb"),
-  );
+  // The ip2region and MaxMind parsers are gone, so no fixture is
+  // staged for them: writing files nothing reads would only hide the
+  // fact that those sources are not part of the pipeline.
 }
 
 /** Remove every source file so the pipeline has nothing to parse. */

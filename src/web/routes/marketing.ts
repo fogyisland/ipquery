@@ -9,6 +9,7 @@ import { verifyCsrfRequest } from "../plugins/csrf";
 import { formatCoordinate } from "../maps/geo-map";
 import { renderWorldMap } from "../maps/render-map";
 import { countryNamesFor } from "../../country-names";
+import { etlUpstreamCount } from "../../etl/sources/labels";
 
 export default async function marketingRoutes(app: FastifyInstance): Promise<void> {
   // The /try form is a lookup, and a lookup is worth a row in query_log
@@ -50,6 +51,10 @@ export default async function marketingRoutes(app: FastifyInstance): Promise<voi
       layout: "layouts/marketing",
       title: req.t("home.title"),
       ipCount,
+      // How many upstreams the data comes from. Derived from the
+      // pipeline's own source table — the page used to say "3" in
+      // two places, and the number was wrong.
+      sourceCount: etlUpstreamCount(),
       csrfToken: req.csrfToken,
       viewBaseUrl: app.viewBaseUrl,
       req,
@@ -184,13 +189,13 @@ export default async function marketingRoutes(app: FastifyInstance): Promise<voi
     // script, no third party seeing the visitor's IP.
     const location =
       row.latitude !== undefined && row.longitude !== undefined
-        ? { lat: row.latitude, lon: row.longitude, source: row.geoSource ?? "maxmind" }
+        ? { lat: row.latitude, lon: row.longitude, source: row.geoSource }
         : undefined;
     const map = renderWorldMap(
       location ? { lat: location.lat, lon: location.lon } : undefined,
       {
         label: req.t("try.map.ariaLabel", { ip, country: countryName }),
-        source: location?.source ?? "maxmind",
+        source: location?.source ?? "unknown",
       },
     );
     return reply.view("marketing/try.hbs", {
@@ -209,14 +214,14 @@ export default async function marketingRoutes(app: FastifyInstance): Promise<voi
         country: {
           code: row.countryCode,
           name: countryName,
-          source: row.countrySource ?? "maxmind",
+          source: row.countrySource,
         },
         region: row.region,
-        city: row.city ? { name: row.city, source: row.citySource ?? "maxmind" } : undefined,
-        isp: row.isp ? { name: row.isp, source: row.ispSource ?? "maxmind" } : undefined,
+        city: row.city ? { name: row.city, source: row.citySource } : undefined,
+        isp: row.isp ? { name: row.isp, source: row.ispSource } : undefined,
         asn:
           row.asn !== undefined
-            ? { number: row.asn, org: row.asnOrg, source: row.asnSource ?? "maxmind" }
+            ? { number: row.asn, org: row.asnOrg, source: row.asnSource }
             : undefined,
         location: location
           ? {

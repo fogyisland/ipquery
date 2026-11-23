@@ -57,7 +57,6 @@ export interface AppConfig {
     database: string;
     poolSize: number;
   };
-  maxmind: { licenseKey?: string; editions: string[] };
   api: { port: number; rateLimit: number; trustProxy: boolean };
   etl: { schedule: string; timezone: string; dataDir: string };
   web: WebConfig;
@@ -101,13 +100,6 @@ export function loadConfig(): AppConfig {
       password: str(process.env.DB_PASSWORD, "rootpass"),
       database: str(process.env.DB_NAME, "ipquery"),
       poolSize: num(process.env.DB_POOL_SIZE, 10),
-    },
-    maxmind: {
-      licenseKey: process.env.MAXMIND_LICENSE_KEY || undefined,
-      editions: str(process.env.MAXMIND_EDITIONS, "GeoLite2-City,GeoLite2-ASN")
-        .split(",")
-        .map((s) => s.trim())
-        .filter(Boolean),
     },
     api: {
       port: num(process.env.PORT, 3880),
@@ -156,8 +148,6 @@ export function redactSecret(value: string): string {
 export function configSummary(cfg: AppConfig): string {
   const lines = [
     `[config] db=${cfg.db.host}:${cfg.db.port}/${cfg.db.database}`,
-    `[config] maxmind key=${cfg.maxmind.licenseKey ? redactSecret(cfg.maxmind.licenseKey) : "(none)"}`,
-    `[config] editions=${cfg.maxmind.editions.join(",")}`,
     `[config] api port=${cfg.api.port} rateLimit=${cfg.api.rateLimit}/min trustProxy=${cfg.api.trustProxy}`,
     `[config] etl schedule="${cfg.etl.schedule}" tz=${cfg.etl.timezone} dataDir=${cfg.etl.dataDir}`,
     `[config] web baseUrl=${cfg.web.baseUrl} cookieSecure=${cfg.web.cookieSecure}`,

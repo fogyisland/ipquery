@@ -236,7 +236,6 @@ directory=/www/ipquery
 | `RATE_LIMIT` | 60 | 每分钟每 IP 的公共 API 请求上限。反代后面要调高（见 `up/BAOTA.md`） |
 | `NODE_ENV` | production | 决定是否强制密钥检查。**不要在服务器上设成 `development`** |
 | `ETL_SCHEDULE` | `0 2 * * *` | 每天 02:00 跑一次增量更新（UTC） |
-| `MAXMIND_LICENSE_KEY` | 空 | 不填就只用 DB-IP 库 |
 | `COOKIE_SECURE` | false | 走 HTTPS 必须设 true |
 | `MCP_REQUIRE_TOKEN` | false | MCP server 的安全开关。**要开 MCP 就设成 true**，见 §5.3 |
 

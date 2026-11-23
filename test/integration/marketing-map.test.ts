@@ -51,7 +51,7 @@ beforeEach(async () => {
        (start_ip, end_ip, range_size, country_code, country_name, region, city,
         latitude, longitude, geo_source, country_source, city_source)
      VALUES (UNHEX(?), UNHEX(?), 255, 'JP', 'Japan', 'Tokyo', 'Tokyo',
-             ?, ?, 'maxmind', 'maxmind', 'maxmind')`,
+             ?, ?, 'dbip', 'dbip', 'dbip')`,
     [RANGE_START, RANGE_END, LATITUDE, LONGITUDE],
   );
 });
@@ -98,7 +98,7 @@ describe("/try renders a map for the looked-up IP", () => {
     expect(r.status).toBe(200);
     expect(r.text).toContain("35.68°N");
     expect(r.text).toContain("139.65°E");
-    expect(r.text).toContain("maxmind");
+    expect(r.text).toContain("dbip");
   });
 
   it("keeps the map free of any third-party request", async () => {
