@@ -1,6 +1,38 @@
 import * as mysql from "mysql2/promise";
 import type { AppConfig } from "../config";
 import type { IpRangeRow, EtlRun, Source } from "../types";
+/**
+ * How long a statement may wait for a METADATA lock, in seconds.
+ *
+ * MySQL's `lock_wait_timeout` governs metadata locks — the locks
+ * `RENAME TABLE` and `LOCK TABLES` take on a table's NAME. It is a
+ * different thing from `innodb_lock_wait_timeout`, which governs row
+ * locks. The server default is 31,536,000 seconds: a year.
+ *
+ * A year is a catastrophic default here, because of how metadata locks
+ * queue. A SHARED lock does not block another SHARED lock, so a
+ * long-running read is not by itself fatal. What is fatal is a PENDING
+ * EXCLUSIVE request — the ETL's `RENAME TABLE` swap. Once one is
+ * pending, every later request queues behind it, including plain reads
+ * that would have been compatible with the reader already running. That
+ * is what turned one stuck ETL run into a whole-site outage on
+ * 2026-11-23: 47 requests queued behind a rename that was itself
+ * waiting for a 42-hour-old diagnostic query to finish.
+ *
+ * Setting a short timeout on every pooled connection bounds the damage
+ * in both directions:
+ *
+ *   - A read that cannot take the lock fails in seconds and reports
+ *     that it was a metadata lock, so the operator knows to look for
+ *     the holder rather than at row-level contention.
+ *   - The swap gives up instead of sitting in the queue for a year.
+ *
+ * Ten seconds is long enough that an ordinary lock wait — an ETL
+ * transaction committing, a backup snapshot starting — still succeeds.
+ * It is short enough that a request never holds a pool connection and
+ * a browser tab open for longer than a coffee break.
+ */
+export declare const METADATA_LOCK_WAIT_SECONDS = 10;
 export declare function createPool(cfg: AppConfig): mysql.Pool;
 /**
  * The five connection values plus the pool size, without the whole
@@ -116,7 +148,58 @@ export interface PreservedRows {
  */
 export declare function preserveManualRows(pool: mysql.Pool): Promise<PreservedRows>;
 export declare function atomicSwapRanges(pool: mysql.Pool): Promise<SwapResult>;
-export declare function findRange(pool: mysql.Pool, ipBuf: Buffer): Promise<IpRangeRow | null>;
+/**
+ * Rewrite a MySQL metadata-lock timeout into something an operator can
+ * act on.
+ *
+ * MySQL reports the condition as ER_LOCK_WAIT_TIMEOUT (1205), whose text
+ * says "Lock wait timeout exceeded; try restarting transaction". For a
+ * ROW lock that is close enough to the truth. For a METADATA lock it is
+ * actively misleading: the transaction is not stuck on rows, it is
+ * stuck behind a lock on a table's NAME, and "restarting the
+ * transaction" will not help — something else has to release it.
+ *
+ * The distinction matters because the two have completely different
+ * fixes. A row-lock timeout is contention and resolves itself. A
+ * metadata-lock timeout means a `RENAME TABLE` (the ETL's swap) or a
+ * `LOCK TABLES` is holding the table, and the operator has to find it
+ * and let it go.
+ *
+ * Non-timeout errors are returned untouched: a typo in the SQL must not
+ * be reported as a lock problem.
+ */
+export declare function describeStorageError(err: unknown): Error;
+/**
+ * How long a read may wait for a metadata lock, when the caller needs
+ * the answer to be quick.
+ *
+ * The pool's default (METADATA_LOCK_WAIT_SECONDS) is the right bound
+ * for a query whose result IS the answer: /lookup cannot say anything
+ * useful without the row, so it is worth waiting a few seconds.
+ *
+ * It is the wrong bound for a query whose result is decoration. The
+ * dashboard's hero element shows the country of your most recent query;
+ * when the IP table is locked that country is simply absent, and the
+ * rest of the page is unaffected. Making the visitor stare at a
+ * spinner for ten seconds to learn a country code they may not even
+ * look at is a bad trade. Two seconds is long enough to cover an
+ * ordinary lock (a committing transaction, a starting snapshot) and
+ * short enough that the page still feels immediate.
+ */
+export declare const OPTIONAL_READ_LOCK_WAIT_SECONDS = 2;
+/**
+ * Look up the range covering an IP.
+ *
+ * `options.metadataLockWaitSeconds` overrides how long the query may
+ * wait for a metadata lock on `ip_ranges`. When it is set, the query
+ * runs on a dedicated connection whose session timeout is armed for
+ * exactly that long — because `lock_wait_timeout` is a session
+ * variable, a pooled connection's value cannot be changed for one
+ * query and changed back.
+ */
+export declare function findRange(pool: mysql.Pool, ipBuf: Buffer, options?: {
+    metadataLockWaitSeconds?: number;
+}): Promise<IpRangeRow | null>;
 export declare function recordEtlStart(pool: mysql.Pool): Promise<number>;
 export declare function recordEtlFinish(pool: mysql.Pool, id: number, status: "success" | "failed", fields: Partial<EtlRun>): Promise<void>;
 /** Live-progress columns to refresh while the run is in flight. Called

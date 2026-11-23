@@ -1,7 +1,7 @@
 {
   "formatVersion": 1,
   "fileCount": 471,
-  "totalBytes": 2683504,
+  "totalBytes": 2705125,
   "files": {
     "api/dbBootstrap.d.ts": {
       "bytes": 8916,
@@ -32,12 +32,12 @@
       "sha256": "3f58951be08ab2a1deaae08cd69ed73cadc59d9f6ad46e6f663fdf682e66e716"
     },
     "api/errorHandler.js": {
-      "bytes": 3523,
-      "sha256": "141af6ee9b28ecfb1a3d491817f70812cfd7aef458c10e298db2479976840865"
+      "bytes": 4732,
+      "sha256": "be6a886a43e056e66903f9093538a0380e8c981dc9ca3e5f26d3c6a944f7b3d4"
     },
     "api/errorHandler.js.map": {
-      "bytes": 1711,
-      "sha256": "4f7f5fc4e2e1afa998d4c50d64612a706a914778a0182594d1ef1cf5ebe46edc"
+      "bytes": 2202,
+      "sha256": "729e64801e0460a0155565e0530aefc2f7dbdee135668095de0a039ed972281f"
     },
     "api/routes/health.d.ts": {
       "bytes": 623,
@@ -56,12 +56,12 @@
       "sha256": "764a53c685a74095c21b3f9187448b8ddb5783af23cb4a11127e8c9996139110"
     },
     "api/routes/lookup.js": {
-      "bytes": 11453,
-      "sha256": "56ad5a5df21c5135af89f5c5cfeb46df8464d2b819ccc14107e3499b1ae73808"
+      "bytes": 12175,
+      "sha256": "4479ec1b3c97371659a75983724a0d47372e0bc02e80ffd760a8e5ac7bb3f466"
     },
     "api/routes/lookup.js.map": {
-      "bytes": 7759,
-      "sha256": "ff1121875048041eaea01fd8ae3f1c8b38da3bc10552933416c7bdca75aeeb69"
+      "bytes": 8046,
+      "sha256": "f9b1d14a515b527655ab2c5d360d057ace494d5b1c16db36a37fb7febfa78509"
     },
     "api/routes/stats.d.ts": {
       "bytes": 121,
@@ -776,16 +776,16 @@
       "sha256": "1e9bb8e2805e62a091d5be1bd36e96c1b5227190c32b9247a2ffdda067917c89"
     },
     "storage/mysql.d.ts": {
-      "bytes": 10428,
-      "sha256": "f3084421528acb27564b82196d1b5c3a14b843c1746bc53c3a8137fe1388f40f"
+      "bytes": 14436,
+      "sha256": "a4fa3459b34d7b661b5a505ac6514d783c67ff87c5bed2005ff50b19bf45f6a0"
     },
     "storage/mysql.js": {
-      "bytes": 39279,
-      "sha256": "7d180c83856e6e71965cf63423bab42c7466be8fe3c84b06a18921a1ecc92c15"
+      "bytes": 48464,
+      "sha256": "42764855230fae832279d692f83ab8f36443511f67cc5ea4f4db182965ffdca0"
     },
     "storage/mysql.js.map": {
-      "bytes": 23821,
-      "sha256": "d6b5b19a2331601446c60b08786b227fb1c16863f9a4a16db4cef9b5eddb6b51"
+      "bytes": 26496,
+      "sha256": "03d9c9e54867defe2ace1714875cd038ef482804a5b6cba056bbe49c75b6fba6"
     },
     "storage/providerErrorLog.d.ts": {
       "bytes": 2645,
@@ -804,12 +804,12 @@
       "sha256": "ca794b37961fb6d98cc53e622bfe155e740106d05cf1254d36e01152f7fcc2d7"
     },
     "storage/queryLog.js": {
-      "bytes": 8068,
-      "sha256": "a3869e7963c0f2ba45426ca60367c4be927bfd9d325ee32f143d342fa2864b05"
+      "bytes": 10123,
+      "sha256": "817d96b0b57d923728e4058305877c4952b4254c7cf3eb0fa57c2af1d9f464d2"
     },
     "storage/queryLog.js.map": {
-      "bytes": 8109,
-      "sha256": "dbc5146d091c072c77f3d7cf7df1d557d83cdf75023cdf46c567a45b7cc8cf1d"
+      "bytes": 9098,
+      "sha256": "15bc6f9dfd52c241d73844d4b2443c6dd41af8ee4ec00036bf369169ba7fe23c"
     },
     "storage/randomProbeLog.d.ts": {
       "bytes": 5321,

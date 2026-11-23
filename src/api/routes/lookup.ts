@@ -26,6 +26,19 @@ export function lookupErrorHandler(
   if (code === "invalid_ip" || code === "not_found" || code === "invalid_api_key") {
     return reply.code(statusCode).send({ error: code });
   }
+  // 503 is a temporary dependency problem, not a broken service. The
+  // client is told so, and told to retry — but not why: the reason
+  // names the IP range table and the ETL swap, which is the shape of
+  // the datastore and nobody else's business.
+  //
+  // This handler exists so the global one cannot leak a driver message
+  // out of /lookup. It must not collapse 503 into `internal_error`:
+  // that says "we are broken" when the truth is "come back in a
+  // moment", and an API client that trusts the difference will page
+  // someone instead of retrying.
+  if (statusCode === 503 && code === "service_unavailable") {
+    return reply.code(statusCode).send({ error: code });
+  }
   return reply.code(statusCode).send({ error: "internal_error" });
 }
 

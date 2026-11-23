@@ -82,8 +82,15 @@ describe("atomicSwapRanges metadata-lock timeout", () => {
     // The assertion pins the environment's default so that a future
     // MySQL upgrade (or a server-wide config change) does not silently
     // make this test vacuous.
+    //
+    // It reads the GLOBAL value, not the session one. The pool arms
+    // every connection with a short session timeout (10 s) precisely so
+    // that no statement can wait for the server's default — reading the
+    // session value here would report the override rather than the
+    // thing being overridden, and the assertion would fail for the
+    // wrong reason.
     const [defaults] = await pool.query<mysql.RowDataPacket[]>(
-      "SHOW VARIABLES LIKE 'lock_wait_timeout'",
+      "SHOW GLOBAL VARIABLES LIKE 'lock_wait_timeout'",
     );
     const defaultValue = Number(defaults[0]?.Value);
     expect(defaultValue).toBeGreaterThan(3600);

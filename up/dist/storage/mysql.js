@@ -33,7 +33,7 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.buildSchemaReference = exports.listMigrationEntries = exports.getSchemaReportFrom = exports.getSchemaReport = exports.migrationStatus = exports.getAppliedVersions = exports.runMigrations = exports.MANUAL_SOURCE_TAGS = void 0;
+exports.buildSchemaReference = exports.listMigrationEntries = exports.getSchemaReportFrom = exports.getSchemaReport = exports.migrationStatus = exports.getAppliedVersions = exports.runMigrations = exports.OPTIONAL_READ_LOCK_WAIT_SECONDS = exports.MANUAL_SOURCE_TAGS = exports.METADATA_LOCK_WAIT_SECONDS = void 0;
 exports.createPool = createPool;
 exports.createPoolFor = createPoolFor;
 exports.truncateNew = truncateNew;
@@ -43,6 +43,7 @@ exports.insertIntoNewUpsert = insertIntoNewUpsert;
 exports.normalizeSource = normalizeSource;
 exports.preserveManualRows = preserveManualRows;
 exports.atomicSwapRanges = atomicSwapRanges;
+exports.describeStorageError = describeStorageError;
 exports.findRange = findRange;
 exports.recordEtlStart = recordEtlStart;
 exports.recordEtlFinish = recordEtlFinish;
@@ -64,6 +65,46 @@ exports.getEtlRunDedupe = getEtlRunDedupe;
 // SPDX-License-Identifier: MIT
 const mysql = __importStar(require("mysql2/promise"));
 const ip_1 = require("../ip");
+/**
+ * How long a statement may wait for a METADATA lock, in seconds.
+ *
+ * MySQL's `lock_wait_timeout` governs metadata locks — the locks
+ * `RENAME TABLE` and `LOCK TABLES` take on a table's NAME. It is a
+ * different thing from `innodb_lock_wait_timeout`, which governs row
+ * locks. The server default is 31,536,000 seconds: a year.
+ *
+ * A year is a catastrophic default here, because of how metadata locks
+ * queue. A SHARED lock does not block another SHARED lock, so a
+ * long-running read is not by itself fatal. What is fatal is a PENDING
+ * EXCLUSIVE request — the ETL's `RENAME TABLE` swap. Once one is
+ * pending, every later request queues behind it, including plain reads
+ * that would have been compatible with the reader already running. That
+ * is what turned one stuck ETL run into a whole-site outage on
+ * 2026-11-23: 47 requests queued behind a rename that was itself
+ * waiting for a 42-hour-old diagnostic query to finish.
+ *
+ * Setting a short timeout on every pooled connection bounds the damage
+ * in both directions:
+ *
+ *   - A read that cannot take the lock fails in seconds and reports
+ *     that it was a metadata lock, so the operator knows to look for
+ *     the holder rather than at row-level contention.
+ *   - The swap gives up instead of sitting in the queue for a year.
+ *
+ * Ten seconds is long enough that an ordinary lock wait — an ETL
+ * transaction committing, a backup snapshot starting — still succeeds.
+ * It is short enough that a request never holds a pool connection and
+ * a browser tab open for longer than a coffee break.
+ */
+exports.METADATA_LOCK_WAIT_SECONDS = 10;
+/**
+ * The statement that arms the timeout on a fresh connection.
+ *
+ * `SET SESSION` scopes the value to the connection it runs on, which is
+ * exactly the scope we want: mysql2 pools connections, and a pooled
+ * connection can be handed to any later query.
+ */
+const SET_METADATA_LOCK_TIMEOUT = `SET SESSION lock_wait_timeout = ${exports.METADATA_LOCK_WAIT_SECONDS}`;
 function createPool(cfg) {
     return createPoolFor({
         host: cfg.db.host,
@@ -75,7 +116,7 @@ function createPool(cfg) {
     });
 }
 function createPoolFor(conn) {
-    return mysql.createPool({
+    const pool = mysql.createPool({
         host: conn.host,
         port: conn.port,
         user: conn.user,
@@ -88,6 +129,34 @@ function createPoolFor(conn) {
         dateStrings: false,
         ...(conn.connectTimeout === undefined ? {} : { connectTimeout: conn.connectTimeout }),
     });
+    // Arm the metadata-lock timeout on every connection the pool opens.
+    //
+    // The hook fires once per physical connection, before the pool hands
+    // it out. That matters: mysql2 pools connections, so a setting applied
+    // to one query's connection would not travel with the connection to
+    // the next query. Setting it here means EVERY statement the pool
+    // runs — including the reads — is bounded.
+    //
+    // A failure to set the variable is fatal to the pool's safety, so it
+    // is logged loudly rather than swallowed. The connection stays in the
+    // pool: the variable is a session default that the server has already
+    // had for a lifetime, and a server that rejects `SET SESSION
+    // lock_wait_timeout` is not one where a year-long default would be
+    // acceptable either.
+    pool.on("connection", (rawConnection) => {
+        // The `connection` event carries the CORE connection — the callback
+        // style one — not the promise wrapper. mysql2's promise pool
+        // forwards the event unchanged, so the runtime object and the
+        // promise-pool type do not agree; the cast states which one this
+        // is.
+        const core = rawConnection;
+        core.query(SET_METADATA_LOCK_TIMEOUT, (err) => {
+            if (err) {
+                console.warn(`[mysql] could not set lock_wait_timeout=${exports.METADATA_LOCK_WAIT_SECONDS} on a pooled connection: ${err instanceof Error ? err.message : String(err)}`);
+            }
+        });
+    });
+    return pool;
 }
 async function truncateNew(pool) {
     await pool.query("TRUNCATE TABLE ip_ranges_new");
@@ -459,7 +528,108 @@ async function atomicSwapRanges(pool) {
         conn.release();
     }
 }
-async function findRange(pool, ipBuf) {
+/**
+ * Rewrite a MySQL metadata-lock timeout into something an operator can
+ * act on.
+ *
+ * MySQL reports the condition as ER_LOCK_WAIT_TIMEOUT (1205), whose text
+ * says "Lock wait timeout exceeded; try restarting transaction". For a
+ * ROW lock that is close enough to the truth. For a METADATA lock it is
+ * actively misleading: the transaction is not stuck on rows, it is
+ * stuck behind a lock on a table's NAME, and "restarting the
+ * transaction" will not help — something else has to release it.
+ *
+ * The distinction matters because the two have completely different
+ * fixes. A row-lock timeout is contention and resolves itself. A
+ * metadata-lock timeout means a `RENAME TABLE` (the ETL's swap) or a
+ * `LOCK TABLES` is holding the table, and the operator has to find it
+ * and let it go.
+ *
+ * Non-timeout errors are returned untouched: a typo in the SQL must not
+ * be reported as a lock problem.
+ */
+function describeStorageError(err) {
+    const original = err instanceof Error ? err : new Error(String(err));
+    const code = original.code;
+    const errno = original.errno;
+    const isMetadataLockTimeout = code === "ER_LOCK_WAIT_TIMEOUT" || errno === 1205 || /lock wait timeout/i.test(original.message);
+    if (!isMetadataLockTimeout)
+        return original;
+    // 503, not 500. The service is up; the dependency it needs is not
+    // available right now. A client that sees 500 gives up (or pages
+    // someone); a client that sees 503 retries. Getting this wrong turns
+    // a ten-second dependency stall into an outage.
+    const described = new Error(`metadata lock timeout after ${exports.METADATA_LOCK_WAIT_SECONDS}s: the IP range table is held by ` +
+        `another session (an ETL swap or a LOCK TABLES). The read was abandoned rather than ` +
+        `waiting for the server's one-year default. Find the holder with ` +
+        `scripts/dev/probe-lock-queue.ts and release it. Underlying error: ${original.message}`);
+    described.statusCode = 503;
+    described.code = "service_unavailable";
+    return described;
+}
+/**
+ * How long a read may wait for a metadata lock, when the caller needs
+ * the answer to be quick.
+ *
+ * The pool's default (METADATA_LOCK_WAIT_SECONDS) is the right bound
+ * for a query whose result IS the answer: /lookup cannot say anything
+ * useful without the row, so it is worth waiting a few seconds.
+ *
+ * It is the wrong bound for a query whose result is decoration. The
+ * dashboard's hero element shows the country of your most recent query;
+ * when the IP table is locked that country is simply absent, and the
+ * rest of the page is unaffected. Making the visitor stare at a
+ * spinner for ten seconds to learn a country code they may not even
+ * look at is a bad trade. Two seconds is long enough to cover an
+ * ordinary lock (a committing transaction, a starting snapshot) and
+ * short enough that the page still feels immediate.
+ */
+exports.OPTIONAL_READ_LOCK_WAIT_SECONDS = 2;
+/**
+ * Run one query on a connection whose metadata-lock wait is exactly
+ * `lockWaitSeconds`.
+ *
+ * `lock_wait_timeout` is a SESSION variable, so it cannot be changed
+ * for a single statement on a pooled connection and changed back —
+ * the connection goes back to the pool with whatever value it was left
+ * holding. The only way to give one query a different bound is to give
+ * it its own connection.
+ *
+ * The connection is returned to the pool afterwards. Its session
+ * timeout is restored to the pool's default first, so the next
+ * statement that borrows it inherits the standard bound rather than
+ * this short one.
+ */
+async function queryWithLockWait(pool, sql, values, lockWaitSeconds) {
+    const conn = await pool.getConnection();
+    try {
+        await conn.query(`SET SESSION lock_wait_timeout = ${Math.max(1, Math.floor(lockWaitSeconds))}`);
+        const [rows] = await conn.query(sql, values);
+        return rows;
+    }
+    finally {
+        // Restore the pool's standard bound before handing the connection
+        // back. If the connection dies here the pool discards it, which is
+        // also fine — a discarded connection loses the session with it.
+        await conn
+            .query(`SET SESSION lock_wait_timeout = ${exports.METADATA_LOCK_WAIT_SECONDS}`)
+            .catch((err) => {
+            console.warn(`[mysql] could not restore lock_wait_timeout on a pooled connection: ${err instanceof Error ? err.message : String(err)}`);
+        });
+        conn.release();
+    }
+}
+/**
+ * Look up the range covering an IP.
+ *
+ * `options.metadataLockWaitSeconds` overrides how long the query may
+ * wait for a metadata lock on `ip_ranges`. When it is set, the query
+ * runs on a dedicated connection whose session timeout is armed for
+ * exactly that long — because `lock_wait_timeout` is a session
+ * variable, a pooled connection's value cannot be changed for one
+ * query and changed back.
+ */
+async function findRange(pool, ipBuf, options) {
     // Two-step lookup. We can't just `ORDER BY range_size ASC LIMIT 1` because
     // MySQL 5.7 (no descending indexes) falls back to a full index scan over
     // idx_range_size to apply the WHERE filter — ~9s on the 8.3M-row DB-IP
@@ -474,14 +644,30 @@ async function findRange(pool, ipBuf) {
     // covering ranges for any IP is small (typically 1-3 — one city-lite
     // /24 plus zero or one coarser country/asn range). 100 covers all
     // realistic overlap while keeping the row fetch cheap.
-    const [rows] = await pool.query(`SELECT start_ip, end_ip, country_code, country_name, region, city, postal_code,
-            latitude, longitude, timezone, isp, asn, asn_org,
-            country_source, city_source, isp_source, asn_source, geo_source,
-            CAST(range_size AS CHAR) AS range_size
-       FROM ip_ranges USE INDEX (uniq_start_end)
-       WHERE start_ip <= ?
-       ORDER BY start_ip DESC
-       LIMIT 100`, [ipBuf]);
+    const sql = `SELECT start_ip, end_ip, country_code, country_name, region, city, postal_code,
+              latitude, longitude, timezone, isp, asn, asn_org,
+              country_source, city_source, isp_source, asn_source, geo_source,
+              CAST(range_size AS CHAR) AS range_size
+         FROM ip_ranges USE INDEX (uniq_start_end)
+         WHERE start_ip <= ?
+         ORDER BY start_ip DESC
+         LIMIT 100`;
+    let rows;
+    try {
+        if (options?.metadataLockWaitSeconds === undefined) {
+            [rows] = await pool.query(sql, [ipBuf]);
+        }
+        else {
+            rows = await queryWithLockWait(pool, sql, [ipBuf], options.metadataLockWaitSeconds);
+        }
+    }
+    catch (err) {
+        // A metadata-lock timeout here means the IP range table is held by
+        // another session. Left as a raw ER_LOCK_WAIT_TIMEOUT it would read
+        // as row contention and invite the wrong response; see
+        // describeStorageError for why the two are different problems.
+        throw describeStorageError(err);
+    }
     // Filter to rows that actually cover the target, then pick the smallest
     // range_size among them.
     //

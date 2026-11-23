@@ -55,6 +55,18 @@ const CLIENT_FACING_CODES = new Set([
 ]);
 
 /**
+ * The message a client gets for a 503.
+ *
+ * Deliberately generic. The internal error says WHY — a metadata lock,
+ * the IP range table, the ETL swap, the operator's probe script — and
+ * none of that should reach an anonymous caller of a public endpoint.
+ * But a bare error code with no message tells the client nothing about
+ * what to do, so the client gets the one instruction that matters:
+ * this is temporary, come back.
+ */
+const SERVICE_UNAVAILABLE_MESSAGE = "The service is temporarily unable to answer. Please retry shortly.";
+
+/**
  * Build the global error handler.
  *
  * The full error object goes to `req.log` — the operator still gets the
@@ -67,6 +79,20 @@ export function createGlobalErrorHandler(): (
 ) => unknown {
   return function globalErrorHandler(err, req, reply) {
     const statusCode = typeof err.statusCode === "number" ? err.statusCode : 500;
+
+    // 503 is its own case: the service is up, a dependency is not. The
+    // client is told that, and told to retry — but not told why.
+    if (statusCode === 503) {
+      req.log.warn({ err }, "dependency unavailable");
+      if (err.code === "service_unavailable") {
+        return reply
+          .code(statusCode)
+          .send({ error: "service_unavailable", message: SERVICE_UNAVAILABLE_MESSAGE });
+      }
+      // A 503 with some other code is still a 5xx: log it, reveal
+      // nothing.
+      return reply.code(statusCode).send({ error: "internal_error" });
+    }
 
     // 4xx is the caller's problem and its own message is safe to
     // return. 5xx is ours: log it in full, return nothing specific.

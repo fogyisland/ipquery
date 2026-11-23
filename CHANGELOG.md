@@ -239,6 +239,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **读路径被元数据锁堵死，整站挂起**: 2026-11-23 那天 `/lookup`、`/dashboard`、
+  `/stats` 全部卡住。根因不在数据库慢，而是一条 SQL 把 `ip_ranges` 拖进了语句里：
+  `getLastUserQuery` 原本用 `LEFT JOIN ip_ranges` 把「最后一次查询」和它的国家/ASN
+  一次查出来。`LEFT JOIN` 让语句需要 `ip_ranges` 的元数据锁；一旦有 `RENAME TABLE`
+  挂起（ETL 换表），**所有**后到的请求——包括只需要读锁的普通 SELECT——都排在它后面。
+  而 MySQL 的 `lock_wait_timeout` 默认是 **31,536,000 秒（一年）**，所以它们会一直等下去。
+  拆成两次查询：行（IP、状态、时间）从 `query_log` 直接读，地理信息再单独查、
+  单独失败。这样国家名只是「装饰」，装饰没了页面还在。
+  - **读也有超时**: 池里每条连接在建连时就 `SET SESSION lock_wait_timeout = 10`。
+    之前只有换表那侧设了 30 s，读的一侧完全没有上限——于是一个锁可以把整站
+    拖死一年。选 `lock_wait_timeout` 而不是 `innodb_lock_wait_timeout`，因为
+    前者管元数据锁，后者管行锁
+  - **可选读另有更短的界**: `getLastUserQuery` 的地理信息走 `findRange` 的
+    `metadataLockWaitSeconds` 参数，只等 2 s。装饰不值得让页面等十秒
+  - **失败是可重试的 503**: 元数据锁超时现在被识别出来，标成
+    `statusCode=503` + `code=service_unavailable`。对外只回
+    `{"error":"service_unavailable"}`，**不泄露内部原因**（表名、锁、ETL 一概不出现在
+    响应体里）；内部原因仍然进日志。503 语义正确：服务没坏，是依赖暂时不可用
+  - **实测对比**（对着真实的生产锁，同一份代码两个实例）:
+    `/dashboard` 从 **500 / 10.02 s** 变成 **200 / 0.06 s**；`/lookup` 仍是
+    **503 / 10.0 s**，但从「挂死」变成了「有界的、语义正确的失败」
 - **迁移清单有两份，其中一份是死代码且已经漂移**: `src/storage/migrations/runner.ts`
   同时内联了一份 `MIGRATION_SQL`（约 2,000 行 SQL，逐条抄自 `.sql` 文件）和一份
   `MIGRATION_FILES` 文件名清单。但 `loadMigrationManifest()` 在导入时就会

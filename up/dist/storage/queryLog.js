@@ -6,6 +6,7 @@ exports.countQueriesByStatusSince = countQueriesByStatusSince;
 exports.getLastUserQuery = getLastUserQuery;
 exports.countQueriesByDay = countQueriesByDay;
 exports.streamQueryLogsCsv = streamQueryLogsCsv;
+const mysql_1 = require("./mysql");
 async function insertQueryLogs(pool, entries) {
     if (entries.length === 0)
         return;
@@ -105,32 +106,81 @@ async function countQueriesByStatusSince(pool, since, opts) {
     }
     return out;
 }
-// Fetch the user's most recent query_log row, joined to ip_ranges so the
-// hero element on /dashboard can show the IP + its resolved country / ASN
-// without a second lookup.
+// Fetch the user's most recent query_log row, plus the resolved
+// country/ASN when status=hit.
+//
+// The row and the geography are fetched SEPARATELY, on purpose.
+//
+// The original version joined them:
+//
+//   FROM query_log q
+//   LEFT JOIN ip_ranges r ON r.start_ip <= q.ip AND r.end_ip >= q.ip ...
+//
+// That put `ip_ranges` in the statement, so the statement needed a
+// metadata lock on it. On 2026-11-23 a pending RENAME on that table
+// made every /dashboard request queue behind it — the console's
+// "show me my last query" page could not be served because it also
+// asked for the country of the last IP.
+//
+// Splitting them makes the geography optional, which is what it always
+// was. The row (IP, status, timestamp) is the content; the country and
+// ASN are decoration. If the IP table is unavailable the row still
+// renders and the decoration is simply absent — the template already
+// hides those fields when they are missing.
+//
+// The second query also gets to be better than the join was. The join's
+// predicate is `start_ip <= ip AND end_ip >= ip` — a range on both
+// columns, which no single index serves, over 7.8M rows. The split
+// version uses findRange(), which walks `uniq_start_end` backwards from
+// the target and takes the 100 nearest candidates (~100ms measured).
 async function getLastUserQuery(pool, userId) {
-    // LIMIT 1 + subquery join so MySQL picks the index-friendly path
-    const [rows] = await pool.query(`SELECT q.ip_text AS ipText, q.status AS status, q.ts AS ts,
-            r.country_code AS countryCode, r.country_name AS countryName, r.asn_org AS asnOrg
-       FROM query_log q
-       LEFT JOIN ip_ranges r
-         ON r.start_ip <= q.ip AND r.end_ip >= q.ip
-        AND r.country_code IS NOT NULL
-      WHERE q.user_id = ?
-      ORDER BY q.ts DESC, q.id DESC
+    const [rows] = await pool.query(`SELECT ip_text AS ipText, status AS status, ts AS ts, ip AS ip
+       FROM query_log
+      WHERE user_id = ?
+      ORDER BY ts DESC, id DESC
       LIMIT 1`, [userId]);
     const arr = rows;
     if (arr.length === 0)
         return null;
     const r = arr[0];
-    return {
+    const base = {
         ipText: String(r.ipText ?? ""),
         status: r.status,
         ts: r.ts,
-        countryCode: r.countryCode ?? null,
-        countryName: r.countryName ?? null,
-        asnOrg: r.asnOrg ?? null,
+        countryCode: null,
+        countryName: null,
+        asnOrg: null,
     };
+    // Only a HIT has a resolved location. A miss or an invalid IP has
+    // nothing to look up, and asking would be a pointless query against
+    // the locked table.
+    if (base.status !== "hit")
+        return base;
+    const ipBuf = r.ip;
+    if (!ipBuf)
+        return base;
+    // The geography is best-effort. If the IP table is locked, timing
+    // out, or missing the IP, the row still renders without it. The
+    // failure is logged rather than swallowed, because "the country
+    // column is empty" and "the IP table is locked" look identical from
+    // the outside and only one of them needs attention.
+    try {
+        const range = await (0, mysql_1.findRange)(pool, ipBuf, {
+            metadataLockWaitSeconds: mysql_1.OPTIONAL_READ_LOCK_WAIT_SECONDS,
+        });
+        if (!range)
+            return base;
+        return {
+            ...base,
+            countryCode: range.countryCode ?? null,
+            countryName: range.countryName ?? null,
+            asnOrg: range.asnOrg ?? null,
+        };
+    }
+    catch (err) {
+        console.warn(`[queryLog] could not resolve the location of the last query: ${err instanceof Error ? err.message : String(err)}`);
+        return base;
+    }
 }
 async function countQueriesByDay(pool, days) {
     // Bucket in UTC end to end. query_log.ts is written with the pool's
