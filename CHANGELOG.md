@@ -11,6 +11,55 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **五个零覆盖模块补上单元测试（63 个用例）**: 导入图分析找出 30 个「测试从未直接
+  引用」的 `src/` 文件，其中多数是插件与路由，由 `buildServer()` + `inject()` 间接
+  覆盖；真正**一条断言都没有**的是这五个。它们各自管着一件出错时没人会立刻发现的事：
+  1. **`src/web/admin/csv.ts`（13 个用例）**: 控制台导出 CSV 的转义。导出里每一个
+     字节都可能是别人写的——用户自选的邮箱、抓来的城市名。带逗号的值会悄悄挪动后面
+     所有列，带换行的值会悄悄变成两行，而导出是「点一下下载」，没人会去看原始字节。
+     用例里带了一个小型 RFC 4180 解析器：字符串比较分不出 `a,b` 和 `"a,b"`，
+     解析器能分清
+  2. **`src/storage/rateLimit.ts`（13 个用例）**: 每数据源的令牌桶。外部 IP 地理 API
+     的免费额度是硬的（ip-api 每分钟 45 次），一次失控的补数能把自己锁到第二天。
+     用例钉住三件事：突发额度发完就**必须等**（早一毫秒都不行）、补充速率与时间成正比、
+     补充不会超过容量上限。这里有个反直觉的点：**桶是满着起步的**，所以不先花掉令牌
+     就永远观察不到补充
+  3. **`src/web/errors/render.ts`（16 个用例）**: 错误页与 CSRF 页。CSRF 页承诺
+     「可以重试」，并给出一个真正有用的按钮——三种状态三个去处（已登录→回原页面、
+     匿名→/login、未初始化→/init）。此前它对所有人都指向 /init，等于告诉一个
+     标签页过期了的登录用户「你的部署没了」
+  4. **`src/web/plugins/loginRateLimit.ts`（12 个用例）**: 登录暴力破解锁定。
+     计数必须**按账号**而不是全局（全局锁定就是拒绝服务而不是防御），
+     锁定必须会过期（否则几次输错就把自己锁在门外）
+  5. **`src/web/plugins/rangeCountRefresher.ts`（9 个用例）**: 缓存的
+     `ip_ranges` 行数。策略才是要钉住的东西：**只在陈旧时重算**——每次都重算
+     等于把那个要几秒的 `COUNT(*)` 又放回页面路径上，而缓存存在的意义正是避免它
+  - RED 校验都做过并已还原：去掉 CSV 的引号加倍 → 转义用例报
+    `expected '…,"say "h…' to contain '"say ""hi"""'`；让 `recordLoginSuccess`
+    不再小写化邮箱 → 混合大小写的清除用例报 `expected true to be false`。
+    **第二次 RED 一开始没咬合**——用例只用了全小写邮箱，看不出键不一致。
+    补上混合大小写那一例之后才咬住：失败计数器用小写键存，
+    清除时若不先小写化，一次成功登录会把旧计数留在原地，
+    账号离一次没犯过的锁定只差一个错字
+- **CI 补上数据库与浏览器两套测试（此前 CI 从未跑过它们）**: `.github/workflows/ci.yml`
+  只有一个 `unit` job，跑 `npm run test:unit`。**集成测试和浏览器测试从来没在 CI 里
+  执行过**——本地 1622 个用例，CI 只跑 1000 个。也就是说上面那批浏览器测试
+  进了仓库却不在 CI 里跑，等于没有守护；集成测试里那批元数据锁回归用例同样如此。
+  新增 `database` job：
+  1. **MySQL 5.7 服务容器**——与生产同版本。新版本会让某条查询在这里过、在那里不过，
+     而这套测试要考的元数据锁行为本身就是版本相关的
+  2. **`MYSQL_ROOT_HOST: "%"`**——root 默认只许本机登录，而套件是从 runner 的
+     网络栈连进来的
+  3. **`NODE_ENV=test`**——关掉生产环境缺 `SESSION_SECRET` 的快速失败。
+     初始化向导正是这些用例要测的东西，没有它向导根本到不了
+  4. **`npx playwright install --with-deps chromium`**——npm 包不保证 runner 上
+     就有浏览器二进制
+- **覆盖率下限（`vitest.config.ts`）**: 之前覆盖率是「测了、报了个数、没人管」。
+  现在 `coverage.thresholds` 把单元切片的数字钉成下限：statements 42 / branches 74 /
+  functions 55 / lines 42。门槛按单元切片标定，因为那是 CI 不依赖数据库就能把关的
+  那一套；更大的切片自然越线（全量套件是 87.72%）。
+  RED 校验：把 statements 门槛临时抬到 99 → 跑测试报
+  `ERROR: Coverage for statements (0.76%) does not meet global threshold (99%)`
 - **浏览器级测试铺开到营销页、仪表盘与地图**: 此前 e2e 套件只碰过 62 条路由里的
   6 条，全是 `/admin*`。营销页、仪表盘和世界地图**没有任何一个测试点过东西**——
   单元测试读脚本源码，集成测试查 HTML 里有没有那段标记，**两边都不执行页面上的
@@ -262,6 +311,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **CI 的覆盖率产物从来没被生成过**: `.github/workflows/ci.yml` 里有一个
+  `Upload coverage` 步骤，指向 `coverage/` 目录；但上面的 `Unit tests` 步骤跑的是
+  `npm run test:unit`——**不带 `--coverage`**，于是 `coverage/` 根本不存在，
+  上传步骤什么也没传（`upload-artifact` 对空目录只警告不报错，所以 CI 一直是绿的，
+  产物一直是空的）。现在这一步改跑 `npm run test:coverage`，
+  `coverage/` 里真的有东西了
 - **读路径被元数据锁堵死，整站挂起**: 2026-11-23 那天 `/lookup`、`/dashboard`、
   `/stats` 全部卡住。根因不在数据库慢，而是一条 SQL 把 `ip_ranges` 拖进了语句里：
   `getLastUserQuery` 原本用 `LEFT JOIN ip_ranges` 把「最后一次查询」和它的国家/ASN

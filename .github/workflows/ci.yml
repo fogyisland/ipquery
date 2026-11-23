@@ -43,8 +43,18 @@ jobs:
       - name: Verify release bundle is in sync
         run: npm run check:release
 
+      # The coverage thresholds live in vitest.config.ts and are
+      # calibrated against this slice: the unit tests are the only ones
+      # that run without a database, so they are the ones CI can gate
+      # on. `npm run test:coverage` is `vitest run test/unit
+      # --coverage`, which is what produces the coverage/ directory the
+      # upload step below ships.
+      #
+      # The step used to be a bare `npm run test:unit`, which wrote no
+      # coverage at all — the upload then found an empty directory and
+      # quietly shipped nothing.
       - name: Unit tests
-        run: npm run test:unit
+        run: npm run test:coverage
 
       - name: Upload coverage
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -53,3 +63,70 @@ jobs:
           name: coverage-report
           path: coverage/
           retention-days: 14
+
+  database:
+    name: Database + browser tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      # 5.7 to match the production server. A newer MySQL would let a
+      # query pass here and fail there, or the other way round — and
+      # the metadata-lock behaviour this suite exists to exercise is
+      # version-specific.
+      mysql:
+        image: mysql:5.7
+        env:
+          MYSQL_ROOT_PASSWORD: rootpass
+          # root may only connect from localhost by default, and the
+          # suite reaches the server from the runner's network stack.
+          MYSQL_ROOT_HOST: "%"
+          MYSQL_DATABASE: ipquery
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -prootpass"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+    env:
+      DB_HOST: 127.0.0.1
+      DB_PORT: "3306"
+      DB_USER: root
+      DB_PASSWORD: rootpass
+      DB_NAME: ipquery
+      # `test` turns off the production fail-fast on a missing
+      # SESSION_SECRET. The wizard and the setup guard are the point
+      # of some of these tests, and they have to be reachable without
+      # a configured install.
+      NODE_ENV: test
+      SESSION_SECRET: ci-session-secret-not-used-in-production
+      CSRF_SECRET: ci-csrf-secret-not-used-in-production
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      # The browser tests drive a real chromium. The npm package does not
+      # guarantee the browser binary is present on a fresh runner.
+      - name: Install chromium
+        run: npx playwright install --with-deps chromium
+
+      # These suites need a database. Each file creates its own
+      # `ipquery_test_*` database and drops it afterwards, so they can
+      # run against the same server without stepping on each other.
+      - name: Integration tests
+        run: npm run test:integration
+
+      # The browser suite is the only one that executes a page's
+      # JavaScript. Everything else calls handlers directly or uses
+      # Fastify's inject(), so a dropdown that never opens or a tab that
+      # never switches passes all of them.
+      - name: Browser tests
+        run: npm run test:e2e
