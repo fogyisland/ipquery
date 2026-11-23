@@ -496,6 +496,140 @@
   color: var(--m-ink-1);
 }
 
+/* ---------- Account menu (marketing top nav) ----------
+   A <details> element, so the open/close behaviour is the browser's.
+   The trigger is the account NAME, not a generic "console" link —
+   a person looking at the header wants to know WHICH account they
+   are in before they click anything. */
+.m-account {
+  position: relative;
+}
+.m-account-trigger {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 10px 5px 5px;
+  border: 1px solid var(--m-border);
+  border-radius: 999px;
+  background: var(--m-surface);
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+.m-account-trigger::-webkit-details-marker {
+  display: none;
+}
+.m-account-trigger:hover {
+  border-color: var(--m-border-strong);
+  background: var(--m-surface-2);
+}
+.m-account-trigger:focus-visible {
+  outline: 2px solid var(--m-accent);
+  outline-offset: 2px;
+}
+.m-account-avatar {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--m-accent-soft);
+  color: var(--m-accent);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  flex: 0 0 auto;
+}
+.m-account-name {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--m-ink-1);
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.m-account-caret {
+  color: var(--m-ink-3);
+  flex: 0 0 auto;
+}
+.m-account[open] .m-account-caret {
+  transform: rotate(180deg);
+}
+.m-account-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 8px);
+  min-width: 200px;
+  background: var(--m-surface);
+  border: 1px solid var(--m-border);
+  border-radius: var(--m-radius-md);
+  box-shadow: var(--m-shadow-md);
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  z-index: 30;
+}
+.m-account-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 8px 12px;
+  border: 0;
+  border-radius: var(--m-radius-sm);
+  background: transparent;
+  color: var(--m-ink-1);
+  font-size: 14px;
+  font-weight: 500;
+  font-family: inherit;
+  text-decoration: none;
+  cursor: pointer;
+}
+/* `.m-page a` (0,1,1) outranks `.m-account-item` (0,1,0), so the menu
+   items would otherwise inherit the accent blue and read as a wall of
+   links instead of a list of actions. Scope the anchor colour to the
+   menu so the item rules below win. */
+.m-account-menu a.m-account-item {
+  color: var(--m-ink-1);
+  text-decoration: none;
+}
+.m-account-menu a.m-account-item:hover {
+  color: var(--m-ink-1);
+}
+.m-account-item:hover {
+  background: var(--m-surface-2);
+}
+.m-account-item:focus-visible {
+  outline: 2px solid var(--m-accent);
+  outline-offset: -2px;
+}
+.m-account-item-danger {
+  color: var(--m-bad);
+}
+.m-account-menu a.m-account-item-danger {
+  color: var(--m-bad);
+}
+.m-account-item-danger:hover {
+  background: color-mix(in srgb, var(--m-bad) 8%, var(--m-surface));
+}
+.m-account-form {
+  margin: 0;
+  padding: 0;
+}
+.m-account-form .m-account-item {
+  border-radius: var(--m-radius-sm);
+}
+
+/* ---------- Profile pages (dashboard) ----------
+   The profile overview is a directory, not a form: the three editable
+   things live on their own pages, so each answer can name the form it
+   belongs to.
+
+   NOTE: the profile pages render inside layouts/dashboard, which loads
+   base.css / layout.css / forms.css / admin.css — NOT this file. Their
+   styles therefore live in admin.css, next to the other console rules. */
+
 /* ---------- Section primitives (shared) ---------- */
 .m-section {
   padding: 80px 24px;

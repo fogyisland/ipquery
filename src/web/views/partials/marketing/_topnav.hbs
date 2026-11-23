@@ -1,4 +1,38 @@
 {{!-- SPDX-License-Identifier: MIT --}}
+{{!--
+  The marketing top nav.
+
+  For a signed-in visitor the right-hand slot is the ACCOUNT MENU: the
+  user's name, and a dropdown holding the four things an account owner
+  reaches for — 个人中心 (the console), 档案 (the profile details),
+  更改密码 (the password form) and 注销 (log out).
+
+  Two decisions worth stating:
+
+  1. It is a <details> element, not a JS-driven dropdown. The page's
+     CSP is `script-src 'self'`, so an inline handler is blocked, and an
+     external controller would have to re-implement focus management,
+     Escape handling and outside-click dismissal that <details> gives
+     for free. <details> also works with no JavaScript at all, which
+     means the menu still opens if the asset fails to load.
+
+  2. 注销 is a POST, not a link. Logging out mutates server state, so
+     it carries a CSRF token; a GET link would be forgeable by any
+     <img src="/logout"> on a third-party page.
+
+  3. No `role="menu"`. The ARIA menu widget obliges the author to move
+     focus between items with the arrow keys. There is no key handler
+     for this menu — the page's CSP forbids inline scripts and no
+     controller exists for it — so claiming the role would promise an
+     interaction that is not there. A list of links inside a disclosure
+     needs no role at all, and keeps the browser's native Tab
+     navigation, which is what a keyboard user expects of a list of
+     links anyway.
+
+  The name shown is the display name when the account has one, and the
+  email address otherwise — an account with no nickname still has to be
+  identifiable in the header.
+--}}
 <nav class="m-topnav">
   <div class="m-topnav-inner">
     <a href="/" class="m-topnav-brand">
@@ -13,7 +47,24 @@
     </div>
     <div class="m-topnav-cta">
       {{#if req.user}}
-        <a href="/dashboard" class="m-text-link">{{req.t 'nav.dashboard'}}</a>
+        <details class="m-account">
+          <summary class="m-account-trigger" aria-label="{{req.t 'nav.account'}}">
+            <span class="m-account-avatar" aria-hidden="true">{{accountInitial}}</span>
+            <span class="m-account-name">{{accountLabel}}</span>
+            <svg class="m-account-caret" width="10" height="6" viewBox="0 0 10 6" aria-hidden="true" focusable="false">
+              <path d="M1 1l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </summary>
+          <div class="m-account-menu">
+            <a class="m-account-item" href="/dashboard">{{req.t 'nav.account'}}</a>
+            <a class="m-account-item" href="/dashboard/profile/details">{{req.t 'nav.profileDetails'}}</a>
+            <a class="m-account-item" href="/dashboard/profile/password">{{req.t 'nav.changePassword'}}</a>
+            <form method="POST" action="/logout" class="m-account-form">
+              <input type="hidden" name="csrf" value="{{req.csrfToken}}">
+              <button type="submit" class="m-account-item m-account-item-danger">{{req.t 'nav.logout'}}</button>
+            </form>
+          </div>
+        </details>
       {{else}}
         <a href="/login" class="m-text-link">{{req.t 'nav.login'}}</a>
         <a href="/signup" class="button button-small">{{req.t 'common.signup'}}</a>

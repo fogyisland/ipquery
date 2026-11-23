@@ -63,6 +63,9 @@
     "history": "查询历史",
     "apiKeys": "API Keys",
     "profile": "个人资料",
+    "account": "个人中心",
+    "profileDetails": "档案",
+    "changePassword": "更改密码",
     "signup": "注册",
     "login": "登录",
     "mcpTokens": "MCP Tokens"
@@ -204,7 +207,19 @@
       "newPassword": "新密码",
       "save": "保存修改",
       "saved": "资料已保存",
-      "savedWithEviction": "资料已保存。已退出 {count} 个其他会话。"
+      "savedWithEviction": "资料已保存。已退出 {count} 个其他会话。",
+      "backToOverview": "返回个人资料",
+      "summary": {
+        "title": "账号信息"
+      },
+      "details": {
+        "title": "档案",
+        "hint": "修改昵称与邮箱"
+      },
+      "password": {
+        "title": "更改密码",
+        "hint": "设置一个新密码，并退出其他设备上的会话"
+      }
     },
     "hit": "命中",
     "miss": "未命中",
@@ -1087,7 +1102,7 @@
     },
     "features": {
       "eyebrow": "为什么选 IPQuery",
-      "title": "一个查询,三个数据源",
+      "title": "一个查询,四个数据源",
       "sub": "主源优先,备源补字段。每个字段都标注来源,你来判断取舍。",
       "sources": {
         "mark": "01 / 多源",

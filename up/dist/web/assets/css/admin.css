@@ -3513,3 +3513,66 @@ button:disabled:hover {
   /* Cancel the hover treatment inherited from the base button rules. */
   background: inherit;
 }
+
+/* ─── Profile pages ──────────────────────────────────────────────────────
+   The account overview is a directory, not a form: the nickname, the
+   email address and the password each live on their own page, because
+   each is a separate form with its own validation, its own CSRF token
+   and its own success message. Stacking them on one page meant the
+   flash after saving the nickname could not say which form it
+   belonged to.
+
+   The overview therefore shows what the account currently holds, and
+   links to the page that edits it. */
+.profile-summary {
+  margin-top: var(--sp-4);
+}
+.profile-summary th {
+  width: 160px;
+  color: var(--text-2);
+  font-weight: 500;
+}
+.profile-summary td {
+  word-break: break-word;
+}
+
+.profile-links {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: var(--sp-4);
+  margin-top: var(--sp-5);
+}
+/* `.card + .card` adds a top margin, which would break the grid gap —
+   the two link cards sit side by side, not stacked. */
+.profile-links .card + .card {
+  margin-top: 0;
+}
+.profile-link {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  text-decoration: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.profile-link:hover {
+  text-decoration: none;
+  border-color: var(--border-2);
+  box-shadow: var(--shadow-card);
+}
+.profile-link:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.profile-link-title {
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 600;
+}
+.profile-link-hint {
+  color: var(--text-2);
+  font-size: 13px;
+}
+.profile-back {
+  margin-top: var(--sp-5);
+  font-size: 14px;
+}

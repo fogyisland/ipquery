@@ -291,68 +291,112 @@ async function dashboardRoutes(app) {
             req,
         });
     });
+    // The profile split into three pages. The top-nav account menu links
+    // to all three, so each destination needs its own URL — a menu whose
+    // entries are anchors into one long form is a menu where every entry
+    // looks like a mistake.
+    //
+    //   /dashboard/profile           — the account overview
+    //   /dashboard/profile/details   — display name and email
+    //   /dashboard/profile/password  — the password form
+    //
+    // The POST stays at /dashboard/profile with an `action` field, so the
+    // existing form posts and their tests keep working unchanged.
+    app.get("/dashboard/profile/details", async (req, reply) => {
+        return reply.view("dashboard/profile-details.hbs", {
+            layout: "layouts/dashboard",
+            title: req.t("dashboard.profile.details.title"),
+            req,
+        });
+    });
+    app.get("/dashboard/profile/password", async (req, reply) => {
+        return reply.view("dashboard/profile-password.hbs", {
+            layout: "layouts/dashboard",
+            title: req.t("dashboard.profile.password.title"),
+            req,
+        });
+    });
     app.post("/dashboard/profile", async (req, reply) => {
         if (!(0, csrf_1.verifyCsrfRequest)(req))
             return reply.code(403).view("errors/csrf.hbs", { layout: "layouts/public", req });
         const body = req.body;
         const action = body.action ?? "";
+        // Each action answers on the page its form lives on. Rendering the
+        // details form's result on the password page (or vice versa)
+        // would drop the user on a page whose form they did not just fill
+        // in, and the flash message would land on a page with nothing to
+        // show it against.
+        //
+        // The helpers RETURN the view promise. `reply.view()` sends the
+        // response itself; if the handler does not await it, Fastify sees
+        // an un-settled handler and sends an empty 200 first — which is
+        // exactly the "Reply was already sent" error.
+        //
+        // `refreshUser` re-reads the account row after a change. `req.user`
+        // is the row as it was when the request arrived, so a handler that
+        // saves and then renders without refreshing it shows the user their
+        // OLD nickname back — the page says "saved" and displays the value
+        // they just replaced, which reads as a failed save.
+        //
+        // `req.session.email` is refreshed alongside it. The session plugin
+        // copies the email onto the session when the request arrives, and
+        // three views render that copy (the sidebar footer, the admin
+        // topbar, the admin dashboard greeting) — so leaving it stale
+        // would show the old address in the chrome of the very page that
+        // changed it.
+        const refreshUser = async () => {
+            const fresh = await (0, users_1.findUserById)(app.pool, req.user.id);
+            if (!fresh)
+                return;
+            req.user = fresh;
+            if (req.session) {
+                req.session.email = fresh.email;
+                req.session.role = fresh.role;
+            }
+        };
+        const detailsView = (flash, status = 200) => reply.code(status).view("dashboard/profile-details.hbs", {
+            layout: "layouts/dashboard",
+            title: req.t("dashboard.profile.details.title"),
+            flash,
+            req,
+        });
+        const passwordView = (flash, status = 200) => reply.code(status).view("dashboard/profile-password.hbs", {
+            layout: "layouts/dashboard",
+            title: req.t("dashboard.profile.password.title"),
+            flash,
+            req,
+        });
         if (action === "displayName") {
             const dn = (body.displayName ?? "").trim();
             if (!dn || dn.length > 64) {
-                return reply.code(400).view("dashboard/profile.hbs", {
-                    layout: "layouts/dashboard",
-                    title: req.t("dashboard.profile.title"),
-                    flash: { error: "invalid display_name" },
-                    req,
-                });
+                return detailsView({ error: "invalid display_name" }, 400);
             }
             await (0, users_1.updateDisplayName)(app.pool, req.user.id, dn);
-            return reply.view("dashboard/profile.hbs", {
-                layout: "layouts/dashboard",
-                title: req.t("dashboard.profile.title"),
-                flash: { success: req.t("dashboard.profile.saved") },
-                req,
-            });
+            await refreshUser();
+            return detailsView({ success: req.t("dashboard.profile.saved") });
         }
         if (action === "email") {
             const email = (body.email ?? "").trim().toLowerCase();
             if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-                return reply.code(400).view("dashboard/profile.hbs", {
-                    layout: "layouts/dashboard",
-                    title: req.t("dashboard.profile.title"),
-                    flash: { error: "invalid email" },
-                    req,
-                });
+                return detailsView({ error: "invalid email" }, 400);
             }
             await (0, users_1.updateEmail)(app.pool, req.user.id, email);
             // email_verified is reset by updateEmail; re-verify by admin or via verification flow (out of scope here)
             // For simplicity in MVP, we just save the new email. Production: trigger re-verification.
-            return reply.view("dashboard/profile.hbs", {
-                layout: "layouts/dashboard",
-                title: req.t("dashboard.profile.title"),
-                flash: { success: req.t("dashboard.profile.saved") },
-                req,
-            });
+            await refreshUser();
+            return detailsView({ success: req.t("dashboard.profile.saved") });
         }
         if (action === "password") {
             const old = body.oldPassword ?? "";
             const newPw = body.newPassword ?? "";
             const v = (0, password_1.validatePassword)(newPw);
-            if (!v.ok)
-                return reply.code(400).view("dashboard/profile.hbs", {
-                    layout: "layouts/dashboard",
-                    title: req.t("dashboard.profile.title"),
-                    flash: { error: req.t("auth.signup.error.password_weak") },
-                    req,
-                });
+            if (!v.ok) {
+                return passwordView({ error: req.t("auth.signup.error.password_weak") }, 400);
+            }
             const hash = await (0, users_1.getUserPasswordHash)(app.pool, req.user.id);
-            if (!hash || !(await (0, password_1.verifyPassword)(hash, old)))
-                return reply.code(401).view("dashboard/profile.hbs", {
-                    layout: "layouts/dashboard",
-                    title: req.t("dashboard.profile.title"),
-                    flash: { error: "old_password_incorrect" },
-                    req,
-                });
+            if (!hash || !(await (0, password_1.verifyPassword)(hash, old))) {
+                return passwordView({ error: "old_password_incorrect" }, 401);
+            }
             await (0, users_1.updatePassword)(app.pool, req.user.id, await (0, password_1.hashPassword)(newPw));
             // Evict any other browser/device that was logged in as this user
             // (matching the forgot/reset flow's security posture). Keep the
@@ -361,15 +405,10 @@ async function dashboardRoutes(app) {
             // req.session is guaranteed non-null inside /dashboard/* (auth
             // guard would have redirected otherwise).
             const evicted = await (0, sessions_1.destroyAllForUserExcept)(app.pool, req.user.id, req.session.id);
-            return reply.view("dashboard/profile.hbs", {
-                layout: "layouts/dashboard",
-                title: req.t("dashboard.profile.title"),
-                flash: {
-                    success: evicted > 0
-                        ? req.t("dashboard.profile.savedWithEviction", { count: String(evicted) })
-                        : req.t("dashboard.profile.saved"),
-                },
-                req,
+            return passwordView({
+                success: evicted > 0
+                    ? req.t("dashboard.profile.savedWithEviction", { count: String(evicted) })
+                    : req.t("dashboard.profile.saved"),
             });
         }
         return reply.code(400).view("dashboard/profile.hbs", {

@@ -84,6 +84,20 @@ function injectPath(reply, data) {
         if (data.req && typeof data.req === "object") {
             data.req.path = path;
         }
+        // The account menu in the marketing top nav needs the signed-in
+        // user's NAME, and a nickname is optional — an account can be
+        // created with only an email address. The label therefore falls
+        // back to the email, and the initial falls back to the first
+        // character of whatever is displayed. Both are computed here
+        // rather than in the template so the same pair is available to
+        // every layout that renders the menu.
+        const user = data.req
+            ?.user;
+        if (user) {
+            const label = (user.displayName ?? "").trim() || (user.email ?? "").trim();
+            data.accountLabel = label;
+            data.accountInitial = label.slice(0, 1).toUpperCase();
+        }
     }
 }
 async function registerView(app, cfg) {

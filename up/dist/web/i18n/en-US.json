@@ -63,6 +63,9 @@
     "history": "History",
     "apiKeys": "API Keys",
     "profile": "Profile",
+    "account": "Account",
+    "profileDetails": "Profile",
+    "changePassword": "Change password",
     "signup": "Sign up",
     "login": "Log in",
     "mcpTokens": "MCP Tokens"
@@ -203,7 +206,19 @@
       "newPassword": "New password",
       "save": "Save changes",
       "saved": "Profile saved",
-      "savedWithEviction": "Profile saved. {count} other session(s) signed out."
+      "savedWithEviction": "Profile saved. {count} other session(s) signed out.",
+      "backToOverview": "Back to profile",
+      "summary": {
+        "title": "Account"
+      },
+      "details": {
+        "title": "Profile",
+        "hint": "Change your display name and email"
+      },
+      "password": {
+        "title": "Change password",
+        "hint": "Set a new password and sign out your other devices"
+      }
     },
     "hit": "Hit",
     "miss": "Miss",
@@ -1086,7 +1101,7 @@
     },
     "features": {
       "eyebrow": "Why IPQuery",
-      "title": "One query, three sources",
+      "title": "One query, four sources",
       "sub": "Primary source first, backups fill the gaps. Each field is tagged with its source so you can decide.",
       "sources": {
         "mark": "01 / aggregation",

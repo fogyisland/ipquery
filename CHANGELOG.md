@@ -153,6 +153,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   5. 守卫测试防止回潮：营销页、README/NOTICE/docs、后台设置页、config 与
      两份 `.env.example` 各有一道
 
+- **右上角账号菜单**: 首页右上角的「控制台」入口改成**用户名**——显示昵称
+  （没有昵称则退回邮箱）加首字母头像，点开是一份下拉菜单：个人中心、档案、
+  更改密码、注销。此前那是一个指向 `/dashboard` 的裸链接，用户想改昵称或
+  改密码只能先进控制台再自己找入口，而控制台里根本没有改密码的地方。
+  1. **用 `<details>` 而不是 JS 下拉**: CSP 是 `script-src 'self'`，内联脚本
+     一律被拦；`<details>/<summary>` 是纯 HTML，键盘与屏幕阅读器都默认可用，
+     零脚本也能开合
+  2. **菜单项分三个目的地**: 「档案」与「更改密码」指向新增的
+     `/dashboard/profile/details` 与 `/dashboard/profile/password` 两页，
+     `/dashboard/profile` 降级为账号概览页。一个菜单里三个入口若都指向同一个
+     长表单，那这个菜单的每一项看起来都像点错了
+  3. **改完密码踢掉其它设备**: 与「忘记密码／重置密码」的姿态一致——保留
+     当前会话（用户正在自己的浏览器里操作，把它踢掉是敌意行为），其余设备
+     全部失效
+  4. **注销走 POST + CSRF**: 菜单里的注销是一个带 `csrf` 隐藏字段的表单，
+     不是 `GET /logout` 链接——登出是状态变更，GET 会被预取器、爬虫和
+     浏览器预加载悄悄触发
+  5. **不谎称自己是 ARIA 菜单**: 菜单一开始带 `role="menu"` 与
+     `role="menuitem"`——而 ARIA 的 menu 部件要求作者用方向键在条目间
+     移动焦点。这份模板没有任何按键处理器（CSP 是 `script-src 'self'`，
+     也没有对应的控制器），于是屏幕阅读器用户被告知「这是一个菜单」、
+     按下方向键、什么也没发生——承诺的交互并不存在。现去掉这两个 role：
+     一个 `<details>` 里的链接列表不需要 role，而且保留了浏览器原生的
+     Tab 导航——键盘用户对一份链接列表期待的本来也就是它
+
 - **HTTP API 批量查询**: 新增 `POST /lookup/batch`，一次最多查 100 个地址。
   MCP 早已有 `ipquery_lookup_batch`，但 HTTP 侧一直没有等价物——一个拿日志
   文件、CDN 源站列表或滥用报告做对账的调用方，只能一个地址一次往返。
@@ -573,6 +598,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **ETL 触发测试滞后于并发守卫**: `admin.etl.test.ts` 仍期望 trigger 新建运行行，
   但 `01e7efd` 加的守卫会在存在 `running` 行时拒绝（正是该测试 `beforeAll` 造出的状态）。
   现先收尾种子行，并补一条断言拒绝路径的用例
+- **改资料后页面显示的还是旧值**: `req.user` 是请求到达时的账号行快照，处理函数
+  存了新昵称再渲染，却没重读——于是页面弹「资料已保存」，输入框里却是**刚被
+  替换掉的那个旧昵称**。读起来就是保存失败。现保存后重新查库并回填
+  `req.user`；`req.session.email` 一并刷新，因为侧栏页脚、后台顶栏、后台
+  问候语渲染的都是会话里那份拷贝，不刷新的话，改了邮箱的页面旁边的框里
+  还写着旧地址
+- **ETL 的 swap 会永久挂起**: `atomicSwapRanges()` 用 `RENAME TABLE` 换表，
+  而 `RENAME` 需要 `ip_ranges` 上的**独占元数据锁（MDL）**。MySQL 的
+  `lock_wait_timeout` 默认是 31,536,000 秒——**一年**。任何一个还在读的
+  长查询（`SELECT COUNT(*)`、带 `JOIN` 的日志查询）都会让 swap 排队一年，
+  表现是「ETL 一直卡在 swap 阶段」；反过来，swap 排队期间所有新读者也全部
+  堵在 MDL 后面，整站查询一起变慢。现 swap 前 `SET SESSION lock_wait_timeout = 30`，
+  等不到锁就**快速失败**并把运行标记为失败，而不是占着锁不放
+- **被放弃的 ETL 运行会一直占着运行锁**: 进程被杀、机器重启之后，`etl_runs`
+  里的 `running` 行不会自己收尾，于是**下一次** ETL 也被守卫挡住——「这个实例
+  再也跑不了 ETL」。现 `closeStaleEtlRuns()` 把超过 120 分钟仍停在 `running`
+  的运行标记为失败并释放锁，取锁时也先回收一遍
+- **首页标题说三个数据源，旁边的数字写四个**: 标题「一个查询,三个数据源」是
+  手写文案，而下方那颗统计徽章的数字是 `etlUpstreamCount()` 从流水线算出来的
+  ——两者已经漂移。流水线抓的是七个文件、来自**四个**上游（DB-IP 占三个文件），
+  于是同一屏上标题说三、徽章说四，两个数字都不可信。现把标题改成四个，并补
+  一道测试把标题里的数字与 `etlUpstreamCount()` 对齐——再加一个上游时，是测试
+  挂掉，而不是页面上悄悄多出一个说法
 
 ### Security
 

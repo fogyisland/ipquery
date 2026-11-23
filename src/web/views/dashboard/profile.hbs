@@ -1,25 +1,42 @@
 {{!-- SPDX-License-Identifier: MIT --}}
+{{!--
+  The account overview.
+
+  It is deliberately not a form. The three things an account owner
+  actually changes — the nickname, the email address and the password —
+  live on their own pages, because each of them is a separate form with
+  its own validation rules, its own CSRF token and its own success
+  message. Stacking three forms on one page means the flash message
+  after saving the nickname cannot say WHICH form it belongs to.
+
+  So this page is a directory: it says what the account currently holds
+  and links to the page that edits it.
+--}}
 <h1>{{req.t 'dashboard.profile.title'}}</h1>
-{{#if flash.success}}<div class="flash flash-success">{{flash.success}}</div>{{/if}}
 
-<form method="POST" action="/dashboard/profile" class="form-section">
-  <input type="hidden" name="csrf" value="{{req.csrfToken}}">
-  <input type="hidden" name="action" value="displayName">
-  {{> form-field name="displayName" label=(req.t 'dashboard.profile.displayName') value=req.user.displayName required=true }}
-  <button type="submit">{{req.t 'common.save'}}</button>
-</form>
+<section class="card">
+  <h2 class="card-title">{{req.t 'dashboard.profile.summary.title'}}</h2>
+  <table class="table profile-summary">
+    <tbody>
+      <tr>
+        <th scope="row">{{req.t 'dashboard.profile.displayName'}}</th>
+        <td>{{req.user.displayName}}</td>
+      </tr>
+      <tr>
+        <th scope="row">{{req.t 'dashboard.profile.email'}}</th>
+        <td>{{req.user.email}}</td>
+      </tr>
+    </tbody>
+  </table>
+</section>
 
-<form method="POST" action="/dashboard/profile" class="form-section">
-  <input type="hidden" name="csrf" value="{{req.csrfToken}}">
-  <input type="hidden" name="action" value="email">
-  {{> form-field name="email" type="email" label=(req.t 'dashboard.profile.email') value=req.user.email required=true help=(req.t 'dashboard.profile.emailHint') }}
-  <button type="submit">{{req.t 'common.save'}}</button>
-</form>
-
-<form method="POST" action="/dashboard/profile" class="form-section">
-  <input type="hidden" name="csrf" value="{{req.csrfToken}}">
-  <input type="hidden" name="action" value="password">
-  {{> form-field name="oldPassword" type="password" label=(req.t 'dashboard.profile.oldPassword') required=true autocomplete="current-password" }}
-  {{> form-field name="newPassword" type="password" label=(req.t 'dashboard.profile.newPassword') required=true help=(req.t 'auth.password.help') autocomplete="new-password" }}
-  <button type="submit">{{req.t 'common.save'}}</button>
-</form>
+<section class="profile-links">
+  <a class="card profile-link" href="/dashboard/profile/details">
+    <span class="profile-link-title">{{req.t 'nav.profileDetails'}}</span>
+    <span class="profile-link-hint">{{req.t 'dashboard.profile.details.hint'}}</span>
+  </a>
+  <a class="card profile-link" href="/dashboard/profile/password">
+    <span class="profile-link-title">{{req.t 'nav.changePassword'}}</span>
+    <span class="profile-link-hint">{{req.t 'dashboard.profile.password.hint'}}</span>
+  </a>
+</section>

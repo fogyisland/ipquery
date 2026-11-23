@@ -24,6 +24,10 @@ data/
 scripts/dev/*.png
 scripts/dev/*.trace.zip
 scripts/dev/*.zip
+# Screenshots written to the repo root by the shot scripts. The scripts
+# now write next to themselves (scripts/dev/*.png, above); this covers
+# the older ones that still aim at the root.
+shots/
 # Scratch files — local commit-message drafts, never committed
 .superpowers/scratch/
 
