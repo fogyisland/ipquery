@@ -20,6 +20,39 @@ import { isInitialized } from "../../src/storage/settings";
  */
 const DB_NAME = "ipquery_test_fresh_boot";
 
+/**
+ * Drop the database, tolerating a dead connection.
+ *
+ * `DROP DATABASE` needs an EXCLUSIVE metadata lock on every table in it.
+ * If a previous run left a connection open on this database — one still
+ * holding a table lock because the test timed out before its `finally`
+ * ran — the DROP queues behind it for MySQL's year-long default, and
+ * the suite hangs in cleanup long after the assertions have passed.
+ *
+ * The wait is bounded here so a cleanup that cannot finish fails fast
+ * instead of hanging. A leftover database is inert; it holds no lock
+ * that anything else waits on.
+ *
+ * The whole body is inside the try, not just the DROP: the session
+ * statement that sets the bound runs first, and a connection that died
+ * while it sat idle throws on THAT rather than on the DROP — which is
+ * how this cleanup failed once, as an ECONNRESET pointing at a line
+ * that had nothing to do with the real problem.
+ */
+async function dropDatabase(conn: mysql.Connection, name: string): Promise<void> {
+  try {
+    await conn.query("SET SESSION lock_wait_timeout = 5");
+    await conn.query(`DROP DATABASE IF EXISTS \`${name}\``);
+  } catch (err: unknown) {
+    // Failing the test over a cleanup that could not take its lock
+    // would bury the real result — which is what the assertions in
+    // this file actually care about.
+    console.warn(
+      `[init-fresh-boot] could not drop ${name}: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
+}
+
 async function createEmptyDatabase(): Promise<mysql.Pool> {
   const cfg = loadConfig();
   const conn = await mysql.createConnection({
@@ -29,7 +62,7 @@ async function createEmptyDatabase(): Promise<mysql.Pool> {
     password: cfg.db.password,
     multipleStatements: true,
   });
-  await conn.query(`DROP DATABASE IF EXISTS \`${DB_NAME}\``);
+  await dropDatabase(conn, DB_NAME);
   await conn.query(`CREATE DATABASE \`${DB_NAME}\` DEFAULT CHARACTER SET utf8mb4`);
   await conn.end();
 
@@ -65,7 +98,7 @@ beforeAll(async () => {
 afterAll(async () => {
   if (pool) await pool.end();
   if (rootConn) {
-    await rootConn.query(`DROP DATABASE IF EXISTS \`${DB_NAME}\``);
+    await dropDatabase(rootConn, DB_NAME);
     await rootConn.end();
   }
 });
