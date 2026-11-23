@@ -30,16 +30,19 @@ export default defineConfig({
       // A floor, not a target.
       //
       // These are calibrated against the unit slice — `vitest run
-      // test/unit --coverage` — because that is the slice CI can gate
-      // on without a database. Measured there: 44.03% statements,
-      // 77.97% branches, 58.79% functions. The floor sits a couple of
-      // points below so ordinary churn does not fail a build, while a
-      // whole new module arriving untested (which is what happened
-      // with the CSV export and the login lockout) does.
+      // test/unit --coverage` — because that is the slice CI gates on.
+      // Measured there: 44.03% statements, 77.97% branches, 58.79%
+      // functions. The floor sits a couple of points below so ordinary
+      // churn does not fail a build, while a whole new module arriving
+      // untested (which is what happened with the CSV export and the
+      // login lockout) does.
       //
-      // A larger slice always clears these: the full suite measures
-      // 87.72% statements because the integration and browser tests
-      // exercise the routes and plugins the unit slice never loads.
+      // The full suite measures 87.72% statements, because the
+      // integration and browser tests exercise the routes and plugins
+      // the unit slice never loads. A SLICE smaller than the unit one
+      // does not clear the floor — `vitest run test/integration
+      // --coverage` trips it, and that is expected: the threshold
+      // describes the unit slice, not any subset of the repository.
       thresholds: {
         statements: 42,
         branches: 74,

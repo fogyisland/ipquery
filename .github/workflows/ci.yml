@@ -15,7 +15,47 @@ jobs:
   unit:
     name: Unit tests + type-check
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
+    services:
+      # The unit slice is NOT database-free. Fifteen of its files build a
+      # throwaway database and exercise the storage layer against it —
+      # the range import, the schema report, the provider counters, the
+      # audit writes. Without a server here they all die in their
+      # beforeAll with ECONNREFUSED, which is why this job had never
+      # once been green: the workflow was created without a database and
+      # every push since has failed on it.
+      #
+      # 5.7 to match the production server. A newer MySQL would let a
+      # query pass here and fail there, or the other way round — and the
+      # metadata-lock behaviour the suite exercises is version-specific.
+      mysql:
+        image: mysql:5.7
+        env:
+          MYSQL_ROOT_PASSWORD: rootpass
+          # root may only connect from localhost by default, and the
+          # suite reaches the server from the runner's network stack.
+          MYSQL_ROOT_HOST: "%"
+          MYSQL_DATABASE: ipquery
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -prootpass"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+    env:
+      DB_HOST: 127.0.0.1
+      DB_PORT: "3306"
+      DB_USER: root
+      DB_PASSWORD: rootpass
+      DB_NAME: ipquery
+      # `test` turns off the production fail-fast on a missing
+      # SESSION_SECRET. The wizard and the setup guard are the point of
+      # some of these tests, and they have to be reachable without a
+      # configured install.
+      NODE_ENV: test
+      SESSION_SECRET: ci-session-secret-not-used-in-production
+      CSRF_SECRET: ci-csrf-secret-not-used-in-production
     steps:
       - uses: actions/checkout@v4
 
@@ -44,9 +84,9 @@ jobs:
         run: npm run check:release
 
       # The coverage thresholds live in vitest.config.ts and are
-      # calibrated against this slice: the unit tests are the only ones
-      # that run without a database, so they are the ones CI can gate
-      # on. `npm run test:coverage` is `vitest run test/unit
+      # calibrated against this slice — the unit tests are the fastest
+      # thing that still covers the storage layer, so they are the ones
+      # CI can gate on. `npm run test:coverage` is `vitest run test/unit
       # --coverage`, which is what produces the coverage/ directory the
       # upload step below ships.
       #
@@ -67,7 +107,12 @@ jobs:
   database:
     name: Database + browser tests
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # The two slices together take about eighteen minutes on a local
+    # machine, and a GitHub runner is slower than that. The previous
+    # thirty-minute ceiling sat close enough to the wall that an
+    # ordinary slow run could be cut off mid-suite and reported as a
+    # test failure.
+    timeout-minutes: 45
     services:
       # 5.7 to match the production server. A newer MySQL would let a
       # query pass here and fail there, or the other way round — and

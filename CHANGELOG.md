@@ -43,9 +43,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     账号离一次没犯过的锁定只差一个错字
 - **CI 补上数据库与浏览器两套测试（此前 CI 从未跑过它们）**: `.github/workflows/ci.yml`
   只有一个 `unit` job，跑 `npm run test:unit`。**集成测试和浏览器测试从来没在 CI 里
-  执行过**——本地 1622 个用例，CI 只跑 1000 个。也就是说上面那批浏览器测试
-  进了仓库却不在 CI 里跑，等于没有守护；集成测试里那批元数据锁回归用例同样如此。
-  新增 `database` job：
+  执行过**——本地 1685 个用例，CI 每次都在跑到 821 个的时候崩在那 15 个需要数据库的
+  文件上。也就是说上面那批浏览器测试进了仓库却不在 CI 里跑，等于没有守护；
+  集成测试里那批元数据锁回归用例同样如此。
+  新增 `database` job（`unit` job 补数据库的事见「Fixed」一节）：
   1. **MySQL 5.7 服务容器**——与生产同版本。新版本会让某条查询在这里过、在那里不过，
      而这套测试要考的元数据锁行为本身就是版本相关的
   2. **`MYSQL_ROOT_HOST: "%"`**——root 默认只许本机登录，而套件是从 runner 的
@@ -56,8 +57,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
      就有浏览器二进制
 - **覆盖率下限（`vitest.config.ts`）**: 之前覆盖率是「测了、报了个数、没人管」。
   现在 `coverage.thresholds` 把单元切片的数字钉成下限：statements 42 / branches 74 /
-  functions 55 / lines 42。门槛按单元切片标定，因为那是 CI 不依赖数据库就能把关的
-  那一套；更大的切片自然越线（全量套件是 87.72%）。
+  functions 55 / lines 42。门槛按单元切片标定，因为那是 CI 把关的那一套
+  （110 秒跑完，是最划算的一道闸）；全量套件是 87.72%，自然越线。
+  注意门槛描述的是**单元切片**：比它小的切片（比如只跑 `test/integration`）会踩线，
+  这是预期行为，不是回归。
   RED 校验：把 statements 门槛临时抬到 99 → 跑测试报
   `ERROR: Coverage for statements (0.76%) does not meet global threshold (99%)`
 - **浏览器级测试铺开到营销页、仪表盘与地图**: 此前 e2e 套件只碰过 62 条路由里的
@@ -311,6 +314,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **CI 从来没有绿过一次**: 查了 `gh run list` 的全部 51 条记录——
+  **50 条 failure，0 条 success**，从 2026-11-10 工作流第一次跑就是这样。
+  根因不在测试本身，在 workflow 里：`unit` job 没有数据库服务，而
+  `test/unit/` 里有 **15 个文件**是要连真库的（它们各自建一个临时库来测存储层：
+  IP 段导入/导出/替换/去重、schema 报告与漂移、provider 计数器、审计写入）。
+  这些文件在 `beforeAll` 里 `createConnection`，连不上就是
+  `ECONNREFUSED 127.0.0.1:3306`——**整个文件在 setup 阶段就挂了**，
+  0 个用例失败、15 个文件失败，看日志像是环境问题而不是代码问题。
+  实际影响：本地 1685 个用例里，CI 一直只跑到 821 个（而且是在挂掉之前），
+  浏览器测试、集成测试、元数据锁回归用例**一次都没在 CI 里执行过**。
+  修法：`unit` job 加上 MySQL 5.7 服务容器与 `DB_*` 环境变量。
+  （顺带一提：`test/unit` 这个目录名并不等于「不需要数据库」——
+  这 15 个文件是存储层的单元测试，只是恰好需要库。）
 - **CI 的覆盖率产物从来没被生成过**: `.github/workflows/ci.yml` 里有一个
   `Upload coverage` 步骤，指向 `coverage/` 目录；但上面的 `Unit tests` 步骤跑的是
   `npm run test:unit`——**不带 `--coverage`**，于是 `coverage/` 根本不存在，
