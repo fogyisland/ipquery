@@ -398,17 +398,60 @@ async function preserveManualRows(pool) {
     const preserved = Number(result.affectedRows);
     return { preserved, conflicts };
 }
+/**
+ * How long the swap waits for the metadata lock it needs, in seconds.
+ *
+ * `RENAME TABLE` needs an EXCLUSIVE metadata lock (MDL) on every table
+ * it touches. MySQL's `lock_wait_timeout` — the timeout that applies to
+ * METADATA locks, as opposed to `innodb_lock_wait_timeout` for row
+ * locks — defaults to **31,536,000 seconds. That is a year.** A rename
+ * that collides with a long-running reader therefore waits for a year
+ * instead of failing.
+ *
+ * The failure mode is not a clean error, it is a wedge:
+ *
+ *   - The ETL's `etl_runs` row stays at `status='running'` with
+ *     `current_stage='swap'`, forever.
+ *   - `findRunningEtlRun()` then refuses every subsequent ETL run —
+ *     the admin cannot re-run it without hand-editing the database.
+ *   - Every reader of `ip_ranges` queues behind the pending rename's
+ *     MDL, so `/lookup`, `/dashboard` and the landing page all hang.
+ *
+ * This happened for real on 2026-11-23: ETL run #6 sat in the swap
+ * stage for 5.8 hours while an unrelated ad-hoc diagnostic query held
+ * a read on the table, and the whole site was down with it.
+ *
+ * Thirty seconds is the bound. The rename itself is a metadata-only
+ * operation — on this box it takes well under a second once the lock
+ * is free — so thirty seconds is several orders of magnitude more than
+ * the rename needs, and still short enough that a failed swap is a
+ * failed RUN (which the pipeline records, and the operator can retry)
+ * rather than a hung server. The session timeout is set on the swap's
+ * own connection, so the pool's other connections keep MySQL's default.
+ */
+const SWAP_LOCK_WAIT_SECONDS = 30;
 async function atomicSwapRanges(pool) {
     const conn = await pool.getConnection();
     const t0 = Date.now();
     try {
+        // Bound the metadata-lock wait BEFORE the rename. Without this the
+        // rename waits for MySQL's year-long default and the whole run
+        // hangs with the live table locked.
+        await conn.query(`SET SESSION lock_wait_timeout = ${SWAP_LOCK_WAIT_SECONDS}`);
         await conn.beginTransaction();
         await conn.query("RENAME TABLE ip_ranges TO ip_ranges_old, ip_ranges_new TO ip_ranges, ip_ranges_old TO ip_ranges_new");
         await conn.commit();
         return { status: "success", durationMs: Date.now() - t0 };
     }
     catch (err) {
-        await conn.rollback();
+        // The rollback itself can fail if the connection is already broken;
+        // the original error is the one worth reporting.
+        try {
+            await conn.rollback();
+        }
+        catch (rollbackErr) {
+            console.warn(`[mysql] swap rollback failed: ${rollbackErr instanceof Error ? rollbackErr.message : String(rollbackErr)}`);
+        }
         const msg = err.message;
         return { status: "failed", durationMs: Date.now() - t0, errorMessage: msg };
     }

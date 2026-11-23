@@ -40,6 +40,28 @@
 // two processes that check at the same moment). Both together: the lock
 // closes the race, the row check explains the refusal to a human.
 //
+// ── Reclaiming an abandoned run ────────────────────────────────────────
+//
+// The row check has a failure mode of its own: a run whose process
+// died leaves its row at status='running' with the lock already free,
+// and every future run is then refused with "an ETL run is already in
+// progress" — pointing at a run that ended days ago, with no way to
+// clear it except a hand-written UPDATE.
+//
+// This happened for real on 2026-11-23: run #6 sat at status='running'
+// with current_stage='swap' for 5.8 hours because its process was
+// killed while the rename was blocked on a metadata lock. The next
+// run was refused, the admin UI showed a run that had been "running"
+// all day, and there was no button to clear it.
+//
+// closeStaleEtlRuns() closes that gap. A run is abandoned when it is
+// BOTH old (past STALE_RUN_AFTER_MINUTES) AND unlocked (nobody holds
+// the advisory lock). Both conditions are required: the lock check is
+// what makes it safe, because a genuinely running run holds the lock
+// even if it looks old; the age check is what keeps the two apart,
+// because there is a window between the pipeline taking the lock and
+// the guard looking for it.
+//
 // ── Why a dedicated connection ────────────────────────────────────────
 //
 // `GET_LOCK` is scoped to the MySQL *session*. The mysql2 pool hands
@@ -50,8 +72,9 @@
 // ONE dedicated connection checked out of the pool for the whole run,
 // and the lock and the connection are released together.
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.EtlRunLockedError = void 0;
+exports.EtlRunLockedError = exports.STALE_RUN_AFTER_MINUTES = void 0;
 exports.findRunningEtlRun = findRunningEtlRun;
+exports.closeStaleEtlRuns = closeStaleEtlRuns;
 exports.acquireEtlRunLock = acquireEtlRunLock;
 exports.withEtlRunLock = withEtlRunLock;
 /**
@@ -108,6 +131,95 @@ async function findRunningEtlRun(pool, excludeRunId) {
     return Number(rows[0].id);
 }
 /**
+ * How long a run may sit at status='running' before it is considered
+ * abandoned, in minutes.
+ *
+ * A real run is not this long. The download stage alone measures in
+ * minutes on a slow link (the 81.7 MB DB-IP city file took 451 s once),
+ * and the insert stage inserts ~9.6M rows — the run that produced the
+ * current library took 23 minutes end to end. Two hours leaves room for
+ * a slow day and for the swap itself (which is bounded at 30 seconds
+ * now, but was unbounded before that fix landed).
+ *
+ * The threshold exists because "no advisory lock holder" alone is not
+ * enough to conclude "dead". There is a window between the pipeline
+ * taking the lock and the guard checking for it, and a genuinely
+ * running run must never be declared stale — closing one out would let
+ * a second run start and race it on truncateNew + atomicSwapRanges.
+ */
+exports.STALE_RUN_AFTER_MINUTES = 120;
+/**
+ * Close out ETL runs that were abandoned by a dead process.
+ *
+ * A run is abandoned when BOTH:
+ *
+ *   - it is at status='running' and older than STALE_RUN_AFTER_MINUTES,
+ *     and
+ *   - no process holds the advisory lock for this database.
+ *
+ * The lock check is what makes this safe. The advisory lock is
+ * released automatically when its session ends — including on a hard
+ * crash — so a crashed run leaves the lock free and the ROW still
+ * saying 'running'. The age check is what keeps the two facts apart:
+ * a run that is old but still holding the lock is genuinely in flight
+ * and must be left alone.
+ *
+ * Returns the number of runs closed out.
+ */
+async function closeStaleEtlRuns(pool) {
+    const candidates = await findStaleRunCandidates(pool);
+    if (candidates.length === 0)
+        return 0;
+    // Is anyone holding the lock right now? If so, a run is in flight
+    // and none of the candidates may be closed — even the old-looking
+    // ones.
+    const conn = await pool.getConnection();
+    try {
+        const lockName = await resolveLockName(conn);
+        const [rows] = await conn.query(`SELECT IS_FREE_LOCK(?) AS free`, [
+            lockName,
+        ]);
+        // IS_FREE_LOCK returns 1 when nobody holds it, 0 when somebody does,
+        // and NULL when the name does not exist.
+        const isFree = rows[0]?.free;
+        if (isFree !== null && Number(isFree) !== 1) {
+            // A run holds the lock. Everything that looks stale is not.
+            return 0;
+        }
+        const ids = candidates.map((c) => c.id);
+        const placeholders = ids.map(() => "?").join(",");
+        const [res] = await pool.query(`UPDATE etl_runs
+          SET status = 'failed',
+              finished_at = NOW(3),
+              error_message = ?
+        WHERE id IN (${placeholders})
+          AND status = 'running'`, [
+            `abandoned: the run had not progressed for over ${exports.STALE_RUN_AFTER_MINUTES} minutes and no process was holding the ETL lock — the row was closed out automatically`,
+            ...ids,
+        ]);
+        const closed = Number(res.affectedRows ?? 0);
+        if (closed > 0) {
+            console.warn(`[etl] closed out ${closed} stale ETL run(s): ${ids.join(", ")} — ` +
+                "no process was holding the ETL lock");
+        }
+        return closed;
+    }
+    finally {
+        conn.release();
+    }
+}
+/**
+ * The ids of runs that are at status='running' and old enough to be
+ * considered abandoned, newest first.
+ */
+async function findStaleRunCandidates(pool) {
+    const [rows] = await pool.query(`SELECT id FROM etl_runs
+      WHERE status = 'running'
+        AND started_at < DATE_SUB(NOW(3), INTERVAL ? MINUTE)
+      ORDER BY id DESC`, [exports.STALE_RUN_AFTER_MINUTES]);
+    return rows.map((r) => ({ id: Number(r.id) }));
+}
+/**
  * Try to take the ETL run lock.
  *
  * Returns `acquired: true` when the caller may proceed. On refusal the
@@ -119,11 +231,26 @@ async function findRunningEtlRun(pool, excludeRunId) {
  * permanent wedge.
  */
 async function acquireEtlRunLock(pool, opts) {
+    // Reclaim abandoned runs before refusing. A run whose process died
+    // leaves its row at status='running' with the advisory lock already
+    // free; without this the guard would refuse every future run and
+    // point the operator at a run that ended days ago. closeStaleEtlRuns
+    // only touches runs that are BOTH old AND unlocked, so a genuinely
+    // running run is never reclaimed.
+    await closeStaleEtlRuns(pool).catch((err) => {
+        // Best-effort. If the reclaim fails, the run simply stays refused
+        // — which is the safe direction: a false negative costs the
+        // operator one manual UPDATE, a false positive lets two runs race.
+        console.warn(`[etl] stale-run reclaim failed: ${err instanceof Error ? err.message : String(err)}`);
+    });
     // Cheap pre-check first: it avoids burning a pooled connection on the
     // common "an ETL really is running" path, and it gives the caller the
     // run id so the UI can link to the in-progress run.
     const runningRunId = await findRunningEtlRun(pool, opts?.excludeRunId);
     if (runningRunId !== null) {
+        // The run survived the reclaim above, so it is either fresh or
+        // still holding the lock — in both cases it is genuinely in
+        // flight. `stale` stays false.
         return {
             acquired: false,
             reason: "an ETL run is already in progress",
