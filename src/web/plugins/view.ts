@@ -237,12 +237,15 @@ export async function registerView(app: FastifyInstance, cfg: { baseUrl: string 
         .join(" ");
     },
   );
-  /** Print a timestamp as it is kept: the wall clock of this host.
+  /** Print a timestamp as it is kept: the wall clock of this host, with
+   *  the zone it is in.
    *
    *  A DATETIME read out of the database IS the server's wall clock —
    *  MySQL wrote it that way — so printing it through `toISOString()`
    *  would shift every absolute time in the console by the host's
-   *  offset from UTC.
+   *  offset from UTC. The offset is printed instead: the digits stay
+   *  the ones the database holds, and the string says which clock they
+   *  are, so a reader in another zone can place them.
    *
    *  The relative helper below needs no such care: it measures the
    *  distance between two instants, and a zone does not change a

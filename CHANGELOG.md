@@ -379,6 +379,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   文件的错误（错误不带驱动 `code`，所以启动路径不会把它误判成「数据库连不上」
   而降级成向导）；新迁移改号 `036`。新增 `test/unit/migration-version-collision.test.ts`
   （4 个用例）钉住「先拒绝、再碰库」
+- **控制台的绝对时间戳不带时区标注**: 2026-11-14 那次后台重构的核查结论是
+  「数据本身正确，唯一的缺口是 `formatDate` 输出的值不带时区标识」——
+  22 处渲染输出 `2026-11-10 18:29:23`，读者无法判断它是本地时间还是 UTC，
+  跨时区排障会误判。导出 CSV 早就用 `formatDbTimestamp()` 写出了偏移，
+  页面却没有，两边对不上
+  现在 `formatDate` 打印 **壁钟数字 + 真实偏移**：`2026-11-10 18:29:23 +08:00`
+  - 数字一个都没动——它们本来就是数据库那口钟上的字面值；加的是**它属于哪口钟**
+  - 偏移取自日期自己的 `getTimezoneOffset()`，也就是**驱动解读字面量时用的那个时区**
+    （服务器用哪口钟，进程就跑在哪台机器上），所以标注和数字永远是同一口钟
+  - 偏移算法和 CSV 导出共用一份实现（`src/storage/dbTimestamp.ts`），
+    页面和导出不会各说各话
+  - 新增 `test/unit/format-date-zone.test.ts`（4 个用例，**不依赖数据库**，直接
+    渲染真实 helper）与 `test/integration/timestamp-display.test.ts`（2 个用例，
+    走真实的 `/admin/audit` 页面）：前者钉住格式，后者钉住「页面上的时间戳
+    就是数据库存的那串字面值，且带偏移」
+  - 两个用例都**先 RED 过**：改回旧实现后分别报
+    `expected '2026-01-15 03:04:05' to be '2026-01-15 03:04:05 +08:00'` 和
+    `a timestamp was rendered without its zone: expected [ '2026-11-24 02:01:34' ] to deeply equal []`
 
 - **CI 从来没有绿过一次**: 查了 `gh run list` 的全部 51 条记录——
   **50 条 failure，0 条 success**，从 2026-11-10 工作流第一次跑就是这样。
