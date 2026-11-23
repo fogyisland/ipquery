@@ -189,17 +189,20 @@
       <div class="scheduler-card-grid">
         <label>
           <span>{{@root.req.t 'admin.unknownIps.scheduler.config.interval'}}</span>
+          {{!-- The options come from RANDOM_GEN_INTERVAL_PRESETS, so the form
+               can only offer an interval the runner will honour. The stored
+               default is 180s (one run every three minutes); when the list
+               left it out, nothing was selected and a plain save wrote the
+               first option instead — quietly tripling the ingest rate. --}}
           <select name="intervalSec">
-            <option value="30" {{#if (eq randomGenConfig.intervalSec 30)}}selected{{/if}}>{{@root.req.t 'admin.unknownIps.scheduler.intervalOptions.30s'}}</option>
-            <option value="60" {{#if (eq randomGenConfig.intervalSec 60)}}selected{{/if}}>{{@root.req.t 'admin.unknownIps.scheduler.intervalOptions.1m'}}</option>
-            <option value="300" {{#if (eq randomGenConfig.intervalSec 300)}}selected{{/if}}>{{@root.req.t 'admin.unknownIps.scheduler.intervalOptions.5m'}}</option>
-            <option value="900" {{#if (eq randomGenConfig.intervalSec 900)}}selected{{/if}}>{{@root.req.t 'admin.unknownIps.scheduler.intervalOptions.15m'}}</option>
-            <option value="1800" {{#if (eq randomGenConfig.intervalSec 1800)}}selected{{/if}}>{{@root.req.t 'admin.unknownIps.scheduler.intervalOptions.30m'}}</option>
+            {{#each intervalOptions}}
+            <option value="{{this}}" {{#if (eq this @root.randomGenConfig.intervalSec)}}selected{{/if}}>{{intervalLabel @root.req this}}</option>
+            {{/each}}
           </select>
         </label>
         <label>
           <span>{{@root.req.t 'admin.unknownIps.scheduler.config.batchSize'}}</span>
-          <input type="number" name="batchSize" min="1" max="100" value="{{randomGenConfig.batchSize}}">
+          <input type="number" name="batchSize" min="1" max="{{batchMax}}" value="{{randomGenConfig.batchSize}}">
         </label>
         <label>
           <span>{{@root.req.t 'admin.unknownIps.scheduler.config.targetRange'}}</span>

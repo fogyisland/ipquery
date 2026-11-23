@@ -117,7 +117,7 @@ async function authRoutes(app) {
         await app.mailer.send({
             to: email,
             subject: "IPQuery 邮箱验证",
-            text: `请访问以下链接验证邮箱:\n${verifyUrl}`,
+            text: `请访问以下链接验证邮�?\n${verifyUrl}`,
             html,
         });
         return reply.code(200).view("auth/signup-success.hbs", {
@@ -133,9 +133,9 @@ async function authRoutes(app) {
         if (!token)
             return reply.code(401).view("auth/verify-result.hbs", {
                 layout: "layouts/auth",
-                title: req.t("verify.title"),
+                title: req.t("auth.verify.title"),
                 success: false,
-                message: req.t("verify.invalid"),
+                message: req.t("auth.verify.invalid"),
                 reason: "invalid",
                 req,
             });
@@ -144,27 +144,27 @@ async function authRoutes(app) {
         if (!v)
             return reply.code(401).view("auth/verify-result.hbs", {
                 layout: "layouts/auth",
-                title: req.t("verify.title"),
+                title: req.t("auth.verify.title"),
                 success: false,
-                message: req.t("verify.invalid"),
+                message: req.t("auth.verify.invalid"),
                 reason: "invalid",
                 req,
             });
         if (v.consumedAt)
             return reply.code(410).view("auth/verify-result.hbs", {
                 layout: "layouts/auth",
-                title: req.t("verify.title"),
+                title: req.t("auth.verify.title"),
                 success: false,
-                message: req.t("verify.consumed"),
+                message: req.t("auth.verify.consumed"),
                 reason: "consumed",
                 req,
             });
         if (v.expiresAt.getTime() < Date.now())
             return reply.code(410).view("auth/verify-result.hbs", {
                 layout: "layouts/auth",
-                title: req.t("verify.title"),
+                title: req.t("auth.verify.title"),
                 success: false,
-                message: req.t("verify.expired"),
+                message: req.t("auth.verify.expired"),
                 reason: "expired",
                 req,
             });
@@ -182,8 +182,7 @@ async function authRoutes(app) {
     //
     //  - A per-requester cooldown, keyed on the requester's IP rather
     //    than on the target userId. The cooldown used to be keyed on the
-    //    target, which only stopped repeated sends to the SAME user —
-    //    an attacker walking `userId` 1..N would send one email to every
+    //    target, which only stopped repeated sends to the SAME user �?  //    an attacker walking `userId` 1..N would send one email to every
     //    user and be blocked by nothing.
     app.post("/verify/resend/:userId", {
         config: {
@@ -220,7 +219,7 @@ async function authRoutes(app) {
         await app.mailer.send({
             to: u.email,
             subject: "IPQuery 邮箱验证",
-            text: `请访问以下链接验证邮箱:\n${verifyUrl}`,
+            text: `请访问以下链接验证邮�?\n${verifyUrl}`,
             html,
         });
         return reply.code(302).redirect("/login?resent=1");
@@ -231,7 +230,7 @@ async function authRoutes(app) {
         const viewData = { req };
         let notice = {};
         if (q.verified)
-            notice.success = req.t("verify.success");
+            notice.success = req.t("auth.verify.success");
         if (q.disabled)
             notice.error = req.t("auth.login.error.disabled");
         if (q.verify_required)
@@ -300,7 +299,7 @@ async function authRoutes(app) {
         await (0, sessions_1.createSession)(app.pool, sid, user.id, expiresAt);
         await (0, users_1.setLastLogin)(app.pool, user.id);
         await (0, auth_1.setSessionCookie)(reply, sid, app.cfg.web.sessionTtlHours * 3600, app.cfg.web.cookieSecure, app.cfg.web.cookieDomain);
-        // Everyone lands at /dashboard after login — it's the personal console, the
+        // Everyone lands at /dashboard after login �?it's the personal console, the
         // place a user starts every session. Admins get a CTA in the sidebar to
         // jump to /admin (see partials/sidebar.hbs); regular users never see admin
         // chrome at all. /admin auth guard 403s non-admins who try to follow the
@@ -339,7 +338,7 @@ async function authRoutes(app) {
             await app.mailer.send({
                 to: user.email,
                 subject: "IPQuery 密码重置",
-                text: `请访问以下链接重置密码:\n${resetUrl}`,
+                text: `请访问以下链接重置密�?\n${resetUrl}`,
                 html,
             });
         }
@@ -362,7 +361,7 @@ async function authRoutes(app) {
             return reply.code(410).view("auth/reset.hbs", {
                 layout: "layouts/auth",
                 title: req.t("auth.reset.title"),
-                error: req.t("verify.expired"),
+                error: req.t("auth.verify.expired"),
                 token: "",
                 req,
             });
@@ -387,7 +386,7 @@ async function authRoutes(app) {
             return reply.code(410).view("auth/reset.hbs", {
                 layout: "layouts/auth",
                 title: req.t("auth.reset.title"),
-                error: req.t("verify.expired"),
+                error: req.t("auth.verify.expired"),
                 token,
                 req,
             });

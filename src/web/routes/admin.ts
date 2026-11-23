@@ -43,6 +43,8 @@ import {
   probeSummaryStats,
   loadRetentionDays,
   saveRetentionDays,
+  RANDOM_GEN_INTERVAL_PRESETS,
+  RANDOM_GEN_BATCH_MAX,
 } from "../../storage/randomProbeLog";
 import { clearPending, exportPendingCsv } from "../../storage/unknownIpQueue";
 import {
@@ -255,13 +257,100 @@ const MCP_STATUS_PILL: Record<string, string> = {
   revoked: "muted",
 };
 
+/**
+ * The schema state, reduced to what the overview card shows.
+ *
+ * `getSchemaReport` returns the whole picture (pending list, drift list,
+ * applied tail) because `/admin/settings` renders all of it. The overview
+ * only needs enough to answer "is this database on the version this code
+ * expects", so it gets a summary instead of the full report — the template
+ * cannot then accidentally render a list it has no room for.
+ *
+ * A read failure is reported as its own state rather than falling back to
+ * "up to date": a ledger that could not be read is not a clean ledger.
+ */
+interface SchemaSummary {
+  statusKind: "success" | "warning" | "info" | "danger";
+  statusText: string;
+  pendingCount: number;
+  /** `035_fix_single_address_ranges` — the newest applied step. */
+  appliedLatestText: string;
+  /** `036_…` when this build ships something newer than the database. */
+  latestText: string;
+  hasLockRisk: boolean;
+  driftCount: number;
+  structureError: string | null;
+  error: string | null;
+}
+
+async function readSchemaSummary(
+  pool: import("mysql2/promise").Pool,
+  req: FastifyRequest,
+): Promise<SchemaSummary> {
+  let report: SchemaReport;
+  try {
+    report = await getSchemaReport(pool);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return {
+      statusKind: "danger",
+      statusText: req.t("admin.settings.schema.statusError", { error: message }),
+      pendingCount: 0,
+      appliedLatestText: req.t("admin.settings.schema.noneApplied"),
+      latestText: "",
+      hasLockRisk: false,
+      driftCount: 0,
+      structureError: null,
+      error: message,
+    };
+  }
+  const fileOf = (entry: { version: string; name: string } | null): string =>
+    entry ? `${entry.version}_${entry.name}` : req.t("admin.settings.schema.noneApplied");
+  return {
+    statusKind:
+      report.error || report.structureError
+        ? "danger"
+        : report.isCurrent
+          ? "success"
+          : report.hasLockRisk
+            ? "warning"
+            : "info",
+    statusText: report.error
+      ? req.t("admin.settings.schema.statusError", { error: report.error })
+      : report.structureError
+        ? req.t("admin.settings.schema.statusStructureError", { error: report.structureError })
+        : report.isCurrent
+          ? req.t("admin.settings.schema.statusOk")
+          : req.t("admin.settings.schema.statusBehind", { count: report.pendingCount }),
+    pendingCount: report.pendingCount,
+    appliedLatestText: fileOf(report.appliedLatest),
+    latestText: fileOf(report.latest),
+    hasLockRisk: report.hasLockRisk,
+    driftCount: report.drift.length,
+    structureError: report.structureError,
+    error: report.error,
+  };
+}
+
 export default async function adminRoutes(app: FastifyInstance): Promise<void> {
   app.get("/admin", { config: { rateLimit: ADMIN_POLL_RATE_LIMIT } }, async (req, reply) => {
     const overview = await getOverview(app.pool);
+    // The schema state belongs on the first screen, not only in
+    // /admin/settings. That page is four tabs deep, and an operator who has
+    // just copied a new build and restarted has exactly one question: did the
+    // database reach the version this code was written against. Asking that
+    // should not require knowing which tab holds the answer.
+    //
+    // The report is cheap enough for the 30s poll this page runs: the ledger
+    // read is one SELECT (warm: ~1ms) and the drift check is one
+    // INFORMATION_SCHEMA read across the whole schema (measured 8ms warm,
+    // 48ms after a fresh connection).
+    const schemaSummary = await readSchemaSummary(app.pool, req);
     return reply.view("admin/dashboard.hbs", {
       layout: "layouts/admin",
       title: req.t("admin.dashboard.title"),
       overview,
+      schemaSummary,
       csrfToken: req.csrfToken,
       req,
     });
@@ -312,7 +401,10 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
     // indication that more existed. The query string carries the
     // filters across a page change; without it, "next" would reset the
     // table to the unfiltered set.
-    const queryString = buildQueryString({ ...q.filters, sort: q.sort?.col ? `${q.sort.dir === "desc" ? "-" : ""}${q.sort.col}` : undefined });
+    const queryString = buildQueryString({
+      ...q.filters,
+      sort: q.sort?.col ? `${q.sort.dir === "desc" ? "-" : ""}${q.sort.col}` : undefined,
+    });
     // The export always covers the whole filtered set, so `page` is
     // dropped — exporting page 2 of 5 and calling it "the export" would
     // be worse than not exporting at all.
@@ -384,8 +476,7 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.post("/admin/users/bulk", async (req, reply) => {
-    if (!verifyCsrfRequest(req))
-      return sendCsrfPage(reply, 403);
+    if (!verifyCsrfRequest(req)) return sendCsrfPage(reply, 403);
     const body = req.body as { action?: string; ids?: string };
     const ids = (body.ids ?? "")
       .split(",")
@@ -412,36 +503,31 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
 
   app.get<{ Params: { id: string } }>("/admin/users/:id", async (req, reply) => {
     const u = await findUserById(app.pool, Number(req.params.id));
-    if (!u)
-      return sendErrorPage(reply, 404, "notFound");
+    if (!u) return sendErrorPage(reply, 404, "notFound");
     return reply.view("admin/user-detail.hbs", { layout: "layouts/admin", title: u.email, user: u, req });
   });
 
   app.post<{ Params: { id: string } }>("/admin/users/:id/enable", async (req, reply) => {
-    if (!verifyCsrfRequest(req))
-      return sendCsrfPage(reply, 403);
+    if (!verifyCsrfRequest(req)) return sendCsrfPage(reply, 403);
     await setDisabled(app.pool, Number(req.params.id), false);
     return reply.redirect("/admin/users/" + req.params.id);
   });
 
   app.post<{ Params: { id: string } }>("/admin/users/:id/disable", async (req, reply) => {
-    if (!verifyCsrfRequest(req))
-      return sendCsrfPage(reply, 403);
+    if (!verifyCsrfRequest(req)) return sendCsrfPage(reply, 403);
     await setDisabled(app.pool, Number(req.params.id), true);
     return reply.redirect("/admin/users/" + req.params.id);
   });
 
   app.post<{ Params: { id: string } }>("/admin/users/:id/verify-email", async (req, reply) => {
-    if (!verifyCsrfRequest(req))
-      return sendCsrfPage(reply, 403);
+    if (!verifyCsrfRequest(req)) return sendCsrfPage(reply, 403);
     req.auditAction = { action: "user.verify_email", targetType: "user", targetId: Number(req.params.id) };
     await markEmailVerified(app.pool, Number(req.params.id));
     return reply.redirect("/admin/users/" + req.params.id);
   });
 
   app.post<{ Params: { id: string } }>("/admin/users/:id/reset-password", async (req, reply) => {
-    if (!verifyCsrfRequest(req))
-      return sendCsrfPage(reply, 403);
+    if (!verifyCsrfRequest(req)) return sendCsrfPage(reply, 403);
     req.auditAction = { action: "user.reset_password", targetType: "user", targetId: Number(req.params.id) };
     const id = Number(req.params.id);
     const tempPassword = `Temp${Math.random().toString(36).slice(2, 10)}1`;
@@ -450,8 +536,7 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
     // can copy it. The field is only set on this single render and is gone
     // on the next GET (req.t resolves to undefined since it's not in context).
     const u = await findUserById(app.pool, id);
-    if (!u)
-      return sendErrorPage(reply, 404, "notFound");
+    if (!u) return sendErrorPage(reply, 404, "notFound");
     return reply.view("admin/user-detail.hbs", {
       layout: "layouts/admin",
       title: u.email,
@@ -462,8 +547,7 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.post<{ Params: { id: string } }>("/admin/users/:id/delete", async (req, reply) => {
-    if (!verifyCsrfRequest(req))
-      return sendCsrfPage(reply, 403);
+    if (!verifyCsrfRequest(req)) return sendCsrfPage(reply, 403);
     req.auditAction = { action: "user.delete", targetType: "user", targetId: Number(req.params.id) };
     await deleteUser(app.pool, Number(req.params.id));
     return reply.redirect("/admin/users");
@@ -471,8 +555,7 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
 
   app.get<{ Params: { id: string } }>("/admin/users/:id/delete/confirm", async (req, reply) => {
     const u = await findUserById(app.pool, Number(req.params.id));
-    if (!u)
-      return sendErrorPage(reply, 404, "notFound");
+    if (!u) return sendErrorPage(reply, 404, "notFound");
     return reply.view("admin/user-delete-confirm.hbs", {
       layout: "layouts/admin",
       title: req.t("admin.users.delete.confirm.title"),
@@ -741,8 +824,7 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
     const id = Number(req.params.id);
     const [rows] = await app.pool.query<RowDataPacket[]>("SELECT * FROM etl_runs WHERE id = ?", [id]);
     const run = rows[0];
-    if (!run)
-      return sendErrorPage(reply, 404, "notFound");
+    if (!run) return sendErrorPage(reply, 404, "notFound");
     const ctx = await buildRunDetailCtx(
       run,
       req as unknown as { t: (k: string, v?: Record<string, string | number>) => string },
@@ -815,8 +897,7 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
   );
 
   app.post("/admin/etl/trigger", async (req, reply) => {
-    if (!verifyCsrfRequest(req))
-      return sendCsrfPage(reply, 403);
+    if (!verifyCsrfRequest(req)) return sendCsrfPage(reply, 403);
     req.auditAction = { action: "etl.trigger", targetType: "etl_run" };
     // Refuse early if an ETL is already running. The pipeline takes the
     // same lock itself (that is the cross-process guarantee), but by
@@ -906,11 +987,10 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
       csvUrl,
       filters: q.filters,
       sort: q.sort,
-      sortColumns: buildSortColumns(
-        ["id", "label", "key_prefix", "created_at"],
-        q.sort,
-        { ...q.filters, page: q.page },
-      ),
+      sortColumns: buildSortColumns(["id", "label", "key_prefix", "created_at"], q.sort, {
+        ...q.filters,
+        page: q.page,
+      }),
       req,
       csrfToken: req.csrfToken,
     });
@@ -956,8 +1036,7 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.post<{ Params: { id: string } }>("/admin/keys/:id/revoke", async (req, reply) => {
-    if (!verifyCsrfRequest(req))
-      return sendCsrfPage(reply, 403);
+    if (!verifyCsrfRequest(req)) return sendCsrfPage(reply, 403);
     req.auditAction = { action: "key.revoke", targetType: "api_key", targetId: Number(req.params.id) };
     await revokeApiKey(app.pool, Number(req.params.id));
     return reply.redirect("/admin/keys");
@@ -970,8 +1049,7 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
   // values defensively. Already-revoked keys are silently skipped by
   // the UPDATE's `revoked_at IS NULL` predicate — they're no-ops.
   app.post("/admin/keys/revoke-bulk", async (req, reply) => {
-    if (!verifyCsrfRequest(req))
-      return sendCsrfPage(reply, 403);
+    if (!verifyCsrfRequest(req)) return sendCsrfPage(reply, 403);
     const body = req.body as { ids?: string };
     const ids = (body.ids ?? "")
       .split(",")
@@ -1023,19 +1101,17 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
       queryString,
       filters: q.filters,
       sort: q.sort,
-      sortColumns: buildSortColumns(
-        ["id", "label", "token_prefix", "requested_at"],
-        q.sort,
-        { ...q.filters, page: q.page },
-      ),
+      sortColumns: buildSortColumns(["id", "label", "token_prefix", "requested_at"], q.sort, {
+        ...q.filters,
+        page: q.page,
+      }),
       req,
       csrfToken: req.csrfToken,
     });
   });
 
   app.post<{ Params: { id: string } }>("/admin/mcp-tokens/:id/approve", async (req, reply) => {
-    if (!verifyCsrfRequest(req))
-      return sendCsrfPage(reply, 403);
+    if (!verifyCsrfRequest(req)) return sendCsrfPage(reply, 403);
     const id = Number(req.params.id);
     if (!Number.isFinite(id) || id <= 0) return reply.redirect("/admin/mcp-tokens");
     const note = ((req.body as { note?: string }).note ?? "").trim();
@@ -1067,8 +1143,7 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.post<{ Params: { id: string } }>("/admin/mcp-tokens/:id/reject", async (req, reply) => {
-    if (!verifyCsrfRequest(req))
-      return sendCsrfPage(reply, 403);
+    if (!verifyCsrfRequest(req)) return sendCsrfPage(reply, 403);
     const id = Number(req.params.id);
     if (!Number.isFinite(id) || id <= 0) return reply.redirect("/admin/mcp-tokens");
     const note = ((req.body as { note?: string }).note ?? "").trim();
@@ -1083,8 +1158,7 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.post<{ Params: { id: string } }>("/admin/mcp-tokens/:id/revoke", async (req, reply) => {
-    if (!verifyCsrfRequest(req))
-      return sendCsrfPage(reply, 403);
+    if (!verifyCsrfRequest(req)) return sendCsrfPage(reply, 403);
     const id = Number(req.params.id);
     if (!Number.isFinite(id) || id <= 0) return reply.redirect("/admin/mcp-tokens");
     req.auditAction = {
@@ -1101,8 +1175,7 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
   // "Approve selected (N)" / "Reject selected (N)". The form posts a
   // comma-separated ids list, capped at 100 by the storage helper.
   app.post("/admin/mcp-tokens/bulk", async (req, reply) => {
-    if (!verifyCsrfRequest(req))
-      return sendCsrfPage(reply, 403);
+    if (!verifyCsrfRequest(req)) return sendCsrfPage(reply, 403);
     const body = req.body as { ids?: string; action?: string };
     const ids = (body.ids ?? "")
       .split(",")
@@ -1477,13 +1550,14 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
       // Pre-resolved strings: `{{req.t key a=b}}` drops hash arguments, so
       // every sentence that carries a value is built here instead of in the
       // template. See the note above the ETL status pill.
-      statusKind: schema.error || schema.structureError
-        ? "danger"
-        : schema.isCurrent
-          ? "success"
-          : schema.hasLockRisk
-            ? "warning"
-            : "info",
+      statusKind:
+        schema.error || schema.structureError
+          ? "danger"
+          : schema.isCurrent
+            ? "success"
+            : schema.hasLockRisk
+              ? "warning"
+              : "info",
       statusText: schema.error
         ? req.t("admin.settings.schema.statusError", { error: schema.error })
         : schema.structureError
@@ -1586,8 +1660,7 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.post("/admin/settings/etl-restart", async (req, reply) => {
-    if (!verifyCsrfRequest(req))
-      return sendCsrfPage(reply, 403);
+    if (!verifyCsrfRequest(req)) return sendCsrfPage(reply, 403);
     req.auditAction = { action: "etl.restart", targetType: "etl_run" };
     // Same guard as /admin/etl/trigger: a second concurrent run would
     // race on truncateNew + atomicSwapRanges and leave a half-populated
@@ -1702,6 +1775,15 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
     ]);
     const { readRandomGenState } = await import("../../web/plugins/randomIpGeneratorRunner");
     const randomGenState = await readRandomGenState(app.pool);
+    // The interval picker's options. A stored value outside the presets is
+    // appended so the current choice stays visible and selected — leaving it
+    // out is what made a plain "save" overwrite the schedule with the first
+    // option in the list.
+    const intervalOptions = [...RANDOM_GEN_INTERVAL_PRESETS];
+    if (!intervalOptions.includes(randomGenConfig.intervalSec)) {
+      intervalOptions.push(randomGenConfig.intervalSec);
+      intervalOptions.sort((a, b) => a - b);
+    }
     // Consume short-lived flash cookies set by POST handlers. Both
     // backfill and random-gen POST routes set JSON cookies on the
     // redirect; we decode them once here and clear them so the banner
@@ -1805,8 +1887,7 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
           displayName: p.displayName,
           freeQuota: p.freeQuota,
           enforcedLimit: enforcedRateLimitLabel(p.name),
-          hasAnyCalls:
-            (health1h?.calls ?? 0) + (health24h?.calls ?? 0) + (health7d?.calls ?? 0) > 0,
+          hasAnyCalls: (health1h?.calls ?? 0) + (health24h?.calls ?? 0) + (health7d?.calls ?? 0) > 0,
           enabled: p.enabled,
           hasApiKey: Boolean(p.apiKey),
           status,
@@ -1892,6 +1973,13 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
       flash,
       randomGenState,
       randomGenConfig,
+      // The interval/limit controls are rendered from these code-side
+      // bounds, so the form can only offer values the runner will honour.
+      // A stored interval that is not one of the presets is appended to the
+      // list: otherwise no option matched, the browser submitted the first
+      // one, and a plain "save" rewrote the schedule.
+      intervalOptions,
+      batchMax: RANDOM_GEN_BATCH_MAX,
       retentionDays,
       recentProbes: recentProbeRows,
       probeSummaryStats: probeSummary,
@@ -1923,8 +2011,7 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
   // providers whose cooldown hasn't elapsed yet — the cost is one
   // indexed SELECT.
   app.post<{ Params: { name: string } }>("/admin/providers/:name", async (req, reply) => {
-    if (!verifyCsrfRequest(req))
-      return sendCsrfPage(reply, 403);
+    if (!verifyCsrfRequest(req)) return sendCsrfPage(reply, 403);
     const name = req.params.name;
     const body = req.body as { enabled?: string; apiKey?: string };
     const { reapProviders } = await import("../../web/plugins/randomIpGeneratorRunner");
@@ -1946,8 +2033,7 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
   // rows (preserving processed rows as the audit trail). Export streams
   // the CSV inline with content-disposition so the browser saves a file.
   app.post("/admin/ingest/queue/clear", async (req, reply) => {
-    if (!verifyCsrfRequest(req))
-      return sendCsrfPage(reply, 403);
+    if (!verifyCsrfRequest(req)) return sendCsrfPage(reply, 403);
     req.auditAction = { action: "unknown_ips.queue.clear", targetType: "unknown_ip_queue" };
     const removed = await clearPending(app.pool);
     reply.setCookie("queue_flash", JSON.stringify({ kind: "cleared", removed }), {
@@ -1973,8 +2059,7 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
   // Circuit-breaker config save. Persists to settings (cb_*) and
   // refreshes the in-memory cache used by the next backfill run.
   app.post("/admin/providers/circuit-breaker", async (req, reply) => {
-    if (!verifyCsrfRequest(req))
-      return sendCsrfPage(reply, 403);
+    if (!verifyCsrfRequest(req)) return sendCsrfPage(reply, 403);
     const body = req.body as { enabled?: string; threshold?: string; window?: string; cooldown?: string };
     req.auditAction = {
       action: "unknown_ips.circuit_breaker.update",
@@ -1998,8 +2083,7 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
   // Re-queue a single IP from the Failure Logs tab. Insert-or-increment
   // (idempotent) so re-clicking doesn't double-count.
   app.post("/admin/ingest/failure-logs/requeue", async (req, reply) => {
-    if (!verifyCsrfRequest(req))
-      return sendCsrfPage(reply, 403);
+    if (!verifyCsrfRequest(req)) return sendCsrfPage(reply, 403);
     const body = req.body as { ip?: string };
     const ipText = (body.ip ?? "").trim();
     if (!ipText) return reply.redirect("/admin/ingest#failure-logs");
@@ -2051,8 +2135,7 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
       config: { rateLimit: { max: 5, timeWindow: "1 hour" } },
     },
     async (req, reply) => {
-      if (!verifyCsrfRequest(req))
-        return sendCsrfPage(reply, 403);
+      if (!verifyCsrfRequest(req)) return sendCsrfPage(reply, 403);
       req.auditAction = { action: "unknown_ips.backfill.preview", targetType: "unknown_ip_queue" };
 
       const batchLimit = Math.min(
@@ -2149,8 +2232,7 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
       config: { rateLimit: { max: 5, timeWindow: "1 hour" } },
     },
     async (req, reply) => {
-      if (!verifyCsrfRequest(req))
-        return sendCsrfPage(reply, 403);
+      if (!verifyCsrfRequest(req)) return sendCsrfPage(reply, 403);
       req.auditAction = { action: "unknown_ips.backfill", targetType: "unknown_ip_queue" };
 
       const cookie = req.cookies[BACKFILL_PREVIEW_COOKIE];
@@ -2232,8 +2314,7 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
       config: { rateLimit: { max: 10, timeWindow: "1 hour" } },
     },
     async (req, reply) => {
-      if (!verifyCsrfRequest(req))
-        return sendCsrfPage(reply, 403);
+      if (!verifyCsrfRequest(req)) return sendCsrfPage(reply, 403);
       req.auditAction = { action: "unknown_ips.generate", targetType: "unknown_ip_queue" };
 
       const body = req.body as { count?: number };
@@ -2281,8 +2362,7 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
   // POST accepts `enabled=on|off` to flip the setting (and start/stop
   // the timer immediately) and `kick=1` to run an out-of-band tick.
   app.post("/admin/ingest/generate/continuous", async (req, reply) => {
-    if (!verifyCsrfRequest(req))
-      return sendCsrfPage(reply, 403);
+    if (!verifyCsrfRequest(req)) return sendCsrfPage(reply, 403);
     req.auditAction = { action: "unknown_ips.generate.continuous", targetType: "settings" };
     const body = req.body as { enabled?: string; kick?: string };
     const { setSetting } = await import("../../storage/settings");
@@ -2304,8 +2384,7 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
   // clamps each one to a safe range. If `intervalSec` changed, the runner
   // needs to restart its setInterval — syncFromSettings handles that.
   app.post("/admin/ingest/scheduler", async (req, reply) => {
-    if (!verifyCsrfRequest(req))
-      return sendCsrfPage(reply, 403);
+    if (!verifyCsrfRequest(req)) return sendCsrfPage(reply, 403);
     const body = req.body as {
       intervalSec?: string;
       batchSize?: string;
@@ -2564,9 +2643,9 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
     lastErrorAt: Date | null;
     lastErrorReason: string | null;
   };
-  const enrichCustomProviders = async (
-    req: { t: (key: string, vars?: Record<string, string | number>) => string },
-  ): Promise<EnrichedCustomProvider[]> => {
+  const enrichCustomProviders = async (req: {
+    t: (key: string, vars?: Record<string, string | number>) => string;
+  }): Promise<EnrichedCustomProvider[]> => {
     const configs = await listProviderConfigs(app.pool);
     const customConfigs = configs.filter((c) => c.isCustom);
     const { aggregateProviderHealth } = await import("../../storage/providerErrorLog");
@@ -2665,8 +2744,7 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.post("/admin/providers/custom", async (req, reply) => {
-    if (!verifyCsrfRequest(req))
-      return sendCsrfPage(reply, 403);
+    if (!verifyCsrfRequest(req)) return sendCsrfPage(reply, 403);
     const body = req.body as Record<string, string>;
     const name = String(body.name ?? "")
       .trim()
@@ -2747,8 +2825,7 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.post<{ Params: { name: string } }>("/admin/providers/custom/:name/delete", async (req, reply) => {
-    if (!verifyCsrfRequest(req))
-      return sendCsrfPage(reply, 403);
+    if (!verifyCsrfRequest(req)) return sendCsrfPage(reply, 403);
     const name = req.params.name;
     req.auditAction = {
       action: "unknown_ips.custom_providers.delete",
@@ -2777,8 +2854,7 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
       config: { rateLimit: { max: 20, timeWindow: "1 hour" } },
     },
     async (req, reply) => {
-      if (!verifyCsrfRequest(req))
-        return sendCsrfPage(reply, 403);
+      if (!verifyCsrfRequest(req)) return sendCsrfPage(reply, 403);
       const name = req.params.name;
       const body = req.body as { ip?: string };
       const ipText = String(body.ip ?? "").trim();
@@ -2870,8 +2946,7 @@ export default async function adminRoutes(app: FastifyInstance): Promise<void> {
   // / external caller still POSTing to the old URL. The new flow lives at
   // /admin/ingest/backfill/preview → /confirm.
   app.post("/admin/unknown-ips/backfill", async (req, reply) => {
-    if (!verifyCsrfRequest(req))
-      return sendCsrfPage(reply, 403);
+    if (!verifyCsrfRequest(req)) return sendCsrfPage(reply, 403);
     req.auditAction = { action: "unknown_ips.backfill", targetType: "unknown_ip_queue" };
     const batchLimit = Math.min(
       Math.max(Number((req.body as { batchLimit?: number }).batchLimit ?? 100) || 100, 1),

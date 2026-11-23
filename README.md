@@ -27,8 +27,19 @@ Two deployment paths, both documented:
 ## Endpoints
 
 - `GET /lookup?ip=8.8.8.8` — geolocation lookup
+- `POST /lookup/batch` — geolocation lookup for up to 100 addresses in one call
 - `GET /healthz` — liveness probe
 - `GET /stats` — last ETL run summary
+
+The batch endpoint answers up to 100 addresses at once, in the order they
+were asked for. A malformed or unknown address is marked rather than
+failing the batch, so one bad line in a list does not cost you the rest:
+
+```bash
+curl -s -X POST localhost:3880/lookup/batch \
+  -H 'Content-Type: application/json' \
+  -d '{"ips":["8.8.8.8","1.1.1.1","not-an-ip"]}'
+```
 
 ## MCP server
 
@@ -111,7 +122,7 @@ The UI follows a tool-style layout: a persistent left sidebar groups links by au
 - **Auth** — `/signup`, `/login`, `/verify`, `/forgot`, `/reset`, `/init` (first-run wizard, unauthenticated entry point)
 - **Dashboard** — `/dashboard`, `/dashboard/history`, `/dashboard/keys`, `/dashboard/profile`
 - **Admin** — `/admin` (overview with ETL/DB/widgets/sparklines), `/admin/users`, `/admin/etl/runs`, `/admin/keys`, `/admin/audit` (query log), `/admin/audit-log` (admin action log), `/admin/queries` (stats + top users + hourly), `/admin/settings` (DB pool + secrets + ETL restart)
-- **API** — `/lookup[/:ip]`, `/healthz`, `/stats`
+- **API** — `/lookup[/:ip]`, `/lookup/batch`, `/healthz`, `/stats`
 
 ### First-deploy guide
 

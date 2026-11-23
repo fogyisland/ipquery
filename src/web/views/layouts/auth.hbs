@@ -1,21 +1,88 @@
 {{!-- SPDX-License-Identifier: MIT --}}
+{{!--
+  The sign-in shell.
+
+  Two panels, not one centred card. The left panel is the product: the same
+  deep navy as the sidebar rail, the console's grid as its backdrop, the
+  wordmark pinned to the top edge, the argument in the lower half, and the
+  provenance line on the bottom edge. The right panel is one raised sheet
+  holding the form.
+
+  The previous version was a 400px form on flat grey with no brand at all —
+  a different product from the console behind it. The first rewrite fixed the
+  colours but kept the form small and the panel half-empty; this one gives the
+  panel a display-scale headline and turns the facts into a labelled list, and
+  puts the form on a 480px sheet so 15px text has room on a desktop screen.
+
+  `.auth-container` is gone, and so is the layout's own `<h1>`: headings belong
+  to the views, which know what the page is for (two of them used to print
+  their own and end up with two).
+--}}
 <!DOCTYPE html>
 <html lang="{{req.locale}}">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{{title}} - IPQuery</title>
-  <meta name="theme-color" content="#ffffff">
+  <meta name="theme-color" content="#1e3a8a">
   <link rel="stylesheet" href="/assets/css/base.css">
   <link rel="stylesheet" href="/assets/css/layout.css">
   <link rel="stylesheet" href="/assets/css/forms.css">
+  <link rel="stylesheet" href="/assets/css/auth.css">
 </head>
 <body class="layout-auth">
-  <main class="auth-container">
-    {{> flash }}
-    <h1>{{title}}</h1>
-    {{{body}}}
-    <p class="auth-footer"><a href="/">{{req.t 'common.back'}}</a></p>
-  </main>
+  <div class="auth-shell">
+    <aside class="auth-panel">
+      <a class="auth-brand" href="/">
+        <span class="auth-brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 28 28" focusable="false"><circle cx="14" cy="14" r="11"/><path d="M3 14h22"/><path d="M14 3c3.2 3 4.8 6.8 4.8 11S17.2 22 14 25"/><path d="M14 3c-3.2 3-4.8 6.8-4.8 11S10.8 22 14 25"/></svg>
+        </span>
+        <span class="auth-brand-name">
+          <span class="auth-brand-word">IPQuery</span>
+          <span class="auth-brand-sub">{{req.t 'auth.shell.subtitle'}}</span>
+        </span>
+      </a>
+
+      <div class="auth-panel-body">
+        <h2 class="auth-panel-headline">{{req.t 'auth.shell.headline'}}</h2>
+        <p class="auth-panel-lede">{{req.t 'auth.shell.lede'}}</p>
+        <p class="auth-panel-lede auth-panel-lede--mobile">{{req.t 'auth.shell.ledeShort'}}</p>
+
+        <dl class="auth-panel-facts">
+          <div class="auth-fact">
+            <dt>{{req.t 'auth.shell.factSourcesLabel'}}</dt>
+            <dd>{{req.t 'auth.shell.factSources'}}</dd>
+          </div>
+          <div class="auth-fact">
+            <dt>{{req.t 'auth.shell.factCoverageLabel'}}</dt>
+            <dd>{{req.t 'auth.shell.factCoverage'}}</dd>
+          </div>
+          <div class="auth-fact">
+            <dt>{{req.t 'auth.shell.factLatencyLabel'}}</dt>
+            <dd>{{req.t 'auth.shell.factLatency'}}</dd>
+          </div>
+        </dl>
+      </div>
+
+      <div class="auth-panel-foot">
+        <span>{{req.t 'auth.shell.selfHosted'}}</span>
+        <span>v{{appVersion}}</span>
+      </div>
+    </aside>
+
+    <main class="auth-main">
+      <div class="auth-sheet">
+        {{> flash }}
+        {{{body}}}
+        <p class="auth-exit">
+          {{#if req.user}}
+            <a href="/dashboard">{{req.t 'auth.shell.toConsole'}}</a>
+          {{else}}
+            <a href="/">{{req.t 'auth.shell.toSite'}}</a>
+          {{/if}}
+        </p>
+      </div>
+    </main>
+  </div>
 </body>
 </html>

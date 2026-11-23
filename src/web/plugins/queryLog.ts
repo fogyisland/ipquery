@@ -16,7 +16,14 @@ export interface PendingLookup {
 
 declare module "fastify" {
   interface FastifyRequest {
-    pendingLog?: PendingLookup;
+    /** The row(s) this request contributes to the query log.
+     *
+     *  A single lookup contributes one row. A batch contributes one row
+     *  per address, because the log's job is to say which addresses were
+     *  asked about — a batch of a hundred addresses that logged one row
+     *  would understate the traffic by a factor of a hundred, and the
+     *  "top addresses" page would be wrong. */
+    pendingLog?: PendingLookup | PendingLookup[];
   }
 }
 
@@ -59,7 +66,14 @@ export function registerQueryLogWriter(
 
   app.addHook("onResponse", async (req: FastifyRequest, _reply: FastifyReply) => {
     if (!req.pendingLog) return;
-    buffer.push(req.pendingLog);
+    if (Array.isArray(req.pendingLog)) {
+      // A batch: one row per address. The buffer's flush threshold is
+      // checked against the whole batch, so a hundred-address batch
+      // flushes on its own rather than waiting for the timer.
+      buffer.push(...req.pendingLog);
+    } else {
+      buffer.push(req.pendingLog);
+    }
     if (buffer.length >= maxBatch) await flush();
   });
 

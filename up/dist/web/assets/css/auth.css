@@ -1,0 +1,688 @@
+/* SPDX-License-Identifier: MIT */
+/* ──────────────────────────────────────────────────────────────────────────
+   Sign-in surface.
+
+   Loaded only by layouts/auth.hbs — the account pages: sign in, sign up,
+   password reset, email verification.
+
+   This is the door to an operator console, so it is built from the console's
+   vocabulary: the deep navy of the sidebar rail (#1e3a8a), the console's own
+   hairline grid over it, the same blue accent, one type family.
+
+   Two passes produced this shape. The first replaced a 400px form on flat
+   grey. The second fixed what that pass got wrong: the composition read as a
+   phone screen because the form column was 380px wide with 13px text inside a
+   1440px viewport, the left panel had no head and 300px of dead space above
+   its copy, and nothing on the page carried desktop weight. So:
+     · the panel gets a real headline at display scale (its own h2, not the
+       form's h1) and the facts become a definition list on hairlines;
+     · the form sits on a raised sheet over a tinted canvas, wide enough for
+       its 15px text (480px) with 48px controls;
+     · nothing is centred in the middle of an empty field — every block is
+       anchored to an edge of its column.
+
+   Everything is scoped to `body.layout-auth` so it cannot leak into the admin
+   console, the wizard or the marketing pages, which load base.css /
+   layout.css / forms.css without this file. The scoped selectors also outrank
+   the bare `.form-field` / `button[type=submit]` rules forms.css ships, which
+   is why the shared file did not have to be rewritten.
+   ────────────────────────────────────────────────────────────────────────── */
+
+body.layout-auth {
+  /* Same navy as .sidebar's --rail-bg in admin.css. Written as a literal
+     because the auth shell never loads admin.css. */
+  --rail: #1e3a8a;
+  --rail-text: #ffffff;
+  --rail-muted: #a8bcdf;
+  --rail-line: rgba(255, 255, 255, 0.16);
+
+  --canvas: #f5f7fb;
+  --sheet: #ffffff;
+  --line: #dfe6f0;
+  --line-strong: #c8d3e2;
+
+  --ink: #0f172a;
+  --ink-2: #475569;
+  --ink-3: #7b8798;
+
+  --accent: #1d4ed8;
+  --accent-dim: #1e40af;
+  --accent-glow: rgba(29, 78, 216, 0.14);
+
+  --danger: #b42318;
+  --danger-tint: #fef3f2;
+  --danger-line: #fecdca;
+
+  --font-sans:
+    Inter, "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, "PingFang SC", "Microsoft YaHei", "Noto Sans SC", sans-serif;
+  --font-mono:
+    ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+
+  color-scheme: light;
+  margin: 0;
+  min-height: 100vh;
+  background: var(--sheet);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-size: 15px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+  /* layout.css still carries `.layout-auth { display: flex; align-items: center;
+     justify-content: center }` from the single-card era. That turned the shell
+     into a shrink-to-fit item in a centred flex row — a navy column floating in
+     a white page instead of two panels filling the viewport. Both rules target
+     `body.layout-auth`, so the later file wins; these three properties restate
+     the neutral values so the old ones cannot apply. */
+  display: block;
+  align-items: stretch;
+  justify-content: flex-start;
+}
+
+/* ── Shell ────────────────────────────────────────────────────────────────
+   42% for the brand panel. It has to be wide enough for a display-scale
+   headline to break over two lines without hyphenating a Chinese word, and
+   narrow enough that the form side never looks like leftover space. */
+.auth-shell {
+  display: grid;
+  grid-template-columns: minmax(460px, 42%) 1fr;
+  min-height: 100vh;
+}
+
+/* ── Left: the brand panel ─────────────────────────────────────────────────
+   A masthead, not a slide: wordmark pinned to the top edge, the argument
+   anchored above the fold, the provenance line on the bottom edge. The grid
+   is the console's own backdrop, inverted for a dark surface — the network
+   motif this product actually works in. */
+.auth-panel {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 40px;
+  padding: 52px 56px 40px;
+  background: var(--rail);
+  background-image:
+    linear-gradient(var(--rail-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--rail-line) 1px, transparent 1px);
+  background-size: 32px 32px, 32px 32px;
+  background-position: -1px -1px;
+  color: var(--rail-text);
+  overflow: hidden;
+}
+
+/* One soft light source from the top-left, so the grid fades instead of
+   stopping at a hard edge. */
+.auth-panel::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(130% 100% at 10% 0%, rgba(255, 255, 255, 0.12) 0%, transparent 60%);
+  pointer-events: none;
+}
+
+.auth-panel > * {
+  position: relative;
+}
+
+.auth-brand {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  text-decoration: none;
+  color: inherit;
+  align-self: flex-start;
+}
+
+.auth-brand-mark {
+  width: 46px;
+  height: 46px;
+  flex: none;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  background: var(--rail-text);
+  color: var(--rail);
+}
+
+.auth-brand-mark svg {
+  width: 27px;
+  height: 27px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.auth-brand-name {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.1;
+}
+
+.auth-brand-word {
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+}
+
+.auth-brand-sub {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--rail-muted);
+  margin-top: 5px;
+}
+
+/* The argument. `margin-top: auto` pushes it down so the block sits above the
+   provenance line instead of hugging the wordmark — the three anchors then
+   read as top / middle-lower / bottom rather than top / top / bottom. */
+.auth-panel-body {
+  margin-top: auto;
+  padding-bottom: 8px;
+  max-width: 40ch;
+}
+
+.auth-panel-headline {
+  margin: 0 0 20px;
+  font-size: clamp(27px, 2.5vw, 36px);
+  line-height: 1.22;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  color: var(--rail-text);
+  max-width: 20ch;
+}
+
+.auth-panel-lede {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.65;
+  font-weight: 400;
+  color: var(--rail-muted);
+}
+/* The short lede only exists in the stacked (narrow) composition. On a wide
+   screen the long one carries the argument, so the short one must not render
+   as a second paragraph repeating it. */
+.auth-panel-lede--mobile {
+  display: none;
+}
+
+/* Facts as a definition list on hairlines: three rows the reader can scan,
+   each pairing a short label with the claim. A bulleted list read as body
+   copy; a table of two columns reads as spec sheet, which is the register
+   this panel wants. */
+.auth-panel-facts {
+  margin: 40px 0 0;
+  border-top: 1px solid var(--rail-line);
+}
+
+.auth-fact {
+  display: grid;
+  grid-template-columns: 76px minmax(0, 1fr);
+  gap: 20px;
+  align-items: baseline;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--rail-line);
+}
+
+.auth-fact dt {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--rail-muted);
+}
+
+.auth-fact dd {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.auth-panel-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding-top: 20px;
+  border-top: 1px solid var(--rail-line);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  color: var(--rail-muted);
+}
+
+/* ── Right: the form ───────────────────────────────────────────────────────
+   A tinted canvas with one raised sheet. The sheet is what gives the page
+   desktop weight: without it the form floated on white with 600px of empty
+   space around it, which is the phone-screen impression the second pass
+   fixed. One surface, one shadow — not a grid of cards. */
+.auth-main {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 56px 48px;
+  background: var(--canvas);
+}
+
+/* The sheet is what gives the right half desktop weight: 480px wide, 44px of
+   padding, 15px body text inside. Without it the form floated in the middle of
+   a white field and read as a phone screen centred on a monitor. */
+.auth-sheet {
+  width: 100%;
+  max-width: 480px;
+  padding: 44px 44px 40px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--sheet);
+  box-shadow:
+    0 1px 2px rgba(16, 24, 40, 0.04),
+    0 24px 48px -30px rgba(16, 24, 40, 0.3);
+}
+
+/* Heading block, rendered by partials/auth-head.hbs. The layout prints no
+   heading of its own: every view already has one, and the two used to
+   duplicate (sign-up confirmation, verification result). */
+.auth-head {
+  margin-bottom: 28px;
+}
+
+.auth-head h1 {
+  margin: 0;
+  font-size: 30px;
+  line-height: 1.18;
+  font-weight: 650;
+  letter-spacing: -0.028em;
+  color: var(--ink);
+}
+
+.auth-head p {
+  margin: 10px 0 0;
+  font-size: 14.5px;
+  line-height: 1.55;
+  color: var(--ink-2);
+}
+
+/* Failure notice, above the fields so the message is read before them. */
+.auth-alert {
+  display: flex;
+  gap: 10px;
+  padding: 12px 14px;
+  margin-top: 18px;
+  border: 1px solid var(--danger-line);
+  border-radius: 10px;
+  background: var(--danger-tint);
+  color: var(--danger);
+  font-size: 13.5px;
+  line-height: 1.45;
+}
+
+.auth-alert svg {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  margin-top: 2px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+}
+
+/* A neutral notice shares the box and swaps the tint, so the reader learns
+   one shape rather than two. */
+.auth-alert--info {
+  border-color: var(--line-strong);
+  background: #f1f5fb;
+  color: var(--ink-2);
+}
+
+.auth-form form {
+  display: grid;
+  gap: 20px;
+}
+
+/* Body copy inside the sheet — the sign-up confirmation and link-expired
+   notice explain what happens next, so they read as prose. */
+.auth-lede-body {
+  margin: 0;
+  font-size: 14.5px;
+  line-height: 1.6;
+  color: var(--ink-2);
+}
+
+/* ── Fields ────────────────────────────────────────────────────────────────
+   Scoped to body.layout-auth, which beats forms.css's bare `.form-field
+   input` on specificity. 48px controls and 15px text: the shared rules were
+   sized for a utility form (0.5rem padding, 13px button), and on a page whose
+   whole content is one form that read as a mobile widget. */
+body.layout-auth .form-field {
+  margin: 0;
+}
+
+body.layout-auth .form-field label {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+  font-size: 13.5px;
+  font-weight: 500;
+  letter-spacing: 0.005em;
+  color: var(--ink-2);
+}
+
+body.layout-auth .form-field input,
+body.layout-auth .form-field select,
+body.layout-auth .form-field textarea {
+  width: 100%;
+  height: 48px;
+  padding: 0 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--sheet);
+  color: var(--ink);
+  font: inherit;
+  font-size: 15px;
+  transition:
+    border-color 120ms ease,
+    box-shadow 120ms ease;
+}
+
+body.layout-auth .form-field textarea {
+  height: auto;
+  min-height: 100px;
+  padding: 12px 14px;
+}
+
+body.layout-auth .form-field input::placeholder {
+  color: var(--ink-3);
+}
+
+body.layout-auth .form-field input:hover {
+  border-color: var(--line-strong);
+}
+
+body.layout-auth .form-field input:focus,
+body.layout-auth .form-field select:focus,
+body.layout-auth .form-field textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-glow);
+}
+
+/* A label row may carry one quiet secondary link — the reset link beside the
+   password label is where people look for it, and it keeps the sheet footer
+   free for the one thing a new visitor needs. */
+.auth-label-link {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--accent);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.auth-label-link:hover {
+  text-decoration: underline;
+}
+
+body.layout-auth .form-help {
+  margin: 8px 0 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ink-3);
+}
+
+body.layout-auth .form-error {
+  margin: 8px 0 0;
+  font-size: 13px;
+  color: var(--danger);
+}
+
+/* ── Submit ─────────────────────────────────────────────────────────────────
+   Full width, 48px, matching the fields above it. */
+body.layout-auth button[type="submit"],
+body.layout-auth .btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 48px;
+  padding: 0 20px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--accent);
+  color: #ffffff;
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  cursor: pointer;
+  transition:
+    background-color 120ms ease,
+    box-shadow 120ms ease;
+}
+
+body.layout-auth button[type="submit"]:hover,
+body.layout-auth .btn-primary:hover {
+  background: var(--accent-dim);
+}
+
+body.layout-auth button[type="submit"]:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--accent-glow);
+}
+
+body.layout-auth .btn-primary:link,
+body.layout-auth .btn-primary:visited {
+  color: #ffffff;
+  text-decoration: none;
+}
+
+/* The secondary action (resend the verification email) keeps the button shape
+   and drops the accent: two accent buttons on one page compete. */
+.auth-secondary-action {
+  margin-top: 20px;
+}
+
+.auth-secondary-action button[type="submit"] {
+  background: transparent;
+  color: var(--accent);
+  border: 1px solid var(--line-strong);
+  font-weight: 500;
+}
+
+.auth-secondary-action button[type="submit"]:hover {
+  background: #f1f5fb;
+  border-color: var(--accent);
+}
+
+/* ── Sheet footer ──────────────────────────────────────────────────────────
+   One line for the account switch, one for the way out of the door. */
+.auth-switch {
+  margin: 28px 0 0;
+  padding-top: 24px;
+  border-top: 1px solid var(--line);
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--ink-3);
+}
+
+.auth-switch a {
+  color: var(--accent);
+  font-weight: 500;
+  text-decoration: none;
+}
+
+.auth-switch a:hover {
+  text-decoration: underline;
+}
+
+.auth-switch-line {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.auth-exit {
+  margin: 24px 0 0;
+  font-size: 13px;
+  color: var(--ink-3);
+}
+
+.auth-exit a {
+  color: var(--ink-2);
+  text-decoration: none;
+  border-bottom: 1px solid var(--line-strong);
+}
+
+.auth-exit a:hover {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+/* ── Flash messages ────────────────────────────────────────────────────────
+   forms.css paints these with 2010-era pastels (#d4edda / #f8d7da). Here they
+   sit directly above a heading, so they get the same restrained treatment as
+   .auth-alert. */
+body.layout-auth .flash {
+  padding: 11px 14px;
+  margin-bottom: 20px;
+  border-radius: 10px;
+  font-size: 13.5px;
+  line-height: 1.45;
+  border: 1px solid transparent;
+}
+
+body.layout-auth .flash-success {
+  background: #f0fdf4;
+  border-color: #bbf7d0;
+  color: #15803d;
+}
+
+body.layout-auth .flash-error {
+  background: var(--danger-tint);
+  border-color: var(--danger-line);
+  color: var(--danger);
+}
+
+body.layout-auth .flash-warning {
+  background: #fffbeb;
+  border-color: #fde68a;
+  color: #b45309;
+}
+
+body.layout-auth .flash-info {
+  background: #eff4ff;
+  border-color: #c7d7fe;
+  color: #1e40af;
+}
+
+/* ── Responsive ───────────────────────────────────────────────────────────
+   Below 900px the panels stack. The navy panel compresses to a masthead band
+   — wordmark, headline, nothing else — because a full-height dark column
+   above a form pushes the form off the first screen, and the facts are
+   reassurance rather than instruction. On a narrow screen the sheet loses its
+   elevation and becomes the page, which is what a single-column layout wants.
+ */
+@media (max-width: 899px) {
+  .auth-shell {
+    grid-template-columns: 1fr;
+    min-height: 0;
+  }
+
+  .auth-panel {
+    gap: 26px;
+    padding: 28px 24px 30px;
+    background-size: 24px 24px, 24px 24px;
+  }
+
+  .auth-brand-mark {
+    width: 38px;
+    height: 38px;
+    border-radius: 10px;
+  }
+
+  .auth-brand-mark svg {
+    width: 22px;
+    height: 22px;
+  }
+
+  .auth-brand-word {
+    font-size: 19px;
+  }
+
+  .auth-panel-body {
+    margin-top: 0;
+    max-width: none;
+  }
+
+  .auth-panel-headline {
+    margin-bottom: 12px;
+    font-size: 24px;
+    max-width: none;
+  }
+
+  .auth-panel-lede,
+  .auth-panel-facts,
+  .auth-panel-foot {
+    display: none;
+  }
+
+  /* The headline alone would read as a slogan over a form; one line of lede
+     is what makes it say something. The long version is hidden (it would fill
+     the band and push the form off the screen). */
+  .auth-panel-lede--mobile {
+    display: block;
+    font-size: 13.5px;
+    margin-top: 10px;
+  }
+
+  .auth-main {
+    align-items: flex-start;
+    padding: 0;
+    background: var(--sheet);
+  }
+
+  .auth-sheet {
+    max-width: none;
+    min-height: 0;
+    padding: 28px 24px 36px;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  .auth-head {
+    margin-bottom: 24px;
+  }
+
+  .auth-head h1 {
+    font-size: 24px;
+  }
+}
+
+/* A short viewport (phone in landscape, a split window): start at the top
+   rather than centre and clip. */
+@media (max-height: 680px) and (min-width: 900px) {
+  .auth-main {
+    align-items: flex-start;
+    padding-top: 40px;
+    padding-bottom: 40px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body.layout-auth .form-field input,
+  body.layout-auth .form-field select,
+  body.layout-auth .form-field textarea,
+  body.layout-auth button[type="submit"],
+  body.layout-auth .btn-primary {
+    transition: none;
+  }
+}

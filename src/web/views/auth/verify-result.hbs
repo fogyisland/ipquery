@@ -1,11 +1,24 @@
-{{! SPDX-License-Identifier: MIT }}
-{{#if success}}
-  <h1>{{req.t "verify.success"}}</h1>
-  <p><a href="/login">{{req.t "common.login"}}</a></p>
-{{else}}
-  <h1>{{req.t "verify.title"}}</h1>
-  <p>{{message}}</p>
-  {{#if (eq reason "expired")}}
-    <p><a href="/login">{{req.t "auth.verify.resend"}}</a></p>
+{{!-- SPDX-License-Identifier: MIT --}}
+{{!-- The verification result. Its own heading and message: the layout used
+     to print `{{title}}` above this view, which repeated the `<h1>` it
+     already had. --}}
+<header class="auth-head">
+  {{#if success}}
+    <h1>{{req.t "auth.verify.success"}}</h1>
+  {{else}}
+    <h1>{{req.t "auth.verify.title"}}</h1>
   {{/if}}
-{{/if}}
+  <div class="auth-alert{{#unless success}} auth-alert--info{{/unless}}" role="status">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v5"/><path d="M12 16.2v.1"/></svg>
+    <span>{{message}}</span>
+  </div>
+</header>
+<div class="auth-form">
+  {{#if success}}
+    <a href="/login" class="btn-primary">{{req.t 'common.login'}}</a>
+  {{else if (eq reason "expired")}}
+    <a href="/login" class="btn-primary">{{req.t 'auth.verify.resend'}}</a>
+  {{else}}
+    <a href="/login" class="btn-primary">{{req.t 'common.login'}}</a>
+  {{/if}}
+</div>

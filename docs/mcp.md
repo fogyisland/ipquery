@@ -8,7 +8,7 @@ IPQuery 以 MCP (Model Context Protocol) server 形式暴露 13 个只读工具�
 | 工具                     | 权限范围 | 说明                                                    | 参数                                                                     |
 | ------------------------ | -------- | ------------------------------------------------------- | ------------------------------------------------------------------------ |
 | `ipquery_lookup`         | 全部     | 查询 IPv4/IPv6 归属地（国家/城市/时区/ISP/ASN）          | `ip`（必填）                                                             |
-| `ipquery_lookup_batch`   | 全部     | 一次查多个地址（最多 100 个），顺序与请求一致            | `ips`（必填，字符串数组）                                                |
+| `ipquery_lookup_batch`   | 全部     | 一次查多个地址（最多 100 个），顺序与请求一致；超过上限报错而非截断 | `ips`（必填，字符串数组）                                                |
 | `ipquery_stats`          | ops      | 库规模摘要：最近 ETL run + 各源记录数                   | 无                                                                       |
 | `ipquery_etl_status`     | ops      | 最近 ETL run 详情 + 队列概要                            | 无                                                                       |
 | `ipquery_etl_sources`    | ops      | 逐源 ETL 贡献：各源产出/跳过/入库/重复行数 + 下载结果   | `runId`（默认最近一次 run）                                              |
@@ -203,6 +203,10 @@ claude mcp add --scope user ipquery -- ipquery-mcp
 
 - `ipquery_lookup` 与 HTTP API `/lookup` 行为一致：查询未命中的 IP 会写入
   `unknown_ip_queue`，由后台回填任务做多提供商投票补齐；MCP 查询不写查询日志。
+- `ipquery_lookup_batch` 与 HTTP API `POST /lookup/batch` 共用同一份核心逻辑，
+  答案完全一致：同样的顺序、同样的逐条标记、同样的计数。两者对超过 100 个
+  地址的请求都**报错**而不是截断 —— 被截断的答案看起来像全部答案，照着它
+  做对账会安静地漏掉被丢掉的那部分。
 - DB 不可达时 server 启动即失败（stderr 明确报错，exit 1），不会带着坏连接运行。
 - token 未批准 / 已吊销 / 不存在时，server **启动即失败**并说明原因 —— 不会
   先连上再在每次调用时报错。

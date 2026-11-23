@@ -10,6 +10,7 @@ const geo_map_1 = require("../maps/geo-map");
 const render_map_1 = require("../maps/render-map");
 const country_names_1 = require("../../country-names");
 const labels_1 = require("../../etl/sources/labels");
+const rangeCount_1 = require("../../storage/rangeCount");
 async function marketingRoutes(app) {
     // The /try form is a lookup, and a lookup is worth a row in query_log
     // whenever the caller can be identified. An anonymous visitor is still
@@ -44,8 +45,10 @@ async function marketingRoutes(app) {
     // isStatus/isAbout flags drive the active-nav indicator (a regression
     // where nav-active was always unset and links looked inert).
     app.get("/", async (req, reply) => {
-        const [ipCountRows] = await app.pool.query("SELECT COUNT(*) AS c FROM ip_ranges");
-        const ipCount = Number(ipCountRows[0].c);
+        // The count is a cached/estimated value, not a COUNT(*): this page used to
+        // spend ~2.7 seconds counting 8.15M rows before it could render, for a
+        // number in the hero. See storage/rangeCount.
+        const ipCount = (await (0, rangeCount_1.getRangeCount)(app.pool)).value;
         return reply.view("home.hbs", {
             layout: "layouts/marketing",
             title: req.t("home.title"),
@@ -209,9 +212,7 @@ async function marketingRoutes(app) {
                 region: row.region,
                 city: row.city ? { name: row.city, source: row.citySource } : undefined,
                 isp: row.isp ? { name: row.isp, source: row.ispSource } : undefined,
-                asn: row.asn !== undefined
-                    ? { number: row.asn, org: row.asnOrg, source: row.asnSource }
-                    : undefined,
+                asn: row.asn !== undefined ? { number: row.asn, org: row.asnOrg, source: row.asnSource } : undefined,
                 location: location
                     ? {
                         lat: location.lat,

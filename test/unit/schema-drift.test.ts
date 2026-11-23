@@ -66,7 +66,7 @@ describe("getSchemaReport structure check", () => {
     const { buildSchemaReference, listMigrationEntries } = await import(
       "../../src/storage/migrations/runner"
     );
-    const ref = buildSchemaReference(listMigrationEntries());
+    const ref = buildSchemaReference(await listMigrationEntries());
     expect(ref.tables.get("settings")).toContain("updated_at");
     expect(ref.tables.get("ip_ranges")).toContain("range_size");
     expect(ref.tables.get("ip_ranges")).toContain("start_ip");
@@ -87,7 +87,7 @@ describe("getSchemaReport structure check", () => {
     const { buildSchemaReference, listMigrationEntries } = await import(
       "../../src/storage/migrations/runner"
     );
-    const ref = buildSchemaReference(listMigrationEntries());
+    const ref = buildSchemaReference(await listMigrationEntries());
     expect(ref.tables.get("etl_run_downloads")).not.toContain("download_bytes_done");
     // …while the columns 020 and 022 really do add are there, despite
     // living a whole statement away from the ALTER TABLE keyword.

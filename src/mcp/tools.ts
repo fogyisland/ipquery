@@ -2,13 +2,18 @@
 // MCP tool definitions + handlers. Shared by the stdio server entry
 // (src/mcp/server.ts); each tool returns plain JSON-serializable values.
 import type { Pool } from "mysql2/promise";
-import { doLookupCore } from "../lookup-core";
+import {
+  doLookupCore,
+  doLookupBatchCore,
+  MAX_BATCH_SIZE,
+  type BatchLookupEntry as CoreBatchLookupEntry,
+  type BatchLookupResult as CoreBatchLookupResult,
+} from "../lookup-core";
 import { lastEtlRun } from "../storage/mysql";
 import { queueStats, topByQueryCount } from "../storage/unknownIpQueue";
 import { listQueryLogs, countQueriesByDay } from "../storage/queryLog";
 import { buildEtlSourceReport } from "../storage/etlSourceReport";
 import { buildRunSourceReport, type EtlSourceReport } from "../storage/etlSourceContribution";
-import { isValidIp } from "../ip";
 import type { QueryLogRow } from "../storage/queryLog";
 import type { LookupResult } from "../types";
 
@@ -65,28 +70,10 @@ export function lookupToolDef(): ToolDef {
 }
 
 /** One address inside a batch answer. */
-export interface BatchLookupEntry {
-  ip: string;
-  /** False when the address was malformed or not in the library. */
-  found: boolean;
-  /** The lookup result, when the address was found. */
-  result?: LookupResult;
-  /** Why the address was not found: "invalid_ip" or "not_found". */
-  error?: string;
-}
+export type BatchLookupEntry = CoreBatchLookupEntry;
 
-export interface BatchLookupResult {
-  results: BatchLookupEntry[];
-  /** How many addresses were asked about. */
-  total: number;
-  /** How many of them were in the library. */
-  found: number;
-  /** How many were not — malformed or unknown. */
-  notFound: number;
-}
-
-/** Largest batch the tool will answer in one call. */
-const MAX_BATCH_SIZE = 100;
+/** The answer to a batch of lookups. */
+export type BatchLookupResult = CoreBatchLookupResult;
 
 /**
  * Look several addresses up in one call.
@@ -99,6 +86,11 @@ const MAX_BATCH_SIZE = 100;
  * addresses still get their answers, and the failed one is marked.
  * A batch that died on the first bad address would be worse than no
  * batch tool at all.
+ *
+ * The work itself lives in the shared core, so this tool and the HTTP
+ * endpoint answer identically — the same addresses, the same markers,
+ * the same count. Two implementations of one answer is how a client ends
+ * up with two different truths about the same address.
  */
 export async function mcpLookupBatch(
   deps: McpPool,
@@ -107,33 +99,17 @@ export async function mcpLookupBatch(
   if (!Array.isArray(args.ips)) {
     throw new Error("ips must be an array of IPv4/IPv6 addresses");
   }
-  const requested = args.ips.slice(0, MAX_BATCH_SIZE).map((ip) => (typeof ip === "string" ? ip.trim() : ""));
-  const results: BatchLookupEntry[] = [];
-  let found = 0;
-
-  for (const ip of requested) {
-    if (!isValidIp(ip)) {
-      results.push({ ip, found: false, error: "invalid_ip" });
-      continue;
-    }
-    try {
-      const result = await mcpLookup(deps, ip);
-      results.push({ ip, found: true, result });
-      found += 1;
-    } catch (e) {
-      // A miss is an answer, not a failure: the address is simply not
-      // in the library. Anything else is reported as an error on that
-      // entry so the rest of the batch still lands.
-      const code = (e as { code?: unknown }).code;
-      results.push({
-        ip,
-        found: false,
-        error: typeof code === "string" ? code : "lookup_failed",
-      });
-    }
+  // Over the cap is refused, not truncated. A truncated answer set looks
+  // like the whole answer set, and a caller reconciling against it would
+  // quietly miss the addresses that were dropped.
+  if (args.ips.length > MAX_BATCH_SIZE) {
+    throw new Error(`at most ${MAX_BATCH_SIZE} addresses per call`);
   }
-
-  return { results, total: requested.length, found, notFound: requested.length - found };
+  if (!args.ips.every((ip) => typeof ip === "string")) {
+    throw new Error("ips must be an array of IPv4/IPv6 addresses");
+  }
+  const requested = args.ips.map((ip) => (ip as string).trim());
+  return doLookupBatchCore(deps.pool, deps.log, requested);
 }
 
 export function lookupBatchToolDef(): ToolDef {

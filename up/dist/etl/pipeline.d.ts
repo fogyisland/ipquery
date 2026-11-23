@@ -65,6 +65,22 @@ export declare class EtlProgressSink {
     flush(): Promise<void>;
     private maybeScheduleFlush;
 }
+/**
+ * The download stage: run `downloadAll` over `specs` and record one
+ * `etl_run_downloads` row per file. Exported so a test can drive the
+ * production stage with a narrower spec list — the monthly DB-IP files are
+ * handed to this stage every run (it is the stage that decides whether the
+ * cached month is still current), and a test that stubs the whole stage to
+ * avoid the network would also lose the fixed-source rows it asserts on.
+ */
+export declare function runDownloadStage(pool: mysql.Pool, runId: number, rawDir: string, now: Date, sink?: EtlProgressSink, 
+/** Which specs to fetch. Defaults to all of them; the pipeline passes
+ *  only the files that are missing or corrupt, so a cached-and-valid
+ *  file is never re-downloaded. */
+specs?: ReadonlyArray<DownloadSpec>, 
+/** Seam for the fixed-file refresh layer — see `runPipeline`'s
+ *  `downloadFixed`. Defaults to the real mirror-walking fetcher. */
+fixedImpl?: typeof fetchFixedOneWithAttempts): Promise<EtlRunDownloadRow[]>;
 /** Signature of the fixed-file refresh layer. It owns the
  *  "refresh failed, reuse the old cache" fallback: a mirror walk that
  *  exhausts every URL throws, and the caller decides whether a cached

@@ -1,6 +1,8 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.MAX_BATCH_SIZE = void 0;
 exports.doLookupCore = doLookupCore;
+exports.doLookupBatchCore = doLookupBatchCore;
 // SPDX-License-Identifier: MIT
 // Shared lookup core used by both the HTTP API route and the MCP server.
 // Extracted from src/api/routes/lookup.ts so the MCP tool reuses the exact
@@ -73,5 +75,42 @@ async function doLookupCore(pool, log, ip) {
             : undefined,
         etag,
     };
+}
+/** Largest batch one call will answer. */
+exports.MAX_BATCH_SIZE = 100;
+/**
+ * Look several addresses up in one call.
+ *
+ * The batch never fails as a whole. One malformed address does not cost
+ * the caller the other ninety-nine answers: the bad one is marked and
+ * the rest land. A batch that died on the first bad address would be
+ * worse than no batch at all — the caller's job is reconciliation, and a
+ * single malformed line in a log file must not cost them the file.
+ *
+ * The HTTP API and the MCP server both call this, so an answer means the
+ * same thing whichever way it was asked for.
+ */
+async function doLookupBatchCore(pool, log, ips) {
+    const results = [];
+    let found = 0;
+    for (const ip of ips) {
+        try {
+            const result = await doLookupCore(pool, log, ip);
+            results.push({ ip, found: true, result });
+            found += 1;
+        }
+        catch (e) {
+            // A miss is an answer, not a failure: the address is simply not in
+            // the library. Anything else is reported against that one entry so
+            // the rest of the batch still lands.
+            const code = e.code;
+            results.push({
+                ip,
+                found: false,
+                error: typeof code === "string" ? code : "lookup_failed",
+            });
+        }
+    }
+    return { results, total: ips.length, found, notFound: ips.length - found };
 }
 //# sourceMappingURL=lookup-core.js.map

@@ -2,7 +2,7 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import * as mysql from "mysql2/promise";
 import { createPool, runMigrations, findRange, lastEtlRun, getEtlRunDedupe } from "../../src/storage/mysql";
-import { runPipeline, EtlProgressSink } from "../../src/etl/pipeline";
+import { runPipeline, runDownloadStage, EtlProgressSink } from "../../src/etl/pipeline";
 import { loadConfig } from "../../src/config";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
@@ -44,10 +44,7 @@ beforeAll(async () => {
   // skip it silently), so a run without these would try to download
   // the real DB-IP files and turn a unit test into a network test.
   const countryCsv = "ip_start,ip_end,country\n9.9.9.0,9.9.9.255,GB\n";
-  await fs.writeFile(
-    path.join(rawDir, "dbip-country.csv.gz"),
-    zlib.gzipSync(Buffer.from(countryCsv)),
-  );
+  await fs.writeFile(path.join(rawDir, "dbip-country.csv.gz"), zlib.gzipSync(Buffer.from(countryCsv)));
   const asnCsv = "start_ip,end_ip,asn,asn_name\n9.9.9.0,9.9.9.255,64500,Example ISP\n";
   await fs.writeFile(path.join(rawDir, "dbip-asn.csv.gz"), zlib.gzipSync(Buffer.from(asnCsv)));
   await writeFixedFixtures(rawDir);
@@ -101,10 +98,7 @@ describe("etl pipeline", () => {
       [result.runId],
     );
     expect(insertRows.reduce((sum, row) => sum + Number(row.rows_attempted), 0)).toBe(dedupe!.emitted);
-    const githubRange = await findRange(
-      pool,
-      Buffer.from([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 1]),
-    );
+    const githubRange = await findRange(pool, Buffer.from([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 1]));
     expect(["metowolf-cn", "runishiwo-cn"]).toContain(githubRange?.countrySource);
   });
 
@@ -167,9 +161,7 @@ describe("etl pipeline", () => {
     const backup = path.join(cfg.etl.dataDir, "dbip.csv.gz.bak");
     await fs.rename(target, backup);
     try {
-      await expect(runPipeline({ cfg, download: noDownload })).rejects.toThrow(
-        /unavailable|vanished/i,
-      );
+      await expect(runPipeline({ cfg, download: noDownload })).rejects.toThrow(/unavailable|vanished/i);
     } finally {
       await fs.rename(backup, target);
     }
@@ -254,6 +246,22 @@ describe("etl pipeline", () => {
     try {
       const result = await runPipeline({
         cfg,
+        // Run the production download stage, but over the FIXED specs only:
+        // the monthly DB-IP files are handed to that stage every run (it
+        // decides whether the cached month is current), and passing them
+        // here would probe download.db-ip.com for real.
+        download: ((...args: Parameters<typeof runDownloadStage>) => {
+          const [pool, runId, rawDir, now, sink, specs, fixedImpl] = args;
+          return runDownloadStage(
+            pool,
+            runId,
+            rawDir,
+            now,
+            sink,
+            (specs ?? []).filter((spec) => spec.mode === "fixed"),
+            fixedImpl,
+          );
+        }) as never,
         downloadFixed: failingRefresh as never,
       });
       expect(result.merged).toBeGreaterThan(0);
@@ -297,9 +305,7 @@ describe("etl pipeline", () => {
     await fs.rename(target, backup);
     const failingDownload = async (): Promise<[]> => [];
     try {
-      await expect(runPipeline({ cfg, download: failingDownload })).rejects.toThrow(
-        /unavailable|vanished/i,
-      );
+      await expect(runPipeline({ cfg, download: failingDownload })).rejects.toThrow(/unavailable|vanished/i);
       const last = await lastEtlRun(pool);
       expect(last?.status).toBe("failed");
       // The live table was not swapped for the failed run.

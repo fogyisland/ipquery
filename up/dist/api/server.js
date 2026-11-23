@@ -37,6 +37,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.redactKeyParam = redactKeyParam;
+exports.isPublicApiPath = isPublicApiPath;
 exports.buildServer = buildServer;
 // SPDX-License-Identifier: MIT
 const fastify_1 = __importDefault(require("fastify"));
@@ -62,6 +63,7 @@ const initGuard_1 = require("../web/plugins/initGuard");
 const sessionPurger_1 = require("../web/plugins/sessionPurger");
 const probeRetention_1 = require("../web/plugins/probeRetention");
 const uploadSweeper_1 = require("../web/plugins/uploadSweeper");
+const rangeCountRefresher_1 = require("../web/plugins/rangeCountRefresher");
 const randomIpGeneratorRunner_1 = require("../web/plugins/randomIpGeneratorRunner");
 const etlScheduler_1 = require("../web/plugins/etlScheduler");
 const loginRateLimit_1 = require("../web/plugins/loginRateLimit");
@@ -110,7 +112,14 @@ function redactKeyParam(url) {
  * The comparison is on the path alone, query string stripped, so
  * `/lookup?ip=…` is still limited.
  */
-const PUBLIC_API_PATHS = new Set(["/healthz", "/lookup", "/stats"]);
+const PUBLIC_API_PATHS = new Set(["/healthz", "/lookup", "/lookup/batch", "/stats"]);
+/** Is this path one of the public API's rate-limited endpoints?
+ *
+ *  Exported so the membership can be pinned by a test. The set is the
+ *  only thing that decides which requests count against the limit, and
+ *  a new public endpoint added without adding it here would be an
+ *  unlimited endpoint — invisible, because nothing about the route
+ *  itself would look wrong. */
 function isPublicApiPath(url) {
     const pathOnly = url.split("?")[0];
     return PUBLIC_API_PATHS.has(pathOnly);
@@ -316,7 +325,23 @@ async function buildServer(cfg, opts) {
     // pool and the server continues as normal — no restart required.
     let dbReachable = true;
     try {
-        await (0, runner_1.runMigrations)(app.pool);
+        const migration = await (0, runner_1.runMigrations)(app.pool);
+        // Say what the boot actually did, because it is the only moment a release
+        // upgrade is visible. Without this line an operator who copies a new
+        // build and restarts cannot tell "the migrations ran" from "they were
+        // already applied" — both print nothing, and the console's schema card
+        // then shows "up to date" either way. The two cases are very different
+        // facts about what just happened to the database.
+        if (migration.applied.length > 0) {
+            app.log.info({
+                applied: migration.applied,
+                alreadyPresent: migration.skipped.length,
+            }, `migrations: ${migration.applied.length} applied at boot, ` +
+                `${migration.skipped.length} already present`);
+        }
+        else {
+            app.log.info({ applied: migration.skipped.length }, `migrations: up to date (${migration.skipped.length} already present)`);
+        }
     }
     catch (err) {
         if (!(0, dbBootstrap_1.isDbUnreachableError)(err)) {
@@ -414,6 +439,11 @@ async function buildServer(cfg, opts) {
     // file on disk that can be two gigabytes, and nothing about it will
     // ever be imported.
     (0, uploadSweeper_1.registerUploadSweeper)(app, () => app.pool);
+    // The `ip_ranges` row count is cached, because COUNT(*) over the real
+    // library costs ~3.2s and the dashboard, the landing page and the console's
+    // 30s auto-refresh all display it. The bulk writers refresh it themselves;
+    // this timer catches rows nothing else announced.
+    (0, rangeCountRefresher_1.registerRangeCountRefresher)(app, () => app.pool);
     const randomGenRunner = (0, randomIpGeneratorRunner_1.registerRandomGenRunner)(app, () => app.pool);
     // The ETL schedule lives in the server, not the CLI, so that it can be
     // armed AFTER the wizard has configured the database. A server that came

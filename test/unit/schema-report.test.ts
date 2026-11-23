@@ -57,21 +57,21 @@ afterAll(async () => {
 });
 
 describe("listMigrationEntries", () => {
-  it("names every shipped migration in file order", () => {
-    const entries = listMigrationEntries();
+  it("names every shipped migration in file order", async () => {
+    const entries = await listMigrationEntries();
     expect(entries.length).toBeGreaterThan(20);
     expect(entries[0]?.version).toBe("001");
     const versions = entries.map((e) => e.version);
     expect(versions).toEqual([...versions].sort());
   });
 
-  it("reads the file name, not a hand-maintained table", () => {
+  it("reads the file name, not a hand-maintained table", async () => {
     // The label has to come from the file itself: a parallel list would
     // rot the moment a migration is added, and the console would then
     // show a name that does not exist on disk.
     const dir = path.join(__dirname, "..", "..", "src", "storage", "migrations");
     const onDisk = fs.readdirSync(dir).filter((f) => /^\d{3}_.+\.sql$/.test(f)).sort();
-    expect(listMigrationEntries().map((e) => `${e.version}_${e.name}.sql`)).toEqual(onDisk);
+    expect((await listMigrationEntries()).map((e) => `${e.version}_${e.name}.sql`)).toEqual(onDisk);
   });
 });
 
@@ -91,7 +91,7 @@ describe("getSchemaReport", () => {
     // A deployed install that missed `migrate` is the whole point of this
     // report: the newest file on disk is not in schema_migrations, and the
     // operator has to be able to see which one.
-    const entries = listMigrationEntries();
+    const entries = await listMigrationEntries();
     const newest = entries[entries.length - 1]!;
     await pool.query("DELETE FROM schema_migrations WHERE version = ?", [newest.version]);
     try {
@@ -110,7 +110,7 @@ describe("getSchemaReport", () => {
     expect(dmlOnly).toBeUndefined();
     // The classification is derived from the file, so an unclassified
     // migration would be a silent gap rather than a safe default.
-    for (const entry of listMigrationEntries()) {
+    for (const entry of await listMigrationEntries()) {
       expect(["schema", "data"]).toContain(entry.kind);
     }
   });
@@ -119,7 +119,7 @@ describe("getSchemaReport", () => {
     // 027 rewrites three ETL stage tables. On a library-sized install that
     // is a lock an operator must plan for, so it cannot be presented as an
     // ordinary pending step.
-    const entries = listMigrationEntries();
+    const entries = await listMigrationEntries();
     const bulk = entries.find((e) => e.version === "027")!;
     expect(bulk.takesTableLock).toBe(true);
     expect(entries.find((e) => e.version === "028")!.takesTableLock).toBe(false);

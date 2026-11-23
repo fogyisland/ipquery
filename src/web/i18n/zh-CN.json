@@ -78,6 +78,7 @@
     "signup": {
       "title": "注册账号",
       "submit": "注册",
+      "haveAccount": "已经有账号？",
       "success": {
         "title": "注册成功",
         "body": "请在邮箱中点击验证链接以激活账号。"
@@ -103,6 +104,7 @@
     "login": {
       "title": "登录",
       "submit": "登录",
+      "noAccount": "还没有账号？",
       "error": {
         "credentials": "邮箱或密码错误",
         "disabled": "账号已禁用,请联系管理员",
@@ -116,11 +118,29 @@
     "forgot": {
       "title": "找回密码",
       "submit": "发送重置链接",
+      "backHint": "已有可用密码？",
       "done": "如果该邮箱已注册,你将收到重置链接"
     },
     "reset": {
       "title": "重置密码",
-      "submit": "重置密码"
+      "submit": "重置密码",
+      "expiredHint": "链接失效了？"
+    },
+    "shell": {
+      "subtitle": "运维控制台",
+      "lede": "自托管，不依赖第三方 API。一次查询返回国家、城市、ASN 与坐标，每个字段都标注数据来源。",
+      "factSources": "DB-IP 与开放网段清单，多个来源互相补位",
+      "factCoverage": "815 万条 IP 段，IPv4 与 IPv6 同一张表",
+      "factLatency": "索引直查，中位延迟 100ms 以内",
+      "selfHosted": "完全自托管",
+      "toSite": "返回站点首页",
+      "toConsole": "进入控制台",
+      "createAccount": "创建账号",
+      "headline": "把 IP 归属地查询放进自己的库",
+      "ledeShort": "自托管 IP 归属地查询：国家、城市、ASN、坐标，逐字段标注来源。",
+      "factSourcesLabel": "数据",
+      "factCoverageLabel": "覆盖",
+      "factLatencyLabel": "延迟"
     }
   },
   "greeting": {
@@ -163,6 +183,8 @@
       "created": "创建时间",
       "revoke": "吊销",
       "revoke.confirm": "确定吊销此 Key?吊销后无法恢复。",
+      "revoke.confirm.title": "吊销 API Key",
+      "revoke.confirm.body": "确定要吊销 {label}（前缀 {prefix}）吗？吊销后该 Key 立即失效，且无法恢复。",
       "created_once": "请保存以下 Key,关闭后将无法再次查看:",
       "endpoint": {
         "title": "API 接入点",
@@ -228,6 +250,7 @@
           "body": "确定吊销此 Token?吊销后使用该 Token 的客户端会立即失效。"
         }
       },
+      "revokeLabel": "吊销",
       "revokedNote": "已吊销",
       "pendingNote": "等待管理员处理",
       "rejectedNote": "管理员拒绝了该申请",
@@ -287,6 +310,10 @@
         "delete": "删除",
         "confirmResetPassword": "确定要重置密码吗？该用户当前的密码会立刻失效。",
         "confirmDisable": "确定要停用该用户吗？该用户将无法登录。"
+      },
+      "resetPasswordResult": {
+        "tempNotice": "临时密码已生成",
+        "tempWarn": "请立刻复制并转交给该用户。离开本页后将无法再次显示；重置密码会使该用户的会话立即失效。"
       },
       "delete.confirm": "确定删除该用户?所有相关数据将被清除。",
       "delete.confirm.title": "确认删除用户",
@@ -457,7 +484,10 @@
       "chart7d.total": "总计 {total} 次",
       "action.queries": "查询日志",
       "action.audit": "查询审计",
-      "action.triggerEtl": "触发 ETL"
+      "action.triggerEtl": "触发 ETL",
+      "ipRangesSub": "IPv4 与 IPv6 合计",
+      "schemaVersion": "数据库架构",
+      "schemaPending": "数据库落后：待执行 {count} 个迁移（最新 {latest}）"
     },
     "queries": {
       "title": "查询统计",
@@ -677,12 +707,10 @@
           "retentionDays": "探测日志保留天数",
           "retentionDaysHint": "0 表示永久保留"
         },
-        "intervalOptions": {
-          "30s": "30 秒",
-          "1m": "1 分钟",
-          "5m": "5 分钟",
-          "15m": "15 分钟",
-          "30m": "30 分钟"
+        "intervalLabel": {
+          "seconds": "{n} 秒",
+          "minutes": "{n} 分钟",
+          "hours": "{n} 小时"
         },
         "targetRangeOptions": {
           "reserved": "RFC 5737 + 6890 (文档/基准段)"

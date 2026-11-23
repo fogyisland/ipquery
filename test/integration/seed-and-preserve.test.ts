@@ -20,49 +20,86 @@ import * as path from "node:path";
 import * as zlib from "node:zlib";
 import { createPool, runMigrations, findRange, preserveManualRows } from "../../src/storage/mysql";
 import { loadDemoSeed } from "../../src/storage/seed/demoSeed";
-import { runPipeline } from "../../src/etl/pipeline";
+import { runPipeline, type DownloadStage } from "../../src/etl/pipeline";
+import { loadConfig } from "../../src/config";
 
-// The four GitHub sources refresh on EVERY run by design — the pipeline
-// calls the fixed-file downloader whether or not a cached copy exists, so
-// it always has the latest China ranges. That makes any test that runs
-// the pipeline without a seam a network test: a slow or blocked fetch
-// stalls the run for up to 120s per URL and then fails it.
+// Every source file the pipeline expects to find on disk after the download
+// stage. Each one is a real, parseable file — the pipeline re-checks every
+// one of them after the download stage and refuses to swap if any is
+// missing.
 //
-// These cases are about preservation, not about how the files arrive. The
-// seam below records the request and returns instantly, leaving the
-// fixtures on disk exactly as `beforeAll` wrote them — which is what a
-// successful-but-cached refresh looks like to the rest of the pipeline.
-// The fixtures the four fixed sources should serve. The pipeline re-checks
-// the file after the download stage and refuses to swap when one is
-// missing, so the seam has to leave a real file behind — returning a
-// "success" without writing would fail that check, not skip it.
-const FIXED_FIXTURES: Readonly<Record<string, string>> = {
+// The four GitHub-hosted lists refresh on EVERY run by design — the
+// pipeline calls the fixed-file downloader whether or not a cached copy
+// exists, so it always has the latest China ranges. That makes any test
+// that runs the pipeline without a seam a network test: a slow or blocked
+// fetch stalls the run for up to 120s per URL and then fails it.
+//
+// The DB-IP monthly files are the other half. The `downloadFixed` seam
+// only covers the four GitHub lists; the monthly DB-IP files go through
+// the ordinary download stage, so they need the bigger `download` seam to
+// stay off the network. The real city-lite file is 81.7 MB and 7,777,815
+// rows: downloading it took 65 s, parsing it 73 s, and inserting it about
+// five minutes — so the test blew the 180 s timeout, and the ETL run it
+// had started held the run lock, which turned the next three tests into
+// `EtlRunLockedError: an ETL run is already in progress`.
+//
+// One seam writes all seven files, because the `download` seam replaces
+// the WHOLE download stage — including the fixed-file refresh the real
+// stage performs. A seam that wrote only the three DB-IP files would
+// leave the four GitHub files missing, and the pipeline refuses to swap
+// when a source file is absent.
+const FIXTURE_FILES: Readonly<Record<string, string>> = {
+  // DB-IP city-lite column layout: start, end, continent, country, region,
+  // city, lat, lon. The parser indexes cols[3] as country (cols[2] is the
+  // continent it ignores), so the column order matters.
+  "dbip.csv.gz":
+    "ip_start,ip_end,continent,country,stateprov,city,latitude,longitude\n" +
+    "9.9.9.0,9.9.9.255,EU,GB,England,London,51.5074,-0.1278\n",
+  "dbip-country.csv.gz": "ip_start,ip_end,country\n9.9.9.0,9.9.9.255,GB\n",
+  "dbip-asn.csv.gz":
+    "start_ip,end_ip,asn,asn_name\n9.9.9.0,9.9.9.255,64500,Example ISP\n",
+  // The four GitHub-hosted lists. A CIDR list wants one prefix per line;
+  // the country CSV wants start,end,country.
   "china-ipv4.txt": "198.18.0.0/15\n",
   "china-v4.txt": "198.18.0.0/15\n",
   "china-v6.txt": "# CN IPv6 List\n2001:db8::/32\n",
   "sapics-user-country.csv": "203.0.113.0,203.0.113.255,AU\n",
 };
 
-const cachedRefresh = async (spec: {
-  destName: string;
-  kind: string;
-  etlSource: string;
-}, outDir: string) => {
-  const body = FIXED_FIXTURES[spec.destName] ?? "";
-  await fs.writeFile(path.join(outDir, spec.destName), body);
-  return {
-    kind: spec.kind,
-    destName: spec.destName,
-    etlSource: spec.etlSource,
-    url: "(cached)",
-    bytes: Buffer.byteLength(body),
-    month: null,
-  };
+/**
+ * The download stage, replaced by one that writes the fixtures.
+ *
+ * It honours the same contract as the real stage: the files land in
+ * `rawDir`, the gzip ones are genuine gzip (the pipeline validates
+ * them), and the month sidecar is written so the stage records the file
+ * as "already the newest release" the way a cached file does.
+ */
+const stageFixtures: DownloadStage = async (
+  _pool,
+  _runId,
+  rawDir,
+  _now,
+  _sink,
+  _specs,
+) => {
+  await fs.mkdir(rawDir, { recursive: true });
+  for (const [name, body] of Object.entries(FIXTURE_FILES)) {
+    const isGzip = name.endsWith(".gz");
+    await fs.writeFile(
+      path.join(rawDir, name),
+      isGzip ? zlib.gzipSync(Buffer.from(body)) : Buffer.from(body),
+    );
+    // The month sidecar is what makes the download stage record the
+    // file as "already the newest release" rather than as a download.
+    if (isGzip) {
+      await fs.writeFile(path.join(rawDir, `${name}.month`), "2026-01\n");
+    }
+  }
+  return [];
 };
 
 /** A pipeline run against the on-disk fixtures, with no network. */
-const runOffline = () => runPipeline({ cfg, downloadFixed: cachedRefresh as never });
-import { loadConfig } from "../../src/config";
+const runOffline = () => runPipeline({ cfg, download: stageFixtures });
 
 const TEST_DB = "ipquery_test_seed";
 let pool: mysql.Pool;
@@ -80,21 +117,9 @@ beforeAll(async () => {
   cfg.etl.dataDir = path.join(__dirname, "..", "tmp-seed-data");
   await fs.mkdir(cfg.etl.dataDir, { recursive: true });
 
-  // A minimal DB-IP fixture set so the ETL has something real to load.
-  // 9.9.9.0/24 is the ETL's row; 8.8.4.4 will be the manual row.
-  const rawDir = path.join(cfg.etl.dataDir, "raw");
-  await fs.mkdir(rawDir, { recursive: true });
-  const cityCsv =
-    "ip_start,ip_end,continent,country,stateprov,city,latitude,longitude\n9.9.9.0,9.9.9.255,EU,GB,England,London,51.5074,-0.1278\n";
-  await fs.writeFile(path.join(rawDir, "dbip.csv.gz"), zlib.gzipSync(Buffer.from(cityCsv)));
-  await fs.writeFile(
-    path.join(rawDir, "dbip-country.csv.gz"),
-    zlib.gzipSync(Buffer.from("ip_start,ip_end,country\n9.9.9.0,9.9.9.255,GB\n")),
-  );
-  await fs.writeFile(
-    path.join(rawDir, "dbip-asn.csv.gz"),
-    zlib.gzipSync(Buffer.from("start_ip,end_ip,asn,asn_name\n9.9.9.0,9.9.9.255,64500,Example ISP\n")),
-  );
+  // The source files are NOT written here: the download seam stages all
+  // seven of them into the raw directory when the ETL runs. 9.9.9.0/24 is
+  // the ETL's row; 8.8.4.4 will be the manual row.
 
   const root = await mysql.createConnection({
     host: cfg.db.host,

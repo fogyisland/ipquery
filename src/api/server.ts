@@ -23,6 +23,7 @@ import { registerInitGuard } from "../web/plugins/initGuard";
 import { registerSessionPurger } from "../web/plugins/sessionPurger";
 import { registerProbeRetention } from "../web/plugins/probeRetention";
 import { registerUploadSweeper } from "../web/plugins/uploadSweeper";
+import { registerRangeCountRefresher } from "../web/plugins/rangeCountRefresher";
 import { registerRandomGenRunner } from "../web/plugins/randomIpGeneratorRunner";
 import { registerEtlScheduler } from "../web/plugins/etlScheduler";
 import { _resetForTests as resetLoginLimit } from "../web/plugins/loginRateLimit";
@@ -92,9 +93,16 @@ export function redactKeyParam(url: string): string {
  * The comparison is on the path alone, query string stripped, so
  * `/lookup?ip=…` is still limited.
  */
-const PUBLIC_API_PATHS = new Set(["/healthz", "/lookup", "/stats"]);
+const PUBLIC_API_PATHS = new Set(["/healthz", "/lookup", "/lookup/batch", "/stats"]);
 
-function isPublicApiPath(url: string): boolean {
+/** Is this path one of the public API's rate-limited endpoints?
+ *
+ *  Exported so the membership can be pinned by a test. The set is the
+ *  only thing that decides which requests count against the limit, and
+ *  a new public endpoint added without adding it here would be an
+ *  unlimited endpoint — invisible, because nothing about the route
+ *  itself would look wrong. */
+export function isPublicApiPath(url: string): boolean {
   const pathOnly = url.split("?")[0]!;
   return PUBLIC_API_PATHS.has(pathOnly);
 }
@@ -318,7 +326,28 @@ export async function buildServer(
   // pool and the server continues as normal — no restart required.
   let dbReachable = true;
   try {
-    await runMigrations(app.pool);
+    const migration = await runMigrations(app.pool);
+    // Say what the boot actually did, because it is the only moment a release
+    // upgrade is visible. Without this line an operator who copies a new
+    // build and restarts cannot tell "the migrations ran" from "they were
+    // already applied" — both print nothing, and the console's schema card
+    // then shows "up to date" either way. The two cases are very different
+    // facts about what just happened to the database.
+    if (migration.applied.length > 0) {
+      app.log.info(
+        {
+          applied: migration.applied,
+          alreadyPresent: migration.skipped.length,
+        },
+        `migrations: ${migration.applied.length} applied at boot, ` +
+          `${migration.skipped.length} already present`,
+      );
+    } else {
+      app.log.info(
+        { applied: migration.skipped.length },
+        `migrations: up to date (${migration.skipped.length} already present)`,
+      );
+    }
   } catch (err) {
     if (!isDbUnreachableError(err)) {
       // A migration that ran and then failed on its own SQL is a real
@@ -421,6 +450,11 @@ export async function buildServer(
   // file on disk that can be two gigabytes, and nothing about it will
   // ever be imported.
   registerUploadSweeper(app, () => app.pool);
+  // The `ip_ranges` row count is cached, because COUNT(*) over the real
+  // library costs ~3.2s and the dashboard, the landing page and the console's
+  // 30s auto-refresh all display it. The bulk writers refresh it themselves;
+  // this timer catches rows nothing else announced.
+  registerRangeCountRefresher(app, () => app.pool);
   const randomGenRunner = registerRandomGenRunner(app, () => app.pool);
   // The ETL schedule lives in the server, not the CLI, so that it can be
   // armed AFTER the wizard has configured the database. A server that came

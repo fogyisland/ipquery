@@ -38,6 +38,14 @@ declare module "fastify" {
  * the operator's logs hold the path without the secret.
  */
 export declare function redactKeyParam(url: string): string;
+/** Is this path one of the public API's rate-limited endpoints?
+ *
+ *  Exported so the membership can be pinned by a test. The set is the
+ *  only thing that decides which requests count against the limit, and
+ *  a new public endpoint added without adding it here would be an
+ *  unlimited endpoint — invisible, because nothing about the route
+ *  itself would look wrong. */
+export declare function isPublicApiPath(url: string): boolean;
 export declare function buildServer(cfg: AppConfig, opts?: {
     extraRoutes?: (app: FastifyInstance) => Promise<void> | void;
 }): Promise<FastifyInstance>;

@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: MIT
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeAll } from "vitest";
 import type { FastifyInstance } from "fastify";
 import type { Pool } from "mysql2/promise";
 import { registerUploadSweeper } from "../../src/web/plugins/uploadSweeper";
+import { reloadMigrationManifest } from "../../src/storage/migrations/runner";
 
 /**
  * The sweeper that clears uploads nobody came back for.
@@ -65,6 +66,23 @@ function fakePool(): { pool: Pool; queries: string[] } {
 }
 
 describe("the upload sweeper", () => {
+  // The sweeper's tick runs the migration runner before it sweeps, and the
+  // runner awaits the migration manifest — an `fs.promises.readdir` issued
+  // when the module was first loaded.
+  //
+  // That read cannot settle while vitest's fake timers are installed:
+  // `advanceTimersByTimeAsync` yields microtasks but not the libuv
+  // completion the read is waiting on, so the tick would hang on the
+  // manifest promise and never reach the pool. The symptom is a silent
+  // no-op — no query, no log, no error.
+  //
+  // Settling the manifest here, while the real timers are still in place,
+  // removes the pending fs read before any fake timer is installed. The
+  // tests then exercise the plugin, not the file system.
+  beforeAll(async () => {
+    await reloadMigrationManifest();
+  });
+
   it("sweeps on a timer instead of only on shutdown", async () => {
     // The whole point of the plugin is that the install cleans up after
     // itself while it is running. A sweeper that only fires on shutdown

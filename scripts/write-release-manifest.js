@@ -72,3 +72,55 @@ console.log(
     `${Object.keys(release.dependencies).length} runtime dependencies, ` +
     `${Object.keys(release.scripts).length} scripts`,
 );
+
+// ── The release lockfile ──────────────────────────────────────────────
+//
+// `install.sh` runs `npm ci --omit=dev`, and `npm ci` refuses to proceed
+// when package.json and package-lock.json disagree about the dependency
+// set. The release lockfile used to be a hand-copied snapshot of some
+// earlier repo state, so it kept drifting: it still listed `maxmind`
+// (dropped from the manifest when the MaxMind parser was removed) and
+// lacked `@fastify/multipart` (added for the chunked range upload). The
+// result was a release that could not be installed at all — `npm ci`
+// exited with EUSAGE before installing anything, so the server never ran
+// on a fresh host.
+//
+// The lockfile is therefore generated here, from the repo's own lock, with
+// the root entry's devDependencies removed. One source of truth: the same
+// resolved tree the repo builds against, minus the packages the release
+// never loads.
+const srcLockPath = path.join(root, "package-lock.json");
+const outLockPath = path.join(root, "up", "package-lock.json");
+
+const lock = JSON.parse(fs.readFileSync(srcLockPath, "utf8"));
+const rootEntry = lock.packages?.[""];
+if (!rootEntry) {
+  throw new Error(`package-lock.json has no root entry — cannot build the release lock`);
+}
+// Keep dll entries the release does need: name/version/license/bin/engines
+// describe the package itself; only the dev dependency list is dropped
+// (npm ci --omit=dev would skip them anyway, but leaving them in the root
+// entry invites the "why is esbuild in the lock of a release?" question).
+delete rootEntry.devDependencies;
+
+// The manifest above is authoritative for the SET of runtime dependencies.
+// A lock entry that disagrees means the two files would fail `npm ci` on a
+// fresh host — the exact failure this block exists to prevent — so check
+// rather than assume.
+const locked = Object.keys(rootEntry.dependencies ?? {}).sort();
+const declared = Object.keys(release.dependencies).sort();
+const lockedOnly = locked.filter((name) => !declared.includes(name));
+const declaredOnly = declared.filter((name) => !locked.includes(name));
+if (lockedOnly.length > 0 || declaredOnly.length > 0) {
+  throw new Error(
+    `the repo lock and package.json disagree: ` +
+      `lock-only [${lockedOnly.join(", ")}], package-only [${declaredOnly.join(", ")}] — ` +
+      `run \`npm install\` in the repo root and rebuild`,
+  );
+}
+
+fs.writeFileSync(outLockPath, JSON.stringify(lock, null, 2) + "\n", "utf8");
+console.log(
+  `[release-manifest] up/package-lock.json written: ${locked.length} direct dependencies, ` +
+    `${Object.keys(lock.packages).length} packages pinned`,
+);

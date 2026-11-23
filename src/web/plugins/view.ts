@@ -17,6 +17,17 @@ type ReplyView = (
 
 const wrapped = new WeakSet<FastifyReply>();
 
+/**
+ * The build's version, read once from the package manifest at startup.
+ *
+ * Handlebars cannot read a file, and a version hardcoded in a view is a
+ * number that goes stale on the first release — the marketing footer already
+ * carries one (`v0.1.0`), which is exactly how that happens. Empty when no
+ * manifest could be found, and the views then print nothing rather than a
+ * wrong number.
+ */
+let appVersionCache = "";
+
 function promoteLayout(
   page: string,
   data: Record<string, unknown> | undefined,
@@ -45,6 +56,7 @@ function injectPath(reply: FastifyReply, data: Record<string, unknown> | undefin
   const path = qIdx >= 0 ? url.slice(0, qIdx) : url;
   if (data) {
     data.path = path;
+    data.appVersion = appVersionCache;
     data.adminNavGroups = ADMIN_NAV_GROUPS;
     data.adminNavLocation = findAdminNav(path);
     if (data.req && typeof data.req === "object") {
@@ -55,6 +67,26 @@ function injectPath(reply: FastifyReply, data: Record<string, unknown> | undefin
 
 export async function registerView(app: FastifyInstance, cfg: { baseUrl: string }): Promise<void> {
   const viewsDir = path.join(__dirname, "..", "views");
+
+  /** The build's version, read once from the package manifest. */
+  appVersionCache = ((): string => {
+    try {
+      // __dirname is dist/web/plugins at runtime; the manifest sits four
+      // levels up in the repo tree and three in the release bundle.
+      for (const candidate of [
+        path.join(__dirname, "..", "..", "..", "package.json"),
+        path.join(__dirname, "..", "..", "package.json"),
+      ]) {
+        if (fs.existsSync(candidate)) {
+          const parsed = JSON.parse(fs.readFileSync(candidate, "utf8")) as { version?: unknown };
+          if (typeof parsed.version === "string" && parsed.version !== "") return parsed.version;
+        }
+      }
+    } catch {
+      // A manifest that cannot be read is not worth failing a page over.
+    }
+    return "";
+  })();
 
   /** Translate a key. The locale lives on the request (`req.locale`, derived
    *  from the `lang` cookie by the i18n plugin), so the request is the
@@ -77,8 +109,10 @@ export async function registerView(app: FastifyInstance, cfg: { baseUrl: string 
 
   Handlebars.registerHelper("eq", (a: unknown, b: unknown) => a === b);
   Handlebars.registerHelper("ne", (a: unknown, b: unknown) => a !== b);
-  Handlebars.registerHelper("startsWith", (str: unknown, prefix: unknown) =>
-    typeof str === "string" && typeof prefix === "string" && str.startsWith(prefix),
+  Handlebars.registerHelper(
+    "startsWith",
+    (str: unknown, prefix: unknown) =>
+      typeof str === "string" && typeof prefix === "string" && str.startsWith(prefix),
   );
   /** Active state is resolved by the same path rules as the breadcrumb:
    *  exact for /admin and /admin/audit, prefix with a slash boundary for
@@ -113,6 +147,31 @@ export async function registerView(app: FastifyInstance, cfg: { baseUrl: string 
       globalThis as { __ipqT?: (l: string, k: string, v?: Record<string, string | number>) => string }
     ).__ipqT;
     return tFn ? tFn(locale, resolvedKey) : resolvedKey;
+  });
+  /** Format an interval in seconds for the scheduler picker ("3 分钟" /
+   *  "3 minutes"). Kept as a helper rather than a dictionary key per value:
+   *  an operator may store any value between the bounds, and a key-per-value
+   *  scheme would print its own name for the one value nobody foresaw — the
+   *  same failure that made the picker unselected. */
+  Handlebars.registerHelper("intervalLabel", function (this: unknown, req: unknown, seconds: unknown) {
+    const total = Number(seconds);
+    if (!Number.isFinite(total) || total <= 0) return "";
+    const translator = (req as { t?: (k: string, v?: Record<string, string | number>) => string } | undefined)
+      ?.t;
+    const pick = (k: string, vars: Record<string, string | number>, fallback: string): string => {
+      if (typeof translator === "function") {
+        const out = translator.call(req, k, vars);
+        return out === k ? fallback : out;
+      }
+      return fallback;
+    };
+    if (total < 60)
+      return pick("admin.unknownIps.scheduler.intervalLabel.seconds", { n: total }, `${total}s`);
+    const minutes = Math.round(total / 60);
+    if (minutes < 60)
+      return pick("admin.unknownIps.scheduler.intervalLabel.minutes", { n: minutes }, `${minutes} min`);
+    const hours = Math.round(total / 3600);
+    return pick("admin.unknownIps.scheduler.intervalLabel.hours", { n: hours }, `${hours} h`);
   });
   Handlebars.registerHelper("not", (v: unknown) => !v);
   Handlebars.registerHelper("and", (a: unknown, b: unknown) => Boolean(a) && Boolean(b));
@@ -171,16 +230,13 @@ export async function registerView(app: FastifyInstance, cfg: { baseUrl: string 
   /** Format a timestamp as "3 minutes ago". The relative wording follows the
    *  reader's language, so the request is passed in for its locale — the
    *  same reason `adminNavLabel` goes through `req.t`. */
-  Handlebars.registerHelper(
-    "formatRelative",
-    (req: unknown, d: Date | string | null | undefined) => {
-      if (!d) return "";
-      const date = typeof d === "string" ? new Date(d) : d;
-      const locale = (req as { locale?: string } | undefined)?.locale;
-      const localeOption = locale === "en-US" ? enUS : zhCN;
-      return formatDistanceToNow(date, { addSuffix: true, locale: localeOption });
-    },
-  );
+  Handlebars.registerHelper("formatRelative", (req: unknown, d: Date | string | null | undefined) => {
+    if (!d) return "";
+    const date = typeof d === "string" ? new Date(d) : d;
+    const locale = (req as { locale?: string } | undefined)?.locale;
+    const localeOption = locale === "en-US" ? enUS : zhCN;
+    return formatDistanceToNow(date, { addSuffix: true, locale: localeOption });
+  });
   Handlebars.registerHelper("year", () => new Date().getFullYear());
   Handlebars.registerHelper("ternary", (cond: unknown, a: unknown, b: unknown) => (cond ? a : b));
   Handlebars.registerHelper("percent", (n: unknown, digits?: unknown) => {
@@ -296,9 +352,16 @@ export async function registerView(app: FastifyInstance, cfg: { baseUrl: string 
     const niceMax = maxY <= 5 ? 5 : Math.ceil(maxY / 5) * 5;
 
     if (buckets.length === 0 || buckets.every((b) => b.total === 0)) {
+      // An empty chart is an invitation, not a shrug. The old copy was a
+      // developer instruction ("run a lookup to populate") rendered inside the
+      // product's own chrome, half in Chinese and half in English. This says
+      // what the area will show and what makes it non-empty.
       return `<div class="chart-bars">
         <div class="chart-y"><span>0</span></div>
-        <div><div class="chart-empty">暂无数据 — run a lookup to populate</div></div>
+        <div><div class="chart-empty">
+          <strong>暂无查询数据</strong>
+          <span>这段时间内的查询会按日统计在这里</span>
+        </div></div>
       </div>`;
     }
 

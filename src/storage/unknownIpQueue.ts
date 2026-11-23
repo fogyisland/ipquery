@@ -84,8 +84,27 @@ export async function insertOrIncrement(
   );
 }
 
+/**
+ * The last IPv4 address, stored the way every runtime path stores one:
+ * sixteen bytes with the address in the last four positions.
+ *
+ * `ip_ranges` also carries IPv6 allocations, and the DB-IP IPv6 file
+ * contributes a catch-all row (`::` through `1fff:…:f`) whose range spans
+ * every address below `2000::`. _Every_ IPv4 address sorts inside that
+ * range, so a plain "is some range covering me" test matches every IPv4
+ * candidate and the queue is then permanently empty: the backfill would
+ * never see a row, and `/lookup` misses would pile up forever. The
+ * comparison below therefore only accepts an IPv6-ending range as a
+ * cover for an IPv6 candidate.
+ */
+const IPV4_MAX = Buffer.from("000000000000000000000000FFFFFFFF", "hex");
+
 /** Return up to `limit` pending IPs that are NOT already covered by
- *  ip_ranges, highest-priority first (more misses, then more recent). */
+ *  ip_ranges, highest-priority first (more misses, then more recent).
+ *
+ *  "Covered" uses the inclusive end the rest of the project uses:
+ *  `end_ip >= target` is the same test findRange() applies, and the
+ *  ETL's own ranges (DB-IP start/end pairs) include their end address. */
 export async function nextBatch(pool: Pool, limit: number): Promise<UnknownIpRow[]> {
   const [rows] = await pool.query<QueueRow[]>(
     `SELECT q.* FROM
@@ -96,12 +115,13 @@ export async function nextBatch(pool: Pool, limit: number): Promise<UnknownIpRow
       LIMIT ?
     ) q
     LEFT JOIN ip_ranges r
-      ON r.start_ip <= q.ip AND q.ip < r.end_ip
+      ON r.start_ip <= q.ip AND r.end_ip >= q.ip
+     AND (q.ip > ? OR r.end_ip <= ?)
     WHERE r.id IS NULL
     LIMIT ?`,
-    [limit * 3, limit],
-    // ↑ Pull 3× so we still get `limit` candidates after the NOT EXISTS
-    //   cull. Reasonable for typical queue-vs-ranges overlap (<<1%).
+    [limit * 3, IPV4_MAX, IPV4_MAX, limit],
+    // ↑ Pull 3× so we still get `limit` candidates after the cull.
+    //   Reasonable for typical queue-vs-ranges overlap (<<1%).
   );
   return rows.map(toRow);
 }

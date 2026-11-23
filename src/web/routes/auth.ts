@@ -113,7 +113,7 @@ export default async function authRoutes(app: FastifyInstance): Promise<void> {
       await app.mailer.send({
         to: email,
         subject: "IPQuery 邮箱验证",
-        text: `请访问以下链接验证邮箱:\n${verifyUrl}`,
+        text: `请访问以下链接验证邮�?\n${verifyUrl}`,
         html,
       });
 
@@ -132,9 +132,9 @@ export default async function authRoutes(app: FastifyInstance): Promise<void> {
     if (!token)
       return reply.code(401).view("auth/verify-result.hbs", {
         layout: "layouts/auth",
-        title: req.t("verify.title"),
+        title: req.t("auth.verify.title"),
         success: false,
-        message: req.t("verify.invalid"),
+        message: req.t("auth.verify.invalid"),
         reason: "invalid",
         req,
       });
@@ -143,27 +143,27 @@ export default async function authRoutes(app: FastifyInstance): Promise<void> {
     if (!v)
       return reply.code(401).view("auth/verify-result.hbs", {
         layout: "layouts/auth",
-        title: req.t("verify.title"),
+        title: req.t("auth.verify.title"),
         success: false,
-        message: req.t("verify.invalid"),
+        message: req.t("auth.verify.invalid"),
         reason: "invalid",
         req,
       });
     if (v.consumedAt)
       return reply.code(410).view("auth/verify-result.hbs", {
         layout: "layouts/auth",
-        title: req.t("verify.title"),
+        title: req.t("auth.verify.title"),
         success: false,
-        message: req.t("verify.consumed"),
+        message: req.t("auth.verify.consumed"),
         reason: "consumed",
         req,
       });
     if (v.expiresAt.getTime() < Date.now())
       return reply.code(410).view("auth/verify-result.hbs", {
         layout: "layouts/auth",
-        title: req.t("verify.title"),
+        title: req.t("auth.verify.title"),
         success: false,
-        message: req.t("verify.expired"),
+        message: req.t("auth.verify.expired"),
         reason: "expired",
         req,
       });
@@ -182,8 +182,7 @@ export default async function authRoutes(app: FastifyInstance): Promise<void> {
   //
   //  - A per-requester cooldown, keyed on the requester's IP rather
   //    than on the target userId. The cooldown used to be keyed on the
-  //    target, which only stopped repeated sends to the SAME user —
-  //    an attacker walking `userId` 1..N would send one email to every
+  //    target, which only stopped repeated sends to the SAME user �?  //    an attacker walking `userId` 1..N would send one email to every
   //    user and be blocked by nothing.
   app.post<{ Params: { userId: string } }>(
     "/verify/resend/:userId",
@@ -222,7 +221,7 @@ export default async function authRoutes(app: FastifyInstance): Promise<void> {
       await app.mailer.send({
         to: u.email,
         subject: "IPQuery 邮箱验证",
-        text: `请访问以下链接验证邮箱:\n${verifyUrl}`,
+        text: `请访问以下链接验证邮�?\n${verifyUrl}`,
         html,
       });
       return reply.code(302).redirect("/login?resent=1");
@@ -240,7 +239,7 @@ export default async function authRoutes(app: FastifyInstance): Promise<void> {
     };
     const viewData: Record<string, unknown> = { req };
     let notice: { success?: string; error?: string; info?: string } = {};
-    if (q.verified) notice.success = req.t("verify.success");
+    if (q.verified) notice.success = req.t("auth.verify.success");
     if (q.disabled) notice.error = req.t("auth.login.error.disabled");
     if (q.verify_required) notice.info = req.t("auth.verify.required");
     viewData.flash = notice;
@@ -323,7 +322,7 @@ export default async function authRoutes(app: FastifyInstance): Promise<void> {
         app.cfg.web.cookieDomain,
       );
 
-      // Everyone lands at /dashboard after login — it's the personal console, the
+      // Everyone lands at /dashboard after login �?it's the personal console, the
       // place a user starts every session. Admins get a CTA in the sidebar to
       // jump to /admin (see partials/sidebar.hbs); regular users never see admin
       // chrome at all. /admin auth guard 403s non-admins who try to follow the
@@ -368,7 +367,7 @@ export default async function authRoutes(app: FastifyInstance): Promise<void> {
         await app.mailer.send({
           to: user.email,
           subject: "IPQuery 密码重置",
-          text: `请访问以下链接重置密码:\n${resetUrl}`,
+          text: `请访问以下链接重置密�?\n${resetUrl}`,
           html,
         });
       }
@@ -393,7 +392,7 @@ export default async function authRoutes(app: FastifyInstance): Promise<void> {
       return reply.code(410).view("auth/reset.hbs", {
         layout: "layouts/auth",
         title: req.t("auth.reset.title"),
-        error: req.t("verify.expired"),
+        error: req.t("auth.verify.expired"),
         token: "",
         req,
       });
@@ -419,7 +418,7 @@ export default async function authRoutes(app: FastifyInstance): Promise<void> {
       return reply.code(410).view("auth/reset.hbs", {
         layout: "layouts/auth",
         title: req.t("auth.reset.title"),
-        error: req.t("verify.expired"),
+        error: req.t("auth.verify.expired"),
         token,
         req,
       });

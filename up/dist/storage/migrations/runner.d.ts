@@ -27,7 +27,16 @@ export declare function reloadMigrationManifest(): Promise<void>;
 /** Load the manifest from an explicit directory. Test-only: it lets a test
  *  point at a directory with no migrations in it. */
 export declare function loadMigrationManifestFrom(migrationsDir: string): Promise<void>;
-export declare function listMigrationEntries(): readonly MigrationEntry[];
+/**
+ * Every migration this build ships, in the order it applies.
+ *
+ * Async on purpose. The manifest is read from the disk at startup, so a
+ * synchronous reader would see an empty list during the window before the
+ * read settles — and "empty" is indistinguishable from "this build ships
+ * no migrations". The report would then say "nothing to check" about a
+ * database that is thirty steps behind.
+ */
+export declare function listMigrationEntries(): Promise<readonly MigrationEntry[]>;
 export declare function getAppliedVersions(pool: mysql.Pool): Promise<Set<string>>;
 export interface MigrationResult {
     applied: string[];
@@ -97,12 +106,11 @@ export interface SchemaReport {
  * The table and column names a migration file is expected to end up with,
  * and the SQL that establishes them.
  *
- * `src/storage/migrations/REFERENCE.md` is generated from this by
- * `scripts/schema-reference.js`. Keeping it as SQL-derived data rather
- * than a hand-written file is the same reasoning as `classify`: a
- * hand-maintained manifest is the thing that goes stale the moment a
- * migration is added, and then the drift check reports a deployment as
- * broken when it is exactly right.
+ * The reference is derived from the migration SQL rather than kept as a
+ * hand-written list — the same reasoning as `classify`: a hand-maintained
+ * manifest is the thing that goes stale the moment a migration is added,
+ * and then the drift check reports a deployment as broken when it is
+ * exactly right.
  */
 export interface SchemaReference {
     /** Table name → column names the migrations add to or create it with. */
@@ -127,9 +135,10 @@ export interface SchemaReference {
 export declare function buildSchemaReference(entries: readonly MigrationEntry[]): SchemaReference;
 export declare function getSchemaReport(pool: mysql.Pool): Promise<SchemaReport>;
 /** The same report against an explicit reference. The console and the health
- *  check use the derived one; `scripts/schema-reference.js` uses the same
- *  builder, so the document and the check cannot disagree. */
-export declare function getSchemaReportFrom(pool: mysql.Pool, reference: SchemaReference): Promise<SchemaReport>;
+ *  check use the derived one; a caller that already holds a reference can
+ *  pass it here so the report compares the database against that reference
+ *  rather than re-deriving one. */
+export declare function getSchemaReportFrom(pool: mysql.Pool, reference: SchemaReference, entriesOverride?: readonly MigrationEntry[]): Promise<SchemaReport>;
 export declare function migrationStatus(pool: mysql.Pool): Promise<{
     applied: string[];
     pending: string[];

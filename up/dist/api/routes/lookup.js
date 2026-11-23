@@ -77,6 +77,20 @@ function ipFromReq(req) {
         return p;
     return undefined;
 }
+/** Parse a JSON string without throwing.
+ *
+ *  Used only on a payload this server produced itself, so a failure here
+ *  means the payload was not what we thought — there is nothing to log
+ *  and nothing to fix at this point, so it returns undefined rather than
+ *  taking the request down. */
+function safeJsonParse(text) {
+    try {
+        return JSON.parse(text);
+    }
+    catch {
+        return undefined;
+    }
+}
 async function lookupRoute(app) {
     app.setErrorHandler(lookupErrorHandler);
     const preHandler = async (req, reply) => {
@@ -151,6 +165,57 @@ async function lookupRoute(app) {
         };
         return payload;
     };
+    /**
+     * The batch's counterpart to `logOnSend`.
+     *
+     * A batch contributes one query-log row per address, because the log
+     * answers "which addresses were asked about" — a batch of a hundred
+     * that logged one row would understate the traffic by a factor of a
+     * hundred and make the "top addresses" page wrong.
+     *
+     * The status of each address comes from its own answer: a hit, a miss
+     * (not in the library), or invalid. A request that was refused
+     * outright — a malformed body, or more addresses than the cap — never
+     * reached a lookup, so it logs nothing.
+     */
+    const logBatchOnSend = async (req, reply, payload) => {
+        const caller = callerOf(req);
+        if (!caller)
+            return payload;
+        if (reply.statusCode !== 200)
+            return payload;
+        // Fastify hands `onSend` the payload already serialized when the route
+        // declares no response schema, so it arrives as a JSON string. A route
+        // that did declare one would hand over the object. Both are accepted:
+        // the log row must not depend on which shape the payload took.
+        const answer = (typeof payload === "string" ? safeJsonParse(payload) : payload);
+        const entries = answer?.results;
+        if (!Array.isArray(entries))
+            return payload;
+        const remoteBuf = req.ip ? (0, ip_1.parseIp)(req.ip) : null;
+        const userAgent = req.headers["user-agent"] ?? null;
+        const rows = [];
+        for (const entry of entries) {
+            if (!entry || typeof entry.ip !== "string")
+                continue;
+            const buf = (0, ip_1.parseIp)(entry.ip);
+            if (!buf)
+                continue;
+            rows.push({
+                ip: buf,
+                ipText: entry.ip,
+                status: entry.found ? "hit" : "miss",
+                userId: caller.userId,
+                apiKeyId: caller.apiKeyId,
+                sessionId: caller.sessionId,
+                remoteAddr: remoteBuf,
+                userAgent,
+            });
+        }
+        if (rows.length > 0)
+            req.pendingLog = rows;
+        return payload;
+    };
     app.get("/lookup", { preHandler, onSend: logOnSend }, async (req, reply) => {
         const ip = req.query.ip;
         // The error code carries everything the caller needs. The rejected
@@ -167,6 +232,46 @@ async function lookupRoute(app) {
         if (!(0, ip_1.isValidIp)(ip))
             return reply.code(400).send({ error: "invalid_ip" });
         return doLookup(app, ip);
+    });
+    /**
+     * Look several addresses up in one call.
+     *
+     * A POST, not a GET: a hundred addresses do not fit in a URL, and a URL
+     * lands in every access log and proxy log on the way. A body does not.
+     *
+     * The batch never fails as a whole. One malformed address does not cost
+     * the caller the other ninety-nine answers — the bad one is marked and
+     * the rest land. The caller's job is reconciliation, and a single bad
+     * line in a log file must not cost them the file.
+     *
+     * The cap is refused rather than applied silently. A caller who asked
+     * for a hundred and one addresses would otherwise get a hundred answers
+     * that looked like all of them, and a reconciliation built on that
+     * would quietly miss a row.
+     */
+    app.post("/lookup/batch", { preHandler, onSend: logBatchOnSend }, async (req, reply) => {
+        const body = req.body;
+        const ips = body?.ips;
+        if (!Array.isArray(ips) || ips.length === 0) {
+            return reply.code(400).send({ error: "invalid_request" });
+        }
+        if (ips.length > lookup_core_1.MAX_BATCH_SIZE) {
+            return reply.code(400).send({
+                error: "invalid_request",
+                message: `at most ${lookup_core_1.MAX_BATCH_SIZE} addresses per request`,
+            });
+        }
+        // Every entry has to be a string before anything is looked up. A
+        // number or an object in the list is a caller's bug, and answering
+        // it with a "invalid_ip" marker would hide the bug behind a
+        // plausible-looking answer — the caller would never learn their
+        // client sent the wrong shape.
+        if (!ips.every((ip) => typeof ip === "string")) {
+            return reply.code(400).send({ error: "invalid_request" });
+        }
+        const trimmed = ips.map((ip) => ip.trim());
+        const answer = await (0, lookup_core_1.doLookupBatchCore)(app.pool, app.log, trimmed);
+        return reply.send(answer);
     });
 }
 //# sourceMappingURL=lookup.js.map

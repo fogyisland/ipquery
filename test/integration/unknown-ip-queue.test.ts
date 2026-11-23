@@ -54,17 +54,15 @@ describe("unknown_ip_queue", () => {
   });
 
   it("nextBatch excludes IPs already covered by ip_ranges", async () => {
-    // Seed an ip_ranges row that covers 192.0.2.0/24 (TEST-NET-1).
+    // Seed an ip_ranges row that covers 192.0.2.0/24 (TEST-NET-1). The end
+    // address is inclusive — the same convention findRange() tests against
+    // and the one the ETL's DB-IP ranges use.
     const startBuf = parseIp("192.0.2.0")!;
-    const _endBuf = parseIp("192.0.2.255");
+    const endBuf = parseIp("192.0.2.255")!;
     await td.pool.query(
       `INSERT INTO ip_ranges (start_ip, end_ip, range_size, country_code, country_source)
        VALUES (?, ?, ?, 'XX', 'seed')`,
-      [
-        startBuf,
-        Buffer.from((BigInt("0x" + startBuf.toString("hex")) + 0x100n).toString(16).padStart(32, "0"), "hex"),
-        0x100,
-      ],
+      [startBuf, endBuf, 255],
     );
     // Queue an IP that IS in the range — should be excluded.
     const inside = parseIp("192.0.2.50")!;
@@ -76,6 +74,48 @@ describe("unknown_ip_queue", () => {
     const batch = await nextBatch(td.pool, 100);
     expect(batch.some((r) => r.ipText === "192.0.2.50")).toBe(false);
     expect(batch.some((r) => r.ipText === "198.51.100.7")).toBe(true);
+  });
+
+  it("nextBatch excludes an IP that sits exactly on a range's end address", async () => {
+    // The end address belongs to the range (findRange() answers for it), so
+    // the queue must treat it as covered too. Getting this wrong re-queues
+    // an address the lookup already resolves. Uses its own block so the
+    // earlier tests' addresses stay untouched.
+    const startBuf = parseIp("233.252.0.0")!;
+    const endBuf = parseIp("233.252.0.255")!;
+    await td.pool.query(
+      `INSERT INTO ip_ranges (start_ip, end_ip, range_size, country_code, country_source)
+       VALUES (?, ?, ?, 'XX', 'seed')`,
+      [startBuf, endBuf, 255],
+    );
+    await insertOrIncrement(td.pool, endBuf, "233.252.0.255");
+
+    const batch = await nextBatch(td.pool, 100);
+    expect(batch.some((r) => r.ipText === "233.252.0.255")).toBe(false);
+  });
+
+  it("nextBatch still returns IPv4 candidates when an IPv6 catchall exists", async () => {
+    // DB-IP's IPv6 file contributes a row from :: to 1fff:…:f. Every IPv4
+    // address compares inside that range, so a coverage test that treats an
+    // IPv6 row as covering IPv4 empties the queue permanently — the backfill
+    // would never receive another IP and /lookup misses would pile up.
+    const ip = "45.33.32.156";
+    try {
+      await td.pool.query(
+        `INSERT INTO ip_ranges (start_ip, end_ip, range_size, country_code, country_source)
+         VALUES (?, ?, 18446744073709551615, 'ZZ', 'dbip')`,
+        [Buffer.from("0".repeat(32), "hex"), Buffer.from("1FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF", "hex")],
+      );
+      await insertOrIncrement(td.pool, parseIp(ip)!, ip);
+
+      const batch = await nextBatch(td.pool, 100);
+      expect(batch.some((r) => r.ipText === ip)).toBe(true);
+    } finally {
+      // The catchall covers every other address in this file's fixtures
+      // too, so it must not survive into the next test.
+      await td.pool.query("TRUNCATE TABLE ip_ranges");
+      await td.pool.query("DELETE FROM unknown_ip_queue WHERE ip_text = ?", [ip]);
+    }
   });
 
   it("nextBatch sorts by query_count DESC, then last_seen_at DESC", async () => {

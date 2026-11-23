@@ -1,4 +1,5 @@
 import type { Pool } from "mysql2/promise";
+import { type BatchLookupEntry as CoreBatchLookupEntry, type BatchLookupResult as CoreBatchLookupResult } from "../lookup-core";
 import { type EtlSourceReport } from "../storage/etlSourceContribution";
 import type { QueryLogRow } from "../storage/queryLog";
 import type { LookupResult } from "../types";
@@ -31,24 +32,9 @@ export declare function iso(d: Date | null | undefined): string | null;
 export declare function mcpLookup(deps: McpPool, ip: string): Promise<LookupResult>;
 export declare function lookupToolDef(): ToolDef;
 /** One address inside a batch answer. */
-export interface BatchLookupEntry {
-    ip: string;
-    /** False when the address was malformed or not in the library. */
-    found: boolean;
-    /** The lookup result, when the address was found. */
-    result?: LookupResult;
-    /** Why the address was not found: "invalid_ip" or "not_found". */
-    error?: string;
-}
-export interface BatchLookupResult {
-    results: BatchLookupEntry[];
-    /** How many addresses were asked about. */
-    total: number;
-    /** How many of them were in the library. */
-    found: number;
-    /** How many were not — malformed or unknown. */
-    notFound: number;
-}
+export type BatchLookupEntry = CoreBatchLookupEntry;
+/** The answer to a batch of lookups. */
+export type BatchLookupResult = CoreBatchLookupResult;
 /**
  * Look several addresses up in one call.
  *
@@ -60,6 +46,11 @@ export interface BatchLookupResult {
  * addresses still get their answers, and the failed one is marked.
  * A batch that died on the first bad address would be worse than no
  * batch tool at all.
+ *
+ * The work itself lives in the shared core, so this tool and the HTTP
+ * endpoint answer identically — the same addresses, the same markers,
+ * the same count. Two implementations of one answer is how a client ends
+ * up with two different truths about the same address.
  */
 export declare function mcpLookupBatch(deps: McpPool, args: {
     ips?: unknown;

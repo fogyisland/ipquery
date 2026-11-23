@@ -251,6 +251,37 @@ const DEFAULT_CONFIG: RandomGenConfig = {
 export const RANDOM_GEN_RUNS_PER_HOUR = 20;
 export const RANDOM_GEN_INTERVAL_SEC = 3600 / RANDOM_GEN_RUNS_PER_HOUR;
 
+/**
+ * The bounds the scheduler form may express, exported so the UI renders
+ * exactly the range the code enforces.
+ *
+ * These used to live only inside `loadRandomGenConfig`, with `save` clamping
+ * to DIFFERENT limits (interval from 1s, batch up to 100). A value the form
+ * accepted could therefore be persisted but never take effect: saving
+ * batch=50 stored 50 while the runner read 20 back, and the page then showed
+ * 50 as the active setting. One clamp, used by both sides, is the fix.
+ */
+export const RANDOM_GEN_INTERVAL_MIN_SEC = 60;
+export const RANDOM_GEN_INTERVAL_MAX_SEC = 3600;
+export const RANDOM_GEN_BATCH_MIN = 1;
+export const RANDOM_GEN_BATCH_MAX = 20;
+
+/** The interval presets the scheduler form offers. 180s (one run every three
+ *  minutes) is the default, so it has to be in this list — it was missing,
+ *  and a form opened on the default then saved the FIRST option (60s),
+ *  silently tripling the ingest rate. */
+export const RANDOM_GEN_INTERVAL_PRESETS: readonly number[] = [60, 180, 300, 900, 1800];
+
+export function clampIntervalSec(value: number): number {
+  if (!Number.isFinite(value)) return DEFAULT_CONFIG.intervalSec;
+  return Math.min(RANDOM_GEN_INTERVAL_MAX_SEC, Math.max(RANDOM_GEN_INTERVAL_MIN_SEC, Math.round(value)));
+}
+
+export function clampBatchSize(value: number): number {
+  if (!Number.isFinite(value)) return DEFAULT_CONFIG.batchSize;
+  return Math.min(RANDOM_GEN_BATCH_MAX, Math.max(RANDOM_GEN_BATCH_MIN, Math.round(value)));
+}
+
 export async function loadRandomGenConfig(pool: Pool): Promise<RandomGenConfig> {
   const [intervalRaw, batchRaw, cooldownRaw, cbRaw] = await Promise.all([
     getSetting(pool, "random_gen_interval_sec"),
@@ -262,17 +293,11 @@ export async function loadRandomGenConfig(pool: Pool): Promise<RandomGenConfig> 
     // Floor of 60s: anything faster is a burst the free tiers will answer
     // with 429s. Ceiling of an hour: slower than that and the "continuous"
     // runner is indistinguishable from a manual click.
-    intervalSec:
-      intervalRaw === null
-        ? DEFAULT_CONFIG.intervalSec
-        : Math.min(3600, Math.max(60, Number(intervalRaw) || DEFAULT_CONFIG.intervalSec)),
-    // Capped at 20: each IP costs one provider call, and a large batch
-    // turns one tick into the kind of burst the per-minute limiter exists
-    // to prevent.
-    batchSize:
-      batchRaw === null
-        ? DEFAULT_CONFIG.batchSize
-        : Math.min(20, Math.max(1, Number(batchRaw) || DEFAULT_CONFIG.batchSize)),
+    intervalSec: intervalRaw === null ? DEFAULT_CONFIG.intervalSec : clampIntervalSec(Number(intervalRaw)),
+    // Capped at RANDOM_GEN_BATCH_MAX: each IP costs one provider call, and a
+    // large batch turns one tick into the kind of burst the per-minute
+    // limiter exists to prevent.
+    batchSize: batchRaw === null ? DEFAULT_CONFIG.batchSize : clampBatchSize(Number(batchRaw)),
     cooldownMinutes:
       cooldownRaw === null
         ? DEFAULT_CONFIG.cooldownMinutes
@@ -290,12 +315,10 @@ export interface RandomGenConfigUpdate {
 
 export async function saveRandomGenConfig(pool: Pool, patch: RandomGenConfigUpdate): Promise<void> {
   if (patch.intervalSec !== undefined) {
-    const clamped = Math.min(3600, Math.max(1, Math.round(patch.intervalSec)));
-    await setSetting(pool, "random_gen_interval_sec", String(clamped));
+    await setSetting(pool, "random_gen_interval_sec", String(clampIntervalSec(patch.intervalSec)));
   }
   if (patch.batchSize !== undefined) {
-    const clamped = Math.min(100, Math.max(1, Math.round(patch.batchSize)));
-    await setSetting(pool, "random_gen_batch_size", String(clamped));
+    await setSetting(pool, "random_gen_batch_size", String(clampBatchSize(patch.batchSize)));
   }
   if (patch.cooldownMinutes !== undefined) {
     const clamped = Math.min(1440, Math.max(0, Math.round(patch.cooldownMinutes)));

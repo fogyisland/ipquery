@@ -40,6 +40,16 @@ function makeReleaseFixture(): string {
   fs.mkdirSync(path.join(directory, "scripts"), { recursive: true });
   fs.mkdirSync(path.join(directory, "up"), { recursive: true });
   fs.copyFileSync(path.join(root, "package.json"), path.join(directory, "package.json"));
+  // The generator also builds `up/package-lock.json` from the repo lock, and
+  // it refuses to write one whose dependency set disagrees with
+  // package.json — that mismatch is exactly the `npm ci` failure the lock
+  // is meant to prevent, so the fixture has to carry both halves of the
+  // pair. The repo's own two files are consistent, so they are the
+  // fixture.
+  fs.copyFileSync(
+    path.join(root, "package-lock.json"),
+    path.join(directory, "package-lock.json"),
+  );
   fs.copyFileSync(
     path.join(root, "scripts", "write-release-manifest.js"),
     path.join(directory, "scripts", "write-release-manifest.js"),
@@ -114,6 +124,42 @@ describe("MCP client configuration", () => {
     expect((generatedManifest.bin as Record<string, string>)["ipquery-mcp"]).toBe(
       "dist/mcp/server.js",
     );
+  });
+
+  it("generates a release lockfile that npm ci would accept", () => {
+    // The release lockfile used to be a hand-copied snapshot of some
+    // earlier repo state, so it drifted: it still listed `maxmind` after
+    // the MaxMind parser was removed, and it lacked `@fastify/multipart`
+    // after the chunked range upload added it. `npm ci` refuses to
+    // install when package.json and package-lock.json disagree about the
+    // dependency set — it exits with EUSAGE before installing anything,
+    // so the server never ran on a fresh host.
+    //
+    // The lockfile is now generated from the repo's own lock. These are
+    // the two things that had to be true for the release to install, and
+    // they are the two things that used to be false.
+    const directory = makeReleaseFixture();
+    execFileSync(process.execPath, [path.join(directory, "scripts", "write-release-manifest.js")], {
+      cwd: directory,
+      stdio: "pipe",
+    });
+
+    const releaseLock = readJson(path.join(directory, "up", "package-lock.json"));
+    const rootEntry = (releaseLock.packages as Record<string, unknown>)[""] as
+      | Record<string, unknown>
+      | undefined;
+    expect(rootEntry).toBeDefined();
+
+    const sourceManifest = readJson(path.join(directory, "package.json"));
+    const locked = Object.keys((rootEntry?.dependencies as object) ?? {}).sort();
+    const declared = Object.keys((sourceManifest.dependencies as object) ?? {}).sort();
+    // The set of runtime dependencies is identical on both sides, which is
+    // what `npm ci` checks before it installs anything.
+    expect(locked).toEqual(declared);
+    // And the dev-only packages are gone: a release has no test runner
+    // and no compiler, so pinning them would only invite the question of
+    // why they are there.
+    expect(rootEntry?.devDependencies).toBeUndefined();
   });
 
   it("declares the MCP bin in the committed release manifest and keeps its entry runnable", () => {

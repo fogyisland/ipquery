@@ -34,11 +34,13 @@ var __importStar = (this && this.__importStar) || (function () {
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.EtlProgressSink = exports.SOURCE_FILES = void 0;
+exports.runDownloadStage = runDownloadStage;
 exports.runPipeline = runPipeline;
 // SPDX-License-Identifier: MIT
 const fs = __importStar(require("node:fs/promises"));
 const path = __importStar(require("node:path"));
 const mysql_1 = require("../storage/mysql");
+const rangeCount_1 = require("../storage/rangeCount");
 const dbip_1 = require("./sources/dbip");
 const download_1 = require("./download");
 const cidr_1 = require("./sources/cidr");
@@ -299,6 +301,14 @@ function toIpRangeRow(rec, source, fillCols) {
 // each stage does ONE insert per file once the work is done, with
 // started_at + finished_at + duration_ms all populated atomically.
 // Swap uses upsertEtlRunSwap so re-runs overwrite.
+/**
+ * The download stage: run `downloadAll` over `specs` and record one
+ * `etl_run_downloads` row per file. Exported so a test can drive the
+ * production stage with a narrower spec list — the monthly DB-IP files are
+ * handed to this stage every run (it is the stage that decides whether the
+ * cached month is still current), and a test that stubs the whole stage to
+ * avoid the network would also lose the fixed-source rows it asserts on.
+ */
 async function runDownloadStage(pool, runId, rawDir, now, sink, 
 /** Which specs to fetch. Defaults to all of them; the pipeline passes
  *  only the files that are missing or corrupt, so a cached-and-valid
@@ -602,6 +612,12 @@ async function runSwapStage(pool, runId) {
     if (result.status !== "success") {
         throw new Error(`atomic swap failed: ${result.errorMessage ?? "unknown error"}`);
     }
+    // The table just changed wholesale, so every cached count of it is wrong.
+    // Recomputing here is free relative to a run that took minutes, and it is
+    // the only moment the number changes by millions. Pages then read the
+    // stored value instead of paying 3.2s for a COUNT(*) each render — see
+    // storage/rangeCount.
+    await (0, rangeCount_1.refreshRangeCount)(pool);
     return row;
 }
 // Helper: mark every in-progress stage row as 'failed' with the given
@@ -720,21 +736,30 @@ async function runPipelineLocked(pool, opts) {
         //         the run then reported success with a partial data set
         //         and swapped it over the live table.
         //
-        //    So: validate each cached file, delete the corrupt ones, and
-        //    download exactly the files that are missing or damaged.
+        //    Decide which DB-IP files to fetch.
+        //
+        //    Two questions, both answered here: is the file whole (a truncated
+        //    .gz blows up in the parser as Z_BUF_ERROR), and is it the CURRENT
+        //    release? The second one is what kept the library frozen for months:
+        //    a gzip-valid cache never stopped being valid, so every later run
+        //    reused it and DB-IP's monthly updates were never followed.
+        //
+        //    The month lives in a sidecar file (see the download module) and is
+        //    compared against the newest release DB-IP actually publishes. The
+        //    download stage makes the same check itself — this pass only exists
+        //    so the log line and the progress bar can say how many files will
+        //    move, and so a corrupt file is removed rather than left for the
+        //    downloader to trip over.
         const reusable = [];
-        const needDownload = [];
         for (const f of exports.SOURCE_FILES.filter((file) => file.validate === "gzip")) {
             const filePath = path.join(rawDir, f.filename);
-            if (!(await fileExists(filePath))) {
-                needDownload.push(f);
+            if (!(await fileExists(filePath)))
                 continue;
-            }
             const problem = await (0, download_1.validateGzFile)(filePath);
             if (problem) {
                 console.warn(`[etl] cached ${f.filename} is corrupt (${problem}); deleting it and re-downloading`);
                 await fs.rm(filePath, { force: true });
-                needDownload.push(f);
+                await fs.rm((0, download_1.monthSidecarPath)(rawDir, f.filename), { force: true });
                 continue;
             }
             reusable.push(f);
@@ -743,12 +768,14 @@ async function runPipelineLocked(pool, opts) {
         // the previous validated cache and is recorded as 'failed', never
         // 'skipped'. The injected test download seam receives all specs so
         // integration tests can short-circuit without network access.
-        const needNames = new Set(needDownload.map((f) => f.filename));
-        const monthlySpecs = download_1.ALL_SPECS.filter((spec) => spec.mode === "monthly" && needNames.has(spec.destName));
+        //
+        // Monthly specs are handed to the download stage even when a file
+        // exists: only that stage knows whether the cached month is still the
+        // newest release, and it is the stage that has to act when it is not.
+        const monthlySpecs = download_1.ALL_SPECS.filter((spec) => spec.mode === "monthly");
         const specs = [...monthlySpecs, ...download_1.EXTRA_SPECS];
-        const monthlyCount = monthlySpecs.length;
-        console.log(`[etl] download: ${monthlyCount} DB-IP file(s) to fetch, ` +
-            `${reusable.length} reused from cache, ${download_1.EXTRA_SPECS.length} GitHub file(s) refreshed`);
+        console.log(`[etl] download: ${monthlySpecs.length} DB-IP file(s) to check ` +
+            `(${reusable.length} already intact on disk), ${download_1.EXTRA_SPECS.length} GitHub file(s) refreshed`);
         sink.setStage("download");
         const fixedImpl = opts.downloadFixed ?? download_1.fetchFixedOneWithAttempts;
         const download = opts.download ?? runDownloadStage;
@@ -775,24 +802,9 @@ async function runPipelineLocked(pool, opts) {
         if (missing.length > 0) {
             throw new Error(`source files unavailable after download: ${missing.join(", ")} — refusing to swap incomplete data over the live table`);
         }
-        // Record one synthetic 'skipped' row per reused file so the
-        // run-detail page doesn't show an empty stage for cached inputs.
-        for (const f of reusable) {
-            await (0, mysql_1.insertEtlRunDownload)(pool, {
-                runId,
-                source: f.etlSource,
-                destName: f.filename,
-                sourceUrl: null,
-                month: null,
-                status: "skipped",
-                bytes: null,
-                durationMs: null,
-                retryCount: 0,
-                errorMessage: null,
-                startedAt: now,
-                finishedAt: now,
-            });
-        }
+        // The download stage already records one row per monthly file — including
+        // a `skipped` row (with its month) for a file that was already the newest
+        // release. Recording a second synthetic row here would double-count.
         // Synthesise the download totals so the bar reads 100% instantly
         // when re-running against cached files.
         try {
@@ -802,13 +814,17 @@ async function runPipelineLocked(pool, opts) {
                     const stat = await fs.stat(path.join(rawDir, f.filename));
                     totalBytes += stat.size;
                 }
-                catch { /* ignore */ }
+                catch {
+                    /* ignore */
+                }
             }
             sink.onDownload(totalBytes, totalBytes);
             sink.setStage("download");
             await sink.flush();
         }
-        catch { /* ignore — sink is best-effort */ }
+        catch {
+            /* ignore — sink is best-effort */
+        }
         // 2) Parse stage: per-file skip counters. The four GitHub sources
         // are parsed and deduped once; parse and insert reuse that snapshot.
         sink.setStage("parse");

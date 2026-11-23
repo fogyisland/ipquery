@@ -40,10 +40,13 @@
     <header class="chart-card-head">
       <div>
         <h3 class="card-title">{{req.t 'admin.dashboard.chart7d.title'}}</h3>
+        {{!-- The subtitle names the window the bars actually cover. It used
+             to read the 24h total, so a chart labelled "近 7 天" carried a
+             number from a different period. --}}
         <p class="card-sub">
-          {{req.t 'admin.dashboard.chart7d.total' total=(add overview.queries24h.hit overview.queries24h.miss overview.queries24h.invalid)}}
+          {{req.t 'admin.dashboard.chart7d.total' total=overview.queries7d.total}}
           &middot;
-          {{req.t 'admin.dashboard.hitRate'}} {{percent overview.queries24h.hitRate 1}}
+          {{req.t 'admin.dashboard.hitRate'}} {{percent overview.queries7d.hitRate 1}}
         </p>
       </div>
       <ul class="chart-legend" aria-label="legend">
@@ -56,8 +59,8 @@
   </div>
 
   <h3 class="dash-section-title">{{req.t 'admin.dashboard.section.system'}}</h3>
-  <div class="dashboard-grid">
-    <div class="card">
+  <div class="dashboard-grid dashboard-grid--metrics">
+    <div class="card stat-card">
       <p class="card-title">{{req.t 'admin.dashboard.etlStatus'}}</p>
       <p class="card-value">
         {{#if overview.etl.lastRun}}
@@ -69,27 +72,48 @@
       <p class="card-sub">{{overview.etl.runsToday}} {{req.t 'admin.dashboard.runsToday'}}</p>
     </div>
 
-    <div class="card">
+    <div class="card stat-card">
       <p class="card-title">{{req.t 'admin.dashboard.ipRanges'}}</p>
       <p class="card-value">{{overview.db.ipRanges}}</p>
+      <p class="card-sub">{{req.t 'admin.dashboard.ipRangesSub'}}</p>
     </div>
 
-    <div class="card">
+    <div class="card stat-card">
       <p class="card-title">{{req.t 'admin.dashboard.users'}}</p>
       <p class="card-value">{{overview.db.users.total}}</p>
       <p class="card-sub">{{overview.db.users.verified}} {{req.t 'admin.dashboard.verified'}}</p>
     </div>
 
-    <div class="card">
+    <div class="card stat-card">
       <p class="card-title">{{req.t 'admin.dashboard.apiKeys'}}</p>
       <p class="card-value">{{overview.db.apiKeys.active}}</p>
       <p class="card-sub">/ {{overview.db.apiKeys.total}}</p>
     </div>
 
-    <div class="card">
+    <div class="card stat-card">
       <p class="card-title">{{req.t 'admin.dashboard.lastSuccess'}}</p>
       <p class="card-value card-value--small">{{#if overview.etl.lastSuccessAt}}{{formatRelative req overview.etl.lastSuccessAt}}{{else}}{{req.t 'admin.dashboard.never'}}{{/if}}</p>
     </div>
+
+    {{!-- Database schema state. This is the card an operator reads first after
+         copying a new build and restarting: it says whether the migrations ran
+         and which version the database is actually on. A pending count means
+         this build shipped a step the database has not applied — which cannot
+         happen through the boot path, so it points at a partially-copied
+         release or a database someone rolled back by hand. --}}
+    <a class="card stat-card stat-card--schema" href="/admin/settings#system">
+      <p class="card-title">{{req.t 'admin.dashboard.schemaVersion'}}</p>
+      <p class="card-value card-value--small">
+        {{> pill kind=schemaSummary.statusKind text=schemaSummary.statusText}}
+      </p>
+      <p class="card-sub">
+        {{#if schemaSummary.pendingCount}}
+          {{req.t 'admin.dashboard.schemaPending' latest=schemaSummary.latestText count=schemaSummary.pendingCount}}
+        {{else}}
+          {{schemaSummary.appliedLatestText}}
+        {{/if}}
+      </p>
+    </a>
   </div>
 
   <div class="card">

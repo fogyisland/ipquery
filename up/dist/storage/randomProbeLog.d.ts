@@ -84,6 +84,27 @@ export interface RandomGenConfig {
 /** Twenty runs an hour, expressed as the interval the runner uses. */
 export declare const RANDOM_GEN_RUNS_PER_HOUR = 20;
 export declare const RANDOM_GEN_INTERVAL_SEC: number;
+/**
+ * The bounds the scheduler form may express, exported so the UI renders
+ * exactly the range the code enforces.
+ *
+ * These used to live only inside `loadRandomGenConfig`, with `save` clamping
+ * to DIFFERENT limits (interval from 1s, batch up to 100). A value the form
+ * accepted could therefore be persisted but never take effect: saving
+ * batch=50 stored 50 while the runner read 20 back, and the page then showed
+ * 50 as the active setting. One clamp, used by both sides, is the fix.
+ */
+export declare const RANDOM_GEN_INTERVAL_MIN_SEC = 60;
+export declare const RANDOM_GEN_INTERVAL_MAX_SEC = 3600;
+export declare const RANDOM_GEN_BATCH_MIN = 1;
+export declare const RANDOM_GEN_BATCH_MAX = 20;
+/** The interval presets the scheduler form offers. 180s (one run every three
+ *  minutes) is the default, so it has to be in this list — it was missing,
+ *  and a form opened on the default then saved the FIRST option (60s),
+ *  silently tripling the ingest rate. */
+export declare const RANDOM_GEN_INTERVAL_PRESETS: readonly number[];
+export declare function clampIntervalSec(value: number): number;
+export declare function clampBatchSize(value: number): number;
 export declare function loadRandomGenConfig(pool: Pool): Promise<RandomGenConfig>;
 export interface RandomGenConfigUpdate {
     intervalSec?: number;

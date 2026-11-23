@@ -35,6 +35,13 @@ export interface Overview {
         hitRate: number;
     };
     last7Days: DailyBucket[];
+    queries7d: {
+        hit: number;
+        miss: number;
+        invalid: number;
+        total: number;
+        hitRate: number;
+    };
     recentActivity: AuditLogEntry[];
 }
 export declare function getOverview(pool: Pool): Promise<Overview>;

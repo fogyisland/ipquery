@@ -37,7 +37,15 @@ function registerQueryLogWriter(app, pool, opts) {
     app.addHook("onResponse", async (req, _reply) => {
         if (!req.pendingLog)
             return;
-        buffer.push(req.pendingLog);
+        if (Array.isArray(req.pendingLog)) {
+            // A batch: one row per address. The buffer's flush threshold is
+            // checked against the whole batch, so a hundred-address batch
+            // flushes on its own rather than waiting for the timer.
+            buffer.push(...req.pendingLog);
+        }
+        else {
+            buffer.push(req.pendingLog);
+        }
         if (buffer.length >= maxBatch)
             await flush();
     });

@@ -45,6 +45,16 @@ const date_fns_1 = require("date-fns");
 const locale_1 = require("date-fns/locale");
 const nav_1 = require("../admin/nav");
 const wrapped = new WeakSet();
+/**
+ * The build's version, read once from the package manifest at startup.
+ *
+ * Handlebars cannot read a file, and a version hardcoded in a view is a
+ * number that goes stale on the first release — the marketing footer already
+ * carries one (`v0.1.0`), which is exactly how that happens. Empty when no
+ * manifest could be found, and the views then print nothing rather than a
+ * wrong number.
+ */
+let appVersionCache = "";
 function promoteLayout(page, data, opts, raw) {
     const mergedOpts = { ...(opts ?? {}) };
     if (!mergedOpts.layout && data && typeof data.layout === "string") {
@@ -68,6 +78,7 @@ function injectPath(reply, data) {
     const path = qIdx >= 0 ? url.slice(0, qIdx) : url;
     if (data) {
         data.path = path;
+        data.appVersion = appVersionCache;
         data.adminNavGroups = nav_1.ADMIN_NAV_GROUPS;
         data.adminNavLocation = (0, nav_1.findAdminNav)(path);
         if (data.req && typeof data.req === "object") {
@@ -77,6 +88,27 @@ function injectPath(reply, data) {
 }
 async function registerView(app, cfg) {
     const viewsDir = path.join(__dirname, "..", "views");
+    /** The build's version, read once from the package manifest. */
+    appVersionCache = (() => {
+        try {
+            // __dirname is dist/web/plugins at runtime; the manifest sits four
+            // levels up in the repo tree and three in the release bundle.
+            for (const candidate of [
+                path.join(__dirname, "..", "..", "..", "package.json"),
+                path.join(__dirname, "..", "..", "package.json"),
+            ]) {
+                if (fs.existsSync(candidate)) {
+                    const parsed = JSON.parse(fs.readFileSync(candidate, "utf8"));
+                    if (typeof parsed.version === "string" && parsed.version !== "")
+                        return parsed.version;
+                }
+            }
+        }
+        catch {
+            // A manifest that cannot be read is not worth failing a page over.
+        }
+        return "";
+    })();
     /** Translate a key. The locale lives on the request (`req.locale`, derived
      *  from the `lang` cookie by the i18n plugin), so the request is the
      *  only reliable source of the reader's language. Templates call
@@ -128,6 +160,32 @@ async function registerView(app, cfg) {
         const locale = req?.locale ?? "zh-CN";
         const tFn = globalThis.__ipqT;
         return tFn ? tFn(locale, resolvedKey) : resolvedKey;
+    });
+    /** Format an interval in seconds for the scheduler picker ("3 分钟" /
+     *  "3 minutes"). Kept as a helper rather than a dictionary key per value:
+     *  an operator may store any value between the bounds, and a key-per-value
+     *  scheme would print its own name for the one value nobody foresaw — the
+     *  same failure that made the picker unselected. */
+    Handlebars.registerHelper("intervalLabel", function (req, seconds) {
+        const total = Number(seconds);
+        if (!Number.isFinite(total) || total <= 0)
+            return "";
+        const translator = req
+            ?.t;
+        const pick = (k, vars, fallback) => {
+            if (typeof translator === "function") {
+                const out = translator.call(req, k, vars);
+                return out === k ? fallback : out;
+            }
+            return fallback;
+        };
+        if (total < 60)
+            return pick("admin.unknownIps.scheduler.intervalLabel.seconds", { n: total }, `${total}s`);
+        const minutes = Math.round(total / 60);
+        if (minutes < 60)
+            return pick("admin.unknownIps.scheduler.intervalLabel.minutes", { n: minutes }, `${minutes} min`);
+        const hours = Math.round(total / 3600);
+        return pick("admin.unknownIps.scheduler.intervalLabel.hours", { n: hours }, `${hours} h`);
     });
     Handlebars.registerHelper("not", (v) => !v);
     Handlebars.registerHelper("and", (a, b) => Boolean(a) && Boolean(b));
@@ -302,9 +360,16 @@ async function registerView(app, cfg) {
         const maxY = Math.max(1, ...buckets.map((b) => b.total));
         const niceMax = maxY <= 5 ? 5 : Math.ceil(maxY / 5) * 5;
         if (buckets.length === 0 || buckets.every((b) => b.total === 0)) {
+            // An empty chart is an invitation, not a shrug. The old copy was a
+            // developer instruction ("run a lookup to populate") rendered inside the
+            // product's own chrome, half in Chinese and half in English. This says
+            // what the area will show and what makes it non-empty.
             return `<div class="chart-bars">
         <div class="chart-y"><span>0</span></div>
-        <div><div class="chart-empty">暂无数据 — run a lookup to populate</div></div>
+        <div><div class="chart-empty">
+          <strong>暂无查询数据</strong>
+          <span>这段时间内的查询会按日统计在这里</span>
+        </div></div>
       </div>`;
         }
         // Y-axis ticks: 0 / 25% / 50% / 75% / 100% of niceMax

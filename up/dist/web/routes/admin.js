@@ -216,13 +216,69 @@ const MCP_STATUS_PILL = {
     rejected: "danger",
     revoked: "muted",
 };
+async function readSchemaSummary(pool, req) {
+    let report;
+    try {
+        report = await (0, runner_1.getSchemaReport)(pool);
+    }
+    catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        return {
+            statusKind: "danger",
+            statusText: req.t("admin.settings.schema.statusError", { error: message }),
+            pendingCount: 0,
+            appliedLatestText: req.t("admin.settings.schema.noneApplied"),
+            latestText: "",
+            hasLockRisk: false,
+            driftCount: 0,
+            structureError: null,
+            error: message,
+        };
+    }
+    const fileOf = (entry) => entry ? `${entry.version}_${entry.name}` : req.t("admin.settings.schema.noneApplied");
+    return {
+        statusKind: report.error || report.structureError
+            ? "danger"
+            : report.isCurrent
+                ? "success"
+                : report.hasLockRisk
+                    ? "warning"
+                    : "info",
+        statusText: report.error
+            ? req.t("admin.settings.schema.statusError", { error: report.error })
+            : report.structureError
+                ? req.t("admin.settings.schema.statusStructureError", { error: report.structureError })
+                : report.isCurrent
+                    ? req.t("admin.settings.schema.statusOk")
+                    : req.t("admin.settings.schema.statusBehind", { count: report.pendingCount }),
+        pendingCount: report.pendingCount,
+        appliedLatestText: fileOf(report.appliedLatest),
+        latestText: fileOf(report.latest),
+        hasLockRisk: report.hasLockRisk,
+        driftCount: report.drift.length,
+        structureError: report.structureError,
+        error: report.error,
+    };
+}
 async function adminRoutes(app) {
     app.get("/admin", { config: { rateLimit: ADMIN_POLL_RATE_LIMIT } }, async (req, reply) => {
         const overview = await (0, overview_1.getOverview)(app.pool);
+        // The schema state belongs on the first screen, not only in
+        // /admin/settings. That page is four tabs deep, and an operator who has
+        // just copied a new build and restarted has exactly one question: did the
+        // database reach the version this code was written against. Asking that
+        // should not require knowing which tab holds the answer.
+        //
+        // The report is cheap enough for the 30s poll this page runs: the ledger
+        // read is one SELECT (warm: ~1ms) and the drift check is one
+        // INFORMATION_SCHEMA read across the whole schema (measured 8ms warm,
+        // 48ms after a fresh connection).
+        const schemaSummary = await readSchemaSummary(app.pool, req);
         return reply.view("admin/dashboard.hbs", {
             layout: "layouts/admin",
             title: req.t("admin.dashboard.title"),
             overview,
+            schemaSummary,
             csrfToken: req.csrfToken,
             req,
         });
@@ -264,7 +320,10 @@ async function adminRoutes(app) {
         // indication that more existed. The query string carries the
         // filters across a page change; without it, "next" would reset the
         // table to the unfiltered set.
-        const queryString = (0, sortColumns_1.buildQueryString)({ ...q.filters, sort: q.sort?.col ? `${q.sort.dir === "desc" ? "-" : ""}${q.sort.col}` : undefined });
+        const queryString = (0, sortColumns_1.buildQueryString)({
+            ...q.filters,
+            sort: q.sort?.col ? `${q.sort.dir === "desc" ? "-" : ""}${q.sort.col}` : undefined,
+        });
         // The export always covers the whole filtered set, so `page` is
         // dropped — exporting page 2 of 5 and calling it "the export" would
         // be worse than not exporting at all.
@@ -796,7 +855,10 @@ async function adminRoutes(app) {
             csvUrl,
             filters: q.filters,
             sort: q.sort,
-            sortColumns: (0, sortColumns_1.buildSortColumns)(["id", "label", "key_prefix", "created_at"], q.sort, { ...q.filters, page: q.page }),
+            sortColumns: (0, sortColumns_1.buildSortColumns)(["id", "label", "key_prefix", "created_at"], q.sort, {
+                ...q.filters,
+                page: q.page,
+            }),
             req,
             csrfToken: req.csrfToken,
         });
@@ -905,7 +967,10 @@ async function adminRoutes(app) {
             queryString,
             filters: q.filters,
             sort: q.sort,
-            sortColumns: (0, sortColumns_1.buildSortColumns)(["id", "label", "token_prefix", "requested_at"], q.sort, { ...q.filters, page: q.page }),
+            sortColumns: (0, sortColumns_1.buildSortColumns)(["id", "label", "token_prefix", "requested_at"], q.sort, {
+                ...q.filters,
+                page: q.page,
+            }),
             req,
             csrfToken: req.csrfToken,
         });
@@ -1553,6 +1618,15 @@ async function adminRoutes(app) {
         ]);
         const { readRandomGenState } = await Promise.resolve().then(() => __importStar(require("../../web/plugins/randomIpGeneratorRunner")));
         const randomGenState = await readRandomGenState(app.pool);
+        // The interval picker's options. A stored value outside the presets is
+        // appended so the current choice stays visible and selected — leaving it
+        // out is what made a plain "save" overwrite the schedule with the first
+        // option in the list.
+        const intervalOptions = [...randomProbeLog_1.RANDOM_GEN_INTERVAL_PRESETS];
+        if (!intervalOptions.includes(randomGenConfig.intervalSec)) {
+            intervalOptions.push(randomGenConfig.intervalSec);
+            intervalOptions.sort((a, b) => a - b);
+        }
         // Consume short-lived flash cookies set by POST handlers. Both
         // backfill and random-gen POST routes set JSON cookies on the
         // redirect; we decode them once here and clear them so the banner
@@ -1752,6 +1826,13 @@ async function adminRoutes(app) {
             flash,
             randomGenState,
             randomGenConfig,
+            // The interval/limit controls are rendered from these code-side
+            // bounds, so the form can only offer values the runner will honour.
+            // A stored interval that is not one of the presets is appended to the
+            // list: otherwise no option matched, the browser submitted the first
+            // one, and a plain "save" rewrote the schedule.
+            intervalOptions,
+            batchMax: randomProbeLog_1.RANDOM_GEN_BATCH_MAX,
             retentionDays,
             recentProbes: recentProbeRows,
             probeSummaryStats: probeSummary,

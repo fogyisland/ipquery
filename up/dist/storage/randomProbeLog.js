@@ -6,10 +6,12 @@
 // /admin/unknown-ips Overview tab "Recent Probes" table; written by the
 // call sites of processIp via recordRandomProbe(). See migration 018.
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.DEFAULT_RETENTION_DAYS = exports.RANDOM_GEN_INTERVAL_SEC = exports.RANDOM_GEN_RUNS_PER_HOUR = void 0;
+exports.DEFAULT_RETENTION_DAYS = exports.RANDOM_GEN_INTERVAL_PRESETS = exports.RANDOM_GEN_BATCH_MAX = exports.RANDOM_GEN_BATCH_MIN = exports.RANDOM_GEN_INTERVAL_MAX_SEC = exports.RANDOM_GEN_INTERVAL_MIN_SEC = exports.RANDOM_GEN_INTERVAL_SEC = exports.RANDOM_GEN_RUNS_PER_HOUR = void 0;
 exports.recordRandomProbe = recordRandomProbe;
 exports.recentProbes = recentProbes;
 exports.probeSummaryStats = probeSummaryStats;
+exports.clampIntervalSec = clampIntervalSec;
+exports.clampBatchSize = clampBatchSize;
 exports.loadRandomGenConfig = loadRandomGenConfig;
 exports.saveRandomGenConfig = saveRandomGenConfig;
 exports.loadRetentionDays = loadRetentionDays;
@@ -170,6 +172,35 @@ const DEFAULT_CONFIG = {
 /** Twenty runs an hour, expressed as the interval the runner uses. */
 exports.RANDOM_GEN_RUNS_PER_HOUR = 20;
 exports.RANDOM_GEN_INTERVAL_SEC = 3600 / exports.RANDOM_GEN_RUNS_PER_HOUR;
+/**
+ * The bounds the scheduler form may express, exported so the UI renders
+ * exactly the range the code enforces.
+ *
+ * These used to live only inside `loadRandomGenConfig`, with `save` clamping
+ * to DIFFERENT limits (interval from 1s, batch up to 100). A value the form
+ * accepted could therefore be persisted but never take effect: saving
+ * batch=50 stored 50 while the runner read 20 back, and the page then showed
+ * 50 as the active setting. One clamp, used by both sides, is the fix.
+ */
+exports.RANDOM_GEN_INTERVAL_MIN_SEC = 60;
+exports.RANDOM_GEN_INTERVAL_MAX_SEC = 3600;
+exports.RANDOM_GEN_BATCH_MIN = 1;
+exports.RANDOM_GEN_BATCH_MAX = 20;
+/** The interval presets the scheduler form offers. 180s (one run every three
+ *  minutes) is the default, so it has to be in this list — it was missing,
+ *  and a form opened on the default then saved the FIRST option (60s),
+ *  silently tripling the ingest rate. */
+exports.RANDOM_GEN_INTERVAL_PRESETS = [60, 180, 300, 900, 1800];
+function clampIntervalSec(value) {
+    if (!Number.isFinite(value))
+        return DEFAULT_CONFIG.intervalSec;
+    return Math.min(exports.RANDOM_GEN_INTERVAL_MAX_SEC, Math.max(exports.RANDOM_GEN_INTERVAL_MIN_SEC, Math.round(value)));
+}
+function clampBatchSize(value) {
+    if (!Number.isFinite(value))
+        return DEFAULT_CONFIG.batchSize;
+    return Math.min(exports.RANDOM_GEN_BATCH_MAX, Math.max(exports.RANDOM_GEN_BATCH_MIN, Math.round(value)));
+}
 async function loadRandomGenConfig(pool) {
     const [intervalRaw, batchRaw, cooldownRaw, cbRaw] = await Promise.all([
         (0, settings_1.getSetting)(pool, "random_gen_interval_sec"),
@@ -181,15 +212,11 @@ async function loadRandomGenConfig(pool) {
         // Floor of 60s: anything faster is a burst the free tiers will answer
         // with 429s. Ceiling of an hour: slower than that and the "continuous"
         // runner is indistinguishable from a manual click.
-        intervalSec: intervalRaw === null
-            ? DEFAULT_CONFIG.intervalSec
-            : Math.min(3600, Math.max(60, Number(intervalRaw) || DEFAULT_CONFIG.intervalSec)),
-        // Capped at 20: each IP costs one provider call, and a large batch
-        // turns one tick into the kind of burst the per-minute limiter exists
-        // to prevent.
-        batchSize: batchRaw === null
-            ? DEFAULT_CONFIG.batchSize
-            : Math.min(20, Math.max(1, Number(batchRaw) || DEFAULT_CONFIG.batchSize)),
+        intervalSec: intervalRaw === null ? DEFAULT_CONFIG.intervalSec : clampIntervalSec(Number(intervalRaw)),
+        // Capped at RANDOM_GEN_BATCH_MAX: each IP costs one provider call, and a
+        // large batch turns one tick into the kind of burst the per-minute
+        // limiter exists to prevent.
+        batchSize: batchRaw === null ? DEFAULT_CONFIG.batchSize : clampBatchSize(Number(batchRaw)),
         cooldownMinutes: cooldownRaw === null
             ? DEFAULT_CONFIG.cooldownMinutes
             : Math.min(1440, Math.max(0, Number(cooldownRaw) || DEFAULT_CONFIG.cooldownMinutes)),
@@ -198,12 +225,10 @@ async function loadRandomGenConfig(pool) {
 }
 async function saveRandomGenConfig(pool, patch) {
     if (patch.intervalSec !== undefined) {
-        const clamped = Math.min(3600, Math.max(1, Math.round(patch.intervalSec)));
-        await (0, settings_1.setSetting)(pool, "random_gen_interval_sec", String(clamped));
+        await (0, settings_1.setSetting)(pool, "random_gen_interval_sec", String(clampIntervalSec(patch.intervalSec)));
     }
     if (patch.batchSize !== undefined) {
-        const clamped = Math.min(100, Math.max(1, Math.round(patch.batchSize)));
-        await (0, settings_1.setSetting)(pool, "random_gen_batch_size", String(clamped));
+        await (0, settings_1.setSetting)(pool, "random_gen_batch_size", String(clampBatchSize(patch.batchSize)));
     }
     if (patch.cooldownMinutes !== undefined) {
         const clamped = Math.min(1440, Math.max(0, Math.round(patch.cooldownMinutes)));

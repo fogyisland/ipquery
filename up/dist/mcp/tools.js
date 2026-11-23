@@ -27,7 +27,6 @@ const unknownIpQueue_1 = require("../storage/unknownIpQueue");
 const queryLog_1 = require("../storage/queryLog");
 const etlSourceReport_1 = require("../storage/etlSourceReport");
 const etlSourceContribution_1 = require("../storage/etlSourceContribution");
-const ip_1 = require("../ip");
 /**
  * Clamp an unknown tool argument into [min, max]. Non-numeric input falls
  * back to the default; numeric input is clamped into the bounds.
@@ -63,8 +62,6 @@ function lookupToolDef() {
         },
     };
 }
-/** Largest batch the tool will answer in one call. */
-const MAX_BATCH_SIZE = 100;
 /**
  * Look several addresses up in one call.
  *
@@ -76,37 +73,27 @@ const MAX_BATCH_SIZE = 100;
  * addresses still get their answers, and the failed one is marked.
  * A batch that died on the first bad address would be worse than no
  * batch tool at all.
+ *
+ * The work itself lives in the shared core, so this tool and the HTTP
+ * endpoint answer identically — the same addresses, the same markers,
+ * the same count. Two implementations of one answer is how a client ends
+ * up with two different truths about the same address.
  */
 async function mcpLookupBatch(deps, args) {
     if (!Array.isArray(args.ips)) {
         throw new Error("ips must be an array of IPv4/IPv6 addresses");
     }
-    const requested = args.ips.slice(0, MAX_BATCH_SIZE).map((ip) => (typeof ip === "string" ? ip.trim() : ""));
-    const results = [];
-    let found = 0;
-    for (const ip of requested) {
-        if (!(0, ip_1.isValidIp)(ip)) {
-            results.push({ ip, found: false, error: "invalid_ip" });
-            continue;
-        }
-        try {
-            const result = await mcpLookup(deps, ip);
-            results.push({ ip, found: true, result });
-            found += 1;
-        }
-        catch (e) {
-            // A miss is an answer, not a failure: the address is simply not
-            // in the library. Anything else is reported as an error on that
-            // entry so the rest of the batch still lands.
-            const code = e.code;
-            results.push({
-                ip,
-                found: false,
-                error: typeof code === "string" ? code : "lookup_failed",
-            });
-        }
+    // Over the cap is refused, not truncated. A truncated answer set looks
+    // like the whole answer set, and a caller reconciling against it would
+    // quietly miss the addresses that were dropped.
+    if (args.ips.length > lookup_core_1.MAX_BATCH_SIZE) {
+        throw new Error(`at most ${lookup_core_1.MAX_BATCH_SIZE} addresses per call`);
     }
-    return { results, total: requested.length, found, notFound: requested.length - found };
+    if (!args.ips.every((ip) => typeof ip === "string")) {
+        throw new Error("ips must be an array of IPv4/IPv6 addresses");
+    }
+    const requested = args.ips.map((ip) => ip.trim());
+    return (0, lookup_core_1.doLookupBatchCore)(deps.pool, deps.log, requested);
 }
 function lookupBatchToolDef() {
     return {

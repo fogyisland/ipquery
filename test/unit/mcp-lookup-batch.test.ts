@@ -153,12 +153,28 @@ describe("The batch lookup tool", () => {
     await expect(mcpLookupBatch(makeDeps(pool), {})).rejects.toThrow(/ips must be an array/i);
   });
 
-  it("caps the size of a batch", async () => {
+  it("refuses a batch that is over the cap rather than truncating it", async () => {
     // An unbounded batch would let one call pull the whole table.
+    //
+    // It used to truncate silently: the first hundred addresses were
+    // answered and the rest dropped, and the answer set looked like the
+    // whole answer set. A caller reconciling against it would believe
+    // every address had been checked, and the ones that were dropped
+    // would never be looked up at all. Refusing is the only safe
+    // answer — the caller learns to split the batch.
     const { pool } = makeLookupPool();
     const ips = Array.from({ length: 500 }, (_, i) => `10.0.${Math.floor(i / 256)}.${i % 256}`);
+    await expect(mcpLookupBatch(makeDeps(pool), { ips })).rejects.toThrow(/at most 100/i);
+  });
+
+  it("answers a batch that is exactly at the cap", async () => {
+    // The cap is a limit, not a cliff: a batch of exactly the maximum
+    // size is a legitimate request and must be answered in full.
+    const { pool } = makeLookupPool();
+    const ips = Array.from({ length: 100 }, (_, i) => `10.0.${Math.floor(i / 256)}.${i % 256}`);
     const result = await mcpLookupBatch(makeDeps(pool), { ips });
-    expect(result.total).toBeLessThanOrEqual(100);
+    expect(result.total).toBe(100);
+    expect(result.results.length).toBe(100);
   });
 
   it("is registered under a name in the canonical tool list", () => {

@@ -3,6 +3,6 @@
 <p>{{req.t "dashboard.mcp.revoke.confirm.body" label=token.label prefix=token.tokenPrefix}}</p>
 <form method="POST" action="/dashboard/mcp-tokens/{{token.id}}/revoke">
   <input type="hidden" name="csrf" value="{{req.csrfToken}}" />
-  <button type="submit" class="btn-danger">{{req.t "dashboard.mcp.revoke"}}</button>
+  <button type="submit" class="btn-danger">{{req.t "dashboard.mcp.revokeLabel"}}</button>
   <a href="/dashboard/mcp-tokens">{{req.t "common.cancel"}}</a>
 </form>

@@ -321,6 +321,20 @@ async function registerRangeRoutes(app) {
             filepath: file,
             countryCode: country || null,
         });
+        // The audit entry goes in after the job is on record, not before: an
+        // export that failed to start did not happen, and a trail that lists
+        // it would be describing something that never ran.
+        //
+        // The country travels with it because it changes what was disclosed.
+        // An export of one country and an export of the whole library are
+        // different acts, and a reader of the trail has to be able to tell
+        // them apart without going and looking at the file.
+        req.auditAction = {
+            action: "ranges.export",
+            targetType: "range_export",
+            targetId: id,
+            metadata: { country: country || null },
+        };
         app.log.info({ exportId: id, country: country || null }, "the range export started");
         setFlash(reply, "success", req.t("admin.ranges.exportStarted"));
         return reply.redirect("/admin/ranges");
@@ -426,6 +440,17 @@ async function registerRangeRoutes(app) {
                 uploadId,
                 declaredRows,
             });
+            // The mode is the whole point of the record. A merge adds rows to
+            // the library; a replace swaps the entire ip_ranges table for the
+            // contents of the uploaded file. A reader of the trail has to be
+            // able to tell those two apart without looking anywhere else, and
+            // this is the only place that says which one happened.
+            req.auditAction = {
+                action: "ranges.import",
+                targetType: "range_import",
+                targetId: importId,
+                metadata: { mode: isReplace ? "replace" : "merge", declaredRows },
+            };
             app.log.info({ importId, uploadId, mode: isReplace ? "replace" : "merge" }, "the range import started");
             setFlash(reply, "success", req.t("admin.ranges.importStarted"));
             return reply.redirect("/admin/ranges");
@@ -484,6 +509,14 @@ async function registerRangeRoutes(app) {
             uploadId: null,
             declaredRows: declaredRowCount(text),
         });
+        // The same record as the chunked path writes: one import, one trail
+        // entry, and the mode that says whether the library was replaced.
+        req.auditAction = {
+            action: "ranges.import",
+            targetType: "range_import",
+            targetId: importId,
+            metadata: { mode: isReplace ? "replace" : "merge", declaredRows: declaredRowCount(text) },
+        };
         app.log.info({ importId, mode: isReplace ? "replace" : "merge", rows: decoded.ranges.length }, "the range import started");
         setFlash(reply, "success", req.t("admin.ranges.importStarted"));
         return reply.redirect("/admin/ranges");
@@ -510,7 +543,14 @@ function readUploadedText(body) {
     return null;
 }
 /** Rows currently in the live table. Shown on the page and required as the
- *  confirmation for a replacement. */
+ *  confirmation for a replacement.
+ *
+ *  This one deliberately stays exact. The replacement form makes the operator
+ *  type this number as the safety gate, and the POST compares it against a
+ *  freshly counted value — an estimate here would make a correct operator fail
+ *  the gate. The page that renders it is an admin tool used rarely, and it
+ *  already does real work; a couple of seconds on that one form is the cost of
+ *  a gate that cannot be satisfied by guessing. */
 async function countRanges(app) {
     const [rows] = await app.pool.query("SELECT COUNT(*) AS n FROM ip_ranges");
     return Number(rows[0]?.n ?? 0);

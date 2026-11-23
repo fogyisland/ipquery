@@ -20,7 +20,11 @@ export declare function insertOrIncrement(pool: Pool, ip: Buffer, ipText: string
     source?: "auto_miss" | "manual_submit";
 }): Promise<void>;
 /** Return up to `limit` pending IPs that are NOT already covered by
- *  ip_ranges, highest-priority first (more misses, then more recent). */
+ *  ip_ranges, highest-priority first (more misses, then more recent).
+ *
+ *  "Covered" uses the inclusive end the rest of the project uses:
+ *  `end_ip >= target` is the same test findRange() applies, and the
+ *  ETL's own ranges (DB-IP start/end pairs) include their end address. */
 export declare function nextBatch(pool: Pool, limit: number): Promise<UnknownIpRow[]>;
 /** Mark a batch of queue rows as merged into ip_ranges under `runId`. */
 export declare function markProcessed(pool: Pool, ids: number[], runId: number): Promise<void>;

@@ -80,3 +80,68 @@ export async function doLookupCore(pool: Pool, log: CoreLogger, ip: string): Pro
     etag,
   };
 }
+
+/** Largest batch one call will answer. */
+export const MAX_BATCH_SIZE = 100;
+
+/** One address inside a batch answer. */
+export interface BatchLookupEntry {
+  ip: string;
+  /** False when the address was malformed or not in the library. */
+  found: boolean;
+  /** The lookup result, when the address was found. */
+  result?: LookupResult;
+  /** Why the address was not found: "invalid_ip" or "not_found". */
+  error?: string;
+}
+
+export interface BatchLookupResult {
+  results: BatchLookupEntry[];
+  /** How many addresses were asked about. */
+  total: number;
+  /** How many of them were in the library. */
+  found: number;
+  /** How many were not — malformed or unknown. */
+  notFound: number;
+}
+
+/**
+ * Look several addresses up in one call.
+ *
+ * The batch never fails as a whole. One malformed address does not cost
+ * the caller the other ninety-nine answers: the bad one is marked and
+ * the rest land. A batch that died on the first bad address would be
+ * worse than no batch at all — the caller's job is reconciliation, and a
+ * single malformed line in a log file must not cost them the file.
+ *
+ * The HTTP API and the MCP server both call this, so an answer means the
+ * same thing whichever way it was asked for.
+ */
+export async function doLookupBatchCore(
+  pool: Pool,
+  log: CoreLogger,
+  ips: readonly string[],
+): Promise<BatchLookupResult> {
+  const results: BatchLookupEntry[] = [];
+  let found = 0;
+
+  for (const ip of ips) {
+    try {
+      const result = await doLookupCore(pool, log, ip);
+      results.push({ ip, found: true, result });
+      found += 1;
+    } catch (e) {
+      // A miss is an answer, not a failure: the address is simply not in
+      // the library. Anything else is reported against that one entry so
+      // the rest of the batch still lands.
+      const code = (e as { code?: unknown }).code;
+      results.push({
+        ip,
+        found: false,
+        error: typeof code === "string" ? code : "lookup_failed",
+      });
+    }
+  }
+
+  return { results, total: ips.length, found, notFound: ips.length - found };
+}

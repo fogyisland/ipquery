@@ -3,6 +3,7 @@ import { describe, it, expect, beforeAll, beforeEach, afterAll } from "vitest";
 import { createTestDb, dropTestDb, type TestDb } from "../helpers/db";
 import { insertOrIncrement, nextBatch } from "../../src/storage/unknownIpQueue";
 import { runBackfill } from "../../src/etl/unknownIpBackfill";
+import { findRange } from "../../src/storage/mysql";
 import type { IpGeoProvider, IpGeoRecord, IpGeoLookupResult } from "../../src/etl/providers/types";
 import { parseIp } from "../../src/ip";
 
@@ -72,12 +73,14 @@ describe("runBackfill (consensus)", () => {
     expect(summary.noConsensus).toBe(0);
     expect(summary.allAbstained).toBe(0);
 
-    // ip_ranges now covers /32 for that IP.
+    // ip_ranges now covers exactly that address. `end_ip` is inclusive — the
+    // same convention findRange() uses — so the row is a single address, not
+    // this address plus the next one.
     const [rows] = await td.pool.query<
       { id: number; country_code: string; region: string; asn: number; country_source: string }[]
     >(
       `SELECT id, country_code, region, asn, country_source FROM ip_ranges
-       WHERE start_ip <= ? AND ? < end_ip`,
+       WHERE start_ip <= ? AND ? <= end_ip`,
       [buf, buf],
     );
     expect(rows.length).toBe(1);
@@ -89,6 +92,23 @@ describe("runBackfill (consensus)", () => {
     // And the queue row is gone from nextBatch.
     const after = await nextBatch(td.pool, 100);
     expect(after.some((r) => r.ipText === ip)).toBe(false);
+
+    // The written row covers this one address and nothing else. `end_ip`
+    // equals `start_ip`, so the address after it stays unresolved until
+    // somebody actually looks it up.
+    const neighbourIp = "203.0.113.11";
+    expect(await findRange(td.pool, parseIp(ip)!)).not.toBeNull();
+    expect(await findRange(td.pool, parseIp(neighbourIp)!)).toBeNull();
+
+    const [writtenRows] = await td.pool.query<
+      Array<{ start_ip: Buffer; end_ip: Buffer; range_size: string }>
+    >(
+      `SELECT start_ip, end_ip, CAST(range_size AS CHAR) AS range_size
+         FROM ip_ranges WHERE country_source = 'multi-provider'`,
+    );
+    const written = writtenRows[0]!;
+    expect(written.start_ip.equals(written.end_ip)).toBe(true);
+    expect(written.range_size).toBe("0");
   });
 
   it("leaves row pending when providers 1-1-1 split on country", async () => {

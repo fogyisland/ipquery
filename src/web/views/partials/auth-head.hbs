@@ -1,0 +1,16 @@
+{{!-- SPDX-License-Identifier: MIT --}}
+{{!-- Heading block for the account pages. The auth layout used to print
+     `<h1>{{title}}</h1>` itself, which duplicated the heading of the views
+     that also printed one (sign-up confirmation, verification result). Each
+     view now supplies its own heading, so the layout prints none.
+
+     `lede` is optional: it explains what this page is for in one sentence,
+     which is what a stranger entering from an emailed link needs. --}}
+<header class="auth-head">
+  <h1>{{title}}</h1>
+  {{#if lede}}<p>{{lede}}</p>{{/if}}
+  {{#if error}}<div class="auth-alert" role="alert">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v5"/><path d="M12 16.2v.1"/></svg>
+    <span>{{error}}</span>
+  </div>{{/if}}
+</header>

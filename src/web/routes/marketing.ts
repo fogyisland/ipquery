@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: MIT
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { callerOf } from "../../api/routes/lookup";
-import type { RowDataPacket } from "mysql2";
 import { lastEtlRun, recentEtlRuns } from "../../storage/mysql";
 import { parseIp, isValidIp } from "../../ip";
 import { findRange } from "../../storage/mysql";
@@ -10,6 +9,7 @@ import { formatCoordinate } from "../maps/geo-map";
 import { renderWorldMap } from "../maps/render-map";
 import { countryNamesFor } from "../../country-names";
 import { etlUpstreamCount } from "../../etl/sources/labels";
+import { getRangeCount } from "../../storage/rangeCount";
 
 export default async function marketingRoutes(app: FastifyInstance): Promise<void> {
   // The /try form is a lookup, and a lookup is worth a row in query_log
@@ -39,14 +39,15 @@ export default async function marketingRoutes(app: FastifyInstance): Promise<voi
     };
   };
 
-
   // Marketing redesign: all 5 public pages render inside layouts/marketing
   // (light commercial chrome, top nav + footer). isHome/isDocs/isTry/
   // isStatus/isAbout flags drive the active-nav indicator (a regression
   // where nav-active was always unset and links looked inert).
   app.get("/", async (req, reply) => {
-    const [ipCountRows] = await app.pool.query<RowDataPacket[]>("SELECT COUNT(*) AS c FROM ip_ranges");
-    const ipCount = Number((ipCountRows[0] as { c: number }).c);
+    // The count is a cached/estimated value, not a COUNT(*): this page used to
+    // spend ~2.7 seconds counting 8.15M rows before it could render, for a
+    // number in the hero. See storage/rangeCount.
+    const ipCount = (await getRangeCount(app.pool)).value;
     return reply.view("home.hbs", {
       layout: "layouts/marketing",
       title: req.t("home.title"),
@@ -191,13 +192,10 @@ export default async function marketingRoutes(app: FastifyInstance): Promise<voi
       row.latitude !== undefined && row.longitude !== undefined
         ? { lat: row.latitude, lon: row.longitude, source: row.geoSource }
         : undefined;
-    const map = renderWorldMap(
-      location ? { lat: location.lat, lon: location.lon } : undefined,
-      {
-        label: req.t("try.map.ariaLabel", { ip, country: countryName }),
-        source: location?.source ?? "unknown",
-      },
-    );
+    const map = renderWorldMap(location ? { lat: location.lat, lon: location.lon } : undefined, {
+      label: req.t("try.map.ariaLabel", { ip, country: countryName }),
+      source: location?.source ?? "unknown",
+    });
     return reply.view("marketing/try.hbs", {
       layout: "layouts/marketing",
       title: req.t("nav.try"),
@@ -219,10 +217,7 @@ export default async function marketingRoutes(app: FastifyInstance): Promise<voi
         region: row.region,
         city: row.city ? { name: row.city, source: row.citySource } : undefined,
         isp: row.isp ? { name: row.isp, source: row.ispSource } : undefined,
-        asn:
-          row.asn !== undefined
-            ? { number: row.asn, org: row.asnOrg, source: row.asnSource }
-            : undefined,
+        asn: row.asn !== undefined ? { number: row.asn, org: row.asnOrg, source: row.asnSource } : undefined,
         location: location
           ? {
               lat: location.lat,

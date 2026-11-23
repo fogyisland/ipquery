@@ -23,13 +23,8 @@ import * as fs from "node:fs";
 import type { Pool } from "mysql2/promise";
 import type { RowDataPacket } from "mysql2";
 import { bufferToString, compareBuffers, parseIp } from "../ip";
-import {
-  atomicSwapRanges,
-  computeRangeSize,
-  insertIntoNew,
-  preserveManualRows,
-  truncateNew,
-} from "./mysql";
+import { atomicSwapRanges, computeRangeSize, insertIntoNew, preserveManualRows, truncateNew } from "./mysql";
+import { refreshRangeCount } from "./rangeCount";
 import { withEtlRunLock } from "../etl/runGuard";
 import { runMigrations } from "./migrations/runner";
 import type { IpRangeRow } from "../types";
@@ -96,10 +91,7 @@ const COLUMNS = [
  * wrong for the column list below. Converting at the boundary keeps the two
  * vocabularies from leaking into each other.
  */
-export async function importRanges(
-  pool: Pool,
-  records: readonly RangeRecord[],
-): Promise<ImportResult> {
+export async function importRanges(pool: Pool, records: readonly RangeRecord[]): Promise<ImportResult> {
   const rows = records.map(toIpRangeRow);
   let inserted = 0;
   const failures: ImportFailure[] = [];
@@ -275,10 +267,11 @@ export async function writeRangeImportProgress(
     await pool.query(`UPDATE range_imports SET ${set.join(", ")} WHERE id = ?`, values);
     return fields.id;
   }
-  await pool.query(
-    `INSERT INTO range_imports (mode, source, declared_rows) VALUES (?, ?, ?)`,
-    [fields.mode, fields.source, fields.declaredRows ?? null],
-  );
+  await pool.query(`INSERT INTO range_imports (mode, source, declared_rows) VALUES (?, ?, ?)`, [
+    fields.mode,
+    fields.source,
+    fields.declaredRows ?? null,
+  ]);
   const [inserted] = await pool.query<RowDataPacket[]>("SELECT LAST_INSERT_ID() AS id");
   return Number(inserted[0]?.id ?? 0);
 }
@@ -308,10 +301,9 @@ export async function finishRangeImport(
 
 export async function readRangeImportState(pool: Pool, id: number): Promise<RangeImportState | null> {
   await runMigrations(pool);
-  const [rows] = await pool.query<RowDataPacket[]>(
-    `SELECT ${JOB_COLUMNS} FROM range_imports WHERE id = ?`,
-    [id],
-  );
+  const [rows] = await pool.query<RowDataPacket[]>(`SELECT ${JOB_COLUMNS} FROM range_imports WHERE id = ?`, [
+    id,
+  ]);
   const r = rows[0];
   if (!r) return null;
   return toState(r);
@@ -541,10 +533,8 @@ function classify(record: RangeRecord, emitted: readonly { start: Buffer; end: B
     }
     if (compareBuffers(other.start, start) === 0 && compareBuffers(other.end, end) === 0) return "exact";
     if (compareBuffers(other.start, start) <= 0 && compareBuffers(other.end, end) >= 0) return "contained";
-    const beforeInside =
-      compareBuffers(other.start, start) <= 0 && compareBuffers(other.end, end) > 0;
-    const afterInside =
-      compareBuffers(other.start, start) > 0 && compareBuffers(other.start, end) <= 0;
+    const beforeInside = compareBuffers(other.start, start) <= 0 && compareBuffers(other.end, end) > 0;
+    const afterInside = compareBuffers(other.start, start) > 0 && compareBuffers(other.start, end) <= 0;
     if (beforeInside || afterInside) overlaps = true;
   }
   return overlaps ? "overlap" : "fresh";
@@ -553,7 +543,13 @@ function classify(record: RangeRecord, emitted: readonly { start: Buffer; end: B
 async function reportProgress(
   pool: Pool,
   options: ImportOptions,
-  stats: { rowsRead: number; written: number; exactDuplicates: number; contained: number; partialOverlaps: number },
+  stats: {
+    rowsRead: number;
+    written: number;
+    exactDuplicates: number;
+    contained: number;
+    partialOverlaps: number;
+  },
   rowsWritten: number,
 ): Promise<void> {
   if (options.importId !== undefined) {
@@ -626,6 +622,9 @@ export async function replaceRangesFromStream(
       if (swap.status !== "success") {
         throw new Error(`the table swap failed: ${swap.errorMessage ?? "unknown error"}`);
       }
+      // The table changed wholesale: refresh the count every page reads
+      // instead of letting each render pay a COUNT(*) over the new table.
+      await refreshRangeCount(pool);
 
       return { written: readRows, preserved: preserved.preserved, total: await countRows(pool) };
     });
@@ -685,9 +684,7 @@ function toIpRangeRow(record: RangeRecord): IpRangeRow {
   // nobody recognises; the row is rejected instead so the line can be
   // fixed in the file.
   if (record.countryCode !== null && record.countryCode.length > 2) {
-    throw new RangeFileError(
-      `line ${record.line}: "${record.countryCode}" is not a two-letter country code`,
-    );
+    throw new RangeFileError(`line ${record.line}: "${record.countryCode}" is not a two-letter country code`);
   }
   const startIp = parseIp(record.start);
   const endIp = parseIp(record.end);

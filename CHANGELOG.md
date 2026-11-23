@@ -135,6 +135,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **文档里的工具总数由测试守着**：`test/unit/mcp-docs-tool-count.test.ts`
     把五份文档里的数字与 `TOOL_NAMES.length` 对齐——手写的数字会让构建失败，
     而不是把文档悄悄写错
+- **死数据源清理**: ip2region 与 MaxMind 的解析器此前躺在仓库里，**没有任何
+  下载规格喂它们、没有任何流水线步骤读它们**，但它们养着一整套对外声明：
+  首页、营销页 meta、README、NOTICE、后台设置页、启动横幅、`.env.example`
+  都在说「聚合 MaxMind、ip2region 与 DB-IP，一个查询，三个来源」。查线上
+  `ip_ranges.country_source` 得到的只有 `dbip` 与 `dbip-country`——**没有一行
+  来自 MaxMind，没有一行来自 ip2region**。声明是一张欠条，而没有任何东西会
+  因为它变成假而失败。现在：
+  1. 解析器与两个 fixture 文件删除
+  2. **数据源清单改为从流水线自己的文件表派生**（`src/etl/sources/labels.ts`），
+     把源加进流水线而不加进标签表，测试会失败
+  3. 首页的「N 个数据源」改为派生值：**4**（DB-IP / metowolf / runishiwo /
+     sapics）——流水线取 7 个文件，来自 4 个地方。说「七个数据源」读起来像
+     七个独立提供方
+  4. `IpinfoProvider` 一并删除：migration 031 已把 ipinfo.io 从扇出里退役，
+     类还导出着，但永远不会被实例化
+  5. 守卫测试防止回潮：营销页、README/NOTICE/docs、后台设置页、config 与
+     两份 `.env.example` 各有一道
+
+- **HTTP API 批量查询**: 新增 `POST /lookup/batch`，一次最多查 100 个地址。
+  MCP 早已有 `ipquery_lookup_batch`，但 HTTP 侧一直没有等价物——一个拿日志
+  文件、CDN 源站列表或滥用报告做对账的调用方，只能一个地址一次往返。
+  1. **用 POST 而不是 GET**：一百个地址塞不进 URL，而 URL 会一路落在访问日志
+     和代理日志里；请求体不会
+  2. **批量整体不失败**：一个畸形地址不吞掉其余九十九个答案，它被标记出来，
+     其余照常返回。对账场景里，一行坏数据不该赔上整个文件
+  3. **顺序即请求顺序**：调用方要能把答案和自己的行对上行
+  4. **超限报错而非截断**：截断后的答案看起来像全部答案，照着它对账会安静地
+     漏掉被丢掉的那部分
+  5. 与 MCP 工具**共用同一份核心逻辑**（`src/lookup-core.ts` 的
+     `doLookupBatchCore`），两边的顺序、标记、计数完全一致。同一份答案有两个
+     实现，客户端就会拿到关于同一个地址的两个说法
+  6. 批量查询在查询日志里**每个地址一行**——查询日志的职责是「哪些地址被查过」，
+     一百个地址记一行会把流量少算一百倍
+  7. 新端点已加入公开 API 的限流名单（`PUBLIC_API_PATHS`）：限流名单是精确
+     匹配集合，新公开端点若不登记就是**不限流**的，而这个一次能问出 100 个
+     地址，不限流恰恰是最不该的结果
+
 ### Changed
 
 - **后台界面深度优化**: 后台控制台从「能用」向「好用」推进一批改动。
@@ -164,24 +201,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **ETL 守卫测试不再依赖网络**: `etl-guards.test.ts` 只写了 city 一个 fixture，
   而 ETL 现在会按份判断缓存、缺失即重下——于是这个测试会真的去下载约 93 MB 的
   DB-IP 数据并插入约 120 万行，撑爆 90s 超时，还留下「运行中」的 ETL 行连累
-- **死数据源清理**: ip2region 与 MaxMind 的解析器此前躺在仓库里，**没有任何
-  下载规格喂它们、没有任何流水线步骤读它们**，但它们养着一整套对外声明：
-  首页、营销页 meta、README、NOTICE、后台设置页、启动横幅、`.env.example`
-  都在说「聚合 MaxMind、ip2region 与 DB-IP，一个查询，三个来源」。查线上
-  `ip_ranges.country_source` 得到的只有 `dbip` 与 `dbip-country`——**没有一行
-  来自 MaxMind，没有一行来自 ip2region**。声明是一张欠条，而没有任何东西会
-  因为它变成假而失败。现在：
-  1. 解析器与两个 fixture 文件删除
-  2. **数据源清单改为从流水线自己的文件表派生**（`src/etl/sources/labels.ts`），
-     把源加进流水线而不加进标签表，测试会失败
-  3. 首页的「N 个数据源」改为派生值：**4**（DB-IP / metowolf / runishiwo /
-     sapics）——流水线取 7 个文件，来自 4 个地方。说「七个数据源」读起来像
-     七个独立提供方
-  4. `IpinfoProvider` 一并删除：migration 031 已把 ipinfo.io 从扇出里退役，
-     类还导出着，但永远不会被实例化
-  5. 守卫测试防止回潮：营销页、README/NOTICE/docs、后台设置页、config 与
-     两份 `.env.example` 各有一道
-
   同文件其余用例。现补齐 country／asn fixture 并用 `runPipeline` 的下载缝
   替换下载阶段，测试不再碰网络
 - `/admin/unknown-ips` 更名为 `/admin/ingest`（旧路径保留重定向）；`/admin/providers`
@@ -194,6 +213,133 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   全量 ETL 约 21 分钟、原始 CSV.gz 约 93 MB、数据盘 >= 20 GB、内存 >= 2 GB）
 
 ### Fixed
+
+- **迁移清单有两份，其中一份是死代码且已经漂移**: `src/storage/migrations/runner.ts`
+  同时内联了一份 `MIGRATION_SQL`（约 2,000 行 SQL，逐条抄自 `.sql` 文件）和一份
+  `MIGRATION_FILES` 文件名清单。但 `loadMigrationManifest()` 在导入时就会
+  `MIGRATION_SQL.clear()` 再用磁盘上的文件重填——**内联那份从模块被 import 的那一
+  刻起就是死的**。它注释里声称的用途（"只发布 `dist/` 的发布包仍能知道 SQL"）
+  也不可能成立：目录读不到时产出的是**空**清单，不是内联那份。
+  代价不是零——**它已经漂移了**：内联 map 有 33 条，磁盘上有 34 个 `.sql`，
+  最新的 `035_fix_single_address_ranges.sql` 登记了文件名却从没进过内联 map。
+  没人发现，因为没人读它。现删除这两份内联副本，磁盘上的 `.sql` 文件是唯一
+  事实来源（`scripts/copy-schema.js` 会把它们复制进 `dist/storage/migrations/`，
+  runner 从 `__dirname` 读）。
+- **schema 报告的竞态**: `listMigrationEntries()` 原本是**同步**的，直接读模块
+  变量；`getSchemaReport()` 是 async 却同步调用它。于是模块加载时那次
+  `readdir` 尚未落定的窗口内，报告会说「没有任何迁移」——对一个落后三十步的
+  数据库来说，这句话读起来就是「你已是最新」。现 `listMigrationEntries()` 改为
+  `async` 并 `await manifestReady`；`getSchemaReport` 先 await 清单再推导
+  结构参考，两者读的是同一份已落定的清单。
+- **e2e 套件从未真正跑通过**: `test/e2e/full-flow.test.ts` 的 `beforeAll` 直接调
+  `runPipeline({ cfg })`，走的是**真实下载阶段**——拉真正的 DB-IP city-lite
+  文件（81.7 MB / 7,777,815 行）。于是这个测试需要 65 s 下载 + 73 s 解析 +
+  约 5 分钟插入，`beforeAll` 钩子撑爆 180 s 超时，整份文件被判为失败。
+  更糟的是，**它自己写的那份一行 fixture 从来没被用过**——下载阶段会把它
+  覆盖成真文件。这个「端到端测试」实际上是一次穿着测试外衣的生产 ETL：
+  又慢、又依赖网络、又依赖机器能连上 GitHub。
+  现改用 `runPipeline` 的 `download` 注入点，测试自己写出全部 7 个源文件
+  （gzip 的那几个是真 gzip，并写 `.month` sidecar 让下载阶段按「已是最新」
+  记录），**被测的仍然是完整的真实流水线**：下载 → 解析 → 插入 → 换表 →
+  对外提供查询，只有字节来自本地磁盘。
+  - 同一个 hook 现在 **5 秒**跑完，e2e 套件 4 个文件 18 个测试全绿
+  - RED 校验：把 8.8.8.8 从三份 DB-IP fixture 里去掉后，`/lookup` 返回
+    404（`{"error":"not_found"}`），断言失败——测试确实在检验它声称的东西
+  - 修的是**测试**，不是产品：流水线本身没有毛病
+- **集成套件里的保留测试同样在跑一次生产 ETL**: `test/integration/seed-and-preserve.test.ts`
+  的 `runOffline()` 只注入了 `downloadFixed` 那个注入点——它只覆盖四个 GitHub
+  托管的固定源。**三份 DB-IP 月度文件走的是普通下载阶段**，于是「with no network」
+  这句注释是假的：测试真的去下载了 81.7 MB 的 city 文件，解析 7,777,815 行，
+  再插入约五分钟——**远超 180 s 的钩子超时**。
+  后果不止一个测试失败：超时的钩子**把 ETL 运行锁留在了持有状态**，于是紧接着
+  的三个测试拿到 `EtlRunLockedError: an ETL run is already in progress`——
+  一次超时伪装成六个独立失败。
+  现改用同一个 `download` 注入点（`test/e2e/full-flow.test.ts` 用的就是它）：
+  测试自己写出**全部七个**源文件（三份 DB-IP 是真 gzip + `.month` sidecar，
+  四个 GitHub 源是文本 fixture），流水线因此完全离线。
+  - 关键是**注入点替换的是整个下载阶段**，包括真实阶段内部的固定源刷新。
+    只写三份 DB-IP 文件会让四个 GitHub 文件缺失，流水线会拒绝换表并报
+    `source files unavailable after download` —— 这是集成套件跑出来的，
+    单跑该文件当时反而是绿的（目录里还留着上一轮的产物）。
+    七个文件必须由**同一个**注入点写出
+  - 同一份文件现在 **3 秒**跑完，14 个测试全绿（此前：180 s 超时 + 5 个连锁失败）
+  - RED 校验：把 country fixture 的国家从 GB 改成 FR，5 个断言失败；漏写
+    `china-ipv4.txt`，5 个断言报「source files unavailable」——注入点确实在
+    喂数据，不是摆设
+  - 修的是**测试**，不是产品
+- **DB-IP 月度文件下载一次后永不更新**: 决定「复用缓存」的唯一依据是
+  `validateGzFile()`（gzip 完整），而这个条件**永远成立**——所以首次下载成功后，
+  库就冻结在那个月份，之后每次运行都记 `skipped` 并报成功。线上证据：run 3 下载了
+  city（85,713,797 字节）后，run 4 三个文件全 `skipped` 却 `success`。现在每个
+  DB-IP 文件旁边有 `<文件名>.month` 记录它属于哪个月，并与 DB-IP **实际发布的最新
+  月份**（HEAD 探测，因为当月文件要到月中才出现）比较；不一致才重下。实测：首轮
+  下载 81.7 MB 后写入 `2026-11`，第二轮三个文件全部 `reused`，不再重复拉 82 MB。
+- **DB-IP 下载是「整请求 120 秒」硬上限**: city-lite 有 82 MB，实测链路 1.29 MB/s
+  理论就要 66 秒，余量不够——2026-11-16 那次 run 5 就是死在这，还在磁盘上留下一个
+  2 MB 的截断 `dbip.csv.gz`。现在改为**空闲超时**（连续 120 秒无数据才断），慢但
+  在动的传输不再被打断；实测 81.7 MB 用了 451 秒正常完成。
+- **月度文件写入不是原子的**: 旧代码直接往正式路径流式写，超时即留下半截文件。
+  现在走「临时文件 → 校验 gzip → 原子替换」，失败保留旧缓存（固定源早就是这个做法）。
+  本机那个截断文件也已在验证后删除，下次 ETL 会重新下载。
+- **回填队列被 IPv6 全量段永久堵死**: `nextBatch()` 用 `q.ip < end_ip` 判断「已被
+  `ip_ranges` 覆盖」。DB-IP 的 IPv6 数据里有一行 `::` – `1fff:…:f`，按字节比较它
+  **包含全部 IPv4 地址**，于是每个排队中的 IPv4 都被判为「已覆盖」，回填批次永远
+  为空——`/lookup` 未命中的 IP 只进不出。线上实测：向 `unknown_ip_queue` 写入
+  `8.8.8.8` / `203.0.113.200` / `45.33.32.156`，`nextBatch` 返回 0 条。现在比较
+  改用**包含端点**的 `end_ip >= q.ip`（与 `findRange()` 一致），并只允许 IPv6 段
+  覆盖 IPv6 候选。
+- **回填写入的 /32 多占了一个地址**: `writeConsensusRange()` 写的是
+  `end_ip = start_ip + 1`，而全表（DB-IP 段、示例数据、`.ipq` 导入）用的都是**包含
+  端点**，`findRange()` 也按 `end_ip >= target` 判断。结果回填出 `203.0.113.7` 的
+  答案后，**没人查过的 `203.0.113.8` 也返回同一个国家**；`range_size` 同时被写成
+  `1`（其余单地址行都是 `0`）。现在写 `end_ip = start_ip`、`range_size = 0`，
+  并用 migration 035 修正旧版本已写入的行。
+- **调度表单一保存就把 3 分钟改成 30 秒**: 间隔下拉框写死 30/60/300/900/1800 秒，
+  而迁移 030 的默认值是 **180 秒**。没有任何选项命中，浏览器于是提交第一个选项
+  （30 秒）——打开页面直接点保存就把入库频率翻了三倍，页面上还看不出发生过什么。
+  选项改为由 `RANDOM_GEN_INTERVAL_PRESETS` 渲染，并把「库里存的值」追加进列表
+  以保证它始终可被选中；标签改由 `intervalLabel` helper 按秒/分计算，不再为每个
+  取值维护一条 i18n 键。
+- **「每批数量」保存 50 实际只跑 20**: `saveRandomGenConfig` 允许到 100，
+  `loadRandomGenConfig` 只认 20。表单显示 50（因为页面读的是**存储值**），
+  runner 实际处理 20——同一次运行有两套事实。现在两侧共用同一组
+  `clampIntervalSec` / `clampBatchSize`，表单的 `max` 也渲染自代码常量。
+- **迁移清单可能被读到旧值**: `loadMigrationManifest()` 是异步的，任何在它完成前
+  发起的读取看到的是硬编码的回退清单——也就是「写这段代码时的文件列表」，不是
+  「这次发布真正带上的文件」。后果很具体：新增的 migration 会被 `migrate` 跳过，
+  被 `migrate:status` 报成 `applied`。现在所有异步入口都先 await 该 Promise。
+- **页面上直接印出 i18n 键名**: `t()` 找不到键时返回键本身，于是这些页面把
+  `verify.success`、`dashboard.keys.revoke.confirm.title`、`dashboard.mcp.revoke`、
+  `admin.users.resetPassword.tempNotice` 当成文案显示。已补齐中英两本字典
+  （`auth.verify.*`、`dashboard.keys.revoke.confirm.*`、`dashboard.mcp.revokeLabel`、
+  `admin.users.resetPasswordResult.*`），并新增 `test/unit/i18n-view-keys.test.ts`：
+  视图与路由里**字面引用**的每个键都必须在默认语言里存在。
+- **API 不再说「这些数据来自 MaxMind」**: 上一条把营销页上的假声明清干净了，
+  但 **JSON 接口里那句假话还在**——而且它出现在**唯一一个本该说实话的字段**上。
+  `country.source` / `city.source` / `isp.source` / `asn.source` / `location.source`
+  的作用就是「说明数据来自哪里」，而查不到来源的行一律回落到 `"maxmind"`。
+  流水线从来没有抓取过 MaxMind，所以这些回落是纯粹的假声明。线上实际影响：
+  **198,157 行** `country_source` 为空（连 `country_code` 也是空的）、
+  **8,152,112 行** `isp_source` 为空。
+  1. `Source` 类型去掉 `"maxmind"` 与 `"ipinfo"`（两者都不是流水线能产生的值），
+     改为加上 `"unknown"`——**「不知道」是「哪里来的」这个问题的一个真实答案**
+  2. 归一化放在**读的那一端**：`normalizeSource()` 把任何不认识的来源列
+     归一为 `"unknown"`。此前 `findRange()` 用的是 `as Source` 的无检查类型断言，
+     一行写着 `"maxmind"` 的历史数据会原样穿过断言——那个断言让类型成了谎言
+  3. 试查页（`/try`）与 API 用同一套归一化；实测一条手工插入的无来源行，
+     接口回答 `"source": "unknown"`，不再是 `"maxmind"`
+  4. **但本项目自己写的三个标签不能被归一化掉**：`multi-provider`（未知 IP
+     回填）、`import`（网段导入）、`seed`（演示数据）。它们不是流水线写的，
+     却是「这一行是谁写的」的唯一记录——归一化成 `"unknown"` 等于把来源记录
+     抹掉。其中 `multi-provider` 与 `import` 还正是 ETL 换表时要带过去的行，
+     没有它们那条 SQL 就无从下手。`seed` 则相反：演示行本来就该被一次刷新
+     替换掉，所以它**不在** `MANUAL_SOURCE_TAGS` 里，但读回来时仍要如实
+     报出 `"seed"`
+- **Provider 分钟级计数器的测试有时会自己失败**: `provider_call_counter_minute`
+  的分钟桶来自**数据库自己的时钟**（`UTC_TIMESTAMP()`），逐次调用各算一次——
+  所以一串调用跨过分钟边界就会被拆成两行，这是分钟表的正确行为。测试却断言
+  「四行变一行」，于是在整点附近必挂一次（同一份代码连续两次跑，一次过一次挂）。
+  生产代码的窗口查询本来就是**跨行求和**的，测试现在也照它那样求和。
 
 - **后台筛选栏从来就没渲染对过**: `/admin/users`、`/admin/keys`、`/admin/audit-log`
   三个页面的筛选栏，每个 `<select>` 的 `name` 都是 `hash`（helper 的名字），
@@ -224,33 +370,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
      并写入 `seed.loaded=true`；成功面板另带 3 秒 `meta refresh`，
      已经打开的旧页面自己就走完这一步
   2. **`etl.setup.inProgress` 设置与运行行状态重复**。两个信号由**不同的代码路径**写入
-- **API 不再说「这些数据来自 MaxMind」**: 上一条把营销页上的假声明清干净了，
-  但 **JSON 接口里那句假话还在**——而且它出现在**唯一一个本该说实话的字段**上。
-  `country.source` / `city.source` / `isp.source` / `asn.source` / `location.source`
-  的作用就是「说明数据来自哪里」，而查不到来源的行一律回落到 `"maxmind"`。
-  流水线从来没有抓取过 MaxMind，所以这些回落是纯粹的假声明。线上实际影响：
-  **198,157 行** `country_source` 为空（连 `country_code` 也是空的）、
-  **8,152,112 行** `isp_source` 为空。
-  1. `Source` 类型去掉 `"maxmind"` 与 `"ipinfo"`（两者都不是流水线能产生的值），
-     改为加上 `"unknown"`——**「不知道」是「哪里来的」这个问题的一个真实答案**
-  2. 归一化放在**读的那一端**：`normalizeSource()` 把任何不认识的来源列
-     归一为 `"unknown"`。此前 `findRange()` 用的是 `as Source` 的无检查类型断言，
-     一行写着 `"maxmind"` 的历史数据会原样穿过断言——那个断言让类型成了谎言
-  3. 试查页（`/try`）与 API 用同一套归一化；实测一条手工插入的无来源行，
-     接口回答 `"source": "unknown"`，不再是 `"maxmind"`
-  4. **但本项目自己写的三个标签不能被归一化掉**：`multi-provider`（未知 IP
-     回填）、`import`（网段导入）、`seed`（演示数据）。它们不是流水线写的，
-     却是「这一行是谁写的」的唯一记录——归一化成 `"unknown"` 等于把来源记录
-     抹掉。其中 `multi-provider` 与 `import` 还正是 ETL 换表时要带过去的行，
-     没有它们那条 SQL 就无从下手。`seed` 则相反：演示行本来就该被一次刷新
-     替换掉，所以它**不在** `MANUAL_SOURCE_TAGS` 里，但读回来时仍要如实
-     报出 `"seed"`
-- **Provider 分钟级计数器的测试有时会自己失败**: `provider_call_counter_minute`
-  的分钟桶来自**数据库自己的时钟**（`UTC_TIMESTAMP()`），逐次调用各算一次——
-  所以一串调用跨过分钟边界就会被拆成两行，这是分钟表的正确行为。测试却断言
-  「四行变一行」，于是在整点附近必挂一次（同一份代码连续两次跑，一次过一次挂）。
-  生产代码的窗口查询本来就是**跨行求和**的，测试现在也照它那样求和。
-
      （向导起的后台任务 vs. ETL 流水线），可能各说各话；服务器在两者之间重启，
      设置就永远停在 `true`，把操作员困在一个几小时前就已结束的运行进度面板上。
      现该标志彻底删除，`etl_runs.status` 是唯一真相——信号写在干活的地方，就不会漂移
@@ -472,6 +591,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 集成测试辅助函数统一为三 Cookie CSRF 协议（`csrf` + `csrf_issued` + `csrf_bind`），
   16 个测试文件同步适配
 - MCP 工具输出中的邮箱与 API Key 前缀默认脱敏
+- **网段导入导出写审计日志**: `/admin/ranges` 是后台唯一能整库摧毁数据的入口
+  ——`replace` 模式的导入会跑 `atomicSwapRanges`，把整个 `ip_ranges` 表换成上传
+  文件的内容。但这个文件里的 7 条路由**一条审计记录都没写**（`admin.ts` 有 30 处），
+  于是「谁替换了库、什么时候、用什么文件」这个问题，答案是：**没有任何记录**。
+  MCP 的 `ipquery_audit_log` 与后台的 `/admin/audit-log` 读的是同一张表，因此
+  两者都对本产品最破坏性的操作是瞎的。现补上三处记录：
+  1. `ranges.export` —— 附带国家过滤条件，因为导出单个国家和导出整个库是两回事
+  2. `ranges.import` —— 附带 `mode`（`merge` 还是 `replace`）与声明行数
+  3. 记录写在**任务落库之后**：导出没能启动就不该出现在轨迹里；被确认次数
+     拦下的导入同理——什么也没发生，就没什么可记的
 
 ## [0.1.0] - 2026-08-19
 

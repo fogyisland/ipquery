@@ -189,17 +189,7 @@ export async function runBackfill(
   }
 
   try {
-    return await runBackfillLocked(
-      pool,
-      providers,
-      queueRows,
-      summary,
-      opts,
-      runMode,
-      dryRun,
-      batchId,
-      log,
-    );
+    return await runBackfillLocked(pool, providers, queueRows, summary, opts, runMode, dryRun, batchId, log);
   } finally {
     lock.release();
   }
@@ -231,16 +221,7 @@ async function runBackfillLocked(
     const slice = queueRows.slice(i, i + CONCURRENCY);
     const sliceOutcomes = await Promise.all(
       slice.map(async (row) => {
-        const result = await processIp(
-          pool,
-          providers,
-          row.ipText,
-          row.ip,
-          summary,
-          runMode,
-          dryRun,
-          log,
-        );
+        const result = await processIp(pool, providers, row.ipText, row.ip, summary, runMode, dryRun, log);
         const outcome = result.outcome;
         const consensus = outcome.kind === "merged" ? outcome.record : null;
         // Fire-and-forget probe audit. Same defensive pattern as
@@ -426,15 +407,13 @@ export async function processIp(
           // defensive .catch — a DB write failure must never poison the
           // fan-out loop. Logged so a silently-broken counter (which
           // would under-report daily quota usage) is visible.
-          touchProviderCalled(pool, p.name, { rateLimited: false, errorCode: code }).catch(
-            (err: unknown) => {
-              logger.warn?.("provider_called_counter write failed", {
-                provider: p.name,
-                ip: ipText,
-                error: err instanceof Error ? err.message : String(err),
-              });
-            },
-          );
+          touchProviderCalled(pool, p.name, { rateLimited: false, errorCode: code }).catch((err: unknown) => {
+            logger.warn?.("provider_called_counter write failed", {
+              provider: p.name,
+              ip: ipText,
+              error: err instanceof Error ? err.message : String(err),
+            });
+          });
           const elapsed = Date.now() - start;
           perProvider.push({
             provider: p.name,
@@ -709,19 +688,26 @@ async function countProviderFailuresInWindow(
   // /32 from a previous run shouldn't abort this run. Returns true if
   // a NEW row was inserted, false if the unique index turned it into a
   // no-op (already existed). The random-gen flow tracks duplicates
-  // separately from genuinely-new rows. */
+  // separately from genuinely-new rows.
+  //
+  // `end_ip` equals `start_ip`. Every row in `ip_ranges` — the ETL's
+  // DB-IP ranges, the demo seed, an .ipq import — holds an INCLUSIVE end
+  // address, and findRange() tests `end_ip >= target` on that basis. This
+  // used to write `start + 1`, which under that test claimed the
+  // neighbouring address as well: a row written for 203.0.113.7 also
+  // answered 203.0.113.8 with the same country, silently mislabeling an
+  // address nobody had looked up. `range_size` is end - start, so a
+  // single-address row is 0 — the same shape the demo seed writes. */
 async function writeConsensusRange(pool: Pool, ip: Buffer, rec: IpGeoRecord): Promise<boolean> {
-  const startBig = BigInt("0x" + ip.toString("hex"));
-  const endBig = startBig + 1n;
-  const endBuf = Buffer.from(endBig.toString(16).padStart(32, "0"), "hex");
-  const startBuf = Buffer.from(startBig.toString(16).padStart(32, "0"), "hex");
+  const startBuf = Buffer.from(ip.toString("hex").padStart(32, "0"), "hex");
+  const endBuf = startBuf;
 
   const [res] = await pool.query<ResultSetHeader>(
     `INSERT IGNORE INTO ip_ranges
        (start_ip, end_ip, range_size, country_code, country_name, region, city,
         latitude, longitude, timezone, isp, asn, asn_org,
         country_source, city_source, isp_source, asn_source, geo_source)
-     VALUES (?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'multi-provider', 'multi-provider', 'multi-provider', 'multi-provider', 'multi-provider')`,
+     VALUES (?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'multi-provider', 'multi-provider', 'multi-provider', 'multi-provider', 'multi-provider')`,
     [
       startBuf,
       endBuf,

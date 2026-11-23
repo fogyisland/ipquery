@@ -24,6 +24,7 @@ import {
   type EtlRunInsertRow,
   type EtlRunSwapRow,
 } from "../storage/mysql";
+import { refreshRangeCount } from "../storage/rangeCount";
 import {
   parseDbipCityCsvStreamWithStats,
   parseDbipCountryCsvStreamWithStats,
@@ -34,6 +35,7 @@ import {
   EXTRA_SPECS,
   downloadAll,
   fetchFixedOneWithAttempts,
+  monthSidecarPath,
   validateGzFile,
   type DownloadSpec,
   type FixedSpec,
@@ -43,11 +45,7 @@ import type * as https from "node:https";
 import { parseMetowolfCidrStreamWithStats } from "./sources/cidr";
 import { parseRunishiwoV4CidrStreamWithStats, parseRunishiwoV6CidrStreamWithStats } from "./sources/cidr";
 import { parseSapicsCountryStreamWithStats } from "./sources/sapicsCountry";
-import {
-  isGithubStreamFile,
-  type GithubStreamFile,
-  type StreamFile,
-} from "./sources/githubTypes";
+import { isGithubStreamFile, type GithubStreamFile, type StreamFile } from "./sources/githubTypes";
 import { prepareGithubSources, type GithubPrepared } from "./sources/prepare";
 import type { ParseStreamResult, SourceRecord } from "./sources/types";
 import { acquireEtlRunLock, EtlRunLockedError } from "./runGuard";
@@ -266,7 +264,10 @@ export class EtlProgressSink {
       insertRowsTotal: this.state.insertRowsTotal ?? undefined,
       currentStage: this.state.currentStage,
     });
-    this.pendingFlush = write.then(() => undefined, () => undefined);
+    this.pendingFlush = write.then(
+      () => undefined,
+      () => undefined,
+    );
     await write;
     this.lastWriteAt = Date.now();
     this.pendingFlush = null;
@@ -333,7 +334,15 @@ function toIpRangeRow(
 // started_at + finished_at + duration_ms all populated atomically.
 // Swap uses upsertEtlRunSwap so re-runs overwrite.
 
-async function runDownloadStage(
+/**
+ * The download stage: run `downloadAll` over `specs` and record one
+ * `etl_run_downloads` row per file. Exported so a test can drive the
+ * production stage with a narrower spec list — the monthly DB-IP files are
+ * handed to this stage every run (it is the stage that decides whether the
+ * cached month is still current), and a test that stubs the whole stage to
+ * avoid the network would also lose the fixed-source rows it asserts on.
+ */
+export async function runDownloadStage(
   pool: mysql.Pool,
   runId: number,
   rawDir: string,
@@ -627,14 +636,7 @@ async function runInsertStage(
     if (batch.length > 0) await flushGithubBatch();
     for (const f of githubFiles) {
       rows.push(
-        await persistInsertRow(
-          pool,
-          runId,
-          f,
-          bySource.get(f.etlSource) ?? emptyTotals(),
-          new Date(),
-          0,
-        ),
+        await persistInsertRow(pool, runId, f, bySource.get(f.etlSource) ?? emptyTotals(), new Date(), 0),
       );
     }
   }
@@ -701,6 +703,12 @@ async function runSwapStage(pool: mysql.Pool, runId: number): Promise<EtlRunSwap
   if (result.status !== "success") {
     throw new Error(`atomic swap failed: ${result.errorMessage ?? "unknown error"}`);
   }
+  // The table just changed wholesale, so every cached count of it is wrong.
+  // Recomputing here is free relative to a run that took minutes, and it is
+  // the only moment the number changes by millions. Pages then read the
+  // stored value instead of paying 3.2s for a COUNT(*) each render — see
+  // storage/rangeCount.
+  await refreshRangeCount(pool);
   return row;
 }
 
@@ -845,9 +853,7 @@ export async function runPipeline(opts: {
   const guard = await acquireEtlRunLock(pool, { excludeRunId: opts.runId });
   if (!guard.acquired || !guard.lock) {
     await pool.end();
-    throw new EtlRunLockedError(
-      guard.reason ?? "an ETL run is already in progress",
-    );
+    throw new EtlRunLockedError(guard.reason ?? "an ETL run is already in progress");
   }
   const releaseLock = guard.lock.release;
   try {
@@ -896,23 +902,29 @@ async function runPipelineLocked(
     //         the run then reported success with a partial data set
     //         and swapped it over the live table.
     //
-    //    So: validate each cached file, delete the corrupt ones, and
-    //    download exactly the files that are missing or damaged.
+    //    Decide which DB-IP files to fetch.
+    //
+    //    Two questions, both answered here: is the file whole (a truncated
+    //    .gz blows up in the parser as Z_BUF_ERROR), and is it the CURRENT
+    //    release? The second one is what kept the library frozen for months:
+    //    a gzip-valid cache never stopped being valid, so every later run
+    //    reused it and DB-IP's monthly updates were never followed.
+    //
+    //    The month lives in a sidecar file (see the download module) and is
+    //    compared against the newest release DB-IP actually publishes. The
+    //    download stage makes the same check itself — this pass only exists
+    //    so the log line and the progress bar can say how many files will
+    //    move, and so a corrupt file is removed rather than left for the
+    //    downloader to trip over.
     const reusable: StreamFile[] = [];
-    const needDownload: StreamFile[] = [];
     for (const f of SOURCE_FILES.filter((file) => file.validate === "gzip")) {
       const filePath = path.join(rawDir, f.filename);
-      if (!(await fileExists(filePath))) {
-        needDownload.push(f);
-        continue;
-      }
+      if (!(await fileExists(filePath))) continue;
       const problem = await validateGzFile(filePath);
       if (problem) {
-        console.warn(
-          `[etl] cached ${f.filename} is corrupt (${problem}); deleting it and re-downloading`,
-        );
+        console.warn(`[etl] cached ${f.filename} is corrupt (${problem}); deleting it and re-downloading`);
         await fs.rm(filePath, { force: true });
-        needDownload.push(f);
+        await fs.rm(monthSidecarPath(rawDir, f.filename), { force: true });
         continue;
       }
       reusable.push(f);
@@ -922,15 +934,15 @@ async function runPipelineLocked(
     // the previous validated cache and is recorded as 'failed', never
     // 'skipped'. The injected test download seam receives all specs so
     // integration tests can short-circuit without network access.
-    const needNames = new Set(needDownload.map((f) => f.filename));
-    const monthlySpecs = ALL_SPECS.filter(
-      (spec) => spec.mode === "monthly" && needNames.has(spec.destName),
-    );
+    //
+    // Monthly specs are handed to the download stage even when a file
+    // exists: only that stage knows whether the cached month is still the
+    // newest release, and it is the stage that has to act when it is not.
+    const monthlySpecs = ALL_SPECS.filter((spec) => spec.mode === "monthly");
     const specs = [...monthlySpecs, ...EXTRA_SPECS];
-    const monthlyCount = monthlySpecs.length;
     console.log(
-      `[etl] download: ${monthlyCount} DB-IP file(s) to fetch, ` +
-        `${reusable.length} reused from cache, ${EXTRA_SPECS.length} GitHub file(s) refreshed`,
+      `[etl] download: ${monthlySpecs.length} DB-IP file(s) to check ` +
+        `(${reusable.length} already intact on disk), ${EXTRA_SPECS.length} GitHub file(s) refreshed`,
     );
     sink.setStage("download");
     const fixedImpl = opts.downloadFixed ?? fetchFixedOneWithAttempts;
@@ -949,8 +961,7 @@ async function runPipelineLocked(
         missing.push(f.filename);
         continue;
       }
-      const problem =
-        f.validate === "gzip" ? await validateGzFile(filePath) : null;
+      const problem = f.validate === "gzip" ? await validateGzFile(filePath) : null;
       if (problem) {
         missing.push(`${f.filename} (${problem})`);
         continue;
@@ -963,24 +974,9 @@ async function runPipelineLocked(
       );
     }
 
-    // Record one synthetic 'skipped' row per reused file so the
-    // run-detail page doesn't show an empty stage for cached inputs.
-    for (const f of reusable) {
-      await insertEtlRunDownload(pool, {
-        runId,
-        source: f.etlSource,
-        destName: f.filename,
-        sourceUrl: null,
-        month: null,
-        status: "skipped",
-        bytes: null,
-        durationMs: null,
-        retryCount: 0,
-        errorMessage: null,
-        startedAt: now,
-        finishedAt: now,
-      });
-    }
+    // The download stage already records one row per monthly file — including
+    // a `skipped` row (with its month) for a file that was already the newest
+    // release. Recording a second synthetic row here would double-count.
 
     // Synthesise the download totals so the bar reads 100% instantly
     // when re-running against cached files.
@@ -990,12 +986,16 @@ async function runPipelineLocked(
         try {
           const stat = await fs.stat(path.join(rawDir, f.filename));
           totalBytes += stat.size;
-        } catch { /* ignore */ }
+        } catch {
+          /* ignore */
+        }
       }
       sink.onDownload(totalBytes, totalBytes);
       sink.setStage("download");
       await sink.flush();
-    } catch { /* ignore — sink is best-effort */ }
+    } catch {
+      /* ignore — sink is best-effort */
+    }
 
     // 2) Parse stage: per-file skip counters. The four GitHub sources
     // are parsed and deduped once; parse and insert reuse that snapshot.
@@ -1003,10 +1003,7 @@ async function runPipelineLocked(
     await sink.flush();
     console.log(`[etl] parse: ${present.length} source file(s)`);
     const githubStartedAt = new Date();
-    const github = await prepareGithubSources(
-      present.filter(isGithubStreamFile),
-      rawDir,
-    );
+    const github = await prepareGithubSources(present.filter(isGithubStreamFile), rawDir);
     await insertEtlRunDedupe(pool, {
       runId,
       inputRows: github.dedupe.stats.input,
@@ -1031,9 +1028,7 @@ async function runPipelineLocked(
       .filter(
         (row) =>
           row.rowsEmitted === 0 &&
-          present.some((file) =>
-            file.filename === row.destName && file.dedupeGroup !== "github-list",
-          ),
+          present.some((file) => file.filename === row.destName && file.dedupeGroup !== "github-list"),
       )
       .map((row) => row.destName);
     if (emptyDbipSources.length > 0) {
@@ -1124,7 +1119,8 @@ async function runPipelineLocked(
     });
     const totalSec = Math.round((Date.now() - runStartedAt) / 1000);
     const totalMin = Math.floor(totalSec / 60);
-    const totalLabel = totalMin > 0 ? `${totalMin}m${String(totalSec % 60).padStart(2, "0")}s` : `${totalSec}s`;
+    const totalLabel =
+      totalMin > 0 ? `${totalMin}m${String(totalSec % 60).padStart(2, "0")}s` : `${totalSec}s`;
     console.log(
       `[etl] success run=${runId} merged=${mergedTotal} in ${totalLabel} ` +
         `(dbip=${dbipCityRecords}, dbip-country=${dbipCountryRecords}, dbip-asn=${dbipAsnRecords})`,

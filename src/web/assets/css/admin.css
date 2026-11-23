@@ -91,8 +91,8 @@
   --grid-line: rgba(15, 23, 42, 0.022);
 
   --font-sans:
-    Inter, "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
-    "Helvetica Neue", Arial, "PingFang SC", "Microsoft YaHei", "Noto Sans SC", sans-serif;
+    Inter, "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue",
+    Arial, "PingFang SC", "Microsoft YaHei", "Noto Sans SC", sans-serif;
   --font-mono:
     ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", "Roboto Mono", monospace;
 
@@ -159,11 +159,12 @@
 }
 
 /* ─── Command bar ────────────────────────────────────────────────────────
-   The bar and the navigation rail share one blue, so the console reads as a
-   single blue frame. The working surface below is the only light region,
-   which is exactly the hierarchy an operator needs: chrome around, data
-   in the middle. The breadcrumb keeps the accent, but as a pale tinted
-   strip — on a blue field a saturated blue label would disappear. */
+   The bar is a light surface with a hairline underneath, not a blue band.
+   A saturated blue bar AND a saturated blue rail made the console a blue
+   frame with a white hole in it; the data was the only thing not competing
+   for attention, which is backwards. Chrome here is quiet: the rail and the
+   bar read as one continuous white surface, and the accent appears only on
+   the things that are actionable or current. */
 .admin-topbar {
   display: flex;
   align-items: center;
@@ -171,13 +172,12 @@
   gap: var(--sp-4);
   min-height: 58px;
   padding: 0 var(--sp-6);
-  background: #1e3a8a;
-  color: var(--rail-text);
-  border-bottom: 0;
+  background: var(--surface);
+  color: var(--text);
+  border-bottom: var(--hairline);
   position: sticky;
   top: 0;
   z-index: 5;
-  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.1);
 }
 .admin-topbar-context,
 .admin-topbar-meta {
@@ -190,29 +190,29 @@
   font-size: 13px;
   font-weight: 700;
   letter-spacing: -0.01em;
-  color: var(--rail-text-strong);
+  color: var(--text);
   white-space: nowrap;
 }
 .admin-topbar-group {
   font-size: 12px;
-  color: var(--rail-muted);
+  color: var(--text-3);
   white-space: nowrap;
 }
 .admin-topbar-current {
   font-size: 12px;
   font-weight: 600;
-  color: var(--rail-text-strong);
+  color: var(--text);
   white-space: nowrap;
 }
 .admin-topbar-sep,
 .admin-topbar-divider {
-  color: rgba(255, 255, 255, 0.35);
+  color: var(--border-3);
   flex: none;
 }
 .admin-topbar-divider {
   width: 1px;
   height: 18px;
-  background: rgba(255, 255, 255, 0.18);
+  background: var(--border);
 }
 .admin-topbar-status {
   display: inline-flex;
@@ -220,7 +220,7 @@
   gap: 6px;
   font-size: 11px;
   font-family: var(--font-mono);
-  color: var(--rail-text);
+  color: var(--text-2);
   white-space: nowrap;
 }
 .admin-topbar-status-dot {
@@ -233,7 +233,7 @@
 .admin-topbar-account {
   font-family: var(--font-mono);
   font-size: 11px;
-  color: var(--rail-muted);
+  color: var(--text-3);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -242,38 +242,47 @@
 .admin-topbar-link {
   font-size: 12px;
   font-weight: 600;
-  color: var(--rail-accent);
+  color: var(--accent);
   text-decoration: none;
   white-space: nowrap;
 }
 .admin-topbar-link:hover {
+  color: var(--accent-dim);
   text-decoration: underline;
-  color: var(--rail-text-strong);
 }
 
 /* ─── Sidebar ───────────────────────────────────────────────────────────── */
-/* ─── Business-blue sidebar ─────────────────────────────────────────────
-   The navigation rail carries the same deep blue as the command bar, so the
-   console is read as one blue frame with white working sheets set into it.
-   Contrast separates the two regions; a hairline alone would not.
+/* ─── Sidebar: a light rail ───────────────────────────────────────────────
+   The rail used to be a saturated navy column with white text. On a screen
+   where the working area is white and the data is white, a 252px slab of
+   pure #1e3a8a became the loudest object on the page — it pulled the eye
+   away from the numbers and made every console screen look heavy and dated
+   (the "blue admin theme" of a decade ago).
+
+   It is now the same colour as the topbar — white — separated from the
+   working area by a single hairline, with the accent reserved for the active
+   item and its left spine. The rail and the bar therefore read as one
+   continuous chrome surface, and the canvas below is the only tinted region.
+   Nesting: groups get small mono labels, the active item gets a soft accent
+   wash and a 3px spine — the only two places colour appears.
 
    These variables are scoped to .sidebar: nothing outside the rail ever
    inherits them. */
 .sidebar {
-  --rail-bg: #1e3a8a;
-  --rail-bg-2: #24459c;
-  --rail-text: #d6e0f5;
-  --rail-text-strong: #ffffff;
-  --rail-muted: #9ab0d8;
-  --rail-line: rgba(255, 255, 255, 0.12);
-  --rail-hover: rgba(255, 255, 255, 0.09);
-  --rail-active: rgba(255, 255, 255, 0.16);
-  --rail-accent: #bfdbfe;
+  /* Kept as aliases so the rules below keep one vocabulary. On a light rail
+     "rail-text-strong" means the darkest ink, not white. */
+  --rail-text: var(--text-2);
+  --rail-text-strong: var(--text);
+  --rail-muted: var(--text-3);
+  --rail-line: var(--border);
+  --rail-hover: var(--surface-2);
+  --rail-active: var(--accent-soft);
+  --rail-accent: var(--accent);
 }
 
 .sidebar {
-  background: var(--rail-bg);
-  border-right: 0;
+  background: var(--surface);
+  border-right: var(--hairline);
   padding: var(--sp-5) 0 var(--sp-4);
   display: flex;
   flex-direction: column;
@@ -283,13 +292,13 @@
   top: 0;
   height: 100vh;
   overflow-y: auto;
-  scrollbar-color: rgba(255, 255, 255, 0.22) transparent;
+  scrollbar-color: var(--border-2) transparent;
 }
 .sidebar::-webkit-scrollbar {
   width: 8px;
 }
 .sidebar::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.18);
+  background: var(--border-2);
   border-radius: 4px;
 }
 .sidebar-brand-mark {
@@ -299,13 +308,13 @@
   border-radius: 9px;
   display: grid;
   place-items: center;
-  /* The mark is the one saturated object on the rail — a white tile with a
-     blue glyph — which is what makes it read as a logo rather than a
-     button. */
-  background: var(--rail-text-strong);
-  color: var(--accent);
+  /* The one saturated object in the rail — a blue tile with a white glyph —
+     which is what makes it read as a logo rather than a button. On the light
+     rail that inversion is what keeps the mark from disappearing. */
+  background: var(--accent);
+  color: #ffffff;
   border: 0;
-  box-shadow: 0 4px 14px -4px rgba(0, 0, 0, 0.35);
+  box-shadow: 0 2px 8px -4px var(--accent-line);
 }
 .sidebar-brand-mark svg {
   width: 21px;
@@ -320,6 +329,10 @@
   display: flex;
   flex-direction: column;
   line-height: 1.15;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--text);
 }
 .sidebar-brand-sub {
   font-family: var(--font-mono);
@@ -365,6 +378,25 @@
   color: var(--rail-muted);
   padding: var(--sp-3) var(--sp-5) var(--sp-1) calc(var(--sp-5) + 26px);
   opacity: 0.9;
+}
+
+/* The brand row. It had no rule of its own — the mark and the text were
+   styled but nothing laid them out, so the wordmark stacked against the logo
+   tile with no gap and the row read as two unrelated fragments. It is a link
+   to the public site, so it gets the padding of a link and the gap of a row.
+   The wordmark is 15px/700: at body size (14px) the brand was smaller than
+   the nav labels below it, which is inverted hierarchy for a masthead. */
+.sidebar-brand {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: var(--sp-2) var(--sp-5);
+  margin-bottom: calc(var(--sp-3) * -1);
+  text-decoration: none;
+  color: var(--text);
+}
+.sidebar-brand:hover {
+  text-decoration: none;
 }
 
 /* Icon slot — a 16px line icon drawn inline as SVG. The old design used a
@@ -691,6 +723,12 @@ code {
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: var(--sp-3);
   margin-bottom: var(--sp-5);
+}
+/* The system-metric tiles are compact: five of them share one row on a
+   desktop and two per row on a tablet. They are facts about the install, not
+   a call to action, so they get less space than the 24h status tiles above. */
+.dashboard-grid--metrics {
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
 }
 
 /* ─── Buttons ───────────────────────────────────────────────────────────── */
@@ -1235,6 +1273,52 @@ dl.settings-dl dd {
 
 .stat-card {
   border-top: 2px solid var(--border-3);
+  /* A metric tile, not a card with three stacked paragraphs. The old layout
+     put the label, a 30px number and a caption in a vertical column, which on
+     a 1440px screen left a 300px-tall box holding three short lines — the
+     single biggest reason the console read as a phone layout. Label and
+     caption now sit on the left, the number on the right, and the tile is
+     roughly half as tall for the same information. */
+  padding: var(--sp-4);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: var(--sp-4);
+  align-items: center;
+}
+/* The schema tile is a link to the detail card, so it gets the affordance of
+   one: the hairline top border becomes the accent on hover, and the text does
+   not underline. It is the only clickable metric on the page. */
+.stat-card--schema {
+  text-decoration: none;
+  color: inherit;
+}
+.stat-card--schema:hover {
+  border-top-color: var(--accent);
+  background: var(--surface-2);
+}
+.stat-card--schema:hover .card-title {
+  color: var(--accent);
+}
+.stat-card .card-title {
+  grid-column: 1;
+  grid-row: 1;
+  margin: 0;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--text-2);
+}
+.stat-card .card-sub {
+  grid-column: 1;
+  grid-row: 2;
+  margin: 2px 0 0;
+  font-size: 11.5px;
+}
+.stat-card .card-value {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  margin: 0;
+  font-size: 30px;
+  text-align: right;
 }
 .stat-card--hit {
   border-top-color: var(--success);
@@ -1263,6 +1347,19 @@ dl.settings-dl dd {
 }
 .chart-card-head .card-title {
   margin: 0;
+}
+
+/* Card titles were 11px — a caption, not a heading. On a page where the
+   section headings are 12px, an 11px title inside each card gave a three
+   level hierarchy nobody could see, and the numbers outweighed their own
+   labels. Titles are 13px/600 in ink; weight now lives on the section
+   heading above, where it belongs. */
+.card-title {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  color: var(--text);
+  margin: 0 0 var(--sp-3);
 }
 .chart-host {
   width: 100%;
@@ -1436,12 +1533,23 @@ dl.settings-dl dd {
 .chart-empty {
   height: 160px;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: 4px;
   color: var(--text-3);
-  font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: 13px;
+  line-height: 1.5;
   border: 1px dashed var(--border);
+  border-radius: var(--radius-sm);
+  text-align: center;
+}
+.chart-empty strong {
+  font-weight: 600;
+  color: var(--text-2);
+}
+.chart-empty span {
+  font-size: 12px;
 }
 
 .dash-link {
@@ -1715,10 +1823,10 @@ dl.settings-dl dd {
   border-bottom: none;
 }
 .settings-tab-pane .form-field-label {
-font-size: 12px;
-font-weight: 600;
-letter-spacing: 0.01em;
-color: var(--text-2);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: var(--text-2);
 }
 .settings-tab-pane .form-field-input {
   display: flex;
@@ -1947,10 +2055,10 @@ color: var(--text-2);
   line-height: 1.2;
 }
 .runner-stat-label {
-font-size: 11px;
-font-weight: 600;
-letter-spacing: 0.01em;
-color: var(--text-3);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: var(--text-3);
 }
 .runner-card-actions,
 .runner-card-queue {
@@ -2579,10 +2687,10 @@ color: var(--text-3);
   gap: 4px;
 }
 .circuit-breaker-row label span {
-font-size: 11px;
-font-weight: 600;
-letter-spacing: 0.01em;
-color: var(--text-3);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: var(--text-3);
 }
 
 /* ─── Scheduler card (continuous random-IP ingest) ──────────────────── */
@@ -2663,10 +2771,10 @@ color: var(--text-3);
   gap: 4px;
 }
 .scheduler-card-grid label span {
-font-size: 11px;
-font-weight: 600;
-letter-spacing: 0.01em;
-color: var(--text-3);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: var(--text-3);
 }
 .scheduler-card-grid select,
 .scheduler-card-grid input[type="number"] {
@@ -2718,10 +2826,10 @@ color: var(--text-3);
   gap: 2px;
 }
 .scheduler-stat-label {
-font-size: 11px;
-font-weight: 600;
-letter-spacing: 0.01em;
-color: var(--text-3);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: var(--text-3);
 }
 .scheduler-stat-value {
   font-family: var(--font-mono);
@@ -2771,10 +2879,10 @@ color: var(--text-3);
   gap: 4px;
 }
 .probe-log-filters label span {
-font-size: 11px;
-font-weight: 600;
-letter-spacing: 0.01em;
-color: var(--text-3);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: var(--text-3);
 }
 .probe-log-filters select {
   background: var(--bg);

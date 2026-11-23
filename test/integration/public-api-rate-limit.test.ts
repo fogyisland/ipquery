@@ -155,4 +155,17 @@ describe("only the public API consumes the global rate-limit budget", () => {
     }
     expect(limited).toBeGreaterThan(0);
   });
+
+  it("applies the limit to the batch endpoint too", async () => {
+    // The batch endpoint is the most expensive public surface there is:
+    // one request asks the server to do up to a hundred lookups. The
+    // limiter's exemption is an exact set of paths, so a new public
+    // endpoint that is not in that set is an UNLIMITED endpoint — and
+    // nothing about the route itself would look wrong.
+    //
+    // This pins the membership directly, because a request-based test
+    // would have to burn the whole budget before it could tell.
+    const { isPublicApiPath } = await import("../../src/api/server");
+    expect(isPublicApiPath("/lookup/batch")).toBe(true);
+  });
 });

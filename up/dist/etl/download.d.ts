@@ -27,9 +27,69 @@ export type DownloadSpec = DbipSpec | FixedSpec;
  *  server didn't send one (chunked encoding, mirrors, etc.) — the
  *  caller can still render an indeterminate progress bar in that case. */
 export type DownloadProgressFn = (bytesDone: number, bytesTotal: number | null) => void;
+/**
+ * How long the socket may stay silent before a download is abandoned.
+ *
+ * This is an IDLE budget, not a cap on the transfer: Node's
+ * `request.setTimeout` fires when no data arrives for the given period and
+ * resets on every received chunk. The city-lite file is 82 MB, so a
+ * duration-based cap (the previous fixed 120 s) fails on any link slower
+ * than ~0.7 MB/s — measured at 1.3 MB/s on a home connection, that left
+ * almost no headroom. Two minutes of silence is the condition that actually
+ * means "this transfer is dead".
+ */
+export declare const IDLE_TIMEOUT_MS = 120000;
+/** How long a HEAD probe may take before its month is treated as unknown. */
+export declare const HEAD_TIMEOUT_MS = 30000;
 export declare const DEFAULT_SPECS: ReadonlyArray<DbipSpec>;
 export declare const EXTRA_SPECS: ReadonlyArray<FixedSpec>;
 export declare const ALL_SPECS: ReadonlyArray<DownloadSpec>;
+/**
+ * The sidecar that records which DB-IP month the file on disk belongs to.
+ *
+ * A gzip-valid cache proves the file is not truncated; it says nothing about
+ * which month it holds. There was no such record, so `pipeline.ts` reused a
+ * cache forever and the library stopped following DB-IP's monthly releases
+ * after the first successful download. The sidecar is the missing fact: the
+ * month the bytes belong to.
+ *
+ * It is a separate file rather than a column because the check has to work
+ * before the database is involved — the CLI `download` command has no run
+ * row — and because a stale sidecar next to a missing file is harmless
+ * (`fileMonth` returns null when the data file is absent).
+ */
+export declare function monthSidecarPath(dataDir: string, destName: string): string;
+/** Read the month recorded next to a cached DB-IP file, or null when there
+ *  is no record (an install that downloaded before this existed, or a file
+ *  somebody deleted). A null return means "month unknown" — the caller
+ *  treats it as stale and refetches, which is the safe direction: one
+ *  download versus a library frozen at an unknown month. */
+export declare function readMonthSidecar(dataDir: string, destName: string): Promise<string | null>;
+/**
+ * True when the cached file for this spec is already the newest release.
+ *
+ * "Newest" is decided by the month the file was downloaded from, not by its
+ * mtime: DB-IP publishes one file per month, so the month name is the
+ * version. `newest` is the first candidate DB-IP actually has — the caller
+ * resolves it by probing (see `fetchLatestMonth`), because the current
+ * calendar month is not published until a few days in.
+ */
+export declare function isCacheCurrent(fileMonth: string | null, newest: string): boolean;
+/**
+ * The newest DB-IP release that exists for this spec.
+ *
+ * DB-IP publishes the current month's file a few days in, so the calendar
+ * month is not a reliable answer — asking for the file that answers 2xx is.
+ * A HEAD request is enough: the monthly download then follows the same URL.
+ *
+ * Returns null when nothing in the lookback window exists, which the caller
+ * must treat as a hard failure rather than "reuse the cache": a cache with
+ * no reachable release could be any age.
+ */
+export declare function probeNewestMonth(spec: DbipSpec, now: Date, lookback?: number, headImpl?: typeof headRequest): Promise<string | null>;
+/** A HEAD request, following one https redirect. Kept here rather than
+ *  pulled from `downloadToFile` because it fetches no body. */
+export declare function headRequest(url: string, getImpl?: typeof https.get): Promise<number>;
 export declare function parseDownloadKinds(input: string | undefined): DownloadSpec[];
 export interface DownloadResult {
     kind: DownloadKind;
@@ -39,6 +99,9 @@ export interface DownloadResult {
     bytes: number;
     /** YYYY-MM for DB-IP monthly files, null for fixed GitHub sources. */
     month: string | null;
+    /** True when the file on disk was kept and no bytes were fetched this
+     *  run — the cached month was already the newest release that exists. */
+    reused?: boolean;
 }
 export interface DownloadFailure {
     kind: DownloadKind;
@@ -53,7 +116,9 @@ export interface DownloadAttempt {
     spec: DownloadSpec;
     destName: string;
     url: string;
-    status: "success" | "failed" | "missing";
+    /** `skipped` is not a failure: the file on disk already holds the newest
+     *  release of its month, so nothing was fetched. */
+    status: "success" | "failed" | "missing" | "skipped";
     bytes: number | null;
     month: string | null;
     durationMs: number | null;
@@ -129,6 +194,11 @@ export declare function fetchFixedOneWithAttempts(spec: FixedSpec, outDir: strin
  * downloadToFile so callers can drive a live progress bar. The bytes
  * reported are per-file — callers tracking the sum across files should
  * aggregate themselves.
+ */
+/**
+ * Download a single DB-IP spec, walking back through candidateMonths until
+ * one returns 2xx. Kept for backwards compatibility with the CLI command;
+ * it delegates to `fetchOneWithAttempts` so there is one implementation.
  */
 export declare function fetchOne(spec: DbipSpec, outDir: string, now: Date, lookback?: number, onProgress?: DownloadProgressFn): Promise<DownloadResult>;
 export declare function fetchOneWithAttempts(spec: DownloadSpec, outDir: string, now: Date, lookback?: number, onProgress?: DownloadProgressFn, getImpl?: typeof https.get, fixedImpl?: typeof fetchFixedOneWithAttempts): Promise<DownloadResult>;

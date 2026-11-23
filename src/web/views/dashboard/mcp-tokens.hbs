@@ -53,7 +53,7 @@
         <td>{{formatRelative @root.req this.lastUsedAt}}</td>
         <td>
           {{#if (eq this.status "approved")}}
-          <a href="/dashboard/mcp-tokens/{{this.id}}/revoke/confirm">{{../req.t 'dashboard.mcp.revoke'}}</a>
+          <a href="/dashboard/mcp-tokens/{{this.id}}/revoke/confirm">{{../req.t 'dashboard.mcp.revokeLabel'}}</a>
           {{else}}<span>{{../req.t 'dashboard.mcp.pendingNote'}}</span>{{/if}}
         </td>
       </tr>

@@ -78,6 +78,7 @@
     "signup": {
       "title": "Sign up",
       "submit": "Create account",
+      "haveAccount": "Already have an account?",
       "success": {
         "title": "Check your email",
         "body": "Click the verification link in the email to activate your account."
@@ -103,6 +104,7 @@
     "login": {
       "title": "Log in",
       "submit": "Log in",
+      "noAccount": "No account yet?",
       "error": {
         "credentials": "Wrong email or password",
         "disabled": "Account disabled, contact admin",
@@ -116,11 +118,29 @@
     "forgot": {
       "title": "Reset password",
       "submit": "Send reset link",
+      "backHint": "Already know your password?",
       "done": "If that email is registered, you will receive a reset link"
     },
     "reset": {
       "title": "Reset password",
-      "submit": "Reset password"
+      "submit": "Reset password",
+      "expiredHint": "Link stopped working?"
+    },
+    "shell": {
+      "subtitle": "Console",
+      "lede": "Self-hosted, no third-party API. One query returns country, city, ASN and coordinates, with every field naming its source.",
+      "factSources": "DB-IP plus open range lists, each filling what the other misses",
+      "factCoverage": "8.1M ranges, IPv4 and IPv6 in one table",
+      "factLatency": "Index direct lookup, under 100ms median",
+      "selfHosted": "Fully self-hosted",
+      "toSite": "Back to ipquery home",
+      "toConsole": "Open the console",
+      "createAccount": "Create an account",
+      "headline": "IP geolocation that lives in your own library",
+      "ledeShort": "Self-hosted IP intelligence: country, city, ASN, coordinates — each field naming its source.",
+      "factSourcesLabel": "DATA",
+      "factCoverageLabel": "COVER",
+      "factLatencyLabel": "SPEED"
     }
   },
   "greeting": {
@@ -163,6 +183,8 @@
       "created": "Created",
       "revoke": "Revoke",
       "revoke.confirm": "Revoke this key? It cannot be undone.",
+      "revoke.confirm.title": "Revoke API key",
+      "revoke.confirm.body": "Revoke {label} (prefix {prefix})? The key stops working immediately and cannot be restored.",
       "created_once": "Save this key now, you will not see it again:",
       "endpoint": {
         "title": "API endpoint",
@@ -227,6 +249,7 @@
           "body": "Revoke this token? Any client using it stops working immediately."
         }
       },
+      "revokeLabel": "Revoke",
       "revokedNote": "Revoked",
       "pendingNote": "Waiting for an administrator",
       "rejectedNote": "The administrator turned this request down",
@@ -286,6 +309,10 @@
         "delete": "Delete",
         "confirmResetPassword": "Reset this user's password? Their current password stops working immediately.",
         "confirmDisable": "Disable this user? They will no longer be able to sign in."
+      },
+      "resetPasswordResult": {
+        "tempNotice": "Temporary password generated",
+        "tempWarn": "Copy it and hand it over now — it is not shown again after you leave this page, and resetting the password ended every session of this user."
       },
       "delete.confirm": "Delete this user? All related data will be removed.",
       "delete.confirm.title": "Delete user?",
@@ -456,7 +483,10 @@
       "chart7d.total": "{total} total",
       "action.queries": "Query log",
       "action.audit": "Query audit",
-      "action.triggerEtl": "Run ETL"
+      "action.triggerEtl": "Run ETL",
+      "ipRangesSub": "IPv4 + IPv6 combined",
+      "schemaVersion": "Database schema",
+      "schemaPending": "Database is behind: {count} migration(s) pending (newest {latest})"
     },
     "queries": {
       "title": "Query volume",
@@ -676,12 +706,10 @@
           "retentionDays": "Probe log retention (days)",
           "retentionDaysHint": "0 keeps the probe log forever"
         },
-        "intervalOptions": {
-          "30s": "30 seconds",
-          "1m": "1 minute",
-          "5m": "5 minutes",
-          "15m": "15 minutes",
-          "30m": "30 minutes"
+        "intervalLabel": {
+          "seconds": "{n} seconds",
+          "minutes": "{n} minutes",
+          "hours": "{n} hours"
         },
         "targetRangeOptions": {
           "reserved": "RFC 5737 + 6890 (documentation/benchmark)"

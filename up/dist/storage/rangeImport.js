@@ -67,6 +67,7 @@ exports.replaceRangesFromFile = replaceRangesFromFile;
 const fs = __importStar(require("node:fs"));
 const ip_1 = require("../ip");
 const mysql_1 = require("./mysql");
+const rangeCount_1 = require("./rangeCount");
 const runGuard_1 = require("../etl/runGuard");
 const runner_1 = require("./migrations/runner");
 const rangeFile_1 = require("./rangeFile");
@@ -214,7 +215,11 @@ async function writeRangeImportProgress(pool, fields) {
         await pool.query(`UPDATE range_imports SET ${set.join(", ")} WHERE id = ?`, values);
         return fields.id;
     }
-    await pool.query(`INSERT INTO range_imports (mode, source, declared_rows) VALUES (?, ?, ?)`, [fields.mode, fields.source, fields.declaredRows ?? null]);
+    await pool.query(`INSERT INTO range_imports (mode, source, declared_rows) VALUES (?, ?, ?)`, [
+        fields.mode,
+        fields.source,
+        fields.declaredRows ?? null,
+    ]);
     const [inserted] = await pool.query("SELECT LAST_INSERT_ID() AS id");
     return Number(inserted[0]?.id ?? 0);
 }
@@ -233,7 +238,9 @@ async function finishRangeImport(pool, id, outcome) {
 }
 async function readRangeImportState(pool, id) {
     await (0, runner_1.runMigrations)(pool);
-    const [rows] = await pool.query(`SELECT ${JOB_COLUMNS} FROM range_imports WHERE id = ?`, [id]);
+    const [rows] = await pool.query(`SELECT ${JOB_COLUMNS} FROM range_imports WHERE id = ?`, [
+        id,
+    ]);
     const r = rows[0];
     if (!r)
         return null;
@@ -490,6 +497,9 @@ async function replaceRangesFromStream(pool, input, options = {}) {
             if (swap.status !== "success") {
                 throw new Error(`the table swap failed: ${swap.errorMessage ?? "unknown error"}`);
             }
+            // The table changed wholesale: refresh the count every page reads
+            // instead of letting each render pay a COUNT(*) over the new table.
+            await (0, rangeCount_1.refreshRangeCount)(pool);
             return { written: readRows, preserved: preserved.preserved, total: await countRows(pool) };
         });
         if (importId !== undefined) {
