@@ -2,8 +2,17 @@ import * as mysql from "mysql2/promise";
 import { type EtlRunDownloadRow } from "../storage/mysql";
 import { fetchFixedOneWithAttempts, type DownloadSpec, type FixedSpec, type DownloadResult } from "./download";
 import type * as https from "node:https";
+import { type StreamFile } from "./sources/githubTypes";
 import type { AppConfig } from "../config";
 import type { EtlStage } from "../types";
+/**
+ * The files the ETL pipeline fetches and parses, in priority order.
+ *
+ * Exported so the source list the API and the MCP server report can be
+ * derived from it. A hand-written list of sources is a promise the code
+ * does not keep — see `src/etl/sources/labels.ts`.
+ */
+export declare const SOURCE_FILES: ReadonlyArray<StreamFile>;
 export interface PipelineResult {
     runId: number;
     merged: number;

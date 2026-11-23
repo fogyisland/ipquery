@@ -1,6 +1,6 @@
 import * as mysql from "mysql2/promise";
 import type { AppConfig } from "../config";
-import type { IpRangeRow, EtlRun } from "../types";
+import type { IpRangeRow, EtlRun, Source } from "../types";
 export declare function createPool(cfg: AppConfig): mysql.Pool;
 /**
  * The five connection values plus the pool size, without the whole
@@ -78,6 +78,21 @@ export interface SwapResult {
  * operator's work — which is exactly what an untagged import would do.
  */
 export declare const MANUAL_SOURCE_TAGS: readonly ["multi-provider", "import"];
+/**
+ * Normalize a source value read out of the database.
+ *
+ * The source columns on `ip_ranges` are free-form text, and they
+ * predate the source tracking: a row inserted by hand, by an older
+ * build, or by a backfill carries whatever was there. Two of those
+ * values are "maxmind" and "ipinfo" — labels of sources this project
+ * never wired into the pipeline.
+ *
+ * Casting such a value to the `Source` type and returning it would
+ * make the API claim the data came from MaxMind for a row MaxMind
+ * never touched. An unrecognized label is normalized to "unknown",
+ * which is what it actually is.
+ */
+export declare function normalizeSource(value: unknown): Source;
 export interface PreservedRows {
     /** Rows copied out of the live table into the staging table. */
     preserved: number;

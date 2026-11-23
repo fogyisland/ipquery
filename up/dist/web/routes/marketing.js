@@ -9,6 +9,7 @@ const csrf_1 = require("../plugins/csrf");
 const geo_map_1 = require("../maps/geo-map");
 const render_map_1 = require("../maps/render-map");
 const country_names_1 = require("../../country-names");
+const labels_1 = require("../../etl/sources/labels");
 async function marketingRoutes(app) {
     // The /try form is a lookup, and a lookup is worth a row in query_log
     // whenever the caller can be identified. An anonymous visitor is still
@@ -49,6 +50,10 @@ async function marketingRoutes(app) {
             layout: "layouts/marketing",
             title: req.t("home.title"),
             ipCount,
+            // How many upstreams the data comes from. Derived from the
+            // pipeline's own source table — the page used to say "3" in
+            // two places, and the number was wrong.
+            sourceCount: (0, labels_1.etlUpstreamCount)(),
             csrfToken: req.csrfToken,
             viewBaseUrl: app.viewBaseUrl,
             req,
@@ -177,11 +182,11 @@ async function marketingRoutes(app) {
         // The map is server-rendered inline SVG — no tile server, no client
         // script, no third party seeing the visitor's IP.
         const location = row.latitude !== undefined && row.longitude !== undefined
-            ? { lat: row.latitude, lon: row.longitude, source: row.geoSource ?? "maxmind" }
+            ? { lat: row.latitude, lon: row.longitude, source: row.geoSource }
             : undefined;
         const map = (0, render_map_1.renderWorldMap)(location ? { lat: location.lat, lon: location.lon } : undefined, {
             label: req.t("try.map.ariaLabel", { ip, country: countryName }),
-            source: location?.source ?? "maxmind",
+            source: location?.source ?? "unknown",
         });
         return reply.view("marketing/try.hbs", {
             layout: "layouts/marketing",
@@ -199,13 +204,13 @@ async function marketingRoutes(app) {
                 country: {
                     code: row.countryCode,
                     name: countryName,
-                    source: row.countrySource ?? "maxmind",
+                    source: row.countrySource,
                 },
                 region: row.region,
-                city: row.city ? { name: row.city, source: row.citySource ?? "maxmind" } : undefined,
-                isp: row.isp ? { name: row.isp, source: row.ispSource ?? "maxmind" } : undefined,
+                city: row.city ? { name: row.city, source: row.citySource } : undefined,
+                isp: row.isp ? { name: row.isp, source: row.ispSource } : undefined,
                 asn: row.asn !== undefined
-                    ? { number: row.asn, org: row.asnOrg, source: row.asnSource ?? "maxmind" }
+                    ? { number: row.asn, org: row.asnOrg, source: row.asnSource }
                     : undefined,
                 location: location
                     ? {

@@ -520,8 +520,7 @@
         "etl": "ETL",
         "web": "Web",
         "smtp": "SMTP",
-        "security": "安全",
-        "maxmind": "MaxMind"
+        "security": "安全"
       },
       "field": {
         "host": "主机",
@@ -1047,7 +1046,7 @@
     "title": "首页 · IPQuery",
     "heroEyebrow": "IP 地理位置 API",
     "heroTitleAccent": "查询任何 <em>IP 地址</em>,<br>都能拿到<strong>可信的国家、城市与 ASN</strong>",
-    "heroSubLong": "聚合 MaxMind GeoLite2、ip2region、DB-IP 三大免费数据源,按字段互补策略返回结果。100% 自托管,亚 100ms 中位延迟。",
+    "heroSubLong": "聚合 DB-IP、国内网段清单与开放 IP 位置数据,按字段互补策略返回结果。100% 自托管,亚 100ms 中位延迟。",
     "ipRanges": "IP 段",
     "metaSources": "数据源",
     "metaLatency": "中位延迟",
@@ -1065,7 +1064,7 @@
       "sources": {
         "mark": "01 / 多源",
         "title": "多源聚合",
-        "sub": "MaxMind / ip2region / DB-IP 互相补位,字段缺失率远低于单源方案。",
+        "sub": "DB-IP、国内网段清单与开放 IP 位置数据互相补位,字段缺失率远低于单源方案。",
         "stat": "数据源"
       },
       "coverage": {
@@ -1116,7 +1115,7 @@
       "company": "公司"
     },
     "heroTitle": "IP 地理位置查询",
-    "heroSubtitle": "聚合 MaxMind / ip2region / DB-IP 三大数据源,每天自动 ETL 更新",
+    "heroSubtitle": "聚合 DB-IP、国内网段清单与开放 IP 位置数据,每天自动 ETL 更新",
     "quickQuery": "快速查询",
     "status": "API 状态",
     "online": "在线",
@@ -1136,7 +1135,7 @@
     "principles": {
       "sources": {
         "title": "多源融合",
-        "sub": "每个字段都标注来源( maxmind / ip2region / dbip ),便于审计与回溯。"
+        "sub": "每个字段都标注来源( dbip / metowolf / runishiwo / sapics ),便于审计与回溯。"
       },
       "speed": {
         "title": "索引优先",
@@ -1159,7 +1158,7 @@
       "handlebars": "服务端模板,零客户端依赖,轻量到极致"
     },
     "licenseTitle": "许可与数据",
-    "licenseBody": "代码以 MIT 协议开源;数据文件由使用者自行下载并遵守各源(MaxMind / ip2region / DB-IP)各自的授权约束。",
+    "licenseBody": "代码以 MIT 协议开源;数据文件由使用者自行下载并遵守各源(DB-IP 与开放网段清单)各自的授权约束。",
     "timelineTitle": "一路走来",
     "timeline": {
       "2024": {
@@ -1167,12 +1166,12 @@
         "desc": "初始 schema、MaxMind 单源加载器、Fastify 服务。单表设计、单一数据源。"
       },
       "2025": {
-        "title": "接入 ip2region + DB-IP",
-        "desc": "三源聚合策略 + 字段级来源标注。range_size 索引实现亚 100ms 查询。"
+        "title": "接入 DB-IP",
+        "desc": "按网段聚合的合并策略 + 字段级来源标注。range_size 索引实现亚 100ms 查询。"
       },
       "2026": {
         "title": "生产级发布",
-        "desc": "鉴权、速率限制、ETL 调度、控制台、多语言支持。MIT 协议开源。"
+        "desc": "鉴权、速率限制、ETL 调度、控制台、多语言支持,并接入更多数据源。MIT 协议开源。"
       }
     }
   },

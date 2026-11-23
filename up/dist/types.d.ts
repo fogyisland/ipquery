@@ -1,4 +1,4 @@
-export type Source = "maxmind" | "ip2region" | "dbip" | "dbip-country" | "dbip-asn" | "ipinfo" | "metowolf-cn" | "runishiwo-cn" | "sapics-user";
+export type Source = "unknown" | "dbip" | "dbip-country" | "dbip-asn" | "metowolf-cn" | "runishiwo-cn" | "sapics-user" | "multi-provider" | "import" | "seed";
 export interface NormalizedRecord {
     startIp: Buffer;
     endIp: Buffer;

@@ -1,12 +1,17 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.clampInt = clampInt;
+exports.iso = iso;
 exports.mcpLookup = mcpLookup;
 exports.lookupToolDef = lookupToolDef;
+exports.mcpLookupBatch = mcpLookupBatch;
+exports.lookupBatchToolDef = lookupBatchToolDef;
 exports.mcpQueueStats = mcpQueueStats;
 exports.queueStatsToolDef = queueStatsToolDef;
 exports.mcpEtlStatus = mcpEtlStatus;
 exports.etlStatusToolDef = etlStatusToolDef;
+exports.mcpEtlSources = mcpEtlSources;
+exports.etlSourcesToolDef = etlSourcesToolDef;
 exports.queueTopToolDef = queueTopToolDef;
 exports.mcpQueueTop = mcpQueueTop;
 exports.maskEmail = maskEmail;
@@ -20,6 +25,9 @@ const lookup_core_1 = require("../lookup-core");
 const mysql_1 = require("../storage/mysql");
 const unknownIpQueue_1 = require("../storage/unknownIpQueue");
 const queryLog_1 = require("../storage/queryLog");
+const etlSourceReport_1 = require("../storage/etlSourceReport");
+const etlSourceContribution_1 = require("../storage/etlSourceContribution");
+const ip_1 = require("../ip");
 /**
  * Clamp an unknown tool argument into [min, max]. Non-numeric input falls
  * back to the default; numeric input is clamped into the bounds.
@@ -55,6 +63,68 @@ function lookupToolDef() {
         },
     };
 }
+/** Largest batch the tool will answer in one call. */
+const MAX_BATCH_SIZE = 100;
+/**
+ * Look several addresses up in one call.
+ *
+ * `ipquery_lookup` takes one address. Reconciling a list of addresses
+ * one call at a time is fine over HTTP and miserable over MCP, where
+ * every call is a round trip through the client.
+ *
+ * A malformed or unknown address does not fail the batch: the other
+ * addresses still get their answers, and the failed one is marked.
+ * A batch that died on the first bad address would be worse than no
+ * batch tool at all.
+ */
+async function mcpLookupBatch(deps, args) {
+    if (!Array.isArray(args.ips)) {
+        throw new Error("ips must be an array of IPv4/IPv6 addresses");
+    }
+    const requested = args.ips.slice(0, MAX_BATCH_SIZE).map((ip) => (typeof ip === "string" ? ip.trim() : ""));
+    const results = [];
+    let found = 0;
+    for (const ip of requested) {
+        if (!(0, ip_1.isValidIp)(ip)) {
+            results.push({ ip, found: false, error: "invalid_ip" });
+            continue;
+        }
+        try {
+            const result = await mcpLookup(deps, ip);
+            results.push({ ip, found: true, result });
+            found += 1;
+        }
+        catch (e) {
+            // A miss is an answer, not a failure: the address is simply not
+            // in the library. Anything else is reported as an error on that
+            // entry so the rest of the batch still lands.
+            const code = e.code;
+            results.push({
+                ip,
+                found: false,
+                error: typeof code === "string" ? code : "lookup_failed",
+            });
+        }
+    }
+    return { results, total: requested.length, found, notFound: requested.length - found };
+}
+function lookupBatchToolDef() {
+    return {
+        name: "ipquery_lookup_batch",
+        description: "Look up up to 100 IPv4/IPv6 addresses in one call. The answers keep the order of the request; an address that is malformed or not in the library is marked rather than failing the batch.",
+        inputSchema: {
+            type: "object",
+            properties: {
+                ips: {
+                    type: "array",
+                    items: { type: "string" },
+                    description: "IPv4/IPv6 addresses to look up (max 100)",
+                },
+            },
+            required: ["ips"],
+        },
+    };
+}
 async function mcpQueueStats(deps) {
     try {
         const s = await (0, unknownIpQueue_1.queueStats)(deps.pool);
@@ -84,20 +154,7 @@ async function mcpEtlStatus(deps) {
                 finishedAt: iso(last.finishedAt ?? null),
                 status: last.status,
                 mergedRecords: last.mergedRecords ?? 0,
-                sources: {
-                    // null = the source did not run; 0 = it ran and contributed
-                    // nothing. MaxMind and ip2region parsers exist but are not
-                    // wired into the ETL pipeline, so their counters stay NULL.
-                    maxmind: {
-                        records: last.maxmindRecords ?? null,
-                        builtAt: iso(last.maxmindBuiltAt ?? null),
-                    },
-                    ip2region: {
-                        records: last.ip2regionRecords ?? null,
-                        builtAt: iso(last.ip2regionBuiltAt ?? null),
-                    },
-                    dbip: { records: last.dbipRecords ?? 0, builtAt: iso(last.dbipBuiltAt ?? null) },
-                },
+                sources: (0, etlSourceReport_1.buildEtlSourceReport)(last),
             },
             queue,
         };
@@ -112,6 +169,41 @@ function etlStatusToolDef() {
         name: "ipquery_etl_status",
         description: "Last ETL run status (per-source record counts) plus a queue summary.",
         inputSchema: { type: "object", properties: {} },
+    };
+}
+/**
+ * Per-source ETL contribution.
+ *
+ * `ipquery_etl_status` reports the run-level counters, of which only
+ * one (the lumped DB-IP counter) is non-null — the other six files are
+ * counted per file in the stage tables, and no tool could reach them.
+ * This one reads those tables.
+ *
+ * `runId` selects the run; without it the most recent run is used.
+ */
+async function mcpEtlSources(deps, runId) {
+    const requested = typeof runId === "number" && Number.isInteger(runId) && runId > 0 ? runId : null;
+    try {
+        return await (0, etlSourceContribution_1.buildRunSourceReport)(deps.pool, requested);
+    }
+    catch (e) {
+        deps.log.error({ err: e }, "mcpEtlSources failed");
+        throw new Error(`etl sources failed: ${e instanceof Error ? e.message : String(e)}`);
+    }
+}
+function etlSourcesToolDef() {
+    return {
+        name: "ipquery_etl_sources",
+        description: "Per-source ETL contribution for one run: rows emitted, skipped, inserted and duplicated per source, with the download outcome. Defaults to the most recent run.",
+        inputSchema: {
+            type: "object",
+            properties: {
+                runId: {
+                    type: "number",
+                    description: "ETL run id to inspect (default: the most recent run)",
+                },
+            },
+        },
     };
 }
 function queueTopToolDef() {

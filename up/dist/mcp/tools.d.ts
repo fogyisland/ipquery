@@ -1,4 +1,5 @@
 import type { Pool } from "mysql2/promise";
+import { type EtlSourceReport } from "../storage/etlSourceContribution";
 import type { QueryLogRow } from "../storage/queryLog";
 import type { LookupResult } from "../types";
 /** Minimal dependency injection surface every MCP tool handler receives. */
@@ -20,6 +21,8 @@ export interface ToolDef {
  * back to the default; numeric input is clamped into the bounds.
  */
 export declare function clampInt(v: unknown, min: number, max: number, fallback: number): number;
+/** ISO-serialize a Date-or-null for stable JSON output. */
+export declare function iso(d: Date | null | undefined): string | null;
 /**
  * MCP lookup: identical behavior to the HTTP /lookup route (including the
  * unknown_ip_queue miss side effect), but never writes query_log — MCP
@@ -27,6 +30,41 @@ export declare function clampInt(v: unknown, min: number, max: number, fallback:
  */
 export declare function mcpLookup(deps: McpPool, ip: string): Promise<LookupResult>;
 export declare function lookupToolDef(): ToolDef;
+/** One address inside a batch answer. */
+export interface BatchLookupEntry {
+    ip: string;
+    /** False when the address was malformed or not in the library. */
+    found: boolean;
+    /** The lookup result, when the address was found. */
+    result?: LookupResult;
+    /** Why the address was not found: "invalid_ip" or "not_found". */
+    error?: string;
+}
+export interface BatchLookupResult {
+    results: BatchLookupEntry[];
+    /** How many addresses were asked about. */
+    total: number;
+    /** How many of them were in the library. */
+    found: number;
+    /** How many were not — malformed or unknown. */
+    notFound: number;
+}
+/**
+ * Look several addresses up in one call.
+ *
+ * `ipquery_lookup` takes one address. Reconciling a list of addresses
+ * one call at a time is fine over HTTP and miserable over MCP, where
+ * every call is a round trip through the client.
+ *
+ * A malformed or unknown address does not fail the batch: the other
+ * addresses still get their answers, and the failed one is marked.
+ * A batch that died on the first bad address would be worse than no
+ * batch tool at all.
+ */
+export declare function mcpLookupBatch(deps: McpPool, args: {
+    ips?: unknown;
+}): Promise<BatchLookupResult>;
+export declare function lookupBatchToolDef(): ToolDef;
 export interface QueueStatsResult {
     pending: number;
     processed: number;
@@ -41,11 +79,11 @@ export interface EtlStatusResult {
         status: string;
         mergedRecords: number;
         /**
-         * Per-source counters. `records` is null for a source that did not
-         * run and 0 for one that ran and contributed nothing — the two are
-         * different facts and callers should not conflate them. MaxMind
-         * and ip2region parsers exist but are not wired into the ETL
-         * pipeline, so their counters are always null.
+         * Per-source counters. `records` is null for a source whose count
+         * the run row does not carry — the source list is derived from the
+         * pipeline's own file table, so it names only sources that
+         * actually run. The per-file counts for those sources live in the
+         * ETL stage tables, not on the run row.
          */
         sources: Record<string, {
             records: number | null;
@@ -56,6 +94,18 @@ export interface EtlStatusResult {
 }
 export declare function mcpEtlStatus(deps: McpPool): Promise<EtlStatusResult>;
 export declare function etlStatusToolDef(): ToolDef;
+/**
+ * Per-source ETL contribution.
+ *
+ * `ipquery_etl_status` reports the run-level counters, of which only
+ * one (the lumped DB-IP counter) is non-null — the other six files are
+ * counted per file in the stage tables, and no tool could reach them.
+ * This one reads those tables.
+ *
+ * `runId` selects the run; without it the most recent run is used.
+ */
+export declare function mcpEtlSources(deps: McpPool, runId?: unknown): Promise<EtlSourceReport>;
+export declare function etlSourcesToolDef(): ToolDef;
 export declare function queueTopToolDef(): ToolDef;
 export interface QueueTopResult {
     pending: Array<{

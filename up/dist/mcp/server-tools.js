@@ -6,7 +6,9 @@ exports.buildToolRegistrations = buildToolRegistrations;
 // Unified registration table: pairs every tool definition with a handler
 // that returns MCP text content. The stdio server entry consumes this.
 const tools_1 = require("./tools");
+const ops_tools_1 = require("./ops-tools");
 const mysql_1 = require("../storage/mysql");
+const etlSourceReport_1 = require("../storage/etlSourceReport");
 const ip_1 = require("../ip");
 /** Structured error result so the server layer can flag isError without
  *  sniffing serialized text. */
@@ -35,20 +37,9 @@ function serializeLastRun(last) {
         finishedAt: last.finishedAt?.toISOString() ?? null,
         status: last.status,
         mergedRecords: last.mergedRecords ?? 0,
-        sources: {
-            // null = the source did not run; 0 = it ran and contributed
-            // nothing. MaxMind and ip2region parsers exist but are not wired
-            // into the ETL pipeline, so their counters stay NULL.
-            maxmind: {
-                records: last.maxmindRecords ?? null,
-                builtAt: last.maxmindBuiltAt?.toISOString() ?? null,
-            },
-            ip2region: {
-                records: last.ip2regionRecords ?? null,
-                builtAt: last.ip2regionBuiltAt?.toISOString() ?? null,
-            },
-            dbip: { records: last.dbipRecords ?? 0, builtAt: last.dbipBuiltAt?.toISOString() ?? null },
-        },
+        // Derived from the pipeline's own file table — the same helper the
+        // HTTP /stats route uses, so the two cannot drift apart.
+        sources: (0, etlSourceReport_1.buildEtlSourceReport)(last),
     };
 }
 async function statsHandler(deps) {
@@ -70,6 +61,10 @@ function buildToolRegistrations(deps) {
     return [
         { def: (0, tools_1.lookupToolDef)(), handler: lookupHandler(deps) },
         {
+            def: (0, tools_1.lookupBatchToolDef)(),
+            handler: (args) => safe(() => (0, tools_1.mcpLookupBatch)(deps, args)),
+        },
+        {
             def: {
                 name: "ipquery_stats",
                 description: "Library summary: last ETL run status and per-source record counts.",
@@ -78,6 +73,26 @@ function buildToolRegistrations(deps) {
             handler: () => safe(() => statsHandler(deps)),
         },
         { def: (0, tools_1.etlStatusToolDef)(), handler: () => safe(() => (0, tools_1.mcpEtlStatus)(deps)) },
+        {
+            def: (0, tools_1.etlSourcesToolDef)(),
+            handler: (args) => safe(() => (0, tools_1.mcpEtlSources)(deps, args.runId)),
+        },
+        {
+            def: (0, ops_tools_1.etlHistoryToolDef)(),
+            handler: (args) => safe(() => (0, ops_tools_1.mcpEtlHistory)(deps, args.limit)),
+        },
+        {
+            def: (0, ops_tools_1.providerHealthToolDef)(),
+            handler: (args) => safe(() => (0, ops_tools_1.mcpProviderHealth)(deps, args)),
+        },
+        {
+            def: (0, ops_tools_1.auditLogToolDef)(),
+            handler: (args) => safe(() => (0, ops_tools_1.mcpAuditLog)(deps, args)),
+        },
+        {
+            def: (0, ops_tools_1.rangeJobsToolDef)(),
+            handler: (args) => safe(() => (0, ops_tools_1.mcpRangeJobs)(deps, args)),
+        },
         { def: (0, tools_1.queueStatsToolDef)(), handler: () => safe(() => (0, tools_1.mcpQueueStats)(deps)) },
         {
             def: (0, tools_1.queueTopToolDef)(),

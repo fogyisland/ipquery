@@ -13,7 +13,7 @@ import {
   findApprovedMcpTokenByHash,
   decideMcpToken,
 } from "../../src/storage/mcpTokens";
-import { authenticate } from "../../src/mcp/auth";
+import { authenticate, OPS_SCOPE_TOOLS } from "../../src/mcp/auth";
 
 let td: TestDb;
 let app: Awaited<ReturnType<typeof buildServer>>;
@@ -196,7 +196,7 @@ describe("admin approval", () => {
     const auth = await authenticate(app.pool, plain, true);
     expect(auth.mode).toBe("token");
     expect(auth.scope).toBe("ops");
-    expect(auth.allowedTools.size).toBe(7);
+    expect(auth.allowedTools.size).toBe(OPS_SCOPE_TOOLS.length);
   });
 
   it("an approved lookup token reaches only the lookup tool", async () => {
@@ -212,7 +212,14 @@ describe("admin approval", () => {
     await decideMcpToken(app.pool, token.id, "approved", adminId, null);
     const auth = await authenticate(app.pool, plain, true);
     expect(auth.scope).toBe("lookup");
-    expect([...auth.allowedTools]).toEqual(["ipquery_lookup"]);
+    // The lookup scope holds the geolocation tools and nothing
+    // operational: single lookup and batch lookup. An ops-only tool
+    // appearing here would leak the internals of the instance to a
+    // token that was only ever supposed to answer "where is this IP".
+    expect([...auth.allowedTools].sort()).toEqual([
+      "ipquery_lookup",
+      "ipquery_lookup_batch",
+    ]);
   });
 
   it("rejecting a token keeps it unusable", async () => {

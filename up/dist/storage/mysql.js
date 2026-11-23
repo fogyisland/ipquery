@@ -40,6 +40,7 @@ exports.truncateNew = truncateNew;
 exports.computeRangeSize = computeRangeSize;
 exports.insertIntoNew = insertIntoNew;
 exports.insertIntoNewUpsert = insertIntoNewUpsert;
+exports.normalizeSource = normalizeSource;
 exports.preserveManualRows = preserveManualRows;
 exports.atomicSwapRanges = atomicSwapRanges;
 exports.findRange = findRange;
@@ -267,6 +268,56 @@ async function insertIntoNewUpsert(pool, rows, fillCols) {
  * operator's work — which is exactly what an untagged import would do.
  */
 exports.MANUAL_SOURCE_TAGS = ["multi-provider", "import"];
+/**
+ * The source labels the ETL pipeline writes.
+ *
+ * Derived from the pipeline's own file table would be ideal, but
+ * pipeline.ts imports this module, so the list is written down here and
+ * `test/unit/source-normalize.test.ts` keeps the two in step.
+ *
+ * The manual tags are in the list because they are real provenance:
+ * the backfill writes 'multi-provider' and the range importer writes
+ * 'import', and the ETL's swap preserves exactly those rows. Dropping
+ * them here would erase the record of who wrote a row — and the swap
+ * would then have nothing to key on.
+ *
+ * 'seed' is here for the same reason but is NOT in
+ * MANUAL_SOURCE_TAGS: the demo loader writes it, and findRange()
+ * demotes a seed row below any real ETL row. It is a real tag on a
+ * real row, so normalizing it away would be wrong — but the ETL is
+ * meant to replace those rows, so they are not carried across a
+ * refresh the way the other two are.
+ */
+const KNOWN_SOURCES = new Set([
+    "unknown",
+    "dbip",
+    "dbip-country",
+    "dbip-asn",
+    "metowolf-cn",
+    "runishiwo-cn",
+    "sapics-user",
+    "seed",
+    ...exports.MANUAL_SOURCE_TAGS,
+]);
+/**
+ * Normalize a source value read out of the database.
+ *
+ * The source columns on `ip_ranges` are free-form text, and they
+ * predate the source tracking: a row inserted by hand, by an older
+ * build, or by a backfill carries whatever was there. Two of those
+ * values are "maxmind" and "ipinfo" — labels of sources this project
+ * never wired into the pipeline.
+ *
+ * Casting such a value to the `Source` type and returning it would
+ * make the API claim the data came from MaxMind for a row MaxMind
+ * never touched. An unrecognized label is normalized to "unknown",
+ * which is what it actually is.
+ */
+function normalizeSource(value) {
+    if (typeof value !== "string")
+        return "unknown";
+    return KNOWN_SOURCES.has(value) ? value : "unknown";
+}
 /** Copies hand-authored rows from the live ip_ranges into the staging
  *  ip_ranges_new, so that the upcoming swap does not drop them.
  *
@@ -441,11 +492,11 @@ async function findRange(pool, ipBuf) {
         isp: r.isp,
         asn: r.asn == null ? undefined : Number(r.asn),
         asnOrg: r.asn_org,
-        countrySource: r.country_source,
-        citySource: r.city_source,
-        ispSource: r.isp_source,
-        asnSource: r.asn_source,
-        geoSource: r.geo_source,
+        countrySource: normalizeSource(r.country_source),
+        citySource: normalizeSource(r.city_source),
+        ispSource: normalizeSource(r.isp_source),
+        asnSource: normalizeSource(r.asn_source),
+        geoSource: normalizeSource(r.geo_source),
     };
 }
 async function recordEtlStart(pool) {

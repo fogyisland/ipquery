@@ -7,9 +7,8 @@
 // The `ip_ranges` table has a `country_name` column, but in practice it is
 // NULL for every row: DB-IP's free CSVs carry a country *code* only (the
 // city-lite file is `start,end,continent,country,region,city,lat,lon` —
-// there is no country-name column), and MaxMind — the one source that
-// could fill the name — has never run through the ETL pipeline because
-// it needs a licence key the project doesn't have.
+// there is no country-name column), and no source in the pipeline fills
+// the name.
 //
 // The result is that a lookup for a Hong Kong address answered "HK" and
 // labelled it "国家" (country), when Hong Kong is a region and the

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { authenticate, LOOKUP_SCOPE_TOOLS, OPS_SCOPE_TOOLS } from "../../src/mcp/auth";
+import { TOOL_NAMES } from "../../src/mcp/tool-names";
 import { hashToken } from "../../src/web/auth/tokens";
 import type { McpToken } from "../../src/types";
 
@@ -65,14 +66,14 @@ describe("authenticate", () => {
     const auth = await authenticate(poolWith(makeToken({ scope: "ops" })), PLAINTEXT, true);
     expect(auth.scope).toBe("ops");
     expect([...auth.allowedTools].sort()).toEqual([...OPS_SCOPE_TOOLS].sort());
-    expect(auth.allowedTools.size).toBe(7);
+    expect(auth.allowedTools.size).toBe(OPS_SCOPE_TOOLS.length);
   });
 
   it("runs unauthenticated in local mode when no token is supplied", async () => {
     const auth = await authenticate(poolWith(null), undefined, false);
     expect(auth.mode).toBe("local");
     expect(auth.token).toBeNull();
-    expect(auth.allowedTools.size).toBe(7);
+    expect(auth.allowedTools.size).toBe(OPS_SCOPE_TOOLS.length);
   });
 
   it("treats a blank token as absent", async () => {
@@ -101,8 +102,16 @@ describe("authenticate", () => {
 });
 
 describe("tool scope boundaries", () => {
-  it("the lookup scope contains only the lookup tool", () => {
-    expect(LOOKUP_SCOPE_TOOLS).toEqual(["ipquery_lookup"]);
+  it("the lookup scope contains only the geolocation tools", () => {
+    // Batch lookup is the same operation as lookup, so it belongs
+    // here. Nothing operational may creep in.
+    expect([...LOOKUP_SCOPE_TOOLS].sort()).toEqual([
+      "ipquery_lookup",
+      "ipquery_lookup_batch",
+    ]);
+    for (const name of LOOKUP_SCOPE_TOOLS) {
+      expect(name).toMatch(/^ipquery_lookup/);
+    }
   });
 
   it("the ops scope contains the lookup tool too", () => {
@@ -112,7 +121,12 @@ describe("tool scope boundaries", () => {
   it("the ops scope covers every tool the server registers", () => {
     // A new tool that is not listed in the ops scope would silently be
     // unreachable for every token — the exact failure this catches.
-    expect(OPS_SCOPE_TOOLS.length).toBe(7);
+    //
+    // The count is derived from the canonical list, not written down:
+    // a hardcoded number here would fail the moment a tool is added,
+    // which is a nuisance rather than a signal. What matters is that
+    // the two lists agree.
     expect(new Set(OPS_SCOPE_TOOLS).size).toBe(OPS_SCOPE_TOOLS.length);
+    expect([...OPS_SCOPE_TOOLS].sort()).toEqual([...TOOL_NAMES].sort());
   });
 });

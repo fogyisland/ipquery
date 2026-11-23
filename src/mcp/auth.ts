@@ -27,15 +27,25 @@ import type { Pool } from "mysql2/promise";
 import type { McpToken, McpTokenScope } from "../types";
 
 /** Tools a `lookup`-scoped token may reach. Everything else is
- *  operational data and needs an `ops` scope. */
-export const LOOKUP_SCOPE_TOOLS = ["ipquery_lookup"] as const;
+ *  operational data and needs an `ops` scope.
+ *
+ *  Batch lookup is the same operation as single lookup — it answers
+ *  geolocation questions and exposes nothing operational — so it sits
+ *  in the lookup scope. */
+export const LOOKUP_SCOPE_TOOLS = ["ipquery_lookup", "ipquery_lookup_batch"] as const;
 
 /** Tools that expose operational data: query logs (with user emails),
  *  queue depths and ETL state. */
 export const OPS_SCOPE_TOOLS = [
   "ipquery_lookup",
+  "ipquery_lookup_batch",
   "ipquery_stats",
   "ipquery_etl_status",
+  "ipquery_etl_sources",
+  "ipquery_etl_history",
+  "ipquery_provider_health",
+  "ipquery_audit_log",
+  "ipquery_range_jobs",
   "ipquery_queue_stats",
   "ipquery_queue_top",
   "ipquery_queries_recent",

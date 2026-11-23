@@ -139,6 +139,40 @@ describe("mcpEtlStatus", () => {
     expect(lastRun.sources.dbip.records).toBe(8000000);
     expect(lastRun.sources.dbip.records).not.toBe(lastRun.mergedRecords);
   });
+  it("does not advertise a source the pipeline never runs", async () => {
+    // The tool used to report a `sources` map with `maxmind` and
+    // `ip2region` in it, both permanently null because neither was
+    // ever fetched or parsed. A source that cannot contribute a row
+    // must not appear in the answer — an operator reading this is
+    // asking "where did my data come from".
+    const pool = {
+      query: vi
+        .fn()
+        .mockResolvedValueOnce([
+          [
+            {
+              id: 16,
+              started_at: new Date("2026-11-07T02:00:00Z"),
+              finished_at: new Date("2026-11-07T02:30:00Z"),
+              status: "success",
+              merged_records: 8940000,
+              maxmind_records: null,
+              ip2region_records: null,
+              dbip_records: 8000000,
+            },
+          ],
+          [],
+        ])
+        .mockResolvedValueOnce([[{ pending: 0, processed: 0, total_queries: 0 }], []]),
+    };
+    const res = await mcpEtlStatus(makeDeps(pool));
+    const lastRun = res.lastRun as {
+      sources: Record<string, { records: number | null }>;
+    };
+    expect(lastRun.sources.ip2region).toBeUndefined();
+    expect(lastRun.sources.maxmind).toBeUndefined();
+    expect(lastRun.sources.dbip.records).toBe(8000000);
+  });
 });
 
 describe("tool defs", () => {

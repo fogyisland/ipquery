@@ -1,6 +1,6 @@
 # IPQuery MCP Server
 
-IPQuery 以 MCP (Model Context Protocol) server 形式暴露 7 个只读工具，AI 工具
+IPQuery 以 MCP (Model Context Protocol) server 形式暴露 13 个只读工具，AI 工具
 （Claude Code、Cursor、Claude Desktop 等）通过 stdio 一行配置即可接入。
 
 ## 工具一览（全部只读）
@@ -8,12 +8,41 @@ IPQuery 以 MCP (Model Context Protocol) server 形式暴露 7 个只读工具�
 | 工具                     | 权限范围 | 说明                                                    | 参数                                                                     |
 | ------------------------ | -------- | ------------------------------------------------------- | ------------------------------------------------------------------------ |
 | `ipquery_lookup`         | 全部     | 查询 IPv4/IPv6 归属地（国家/城市/时区/ISP/ASN）          | `ip`（必填）                                                             |
+| `ipquery_lookup_batch`   | 全部     | 一次查多个地址（最多 100 个），顺序与请求一致            | `ips`（必填，字符串数组）                                                |
 | `ipquery_stats`          | ops      | 库规模摘要：最近 ETL run + 各源记录数                   | 无                                                                       |
 | `ipquery_etl_status`     | ops      | 最近 ETL run 详情 + 队列概要                            | 无                                                                       |
+| `ipquery_etl_sources`    | ops      | 逐源 ETL 贡献：各源产出/跳过/入库/重复行数 + 下载结果   | `runId`（默认最近一次 run）                                              |
+| `ipquery_etl_history`    | ops      | ETL 运行历史（最新在前）：状态/起止时间/入库行数/失败原因 | `limit`（1-100，默认 20）                                             |
+| `ipquery_provider_health`| ops      | 回填所用 provider 的健康度 + 熔断阈值                    | `windowMinutes`（1-10080，默认 60）                                      |
+| `ipquery_audit_log`      | ops      | 管理操作审计日志（最新在前）：谁、做了什么、对谁、从哪来 | `limit`（1-100，默认 20）、`action`（按动作名过滤）                         |
+| `ipquery_range_jobs`     | ops      | 网段导入/导出任务状态：进度、行数、体积、失败原因         | `limit`（1-50，默认 10）                                                  |
 | `ipquery_queue_stats`    | ops      | unknown-IP 队列计数（pending/processed/totalQueries）   | 无                                                                       |
 | `ipquery_queue_top`      | ops      | 查询次数最高的未知 IP                                   | `limit`（1-100，默认 20）                                                |
 | `ipquery_queries_recent` | ops      | 最近查询日志（最新在前）                                | `limit`（1-50，默认 10）、`status`（hit/miss/invalid）、`includePrivate` |
 | `ipquery_queries_daily`  | ops      | 按天查询量曲线                                          | `days`（1-90，默认 30）                                                  |
+
+> `ipquery_etl_status` 的 `sources` 里只有 DB-IP 一个非空计数——run 行本身
+> 只带这一个合并计数器，其余六个文件按文件记在 stage 表里。
+> `ipquery_etl_sources` 读的就是那三张 stage 表
+> （`etl_run_downloads` / `etl_run_parses` / `etl_run_inserts`），
+> 想知道"国内网段是哪来的、出了多少行"用它。
+
+> `ipquery_etl_status` 只看最近一次 run。要看"昨晚那次是不是失败了、
+> 这个实例一共跑过多少回"，用 `ipquery_etl_history`——它把 `etl_runs`
+> 表按时间倒序列出来，失败的那次带 `errorMessage`。
+
+> `ipquery_provider_health` 报的是回填扇出用的几个 provider
+> （IP-API / IP.SB / IP9）的调用量、429 与其它错误的占比，以及熔断器
+> 当前的阈值。健康数字不和阈值一起看是没有意义的：50% 失败在 100%
+> 阈值下依然算健康。
+
+> `ipquery_audit_log` 读的是 `admin_audit_log`——每一次管理动作都落在
+> 里面：批准 MCP token、导入网段、改熔断阈值。它带操作者的邮箱，
+> 所以属于 ops 数据，`lookup` 范围的 token 读不到。
+
+> `ipquery_range_jobs` 报的是导入与导出任务的状态。整库导入要跑几个小时，
+> 整库导出要写两个多 G，所以两者都是脱离请求后台跑的——状态写在
+> `range_imports` / `range_exports` 两张表里，重启之后还在。
 
 ## 前提
 
@@ -31,19 +60,19 @@ MCP server 需要一枚 **MCP Token** 才能在受控环境下工作。Token 有
 
 | 范围      | 可用工具                     | 说明                                       |
 | --------- | ---------------------------- | ------------------------------------------ |
-| `lookup`  | 仅 `ipquery_lookup`          | 只需要查 IP 归属地时用这个                 |
-| `ops`     | 全部 7 个                    | 可读查询日志、回填队列、ETL 状态等运维数据 |
+| `lookup`  | `ipquery_lookup`、`ipquery_lookup_batch` | 只需要查 IP 归属地时用这个      |
+| `ops`     | 全部 13 个                   | 可读查询日志、回填队列、ETL 状态等运维数据 |
 
 **Token 需要管理员批准。** 用户在控制台 `/dashboard/mcp-tokens` 申请，管理员在
 `/admin/mcp-tokens` 批准或拒绝 —— 批准前 token 不生效，server 会拒绝连接。
 
-这是刻意的：5 个工具读的是运维数据（`ipquery_queries_recent` 会返回用户邮箱、
-API Key 前缀），不能让任何人自助拿到。API Key（`/dashboard/keys`）依旧是自助创建
-的，两套凭证互不影响。
+这是刻意的：`ipquery_queries_recent` 会返回用户邮箱、API Key 前缀，
+`ipquery_queue_top` 会列出被查询最多的未知 IP——这些运维数据不能让任何人自助拿到。
+API Key（`/dashboard/keys`）依旧是自助创建的，两套凭证互不影响。
 
 ### 本机开发：免 token
 
-不带 `IPQUERY_MCP_TOKEN` 启动时，server 以 **local 模式** 运行，7 个工具全开。
+不带 `IPQUERY_MCP_TOKEN` 启动时，server 以 **local 模式** 运行，13 个工具全开。
 这是为了让开发者在本机 `node dist/mcp/server.js` 直接可用。
 
 生产环境请设置 `MCP_REQUIRE_TOKEN=true` —— 此时没有 token 的 server **启动即失败**，
@@ -71,7 +100,7 @@ claude -p --mcp-config=./.mcp.json "查一下 8.8.8.8"
 
 `--mcp-config` 读进来的 server 属于 dynamic scope，不走 project scope 的
 首次批准门槛，因此不需要先在 `~/.claude/settings.json` 里批准。实测一次调用即可
-拿到全部 7 个工具。
+拿到全部 13 个工具。
 
 **团队共享**（project scope，随仓库入库）：
 
@@ -159,7 +188,7 @@ claude mcp add --scope user ipquery -- ipquery-mcp
 
 | 变量                 | 说明                                                          |
 | -------------------- | ------------------------------------------------------------- |
-| `IPQUERY_MCP_TOKEN`  | MCP Token 明文。不设 = local 模式（7 工具全开）              |
+| `IPQUERY_MCP_TOKEN`  | MCP Token 明文。不设 = local 模式（13 工具全开）              |
 | `MCP_REQUIRE_TOKEN`  | 设为 `true` / `1` 时，没有 token 的 server 启动即失败          |
 
 ## 隐私

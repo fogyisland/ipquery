@@ -33,7 +33,7 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.EtlProgressSink = void 0;
+exports.EtlProgressSink = exports.SOURCE_FILES = void 0;
 exports.runPipeline = runPipeline;
 // SPDX-License-Identifier: MIT
 const fs = __importStar(require("node:fs/promises"));
@@ -54,7 +54,14 @@ const progressReporter_1 = require("./progressReporter");
 // a later, lower-priority file (inserted later) doesn't clobber a value
 // already filled by an earlier, higher-priority one. Higher priority wins
 // because COALESCE(existing, new) keeps the already-present value.
-const SOURCE_FILES = [
+/**
+ * The files the ETL pipeline fetches and parses, in priority order.
+ *
+ * Exported so the source list the API and the MCP server report can be
+ * derived from it. A hand-written list of sources is a promise the code
+ * does not keep — see `src/etl/sources/labels.ts`.
+ */
+exports.SOURCE_FILES = [
     {
         source: "dbip",
         etlSource: "dbip-city",
@@ -717,7 +724,7 @@ async function runPipelineLocked(pool, opts) {
         //    download exactly the files that are missing or damaged.
         const reusable = [];
         const needDownload = [];
-        for (const f of SOURCE_FILES.filter((file) => file.validate === "gzip")) {
+        for (const f of exports.SOURCE_FILES.filter((file) => file.validate === "gzip")) {
             const filePath = path.join(rawDir, f.filename);
             if (!(await fileExists(filePath))) {
                 needDownload.push(f);
@@ -752,7 +759,7 @@ async function runPipelineLocked(pool, opts) {
         // because the parse stage would silently skip it.
         const present = [];
         const missing = [];
-        for (const f of SOURCE_FILES) {
+        for (const f of exports.SOURCE_FILES) {
             const filePath = path.join(rawDir, f.filename);
             if (!(await fileExists(filePath))) {
                 missing.push(f.filename);
@@ -790,7 +797,7 @@ async function runPipelineLocked(pool, opts) {
         // when re-running against cached files.
         try {
             let totalBytes = 0;
-            for (const f of SOURCE_FILES) {
+            for (const f of exports.SOURCE_FILES) {
                 try {
                     const stat = await fs.stat(path.join(rawDir, f.filename));
                     totalBytes += stat.size;

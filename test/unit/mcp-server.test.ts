@@ -6,11 +6,15 @@ import { TOOL_NAMES } from "../../src/mcp/tool-names";
 const noopLog = { warn: vi.fn(), error: vi.fn() };
 
 describe("buildToolRegistrations", () => {
-  it("registers exactly the 7 read-only tools", () => {
+  it("registers exactly the tools the canonical list names", () => {
     const deps = { pool: {}, log: noopLog } as never;
     const tools = buildToolRegistrations(deps);
     expect(tools.map((t) => t.def.name).sort()).toEqual([...TOOL_NAMES].sort());
-    expect(TOOL_NAMES).toHaveLength(7);
+    // The count is derived, not written down — a hardcoded number here
+    // would break every time a tool is added, without saying anything
+    // about whether the registration is right.
+    expect(TOOL_NAMES.length).toBe(tools.length);
+    expect(new Set(TOOL_NAMES).size).toBe(TOOL_NAMES.length);
   });
 
   it("includes ipquery_stats as a top-level tool", () => {

@@ -34,10 +34,6 @@ export interface AppConfig {
         database: string;
         poolSize: number;
     };
-    maxmind: {
-        licenseKey?: string;
-        editions: string[];
-    };
     api: {
         port: number;
         rateLimit: number;

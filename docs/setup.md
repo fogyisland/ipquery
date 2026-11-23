@@ -525,7 +525,7 @@ MCP_REQUIRE_TOKEN=true
 ```
 
 放进 `.env` 或 MCP 客户端配置的环境变量里都行。这一项的作用是：没有 token
-的 server **启动即失败**，而不是退化成「7 个工具全开」。
+的 server **启动即失败**，而不是退化成「13 个工具全开」。
 
 反过来说，**这一项没设 = 没设成 true = 免认证模式**。`docs/mcp.md` 里说的
 local 模式是给本机开发用的，不是给生产用的。
@@ -538,7 +538,8 @@ token 要在控制台里申请、管理员批准后即生效：
 2. 管理员在 `/admin/mcp-tokens` 批准
 3. 拿到 `ipqt_` 开头的明文
 
-范围区别：`lookup` 只给 `ipquery_lookup`；`ops` 给全部 7 个工具（其中
+范围区别：`lookup` 给 `ipquery_lookup` 与 `ipquery_lookup_batch`（都是查归属地）；
+`ops` 给全部 13 个工具（其中
 `ipquery_queries_recent` 能看到用户邮箱和 API Key 前缀）。
 
 ### 接进 Claude Code
@@ -556,7 +557,7 @@ claude mcp add --scope user ipquery -- \
 claude mcp add --scope user ipquery -- ipquery-mcp
 ```
 
-完整说明（7 个工具的清单、权限范围、隐私处理、`--mcp-config` 用法）见
+完整说明（13 个工具的清单、权限范围、隐私处理、`--mcp-config` 用法）见
 [`docs/mcp.md`](./mcp.md)。
 
 ### 上线核对

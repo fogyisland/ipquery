@@ -106,6 +106,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
      失败才知道自己的文件多大。现在两个上限都印在表单旁，超限时提示语也带上
      真实数字
 
+- **MCP 工具扩到 13 个**: 此前 7 个只读工具只覆盖了「查一个 IP」和「看最近的
+  队列／查询日志」，一个运维真正会问的问题——**「昨晚那次 ETL 跑成功了吗？
+  这个实例一共跑过多少回？」**——在 MCP 里没有答案，因为管理界面的数据在
+  HTTP 那一侧。现补齐 6 个：
+  1. **`ipquery_etl_sources`**：逐源 ETL 贡献（各源产出／跳过／入库／重复行数 +
+     下载结果）。此前 `ipquery_etl_status` 的 `sources` 里只有 DB-IP 一个非空
+     计数器——run 行本身只带这一个合并计数器，其余文件按文件记在 stage 表里，
+     没有任何工具能读到。「国内网段是哪来的、出了多少行」问的就是那三张表
+  2. **`ipquery_etl_history`**：ETL 运行历史（最新在前），失败的那次带
+     `errorMessage`。`ipquery_etl_status` 只看最近一次 run
+  3. **`ipquery_provider_health`**：回填扇出所用 provider 的健康度（调用量、
+     429 与其它错误的占比）+ 熔断阈值。健康数字不和阈值一起看是没有意义的：
+     50% 失败在 100% 阈值下依然算健康
+  4. **`ipquery_audit_log`**：管理操作审计日志（谁、做了什么、对谁、从哪来），
+     带操作者邮箱——所以属于 ops 数据，`lookup` 范围的 token 读不到
+  5. **`ipquery_range_jobs`**：网段导入／导出任务状态（进度、行数、体积、失败
+     原因）。整库导入要跑几个小时、整库导出要写两个多 G，两者都是脱离请求
+     后台跑的，状态写在 `range_imports` / `range_exports` 两张表里，重启之后还在
+  6. **`ipquery_lookup_batch`**：一次查多个地址（最多 100 个）。`ipquery_lookup`
+     一次一个，HTTP 下三个地址还能忍，MCP 下每个调用都是一次往返——批量对账
+     客户流量来源、检查一批可疑地址，都不该一个一个来。单个地址格式错误或
+     未收录**不会让整批失败**：坏的那个被标记，其余照常返回
+  - **权限范围**：批量查询与单条查询是同一件事，不暴露任何运维数据，因此同属
+    `lookup` 范围；其余 5 个属 `ops`
+  - **加一个工具要改三处**，漏一处是静默漏洞而不是报错：`tool-names.ts` 的
+    `TOOL_NAMES`、`auth.ts` 的 scope 列表、`server-tools.ts` 的注册表
+  - **文档里的工具总数由测试守着**：`test/unit/mcp-docs-tool-count.test.ts`
+    把五份文档里的数字与 `TOOL_NAMES.length` 对齐——手写的数字会让构建失败，
+    而不是把文档悄悄写错
 ### Changed
 
 - **后台界面深度优化**: 后台控制台从「能用」向「好用」推进一批改动。

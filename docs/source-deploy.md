@@ -247,7 +247,7 @@ Cursor 这类客户端直接查 IP 归属地。**不接 AI 客户端就不必管
 它不走 HTTP 端口，是客户端拉起的子进程，走 stdio 通信。
 
 **上线第一件事：`MCP_REQUIRE_TOKEN=true`。** 这个 server 一旦跑起来就能读
-数据库，不需要登录也不需要 API Key；不开这个开关，它就是「7 个工具全开」的
+数据库，不需要登录也不需要 API Key；不开这个开关，它就是「13 个工具全开」的
 免认证模式。设成 true 之后，没有 token 的 server 启动即失败。
 
 token 要在控制台 `/dashboard/mcp-tokens` 申请、管理员在 `/admin/mcp-tokens`
@@ -377,7 +377,7 @@ stderr_logfile=/www/wwwlogs/ipquery.err.log
 - [ ] 数据库账号非 root，仅授权本库
 - [ ] 反代**覆盖**转发了 `X-Forwarded-For`（`proxy_set_header X-Forwarded-For $remote_addr;`），
       `.env` 里 `TRUST_PROXY=true`，且 Node 端口只有反代能访问；否则 `RATE_LIMIT` 需按并发量调高
-- [ ] 若要开 MCP 服务：`MCP_REQUIRE_TOKEN=true`（不设 = 免认证模式，7 个工具全开）
+- [ ] 若要开 MCP 服务：`MCP_REQUIRE_TOKEN=true`（不设 = 免认证模式，13 个工具全开）
 
 ---
 
