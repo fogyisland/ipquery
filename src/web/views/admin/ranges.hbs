@@ -107,7 +107,13 @@
     <details class="range-replace">
       <summary>{{req.t 'admin.ranges.replace.title'}}</summary>
       <p class="range-replace-warning">{{req.t 'admin.ranges.replace.warning'}}</p>
-      <p class="form-field-hint">{{req.t 'admin.ranges.replace.currentRows'}} <strong>{{currentRows}}</strong></p>
+      <p class="form-field-hint">{{req.t 'admin.ranges.replace.currentRows'}} <strong>{{currentRowsLabel}}</strong></p>
+      {{#if currentRowsUnknown}}
+      {{!-- The count is the one number on this page the database might not
+           be able to give us — another session can hold a lock on the table.
+           Saying so beats showing a number the page did not read. --}}
+      <p class="form-field-hint">{{req.t 'admin.ranges.replace.currentRowsUnknown'}}</p>
+      {{/if}}
       <form method="post" action="/admin/ranges/import" enctype="multipart/form-data">
         <input type="hidden" name="csrf" value="{{csrfToken}}">
         <input type="hidden" name="mode" value="replace">
@@ -121,7 +127,7 @@
           <label class="form-field-label" for="replace-confirm">{{req.t 'admin.ranges.replace.confirmLabel'}}</label>
           <div class="form-field-input">
             <input id="replace-confirm" type="number" name="confirmRows" min="0" required
-                   inputmode="numeric" placeholder="{{currentRows}}">
+                   inputmode="numeric" placeholder="{{currentRowsLabel}}">
             <span class="form-field-hint">{{req.t 'admin.ranges.replace.confirmHint'}}</span>
           </div>
         </div>
@@ -168,7 +174,7 @@
     <div class="form-field" id="range-upload-confirm-field" hidden>
       <label class="form-field-label" for="range-upload-confirm">{{req.t 'admin.ranges.replace.confirmLabel'}}</label>
       <div class="form-field-input">
-        <input id="range-upload-confirm" type="number" min="0" inputmode="numeric" placeholder="{{currentRows}}">
+        <input id="range-upload-confirm" type="number" min="0" inputmode="numeric" placeholder="{{currentRowsLabel}}">
         <span class="form-field-hint">{{req.t 'admin.ranges.replace.confirmHint'}}</span>
       </div>
     </div>

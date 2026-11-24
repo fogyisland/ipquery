@@ -1052,10 +1052,12 @@
         "title": "Replace the whole library",
         "warning": "Warning: the uploaded file replaces the IP range library outright. Rows that are yours — multi-provider and imported rows — are carried forward; everything else is discarded.",
         "currentRows": "Ranges currently in this library:",
+        "currentRowsUnknown": "The row count could not be read right now — the database is busy. A replacement will ask for the number.",
         "confirmLabel": "Type that number to confirm",
         "confirmHint": "This is the guard against a mistake: a number that does not match runs nothing, and a browser resend is refused with it.",
         "action": "Replace the library",
         "mismatch": "The confirmation number does not match ({expected} ranges) — nothing was replaced",
+        "countUnavailable": "The row count could not be read, so nothing was replaced. Try again in a moment.",
         "done": "Replaced — {written} ranges written, {kept} of your rows kept",
         "failed": "Replacement failed: {error}"
       },

@@ -264,12 +264,21 @@ async function registerRangeRoutes(app) {
             createdAtLabel: (0, dbTimestamp_1.formatDbTimestamp)(e.startedAt ?? new Date()),
             isRunning: e.status === "running",
         }));
+        // The count is the one thing on this page that can fail on its own,
+        // and it is allowed to: nothing else here reads `ip_ranges`. When the
+        // table is locked by another session the count comes back unknown
+        // instead of taking the whole page down with it.
+        const currentRows = await readRangeCount(app);
         return reply.view("admin/ranges.hbs", {
             layout: "layouts/admin",
             title: req.t("admin.ranges.title"),
             exports,
             maxRows: rangeFile_1.IPQ_DEFAULT_MAX_ROWS,
-            currentRows: await countRanges(app),
+            // The number the operator is asked to type. Unknown is a dash, not a
+            // zero: a zero would be a number, and a number the page did not read
+            // is worse than no number at all.
+            currentRowsLabel: currentRows === null ? "—" : String(currentRows),
+            currentRowsUnknown: currentRows === null,
             // The job is a row, not a request: a whole-library import outlives the
             // tab that started it, and this is what shows how far it got.
             imports: (await (0, rangeImport_1.listRangeImports)(app.pool, 10)).map((job) => ({
@@ -420,12 +429,10 @@ async function registerRangeRoutes(app) {
             // carries a stale count and is refused.
             const isReplace = String(body?.mode ?? "") === "replace";
             if (isReplace) {
-                const expected = await countRanges(app);
                 const typed = Number(body?.confirmRows ?? NaN);
-                if (!Number.isFinite(typed) || typed !== expected) {
-                    setFlash(reply, "error", req.t("admin.ranges.replace.mismatch", { expected }));
+                const allowed = await replacementAllowed(app, req, reply, typed);
+                if (!allowed)
                     return reply.redirect("/admin/ranges");
-                }
             }
             // One import at a time in this process. Two would fight over the
             // same rows, and a replacement must not start while a merge is
@@ -480,12 +487,10 @@ async function registerRangeRoutes(app) {
         // "resend" after a timeout — carries a stale count and is refused.
         const isReplace = String(body?.mode ?? "") === "replace";
         if (isReplace) {
-            const expected = await countRanges(app);
             const typed = Number(body?.confirmRows ?? NaN);
-            if (!Number.isFinite(typed) || typed !== expected) {
-                setFlash(reply, "error", req.t("admin.ranges.replace.mismatch", { expected }));
+            const allowed = await replacementAllowed(app, req, reply, typed);
+            if (!allowed)
                 return reply.redirect("/admin/ranges");
-            }
         }
         if ((0, rangeImportJob_1.isRangeImportRunning)()) {
             setFlash(reply, "error", req.t("admin.ranges.importBusy"));
@@ -560,6 +565,59 @@ function readUploadedText(body) {
 async function countRanges(app) {
     const [rows] = await app.pool.query("SELECT COUNT(*) AS n FROM ip_ranges");
     return Number(rows[0]?.n ?? 0);
+}
+/**
+ * The row count, or null when it cannot be read.
+ *
+ * `ip_ranges` is the table every other session wants: the ETL swaps it
+ * under a RENAME, a hand-run UPDATE takes a write lock on it, a leftover
+ * transaction holds one. When that happens the count waits for the
+ * metadata lock until `lock_wait_timeout` and then throws
+ * ER_LOCK_WAIT_TIMEOUT.
+ *
+ * The two callers treat that differently, because the count means different
+ * things to them. On the page it is a nicety — the export list, the import
+ * history and both forms do not depend on it — so it is allowed to be
+ * missing. In the replacement gate it is the whole point, so it is not.
+ */
+async function readRangeCount(app) {
+    try {
+        return await countRanges(app);
+    }
+    catch (err) {
+        app.log.warn({ err }, "the ip_ranges row count could not be read");
+        return null;
+    }
+}
+/**
+ * The replacement gate.
+ *
+ * The operator types the number of ranges currently in the library, and it
+ * is compared against a freshly counted one: a browser resend of the form
+ * carries the count from before the first replacement, and refusing is the
+ * whole point of the gate.
+ *
+ * There are two ways to refuse, and the operator needs to be told which
+ * one happened. The number they typed does not match — they get the
+ * current count back so they can type it. Or the count cannot be read at
+ * all, because the table is locked by another session: then there is
+ * nothing to compare against, the gate stays shut, and saying so is the
+ * difference between "your confirmation was wrong" and "the database is
+ * busy" — otherwise the operator blames their own number.
+ *
+ * Returns true when the replacement may proceed.
+ */
+async function replacementAllowed(app, req, reply, typed) {
+    const expected = await readRangeCount(app);
+    if (expected === null) {
+        setFlash(reply, "error", req.t("admin.ranges.replace.countUnavailable"));
+        return false;
+    }
+    if (!Number.isFinite(typed) || typed !== expected) {
+        setFlash(reply, "error", req.t("admin.ranges.replace.mismatch", { expected }));
+        return false;
+    }
+    return true;
 }
 /** The row count the header declares. A file that cannot say is left null —
  *  a bar with no denominator is honest, a guessed one is not. */

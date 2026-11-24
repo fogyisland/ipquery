@@ -1053,10 +1053,12 @@
         "title": "整库替换",
         "warning": "警告：导入的文件会完全取代当前的 IP 段库。当前库里不属于你的手工数据（multi-provider / import 标记的行）会保留，其余一律丢弃。",
         "currentRows": "当前库中 IP 段条数：",
+        "currentRowsUnknown": "现在读不到当前条数（数据库被占用）；执行整库替换时会提示正确的数字。",
         "confirmLabel": "输入上面的条数以确认",
         "confirmHint": "这是防止误操作的门槛：数字对不上就不执行，浏览器自动重发也会被挡住。",
         "action": "确认替换",
         "mismatch": "确认数字不匹配（当前是 {expected} 条），没有执行任何替换",
+        "countUnavailable": "读不到当前条数，没有执行任何替换。请稍后重试。",
         "done": "替换完成：写入 {written} 条，保留手工数据 {kept} 条",
         "failed": "替换失败：{error}"
       },

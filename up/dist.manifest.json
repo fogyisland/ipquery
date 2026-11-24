@@ -1,7 +1,7 @@
 {
   "formatVersion": 1,
   "fileCount": 475,
-  "totalBytes": 2722843,
+  "totalBytes": 2726994,
   "files": {
     "api/dbBootstrap.d.ts": {
       "bytes": 8916,
@@ -1256,8 +1256,8 @@
       "sha256": "080b721f056d5350784d1dcca32fb83964e222582476c118dae2420b8a8565ee"
     },
     "web/i18n/en-US.json": {
-      "bytes": 59904,
-      "sha256": "6567e46c6ed194972ac2db1fcce83ed2da15cf54bf633395774b22fafc348d32"
+      "bytes": 60156,
+      "sha256": "e9a563ca6f3a3b20491d904db7c427dae93bebe6cb23305a313cf31f9b82a215"
     },
     "web/i18n/index.d.ts": {
       "bytes": 309,
@@ -1276,8 +1276,8 @@
       "sha256": "33cd4e4a9a90a35dc5c3b8308e78a6449754c712719b9f1af35b2e25156641cc"
     },
     "web/i18n/zh-CN.json": {
-      "bytes": 59480,
-      "sha256": "28a96a615e341754f38500d76d44c795e8b857bad65068296913a7c679b67891"
+      "bytes": 59717,
+      "sha256": "a34f3767678f75e50c82f1911e5939748b3d6bc3ef94fe9d1c8cb3e68565e84a"
     },
     "web/maps/geo-map.d.ts": {
       "bytes": 1050,
@@ -1548,12 +1548,12 @@
       "sha256": "43027b613a35bc6d104688d313d52ea6e0970c750987eee2ac00097d3d2c7e2e"
     },
     "web/routes/adminRanges.js": {
-      "bytes": 29800,
-      "sha256": "a1d90240f84ba60346b8361e0cced6dccc4800256f6e0fc88c68455364b41e77"
+      "bytes": 32345,
+      "sha256": "6e6166d882f7778df4c304755989289a6a6f0ebfa74b1df1265949775467a149"
     },
     "web/routes/adminRanges.js.map": {
-      "bytes": 19673,
-      "sha256": "c511e5a28544fd05757c0c08dfb3c8e8355a65a943e1833ddf058173f834b34b"
+      "bytes": 20411,
+      "sha256": "f1925a8aff61285c7820b07c43d5a72b9e6d31961da6e356c139f6953da089e1"
     },
     "web/routes/auth.d.ts": {
       "bytes": 121,
@@ -1648,8 +1648,8 @@
       "sha256": "f74a8bf11252f6d734b5efb241bfee19ca2510b9f21bdea97186c5f96f05febe"
     },
     "web/views/admin/ranges.hbs": {
-      "bytes": 12876,
-      "sha256": "5e00ebdf67f10bd2d944454db7ad258a4c0585b104433971fb7f3735e18fe943"
+      "bytes": 13255,
+      "sha256": "d19f06f588e6e320f6ee0ce9c05219122cd0e3e3c9f2e96ae32ed7bb909bda1b"
     },
     "web/views/admin/settings.hbs": {
       "bytes": 20307,
